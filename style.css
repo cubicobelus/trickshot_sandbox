@@ -185,7 +185,7 @@
   .slot .name { font-size: 12px; font-weight: bold; letter-spacing: 0.8px; }
   .slot .icon { height: 34px; margin-top: 2px; }
   .slot .icon svg { height: 100%; width: auto; display: block; margin: 0 auto; }
-  .slot.active { background: rgba(255,210,74,0.16); border-color: #ffd24a; color: #fff; transform: translateX(-6px); }
+  .slot.active { background: rgba(255,210,74,0.16); border-color: #ffd24a; color: #fff; }
   .slot.active .name { color: #ffd24a; }
 
   /* loadout picker in the menu */

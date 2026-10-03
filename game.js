@@ -548,11 +548,13 @@
   const brassMat = new THREE.MeshStandardMaterial({ color: 0xc9a14a, roughness: 0.3, metalness: 0.85 });
   const casingGeo = new THREE.CylinderGeometry(0.010, 0.012, 0.08, 8);
   const smallCasingGeo = new THREE.CylinderGeometry(0.0065, 0.0075, 0.032, 8);
+  const magnumCasingGeo = new THREE.CylinderGeometry(0.0092, 0.0098, 0.034, 10);   // .50 AE: short and fat
   const shellGeo = new THREE.CylinderGeometry(0.0115, 0.0115, 0.066, 10);
   const shellMat = new THREE.MeshStandardMaterial({ color: 0xa3231b, roughness: 0.55, metalness: 0.1 });
   const CASINGS = {
     rifle: { geo: casingGeo, mat: brassMat, ping: 1 },
     small: { geo: smallCasingGeo, mat: brassMat, ping: 0.7 },
+    magnum: { geo: magnumCasingGeo, mat: brassMat, ping: 0.9 },
     shell: { geo: shellGeo, mat: shellMat, ping: 0.25 },   // plastic: a dull tap, not a ring
   };
   const casingPool = [];
@@ -909,21 +911,36 @@
   const pumpBody = addPart(shotgunPump, new THREE.CylinderGeometry(0.03, 0.03, 0.17, 12), polymerMat, 0, 0.002, 0, HALF_PI, 0, 0);
   pumpBody.scale.set(0.95, 1, 0.82);
   for (let i = 0; i < 7; i++) addPart(shotgunPump, new THREE.TorusGeometry(0.0285, 0.0028, 4, 14), gripMat, 0, 0.002, -0.066 + i * 0.022);
-  // ---- pistol: big-bore semi-auto with a slide that kicks back on every shot ----
+  // ---- Desert Eagle: polished stainless, a long triangular barrel with a top rail over
+  // a short slide, a squared trigger guard and a chunky rubber grip ----
+  // kept only mildly metallic: there's no environment to reflect yet, and fully metallic
+  // surfaces with nothing to reflect render nearly black
+  const stainlessMat = new THREE.MeshStandardMaterial({ color: 0xdadde2, roughness: 0.32, metalness: 0.35 });
+  const stainlessDark = new THREE.MeshStandardMaterial({ color: 0xa9adb4, roughness: 0.38, metalness: 0.35 });
   const pistolGroup = new THREE.Group();
-  addPart(pistolGroup, new THREE.BoxGeometry(0.034, 0.034, 0.2), metalMid, 0, -0.006, -0.03);   // frame
+  addPart(pistolGroup, new THREE.BoxGeometry(0.036, 0.032, 0.21), stainlessDark, 0, -0.008, -0.03);    // frame
+  // barrel: a triangular prism, point down, flat face up, with the rail along the top
+  const deBarrel = addPart(pistolGroup, new THREE.CylinderGeometry(0.026, 0.026, 0.17, 3), stainlessMat, 0, 0.034, -0.1, HALF_PI, 0, 0);
+  deBarrel.rotation.order = "XZY"; deBarrel.rotation.set(HALF_PI, 0, Math.PI);   // flat side up
+  deBarrel.scale.set(1, 1, 0.75);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.014, 0.006, 0.16), stainlessDark, 0, 0.052, -0.1);       // top rail
+  addPart(pistolGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.004, 10), portMat, 0, 0.034, -0.186, HALF_PI, 0, 0);   // bore
+  addPart(pistolGroup, new THREE.BoxGeometry(0.005, 0.009, 0.012), stainlessDark, 0, 0.059, -0.175);    // front sight
+  // slide: the rear section, which kicks back on every shot
   const pistolSlide = new THREE.Group();
   pistolGroup.add(pistolSlide);
-  addPart(pistolSlide, new THREE.BoxGeometry(0.037, 0.04, 0.245), metalDark, 0, 0.031, -0.055);
-  for (let i = 0; i < 5; i++) addPart(pistolSlide, new THREE.BoxGeometry(0.039, 0.03, 0.004), metalMid, 0, 0.031, 0.035 + i * 0.01);
-  addPart(pistolSlide, new THREE.BoxGeometry(0.006, 0.01, 0.01), metalMid, 0, 0.055, -0.165);   // front sight
-  addPart(pistolSlide, new THREE.BoxGeometry(0.024, 0.01, 0.01), metalMid, 0, 0.055, 0.05);     // rear sight
-  addPart(pistolGroup, new THREE.CylinderGeometry(0.011, 0.011, 0.02, 10), metalDark, 0, 0.031, -0.18, HALF_PI, 0, 0);   // muzzle
-  addPart(pistolGroup, new THREE.BoxGeometry(0.034, 0.12, 0.052), gripMat, 0, -0.075, 0.058, 0.25, 0, 0);   // grip
-  addPart(pistolGroup, new THREE.TorusGeometry(0.022, 0.004, 6, 12, Math.PI), metalDark, 0, -0.025, -0.02, 0, HALF_PI, Math.PI);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.006, 0.022, 0.006), metalDark, 0, -0.03, -0.02, 0.25, 0, 0);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.012, 0.016, 0.012), metalDark, 0, 0.045, 0.075, -0.4, 0, 0);   // hammer
-  const pistolMag = addPart(pistolGroup, new THREE.BoxGeometry(0.026, 0.11, 0.04), metalDark, 0, -0.085, 0.062, 0.25, 0, 0);
+  addPart(pistolSlide, new THREE.BoxGeometry(0.04, 0.042, 0.11), stainlessMat, 0, 0.028, 0.035);
+  for (let i = 0; i < 6; i++) addPart(pistolSlide, new THREE.BoxGeometry(0.042, 0.032, 0.0035), stainlessDark, 0, 0.026, 0.05 + i * 0.008);
+  addPart(pistolSlide, new THREE.BoxGeometry(0.008, 0.009, 0.008), stainlessDark, -0.009, 0.053, 0.083);   // rear sight, two ears
+  addPart(pistolSlide, new THREE.BoxGeometry(0.008, 0.009, 0.008), stainlessDark, 0.009, 0.053, 0.083);
+  // squared trigger guard, trigger, slide stop, hammer
+  addPart(pistolGroup, new THREE.BoxGeometry(0.008, 0.032, 0.008), stainlessDark, 0, -0.036, -0.06);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.008, 0.008, 0.06), stainlessDark, 0, -0.05, -0.034);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.006, 0.024, 0.006), metalDark, 0, -0.032, -0.03, 0.25, 0, 0);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.004, 0.008, 0.03), stainlessDark, 0.02, 0.006, 0.0);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.014, 0.02, 0.014), stainlessDark, 0, 0.044, 0.096, -0.5, 0, 0);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.04, 0.135, 0.058), gripMat, 0, -0.08, 0.06, 0.24, 0, 0);    // rubber grip
+  const pistolMag = addPart(pistolGroup, new THREE.BoxGeometry(0.03, 0.12, 0.045), metalDark, 0, -0.09, 0.062, 0.24, 0, 0);
 
   const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup];
   for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
@@ -1086,14 +1103,14 @@
       inspectDuration: 1.9, inspects: GUN_INSPECTS,
     },
     pistol: {
-      name: "PISTOL", group: pistolGroup,
+      name: "DEAGLE", group: pistolGroup,
       restPos: new THREE.Vector3(0.18, -0.19, -0.38), restRot: new THREE.Euler(0.02, -0.06, 0),
-      adsPos: new THREE.Vector3(0.0, -0.06, -0.30), adsRot: new THREE.Euler(0, 0, 0),
+      adsPos: new THREE.Vector3(0.0, -0.06, -0.32), adsRot: new THREE.Euler(0, 0, 0),   // front blade between the rear ears
       canADS: true, scope: false, adsZoom: 0.82, fireRate: 0.26, auto: false, isMelee: false, usesAmmo: true,
       magSize: 7, ammoLabel: "ROUNDS", pellets: 1, spread: 0.0035, spreadAds: 0.001, bloom: 0.004, bloomMax: 0.012, bloomRecover: 0.05,
       scoreScale: 0.8, recoil: 0.75, kick: 0.55, flashScale: 0.7, brake: false, smoke: 0.5,
-      action: "slide", ejectOnShot: true, casing: "small",
-      muzzle: new THREE.Vector3(0, 0.031, -0.20), eject: new THREE.Vector3(0.022, 0.045, -0.02),
+      action: "slide", ejectOnShot: true, casing: "magnum",
+      muzzle: new THREE.Vector3(0, 0.034, -0.2), eject: new THREE.Vector3(0.024, 0.04, 0.03),
       sound: { recording: "pistol", rate: 1, lowcut: 60, length: 1.8, gain: 0.9 },
       mag: pistolMag, magRestY: pistolMag.position.y,
       reload: {
@@ -1107,7 +1124,7 @@
           [1.60,  0,     0,     0,    0,     0   ],
         ],
       },
-      inspectDuration: 1.7, inspects: GUN_INSPECTS,
+      inspectDuration: 1.7, inspects: GUN_INSPECTS, inspectReach: 0.45,   // a pistol doesn't need the rifle's big moves
     },
     knife: {
       name: "KNIFE", group: knifeGroup,
@@ -1211,7 +1228,7 @@
     _ejectPos.copy(w.eject);
     w.group.localToWorld(_ejectPos);
     camera.getWorldQuaternion(_camQuat);
-    const k = w.casing === "small" ? 0.8 : 1;
+    const k = w.casing === "small" ? 0.8 : w.casing === "magnum" ? 1.15 : 1;
     _ejectVel.set((2.2 + Math.random() * 0.9) * k * handSign(), (1.9 + Math.random() * 0.8) * k, 0.5 + Math.random() * 0.5)
       .applyQuaternion(_camQuat).add(player.velocity);
     ejectCasing(_ejectPos, _ejectVel, w.casing);
@@ -1440,7 +1457,8 @@
       vm.inspectTimer -= dt;
       const t = 1 - Math.max(vm.inspectTimer, 0) / w.inspectDuration;
       w.inspects[vm.inspectIndex](Math.min(t, 1), _tmpPos, _tmpRot);
-      ipx = _tmpPos.x; ipy = _tmpPos.y; ipz = _tmpPos.z;
+      const reach = w.inspectReach || 1;
+      ipx = _tmpPos.x * reach; ipy = _tmpPos.y * reach; ipz = _tmpPos.z * reach;
       irx = _tmpRot.x; iry = _tmpRot.y; irz = _tmpRot.z;
       if (vm.inspectTimer <= 0) { vm.inspectTimer = 0; boltMesh.position.z = 0.20; }
     }
@@ -1877,11 +1895,11 @@
   const feedEl = document.getElementById("feed");
   // weapon icons for the hotbar, all pointing left, drawn in a 64 x 24 box
   const WEAPON_ICONS = {
-    rifle: '<rect x="3" y="12.5" width="47" height="2.6" rx="1"/><rect x="2" y="11.6" width="5" height="4.4" rx="1"/><rect x="43" y="9.5" width="16" height="7.5" rx="2"/><rect x="22" y="5.5" width="17" height="4" rx="1.6"/><rect x="26" y="9" width="2" height="3"/><rect x="34" y="9" width="2" height="3"/><rect x="45" y="16" width="4" height="6" rx="1.2"/><rect x="55" y="15" width="8" height="4" rx="1.6"/>',
+    rifle: '<rect x="0.5" y="10.3" width="3.6" height="3.4" rx="0.6"/><rect x="3" y="11" width="25" height="2" rx="0.8"/><path d="M24 10 L44 10 L44 15 L27.5 15 Q25 15 24 13.6 Z"/><path d="M43 10 L50 10.6 L62.4 11.4 L63 18.6 L60.4 18.9 L52 15.6 L47.4 16.2 L45 19.8 L41.6 19.8 L43.2 15 Z"/><rect x="27" y="5.4" width="15" height="2.6" rx="1.2"/><path d="M22 4.3 L27.6 5 L27.6 8.4 L22 9.1 Z"/><path d="M41.4 5 L44.6 4.6 L44.6 8.8 L41.4 8.4 Z"/><rect x="29.6" y="7.6" width="1.8" height="2.6"/><rect x="37.6" y="7.6" width="1.8" height="2.6"/><rect x="33.5" y="4.2" width="2" height="1.4" rx="0.4"/><circle cx="45.6" cy="12.6" r="1.4"/><rect x="33" y="15" width="5" height="2.6" rx="0.4"/><path d="M38.6 15 Q39 18.4 42 18.2 L42 17.1 Q40 17.2 39.8 15 Z"/>',
     ar: '<rect x="4" y="10" width="14" height="2.6" rx="1"/><rect x="16" y="8.5" width="16" height="5.5" rx="1"/><rect x="30" y="7.5" width="16" height="7" rx="1"/><rect x="33" y="5" width="9" height="2.5" rx="1"/><path d="M34 14 L39 14 L37.5 22 L33 21 Z"/><path d="M43 14 L47 14 L47.5 19.5 L44 19.5 Z"/><rect x="46" y="9" width="7" height="3" rx="1"/><rect x="52" y="7.5" width="9" height="8" rx="1.5"/>',
-    ak: '<rect x="3" y="10.5" width="13" height="2.4" rx="1"/><rect x="14" y="9.5" width="15" height="4.5" rx="1.5"/><rect x="16" y="7.5" width="11" height="2" rx="1"/><rect x="28" y="8.5" width="17" height="6" rx="1"/><path d="M33 14 L38 14 L41 21 L36.5 22.5 Z"/><path d="M42 14 L45.5 14 L46.5 19.5 L43 19.5 Z"/><path d="M45 9 L62 11.5 L62 17.5 L45 14 Z"/>',
+    ak: '<rect x="0.5" y="9.5" width="3.2" height="2.6" rx="0.5"/><rect x="3" y="10.1" width="9" height="1.4"/><path d="M9.6 7.6 L11.6 7.6 L12.4 12 L9.6 12 Z"/><rect x="12" y="7.8" width="9.5" height="1.9" rx="0.8"/><rect x="12" y="10" width="10" height="3.8" rx="1.2"/><rect x="21" y="8.6" width="19" height="5.4" rx="0.6"/><path d="M21 8.8 Q30 6.4 40 7.3 L40 8.8 Z"/><rect x="21.6" y="7" width="2" height="1.8"/><path d="M25.6 14 L31 14 Q31.4 18.6 34.6 22.4 L30.2 23.6 Q26.6 19 25.6 14 Z"/><path d="M35 14 L38.6 14 L40.4 20.6 L37 21.2 Z"/><path d="M31.6 14 Q32 16.6 34.8 16.4 L34.8 15.4 Q33 15.6 32.8 14 Z"/><path d="M39.5 8.8 L46 9.6 L62.4 12 L63 18.8 L60.6 19 L46 14.6 L39.5 14 Z"/>',
     shotgun: '<rect x="2" y="9" width="36" height="2.6" rx="1"/><rect x="8" y="12" width="26" height="2.4" rx="1"/><rect x="14" y="11" width="12" height="4.5" rx="1.5"/><rect x="36" y="8.5" width="12" height="6.5" rx="1"/><path d="M47 9 L62 11 L62 18 L47 15 Z"/><path d="M40 15 L44 15 L43 18 L40 17 Z"/>',
-    pistol: '<rect x="16" y="7" width="28" height="6" rx="1.2"/><rect x="18" y="12.5" width="22" height="3" rx="1"/><path d="M34 14 L42 14 L44.5 23 L37 23 Z"/><path d="M28 15 L33 15 L33 18 L29 18 Z"/>',
+    pistol: '<g transform="translate(6.5 0)"><path d="M5 5.2 L46 5.2 L46 11.2 L7.4 11.2 L5 9.2 Z"/><rect x="8" y="3.6" width="35" height="1.6" rx="0.4"/><rect x="7.6" y="2.6" width="1.6" height="1.4"/><rect x="41.6" y="2.6" width="2.8" height="1.4"/><rect x="12" y="11" width="34.5" height="3.2" rx="0.4"/><path d="M21.4 14 L21.4 19.2 Q21.4 20.4 22.8 20.4 L32 20.4 L32 18.6 L23.4 18.6 L23.4 14 Z"/><path d="M27.6 14 L29.4 14 L29 17.4 L27.8 17.4 Z"/><path d="M33 14 L46 14 Q47.8 14 48.2 15.8 L50.6 23.4 L39.6 23.4 L36.6 15.6 Z"/><path d="M45.8 5.8 L49.6 4.4 L50.4 7.2 L46.2 9 Z"/></g>',
     knife: '<path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/><rect x="41" y="8" width="3" height="9" rx="1"/><rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/><circle cx="60.5" cy="12.4" r="2.4"/>',
   };
   const iconSVG = (id) => '<svg viewBox="0 0 64 24" fill="currentColor">' + WEAPON_ICONS[id] + "</svg>";
