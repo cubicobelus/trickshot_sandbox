@@ -77,36 +77,124 @@
     </div>
 
     <div id="settings">
-      <h2>Settings</h2>
-      <div class="slider-row">
-        <label>Sens X</label>
-        <input type="range" id="sens-x" min="0.05" max="4" step="0.05" value="1">
-        <div class="val" id="sens-x-val">1.00</div>
+      <div class="settings-head">
+        <h2>Settings</h2>
+        <div class="stabs" role="tablist">
+          <button type="button" class="stab active" data-tab="mouse">Mouse</button>
+          <button type="button" class="stab" data-tab="crosshair">Crosshair</button>
+          <button type="button" class="stab" data-tab="view">View</button>
+          <button type="button" class="stab" data-tab="other">Other</button>
+        </div>
       </div>
-      <div class="slider-row">
-        <label>Sens Y</label>
-        <input type="range" id="sens-y" min="0.05" max="4" step="0.05" value="1">
-        <div class="val" id="sens-y-val">1.00</div>
+
+      <div class="spanel" data-panel="mouse">
+        <div class="slider-row">
+          <label for="sens-x">Sens X</label>
+          <input type="range" id="sens-x" min="0.05" max="4" step="0.05" value="1">
+          <div class="val" id="sens-x-val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="sens-y">Sens Y</label>
+          <input type="range" id="sens-y" min="0.05" max="4" step="0.05" value="1">
+          <div class="val" id="sens-y-val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="sens-scope">Scoped mult</label>
+          <input type="range" id="sens-scope" min="0.05" max="1" step="0.05" value="0.35">
+          <div class="val" id="sens-scope-val">0.35</div>
+        </div>
+        <div class="slider-row">
+          <label for="accel-strength">Accel strength</label>
+          <input type="range" id="accel-strength" min="0" max="1.5" step="0.05" value="0.7" disabled>
+          <div class="val" id="accel-strength-val">0.70</div>
+        </div>
+        <div class="check-row">
+          <label><input type="checkbox" id="sens-link" checked>Link Y to X</label>
+          <label><input type="checkbox" id="mouse-accel">Mouse acceleration</label>
+        </div>
       </div>
-      <div class="slider-row">
-        <label>Scoped mult</label>
-        <input type="range" id="sens-scope" min="0.05" max="1" step="0.05" value="0.35">
-        <div class="val" id="sens-scope-val">0.35</div>
+
+      <div class="spanel" data-panel="crosshair" hidden>
+        <div class="xh-preview" id="xh-preview"></div>
+        <div class="slider-row">
+          <label for="xh-style">Style</label>
+          <select id="xh-style" data-setting="xhStyle">
+            <option value="cross">Cross</option>
+            <option value="cross-dot">Cross + dot</option>
+            <option value="t">T (no top)</option>
+            <option value="dot">Dot</option>
+            <option value="circle">Circle + dot</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <label for="xh-color">Colour</label>
+          <input type="color" id="xh-color" data-setting="xhColor" value="#eeeeee">
+          <div class="swatches" id="xh-swatches"></div>
+        </div>
+        <div class="slider-row">
+          <label for="xh-size">Length</label>
+          <input type="range" id="xh-size" data-setting="xhSize" min="2" max="30" step="1" value="9">
+          <div class="val">9</div>
+        </div>
+        <div class="slider-row">
+          <label for="xh-thick">Thickness</label>
+          <input type="range" id="xh-thick" data-setting="xhThick" min="1" max="6" step="0.5" value="2">
+          <div class="val">2</div>
+        </div>
+        <div class="slider-row">
+          <label for="xh-gap">Gap</label>
+          <input type="range" id="xh-gap" data-setting="xhGap" min="0" max="15" step="1" value="0">
+          <div class="val">0</div>
+        </div>
+        <div class="slider-row">
+          <label for="xh-alpha">Opacity</label>
+          <input type="range" id="xh-alpha" data-setting="xhAlpha" min="0.2" max="1" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="check-row">
+          <label><input type="checkbox" id="xh-outline" data-setting="xhOutline">Black outline</label>
+        </div>
       </div>
-      <div class="slider-row">
-        <label>Accel strength</label>
-        <input type="range" id="accel-strength" min="0" max="1.5" step="0.05" value="0.7" disabled>
-        <div class="val" id="accel-strength-val">0.70</div>
+
+      <div class="spanel" data-panel="view" hidden>
+        <div class="slider-row">
+          <label for="hand">Weapon hand</label>
+          <select id="hand" data-setting="hand">
+            <option value="right">Right-handed</option>
+            <option value="left">Left-handed</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <label for="fov">Field of view</label>
+          <input type="range" id="fov" data-setting="fov" min="60" max="110" step="1" value="78">
+          <div class="val">78</div>
+        </div>
+        <div class="slider-row">
+          <label for="bob">Weapon bob</label>
+          <input type="range" id="bob" data-setting="bob" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="shake">Screen shake</label>
+          <input type="range" id="shake" data-setting="shake" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="check-row">
+          <label><input type="checkbox" id="scope-sway" data-setting="scopeSway" checked>Scope sway</label>
+          <label><input type="checkbox" id="speed-lines" data-setting="speedLines" checked>Speed lines</label>
+        </div>
       </div>
-      <div class="slider-row">
-        <label>Volume</label>
-        <input type="range" id="volume" min="0" max="1" step="0.05" value="0.55">
-        <div class="val" id="volume-val">0.55</div>
-      </div>
-      <div class="check-row">
-        <label><input type="checkbox" id="sens-link" checked>Link Y to X</label>
-        <label><input type="checkbox" id="mouse-accel">Mouse acceleration</label>
-        <label><input type="checkbox" id="unlimited-ammo">Unlimited ammo</label>
+
+      <div class="spanel" data-panel="other" hidden>
+        <div class="slider-row">
+          <label for="volume">Volume</label>
+          <input type="range" id="volume" min="0" max="1" step="0.05" value="0.55">
+          <div class="val" id="volume-val">0.55</div>
+        </div>
+        <div class="check-row">
+          <label><input type="checkbox" id="unlimited-ammo">Unlimited ammo</label>
+        </div>
+        <button type="button" class="btn small" id="settings-reset">Reset all settings</button>
       </div>
     </div>
 

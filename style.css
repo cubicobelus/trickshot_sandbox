@@ -33,16 +33,42 @@
   .check-row input { accent-color: #ffd24a; cursor: pointer; vertical-align: middle; margin-right: 4px; }
   .check-row label { cursor: pointer; margin-right: 14px; white-space: nowrap; }
 
+  /* settings tabs */
+  .settings-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .settings-head h2 { margin: 0 !important; }
+  .stabs { display: flex; gap: 4px; }
+  .stab {
+    background: transparent; color: #aaa; border: 1px solid #3a3a42; border-radius: 5px;
+    padding: 3px 10px; font: 12px 'Segoe UI', Arial, sans-serif; cursor: pointer;
+  }
+  .stab:hover { color: #fff; border-color: #666; }
+  .stab.active { color: #111; background: #ffd24a; border-color: #ffd24a; font-weight: bold; }
+  .spanel { min-height: 150px; }
+  .slider-row select {
+    flex: 1; background: #26262c; color: #eee; border: 1px solid #44444c; border-radius: 4px;
+    padding: 3px 6px; font: 12.5px 'Segoe UI', Arial, sans-serif; cursor: pointer;
+  }
+  .slider-row input[type=color] { width: 44px; height: 24px; padding: 0; border: 1px solid #44444c; border-radius: 4px; background: none; cursor: pointer; }
+  .swatches { display: flex; gap: 5px; flex: 1; }
+  .swatches button { width: 18px; height: 18px; border-radius: 50%; border: 1px solid #555; cursor: pointer; padding: 0; }
+  .xh-preview {
+    height: 70px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #3a3a42;
+    background: linear-gradient(90deg, #87b7d9 0 33%, #b4e77f 33% 66%, #6e6e78 66%);
+    display: flex; align-items: center; justify-content: space-around;
+  }
+  #settings-reset { margin-top: 14px; }
+
+  /* the crosshair is an SVG drawn from the settings; colour comes from `color` */
+  #crosshair { color: #eee; }
+  #crosshair.hit { color: #ff3b3b !important; }
+  #crosshair svg, .xh-preview svg { display: block; overflow: visible; }
+
   #hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
 
   #crosshair {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 20px; height: 20px; transition: opacity 0.1s;
+    transition: opacity 0.1s;
   }
-  #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #eee; }
-  #crosshair::before { left: 9px; top: 0; width: 2px; height: 20px; }
-  #crosshair::after { top: 9px; left: 0; width: 20px; height: 2px; }
-  #crosshair.hit::before, #crosshair.hit::after { background: #ff3b3b; }
 
   #scope {
     position: absolute; top: 50%; left: 50%; width: 78vh; height: 78vh; border-radius: 50%;

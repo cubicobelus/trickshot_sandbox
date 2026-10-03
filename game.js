@@ -97,7 +97,13 @@
   const SETTINGS = {
     sensX: 1.0, sensY: 1.0, scopedSensMult: 0.35, volume: 0.55,
     unlimitedAmmo: false, mouseAccel: false, accelStrength: 0.7,
+    // crosshair
+    xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
+    // view
+    hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
   };
+  const DEFAULT_SETTINGS = Object.assign({}, SETTINGS);
+  const handSign = () => (SETTINGS.hand === "left" ? -1 : 1);
 
   // ======================================================================
   // SCENE
@@ -675,7 +681,7 @@
     m.mesh.scale.setScalar(1);
     m.mesh.visible = true;
     camera.getWorldQuaternion(_magDropQuat);
-    _magDropVel.set(0.25 + Math.random() * 0.3, -1.4, 0.2).applyQuaternion(_magDropQuat);
+    _magDropVel.set((0.25 + Math.random() * 0.3) * handSign(), -1.4, 0.2).applyQuaternion(_magDropQuat);
     m.vel.copy(_magDropVel).add(player.velocity);
     m.spin.set((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 8);
   }
@@ -765,8 +771,12 @@
 
   rifleGroup.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   knifeGroup.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
-  camera.add(rifleGroup);
-  camera.add(knifeGroup);
+  // everything held sits under one root, so left-handed is a single mirror (three.js
+  // flips face winding for negative scale, so the models still render correctly)
+  const viewmodelRoot = new THREE.Group();
+  camera.add(viewmodelRoot);
+  viewmodelRoot.add(rifleGroup);
+  viewmodelRoot.add(knifeGroup);
   camera.add(muzzleLight);
   knifeGroup.visible = false;
 
@@ -922,7 +932,7 @@
     _ejectPos.set(0.06, 0.035, 0.12);
     rifleGroup.localToWorld(_ejectPos);
     camera.getWorldQuaternion(_camQuat);
-    _ejectVel.set(2.2 + Math.random() * 0.9, 1.9 + Math.random() * 0.8, 0.5 + Math.random() * 0.5)
+    _ejectVel.set((2.2 + Math.random() * 0.9) * handSign(), 1.9 + Math.random() * 0.8, 0.5 + Math.random() * 0.5)
       .applyQuaternion(_camQuat).add(player.velocity);
     ejectCasing(_ejectPos, _ejectVel);
     spawnSmoke(_ejectPos, player.velocity.x, 0.3, player.velocity.z, 0.8, 0.04, 0.22, 0.22);
@@ -997,7 +1007,7 @@
 
     const speedFactor = moving ? (sprinting ? 1.6 : 1.0) : 0;
     vm.bobTimer += dt * (onGround ? (2 + speedFactor * 8) : 1.2);
-    const bobScale = (1 - adsEased) * (0.3 + speedFactor);
+    const bobScale = (1 - adsEased) * (0.3 + speedFactor) * SETTINGS.bob;
     const bobX = Math.sin(vm.bobTimer) * 0.012 * bobScale;
     const bobY = Math.abs(Math.sin(vm.bobTimer * 2)) * 0.008 * bobScale;
 
@@ -1007,9 +1017,10 @@
     // figure-eight breathing sway while scoped. Both move the real aim, so what
     // the reticle shows is where the shot goes.
     vm.camKick *= Math.max(0, 1 - dt * 10);
-    const sway = CFG.scopeSway * adsEased;
-    camera.rotation.x = vm.camKick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway;
-    camera.rotation.y = vm.camKick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3;
+    const sway = SETTINGS.scopeSway ? CFG.scopeSway * adsEased : 0;
+    const kick = vm.camKick * SETTINGS.shake;
+    camera.rotation.x = kick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway;
+    camera.rotation.y = kick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3;
 
     // bolt: roll the rifle toward you while it works, with a jolt on each slam
     let boltTilt = 0, boltJolt = 0;
@@ -1083,12 +1094,12 @@
     const speedNow = Math.hypot(player.velocity.x, player.velocity.z);
     const speedT = Math.max(0, Math.min((speedNow - CFG.groundMaxSpeed) / (CFG.maxSpeed - CFG.groundMaxSpeed), 1));
     const speedFov = CFG.speedFovBoost * speedT * (1 - adsEased);
-    const targetFov = CFG.baseFov + (CFG.scopedFov - CFG.baseFov) * adsEased + speedFov;
+    const targetFov = SETTINGS.fov + (CFG.scopedFov - SETTINGS.fov) * adsEased + speedFov;
     if (Math.abs(camera.fov - targetFov) > 0.02) {
       camera.fov += (targetFov - camera.fov) * Math.min(dt * 12, 1);
       camera.updateProjectionMatrix();
     }
-    speedlinesEl.style.opacity = Math.max(0, (speedT - 0.35) / 0.65) * 0.85 * (1 - adsEased);
+    speedlinesEl.style.opacity = SETTINGS.speedLines ? Math.max(0, (speedT - 0.35) / 0.65) * 0.85 * (1 - adsEased) : 0;
 
     const scopeAlpha = Math.max(0, (adsEased - 0.55) / 0.45);
     scopeEl.style.opacity = scopeAlpha;
@@ -1434,6 +1445,26 @@
   const mouseAccelEl = document.getElementById("mouse-accel");
   const unlimitedAmmoEl = document.getElementById("unlimited-ammo");
 
+  // Newer settings bind themselves through a data-setting attribute: the element's type
+  // decides how the value is read, and its own min/max or options validate saved values.
+  const boundEls = Array.from(document.querySelectorAll("[data-setting]"));
+  function readBound(el) {
+    if (el.type === "checkbox") return el.checked;
+    if (el.type === "range") return parseFloat(el.value);
+    return el.value;
+  }
+  function writeBound(el, v) {
+    if (el.type === "checkbox") el.checked = v; else el.value = v;
+    const out = el.parentElement.querySelector(".val");
+    if (out && el.type === "range") out.textContent = Number.isInteger(+el.step) ? String(v) : (+v).toFixed(2);
+  }
+  function validBound(el, v) {
+    if (el.type === "checkbox") return typeof v === "boolean";
+    if (el.type === "range") return typeof v === "number" && Number.isFinite(v) && v >= +el.min && v <= +el.max;
+    if (el.type === "color") return typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
+    return Array.from(el.options || []).some((o) => o.value === v);
+  }
+
   function refreshSettingsUI() {
     sensXVal.textContent = SETTINGS.sensX.toFixed(2);
     sensYVal.textContent = SETTINGS.sensY.toFixed(2);
@@ -1447,7 +1478,44 @@
     volumeEl.value = SETTINGS.volume;
     sensYEl.disabled = sensLink.checked;
     accelStrengthEl.disabled = !SETTINGS.mouseAccel;
+    mouseAccelEl.checked = SETTINGS.mouseAccel;
+    unlimitedAmmoEl.checked = SETTINGS.unlimitedAmmo;
+    for (const el of boundEls) writeBound(el, SETTINGS[el.dataset.setting]);
+    applySettings();
     saveSettings();
+  }
+
+  // ---- crosshair, drawn as SVG from the settings ----
+  function crosshairSVG(s) {
+    const L = s.xhSize, T = s.xhThick, G = s.xhGap, st = s.xhStyle;
+    const lines = [], dots = [];
+    if (st === "cross" || st === "cross-dot" || st === "t") {
+      lines.push([-G - L, 0, -G, 0], [G, 0, G + L, 0], [0, G, 0, G + L]);
+      if (st !== "t") lines.push([0, -G - L, 0, -G]);
+    }
+    const ringR = G + L * 0.6 + 2;
+    if (st === "circle") dots.push({ r: ringR, ring: true });
+    if (st === "cross-dot" || st === "dot" || st === "circle") dots.push({ r: Math.max(T * 0.9, 1), ring: false });
+    // square caps on both passes make the outline a 1 px border all round
+    const draw = (extra, color) =>
+      lines.map(([a, b, c, d]) => `<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" stroke="${color}" stroke-width="${T + extra}" stroke-linecap="square"/>`).join("") +
+      dots.map((c) => (c.ring
+        ? `<circle r="${c.r}" fill="none" stroke="${color}" stroke-width="${T + extra}"/>`
+        : `<circle r="${c.r + extra / 2}" fill="${color}"/>`)).join("");
+    const half = Math.ceil(Math.max(G + L, st === "circle" ? ringR : 0) + T + 3);
+    return `<svg width="${half * 2}" height="${half * 2}" viewBox="${-half} ${-half} ${half * 2} ${half * 2}" opacity="${s.xhAlpha}">` +
+      (s.xhOutline ? draw(2, "#000") : "") + draw(0, "currentColor") + "</svg>";
+  }
+
+  const xhPreviewEl = document.getElementById("xh-preview");
+  function applySettings() {
+    const svg = crosshairSVG(SETTINGS);
+    crosshairEl.innerHTML = svg;
+    crosshairEl.style.color = SETTINGS.xhColor;
+    // the same crosshair over sky, grass and wall colours
+    xhPreviewEl.innerHTML = `<div style="color:${SETTINGS.xhColor}">${svg}</div>`.repeat(3);
+    viewmodelRoot.scale.x = handSign();
+    muzzleLight.position.x = 0.3 * handSign();
   }
 
   // settings survive a reload; storage can be blocked (private windows), so it's optional
@@ -1468,10 +1536,15 @@
     };
     num("sensX", sensXEl); num("sensY", sensYEl); num("scopedSensMult", sensScopeEl);
     num("accelStrength", accelStrengthEl); num("volume", volumeEl);
-    if (typeof saved.mouseAccel === "boolean") SETTINGS.mouseAccel = mouseAccelEl.checked = saved.mouseAccel;
-    if (typeof saved.unlimitedAmmo === "boolean") SETTINGS.unlimitedAmmo = unlimitedAmmoEl.checked = saved.unlimitedAmmo;
+    if (typeof saved.mouseAccel === "boolean") SETTINGS.mouseAccel = saved.mouseAccel;
+    if (typeof saved.unlimitedAmmo === "boolean") SETTINGS.unlimitedAmmo = saved.unlimitedAmmo;
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
+    for (const el of boundEls) {
+      const key = el.dataset.setting;
+      if (validBound(el, saved[key])) SETTINGS[key] = saved[key];
+    }
   })();
+
   sensXEl.addEventListener("input", () => {
     SETTINGS.sensX = parseFloat(sensXEl.value);
     if (sensLink.checked) SETTINGS.sensY = SETTINGS.sensX;
@@ -1497,6 +1570,39 @@
     updateAmmoHud();
     saveSettings();
   });
+  for (const el of boundEls) {
+    el.addEventListener(el.type === "range" || el.type === "color" ? "input" : "change", () => {
+      SETTINGS[el.dataset.setting] = readBound(el);
+      refreshSettingsUI();
+    });
+  }
+
+  // quick colour picks next to the colour input
+  const swatchesEl = document.getElementById("xh-swatches");
+  for (const c of ["#eeeeee", "#7cfc00", "#22d3ee", "#ffd24a", "#ff4fd8", "#ff3b3b"]) {
+    const b = document.createElement("button");
+    b.type = "button"; b.style.background = c; b.title = c;
+    b.addEventListener("click", () => { SETTINGS.xhColor = c; refreshSettingsUI(); });
+    swatchesEl.appendChild(b);
+  }
+
+  // tabs
+  const settingsTabs = settingsPanel.querySelectorAll(".stab");
+  settingsTabs.forEach((tab) => tab.addEventListener("click", () => {
+    settingsTabs.forEach((t) => t.classList.toggle("active", t === tab));
+    settingsPanel.querySelectorAll(".spanel").forEach((p) => { p.hidden = p.dataset.panel !== tab.dataset.tab; });
+  }));
+
+  document.getElementById("settings-reset").addEventListener("click", () => {
+    Object.assign(SETTINGS, DEFAULT_SETTINGS);
+    sensLink.checked = true;
+    if (masterGain) masterGain.gain.value = SETTINGS.volume;
+    cancelReload();
+    ammo = CFG.magSize;
+    updateAmmoHud();
+    refreshSettingsUI();
+  });
+
   settingsPanel.addEventListener("click", (e) => e.stopPropagation());
   refreshSettingsUI();
 
