@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trickshot Sandbox</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="blocker">
+  <div id="instructions">
+    <h1>Trickshot Sandbox</h1>
+    <p>
+      <span class="key">WASD</span> move &nbsp;•&nbsp; <span class="key">Space</span> jump &nbsp;•&nbsp;
+      <span class="key">Shift</span> sprint &nbsp;•&nbsp; <span class="key">Ctrl</span> slide &nbsp;•&nbsp;
+      <span class="key">R</span> reload &nbsp;•&nbsp; <span class="key">F</span> inspect<br>
+      <span class="key">Left click</span> attack &nbsp;•&nbsp; <span class="key">Right click</span> scope &nbsp;•&nbsp;
+      <span class="key">1 / 2 / Q / wheel</span> switch
+    </p>
+    <p>
+      Base run speed is slow — you <em>build</em> speed by chaining slides, bunnyhops (hold jump on landing)
+      and wall bounces, up to 22 u/s.<br>
+      Small cyan targets are worth far more. Quickscoping, no-scopes, spins, speed and last-round shots all stack.
+    </p>
+
+
+    <div id="mode-tabs">
+      <button type="button" class="tab active" data-mode="solo">Singleplayer</button>
+      <button type="button" class="tab" data-mode="mp">Multiplayer</button>
+    </div>
+
+    <div id="panel-solo">
+      <div class="start" id="start-btn">Click to play</div>
+    </div>
+
+    <div id="panel-mp" hidden>
+      <div id="mp-connect">
+        <div class="mp-row">
+          <label for="mp-name">Name</label>
+          <input type="text" id="mp-name" maxlength="14" placeholder="Player" autocomplete="off">
+        </div>
+        <div class="mp-cols">
+          <div class="mp-box">
+            <h3>Host a room</h3>
+            <div class="check-row">
+              <label><input type="radio" name="mp-sub" value="race" checked>Score Race</label>
+              <label><input type="radio" name="mp-sub" value="dm">Deathmatch</label>
+            </div>
+            <p class="mp-hint" id="mp-sub-hint"></p>
+            <button type="button" class="btn" id="mp-host-btn">Create room</button>
+          </div>
+          <div class="mp-box">
+            <h3>Join a room</h3>
+            <input type="text" id="mp-code" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false">
+            <button type="button" class="btn" id="mp-join-btn">Join</button>
+          </div>
+        </div>
+        <p class="mp-status" id="mp-status"></p>
+      </div>
+
+      <div id="mp-room" hidden>
+        <div class="mp-codebar">Room code <b id="mp-room-code">-----</b>
+          <button type="button" class="btn small" id="mp-copy-btn">Copy</button></div>
+        <div class="mp-modeline">Mode: <b id="mp-room-mode"></b>
+          <span id="mp-host-mode" hidden>&nbsp;&middot; next round:
+            <select id="mp-next-sub"><option value="race">Score Race</option><option value="dm">Deathmatch</option></select></span>
+        </div>
+        <ul id="mp-players"></ul>
+        <div class="start" id="mp-play-btn">Click to play</div>
+        <button type="button" class="btn small" id="mp-leave-btn">Leave room</button>
+      </div>
+    </div>
+
+    <div id="settings">
+      <h2>Settings</h2>
+      <div class="slider-row">
+        <label>Sens X</label>
+        <input type="range" id="sens-x" min="0.05" max="4" step="0.05" value="1">
+        <div class="val" id="sens-x-val">1.00</div>
+      </div>
+      <div class="slider-row">
+        <label>Sens Y</label>
+        <input type="range" id="sens-y" min="0.05" max="4" step="0.05" value="1">
+        <div class="val" id="sens-y-val">1.00</div>
+      </div>
+      <div class="slider-row">
+        <label>Scoped mult</label>
+        <input type="range" id="sens-scope" min="0.05" max="1" step="0.05" value="0.35">
+        <div class="val" id="sens-scope-val">0.35</div>
+      </div>
+      <div class="slider-row">
+        <label>Accel strength</label>
+        <input type="range" id="accel-strength" min="0" max="1.5" step="0.05" value="0.7" disabled>
+        <div class="val" id="accel-strength-val">0.70</div>
+      </div>
+      <div class="slider-row">
+        <label>Volume</label>
+        <input type="range" id="volume" min="0" max="1" step="0.05" value="0.55">
+        <div class="val" id="volume-val">0.55</div>
+      </div>
+      <div class="check-row">
+        <label><input type="checkbox" id="sens-link" checked>Link Y to X</label>
+        <label><input type="checkbox" id="mouse-accel">Mouse acceleration</label>
+        <label><input type="checkbox" id="unlimited-ammo">Unlimited ammo</label>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="hud">
+  <div id="speedlines"></div>
+  <div id="scope"><div id="scope-lines"><div class="l lv"></div><div class="l lh"></div><div class="dot"></div></div></div>
+  <div id="crosshair"></div>
+  <div id="speed">
+    Speed: <span id="speed-val">0</span> u/s <span class="state" id="state-val"></span>
+    <div id="speedbar"><div id="speedbar-fill"></div></div>
+  </div>
+  <div id="score">Score<br><span id="score-val">0</span></div>
+  <div id="streak">Streak<br><span id="streak-val">0</span></div>
+  <div id="bonus-tags"></div>
+  <div id="feed"></div>
+  <div id="mp-timer" hidden><span id="mp-timer-val">3:00</span><div id="mp-timer-mode"></div></div>
+  <div id="killfeed"></div>
+  <div id="dead-screen" hidden><div>ELIMINATED</div><small id="dead-by"></small></div>
+  <div id="ammo">
+    <div class="count" id="ammo-count">5<span class="max"> / 5</span></div>
+    <div class="label" id="ammo-label">ROUNDS</div>
+  </div>
+  <div id="hotbar">
+    <div class="slot active" id="slot-rifle">
+      <div class="num">1</div>
+      <div class="icon">
+        <svg viewBox="0 0 64 24" fill="currentColor">
+          <rect x="3" y="12.5" width="47" height="2.6" rx="1"/>
+          <rect x="2" y="11.6" width="5" height="4.4" rx="1"/>
+          <rect x="43" y="9.5" width="16" height="7.5" rx="2"/>
+          <rect x="22" y="5.5" width="17" height="4" rx="1.6"/>
+          <rect x="26" y="9" width="2" height="3"/>
+          <rect x="34" y="9" width="2" height="3"/>
+          <rect x="45" y="16" width="4" height="6" rx="1.2"/>
+          <rect x="55" y="15" width="8" height="4" rx="1.6"/>
+        </svg>
+      </div>
+      <div class="name">SNIPER</div>
+    </div>
+    <div class="slot" id="slot-knife">
+      <div class="num">2</div>
+      <div class="icon">
+        <svg viewBox="0 0 64 24" fill="currentColor">
+          <path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/>
+          <rect x="41" y="8" width="3" height="9" rx="1"/>
+          <rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/>
+          <circle cx="60.5" cy="12.4" r="2.4"/>
+        </svg>
+      </div>
+      <div class="name">KNIFE</div>
+    </div>
+  </div>
+</div>
+
+<div id="scoreboard" hidden>
+  <h2 id="sb-title">Scoreboard</h2>
+  <table><thead><tr><th>#</th><th>Player</th><th>Score</th><th>Kills</th><th>Deaths</th></tr></thead><tbody id="sb-body"></tbody></table>
+  <p id="sb-foot"></p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
