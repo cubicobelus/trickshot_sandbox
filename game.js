@@ -1086,121 +1086,51 @@
       d[i] = white * 0.75 + last * 0.6;
     }
 
-    for (let v = 0; v < 4; v++) shotVariants.push(makeShotLayers(audioCtx));
+    decodeRifleShot();
   }
 
-  // The rifle report is built sample by sample rather than from oscillators: a real
-  // gunshot has no pitch, so any tone sweep reads as a synth "pew". Three layers:
-  //  crack - the supersonic N-wave (a sharp jump, a straight ramp down, a sharp return)
-  //  blast - broadband muzzle blast whose brightness collapses within a few ms
-  //  thump - low rumble from heavily low-passed noise
-  // Four random variants so back-to-back shots aren't identical.
-  const shotVariants = [];
+  // The rifle report is a recording: "Rifle Gun Shot 01" by LilMati (freesound 433858,
+  // CC0), embedded in sounds.js. Decoded once and trimmed to start right on the shot.
+  let rifleShotBuffer = null;
 
-  function makeShotLayers(ctx) {
-    const sr = ctx.sampleRate;
-    const white = () => Math.random() * 2 - 1;
-    const onePole = (fc) => 1 - Math.exp(-2 * Math.PI * fc / sr);
+  function decodeRifleShot() {
+    const b64 = window.TSB_SOUNDS && window.TSB_SOUNDS.rifleShot;
+    if (!b64) return;
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    audioCtx.decodeAudioData(bytes.buffer).then((buf) => { rifleShotBuffer = trimToFirstShot(buf); }, () => {});
+  }
 
-    function buffer(seconds, fill) {
-      const len = Math.floor(sr * seconds);
-      const buf = ctx.createBuffer(1, len, sr);
-      const d = buf.getChannelData(0);
-      fill(d, len);
-      let peak = 0;
-      for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
-      if (peak > 0) for (let i = 0; i < len; i++) d[i] /= peak;
-      return buf;
+  // start just before the first big transient, stop before a second shot if the
+  // recording has one, and normalise to full scale
+  function trimToFirstShot(buf) {
+    const sr = buf.sampleRate, ch = buf.numberOfChannels;
+    const mono = new Float32Array(buf.length);
+    for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) mono[i] += d[i] / ch; }
+    let peak = 0;
+    for (let i = 0; i < mono.length; i++) peak = Math.max(peak, Math.abs(mono[i]));
+    let start = 0;
+    for (let i = 0; i < mono.length; i++) {
+      if (Math.abs(mono[i]) > peak * 0.3) { start = Math.max(0, i - Math.floor(sr * 0.004)); break; }
     }
-
-    const crack = buffer(0.02, (d, len) => {
-      const T = sr * rnd(0.0014, 0.0022);
-      let hp = 0, prev = 0;
-      for (let i = 0; i < len; i++) {
-        const n = i < T ? 1 - 2 * i / T : 0;                // N-wave body
-        const fizz = white() * 0.5 * Math.exp(-i / (sr * 0.0018));
-        const x = n + fizz;
-        hp = 0.92 * (hp + x - prev); prev = x;              // gentle high-pass keeps it a snap, not a pop
-        d[i] = hp;
-      }
-    });
-
-    // Fixed bands that each die at their own rate: the highs vanish in a few ms, the
-    // lows hang on. (A single swept filter does the same darkening but the ear hears
-    // the sweep itself as a "zap".)
-    const blast = buffer(0.5, (d, len) => {
-      let hLp = 0, mA = 0, mB = 0, l1 = 0, l2 = 0;
-      const kH = onePole(3500), kMa = onePole(2600), kMb = onePole(280), kL = onePole(420);
-      const atk = sr * 0.0003;
-      for (let i = 0; i < len; i++) {
-        const t = i / sr;
-        const wh = white(), wm = white(), wl = white();
-        hLp += kH * (wh - hLp);
-        mA += kMa * (wm - mA); mB += kMb * (mA - mB);
-        l1 += kL * (wl - l1); l2 += kL * (l1 - l2);
-        const hi = (wh - hLp) * Math.exp(-t / 0.004);
-        const mid = (mA - mB) * 1.4 * Math.exp(-t / 0.018);
-        const low = l2 * 3.0 * Math.exp(-t / 0.075);
-        d[i] = Math.min(i / atk, 1) * (hi * 0.9 + mid + low);
-      }
-    });
-
-    const thump = buffer(0.45, (d, len) => {
-      let a = 0, b = 0;
-      const k = onePole(140);
-      const atk = sr * 0.002;
-      for (let i = 0; i < len; i++) {
-        const t = i / sr;
-        a += k * (white() - a);
-        b += k * (a - b);
-        d[i] = b * Math.min(i / atk, 1) * Math.exp(-t / 0.085);
-      }
-    });
-
-    // Rolling tail: the report coming back off distant terrain. One continuous, smeared
-    // rumble with slow irregular swells, different in each ear. Discrete repeats would
-    // read as a bouncy "boing-oing".
-    const tailLen = Math.floor(sr * 1.8);
-    const tail = ctx.createBuffer(2, tailLen, sr);
-    const kA = onePole(650), kB = onePole(240), kMod = onePole(7);
+    const win = Math.floor(sr * 0.005);
+    let end = Math.min(mono.length, start + sr * 3.2), level = 0;
+    for (let i = start + Math.floor(sr * 0.35); i + win < end; i += win) {
+      let e = 0;
+      for (let j = i; j < i + win; j++) e = Math.max(e, Math.abs(mono[j]));
+      if (level > 0 && e > peak * 0.45 && e > level * 4) { end = i - Math.floor(sr * 0.01); break; }
+      level = level ? level * 0.7 + e * 0.3 : e;
+    }
+    const len = Math.max(1, Math.floor(end - start));
+    const out = audioCtx.createBuffer(2, len, sr);
+    let pk = 0;
     for (let c = 0; c < 2; c++) {
-      const d = tail.getChannelData(c);
-      const mod = new Float32Array(tailLen);
-      let m1 = 0, m2 = 0, mMin = Infinity, mMax = -Infinity;
-      for (let i = 0; i < tailLen; i++) {
-        m1 += kMod * (white() - m1); m2 += kMod * (m1 - m2);
-        mod[i] = m2;
-        if (m2 < mMin) mMin = m2;
-        if (m2 > mMax) mMax = m2;
-      }
-      let a1 = 0, a2 = 0, b1 = 0, b2 = 0, peak = 0;
-      for (let i = 0; i < tailLen; i++) {
-        const t = i / sr;
-        const w = white();
-        a1 += kA * (w - a1); a2 += kA * (a1 - a2);
-        b1 += kB * (w - b1); b2 += kB * (b1 - b2);
-        const rise = t < 0.04 ? 0 : Math.min((t - 0.04) / 0.12, 1);
-        const swell = 0.45 + 0.55 * (mod[i] - mMin) / (mMax - mMin || 1);
-        const v = rise * rise * (3 - 2 * rise) * swell * (a2 * Math.exp(-t / 0.30) + b2 * 1.6 * Math.exp(-t / 0.65));
-        d[i] = v;
-        peak = Math.max(peak, Math.abs(v));
-      }
-      if (peak > 0) for (let i = 0; i < tailLen; i++) d[i] /= peak;
+      const src = buf.getChannelData(Math.min(c, ch - 1)), d = out.getChannelData(c);
+      for (let i = 0; i < len; i++) { d[i] = src[start + i]; pk = Math.max(pk, Math.abs(d[i])); }
     }
-
-    return { crack, blast, thump, tail };
-  }
-
-  function playBuffer(buf, gain, delay, wet, saturate, rate) {
-    const now = audioCtx.currentTime + (delay || 0);
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = rate || 1;
-    const g = audioCtx.createGain();
-    g.gain.value = gain;
-    src.connect(g);
-    route(g, wet, saturate);
-    src.start(now);
+    for (let c = 0; c < 2; c++) { const d = out.getChannelData(c); for (let i = 0; i < len; i++) d[i] *= 0.95 / (pk || 1); }
+    return out;
   }
 
   // route a node to dry master (optionally through saturation) and the reverb send
@@ -1274,18 +1204,29 @@
     o.start(now); o.stop(now + dur + 0.02);
   }
 
-  // .50-cal report from the pre-built layers above, then echoes rolling off into the
-  // distance. `scoped` (0..1) pulls the sound in closer: more low end, a bit less room.
-  function playShotSound(scoped) {
+  // the recording, processed as tuned in the shot lab: 60 Hz low cut, light
+  // compression, full level for 0.9 s then a fade to silence at 1.8 s
+  function playShotSound() {
     if (!audioCtx) return;
-    const s = scoped || 0;
-    const room = 1 - 0.3 * s;
-    const v = shotVariants[Math.floor(Math.random() * shotVariants.length)];
-    // light reverb sends only: the synthetic room smears transients into a metallic ring
-    playBuffer(v.crack, 0.75, 0, 0.04 * room, false);
-    playBuffer(v.blast, 0.85, 0.0005, 0.14 * room, true);
-    playBuffer(v.thump, 0.65 + 0.3 * s, 0.001, 0.10 * room, false);
-    playBuffer(v.tail, 0.42 * room, 0, 0.18, false);
+    if (!rifleShotBuffer) { noiseHit(1400, 0.5, 1.2, 0.12, "lowpass", 0, 0.3, true); return; }   // still decoding
+    const now = audioCtx.currentTime;
+    const src = audioCtx.createBufferSource();
+    src.buffer = rifleShotBuffer;
+    src.playbackRate.value = rnd(0.98, 1.02);   // tiny variation so repeat shots aren't identical
+    const hp = audioCtx.createBiquadFilter();
+    hp.type = "highpass"; hp.frequency.value = 60; hp.Q.value = 0.7;
+    const comp = audioCtx.createDynamicsCompressor();
+    comp.threshold.value = -15.6; comp.ratio.value = 6; comp.knee.value = 6;
+    comp.attack.value = 0.004; comp.release.value = 0.15;
+    const makeup = audioCtx.createGain();
+    makeup.gain.value = 1.56;
+    const env = audioCtx.createGain();
+    env.gain.setValueAtTime(1, now);
+    env.gain.setValueAtTime(1, now + 0.9);
+    env.gain.linearRampToValueAtTime(0, now + 1.8);
+    src.connect(hp).connect(comp).connect(makeup).connect(env).connect(masterGain);
+    src.start(now);
+    src.stop(now + 1.85);
   }
 
   function playDryFire() { noiseHit(3000, 6, 0.16, 0.04, "highpass", 0, 0.15); tone("square", 260, 150, 0.06, 0.05, 0, 0.1); }
@@ -2096,7 +2037,7 @@
     // ---- rifle ----
     const ammoBefore = ammo;
     if (!SETTINGS.unlimitedAmmo) { ammo--; updateAmmoHud(); }
-    playShotSound(easeInOut(vm.adsProgress));
+    playShotSound();
     vm.recoil = 1;
     vm.camKick = 1;
     vm.camKickYaw = Math.random() * 2 - 1;
