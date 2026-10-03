@@ -546,17 +546,29 @@
   // ======================================================================
   const brassMat = new THREE.MeshStandardMaterial({ color: 0xc9a14a, roughness: 0.3, metalness: 0.85 });
   const casingGeo = new THREE.CylinderGeometry(0.010, 0.012, 0.08, 8);
+  const smallCasingGeo = new THREE.CylinderGeometry(0.0065, 0.0075, 0.032, 8);
+  const shellGeo = new THREE.CylinderGeometry(0.0115, 0.0115, 0.066, 10);
+  const shellMat = new THREE.MeshStandardMaterial({ color: 0xa3231b, roughness: 0.55, metalness: 0.1 });
+  const CASINGS = {
+    rifle: { geo: casingGeo, mat: brassMat, ping: 1 },
+    small: { geo: smallCasingGeo, mat: brassMat, ping: 0.7 },
+    shell: { geo: shellGeo, mat: shellMat, ping: 0.25 },   // plastic: a dull tap, not a ring
+  };
   const casingPool = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 24; i++) {   // enough for a full-auto burst
     const mesh = new THREE.Mesh(casingGeo, brassMat);
     mesh.visible = false; mesh.frustumCulled = false;
     scene.add(mesh);
-    casingPool.push({ mesh, vel: new THREE.Vector3(), spin: new THREE.Vector3(), age: 0, bounces: 0, resting: false, active: false });
+    casingPool.push({ mesh, vel: new THREE.Vector3(), spin: new THREE.Vector3(), age: 0, bounces: 0, resting: false, active: false, ping: 1 });
   }
 
-  function ejectCasing(pos, vel) {
+  function ejectCasing(pos, vel, kind) {
     let c = casingPool.find((k) => !k.active);
     if (!c) c = casingPool.reduce((a, b) => (a.age > b.age ? a : b));   // recycle the oldest
+    const type = CASINGS[kind] || CASINGS.rifle;
+    c.mesh.geometry = type.geo;
+    c.mesh.material = type.mat;
+    c.ping = type.ping;
     c.active = true; c.age = 0; c.bounces = 0; c.resting = false;
     c.mesh.visible = true;
     c.mesh.scale.setScalar(1);
@@ -580,7 +592,7 @@
       const gy = currentGroundY(m.position.x, m.position.z, m.position.y + 0.3);
       if (m.position.y - 0.012 <= gy && c.vel.y < 0) {
         m.position.y = gy + 0.012;
-        if (c.bounces < 3) playCasingPing(Math.min(-c.vel.y / 6, 1) * (c.bounces ? 0.5 : 1));
+        if (c.bounces < 3) playCasingPing(Math.min(-c.vel.y / 6, 1) * (c.bounces ? 0.5 : 1) * c.ping);
         c.bounces++;
         c.vel.y = -c.vel.y * 0.32;
         c.vel.x *= 0.55; c.vel.z *= 0.55;
@@ -676,12 +688,14 @@
   const _magDropVel = new THREE.Vector3();
   const _magDropQuat = new THREE.Quaternion();
 
-  function dropMagazine() {
+  function dropMagazine(w) {
+    const magMeshNow = w.mag;
     let m = magDropPool.find((k) => !k.active);
     if (!m) m = magDropPool.reduce((a, b) => (a.age > b.age ? a : b));   // recycle the oldest
     m.active = true; m.age = 0; m.bounces = 0; m.resting = false;
-    magMesh.getWorldPosition(m.mesh.position);
-    magMesh.getWorldQuaternion(_magDropQuat);
+    m.mesh.geometry = magMeshNow.geometry;
+    magMeshNow.getWorldPosition(m.mesh.position);
+    magMeshNow.getWorldQuaternion(_magDropQuat);
     m.mesh.quaternion.copy(_magDropQuat);
     m.mesh.scale.setScalar(1);
     m.mesh.visible = true;
@@ -741,6 +755,7 @@
   addPart(muzzleFlash, new THREE.ConeGeometry(0.06, 0.38, 8), flashMat, 0, 0, -0.17, -Math.PI / 2, 0, 0);
   addPart(muzzleFlash, new THREE.BoxGeometry(0.34, 0.03, 0.03), flashMat, 0, 0, 0.13);
   addPart(muzzleFlash, new THREE.BoxGeometry(0.26, 0.022, 0.022), flashMat, 0, 0, 0.06);
+  const flashJets = [muzzleFlash.children[1], muzzleFlash.children[2]];
 
   // lights up the surroundings for a frame; lives on the camera so it never drops out
   // of the scene (an invisible parent would remove it and force a shader rebuild)
@@ -774,16 +789,70 @@
     knifeGroup.scale.setScalar(0.92);
   })();
 
-  rifleGroup.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
-  knifeGroup.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
+
+  // ---- assault rifle: flat-top carbine with a quad-rail handguard ----
+  const polymerMat = new THREE.MeshStandardMaterial({ color: 0x2b2c2f, roughness: 0.75, metalness: 0.15 });
+  const arGroup = new THREE.Group();
+  addPart(arGroup, new THREE.BoxGeometry(0.05, 0.06, 0.26), metalDark, 0, 0.02, 0);              // upper receiver
+  addPart(arGroup, new THREE.BoxGeometry(0.046, 0.05, 0.19), metalMid, 0, -0.03, 0.02);         // lower receiver
+  addPart(arGroup, new THREE.BoxGeometry(0.03, 0.012, 0.25), metalDark, 0, 0.056, -0.01);       // top rail
+  addPart(arGroup, new THREE.BoxGeometry(0.062, 0.062, 0.25), polymerMat, 0, 0.015, -0.26);     // handguard
+  for (let i = 0; i < 6; i++) addPart(arGroup, new THREE.BoxGeometry(0.066, 0.008, 0.012), metalDark, 0, 0.015, -0.16 - i * 0.04);
+  addPart(arGroup, new THREE.CylinderGeometry(0.011, 0.011, 0.24, 10), metalDark, 0, 0.015, -0.50, HALF_PI, 0, 0);   // barrel
+  addPart(arGroup, new THREE.CylinderGeometry(0.015, 0.015, 0.055, 10), metalDark, 0, 0.015, -0.64, HALF_PI, 0, 0);  // flash hider
+  // iron sights: aiming looks through the rear ring with the front post's tip at its centre
+  addPart(arGroup, new THREE.BoxGeometry(0.008, 0.036, 0.012), metalDark, 0, 0.059, -0.37);     // front sight post
+  addPart(arGroup, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.064, 0.08);        // rear sight base
+  addPart(arGroup, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.077, 0.08);  // rear sight ring
+  addPart(arGroup, new THREE.BoxGeometry(0.035, 0.1, 0.04), gripMat, 0, -0.085, 0.10, 0.35, 0, 0);   // pistol grip
+  addPart(arGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.058, 0.04, 0, HALF_PI, Math.PI);
+  addPart(arGroup, new THREE.CylinderGeometry(0.016, 0.016, 0.17, 10), metalDark, 0, 0.008, 0.21, HALF_PI, 0, 0);    // buffer tube
+  addPart(arGroup, new THREE.BoxGeometry(0.045, 0.075, 0.14), polymerMat, 0, -0.015, 0.31);     // stock
+  addPart(arGroup, new THREE.BoxGeometry(0.02, 0.012, 0.03), metalMid, 0, 0.055, 0.12);         // charging handle
+  const arMag = addPart(arGroup, new THREE.BoxGeometry(0.03, 0.15, 0.065), metalDark, 0, -0.12, -0.035, 0.2, 0, 0);
+
+  // ---- pump shotgun: wooden stock and forend, tube magazine under the barrel ----
+  const shotgunGroup = new THREE.Group();
+  addPart(shotgunGroup, new THREE.BoxGeometry(0.068, 0.085, 0.26), metalDark, 0, 0, 0);         // receiver
+  addPart(shotgunGroup, new THREE.CylinderGeometry(0.017, 0.017, 0.62, 12), metalDark, 0, 0.022, -0.44, HALF_PI, 0, 0);  // barrel
+  addPart(shotgunGroup, new THREE.CylinderGeometry(0.015, 0.015, 0.46, 12), metalMid, 0, -0.018, -0.37, HALF_PI, 0, 0);  // mag tube
+  // bead on a short post, standing just proud of the receiver so you can sight down the barrel
+  addPart(shotgunGroup, new THREE.BoxGeometry(0.004, 0.012, 0.006), metalDark, 0, 0.044, -0.74);
+  addPart(shotgunGroup, new THREE.SphereGeometry(0.006, 8, 8), metalMid, 0, 0.051, -0.74);       // bead sight
+  addPart(shotgunGroup, new THREE.BoxGeometry(0.06, 0.09, 0.3), woodStock, 0, -0.05, 0.27, -0.15, 0, 0);    // stock, dropping away
+  addPart(shotgunGroup, new THREE.BoxGeometry(0.062, 0.1, 0.025), gripMat, 0, -0.08, 0.425, -0.15, 0, 0);   // butt pad
+  addPart(shotgunGroup, new THREE.TorusGeometry(0.028, 0.005, 6, 12, Math.PI), metalDark, 0, -0.043, 0.06, 0, HALF_PI, Math.PI);
+  addPart(shotgunGroup, new THREE.BoxGeometry(0.007, 0.03, 0.007), metalDark, 0, -0.058, 0.06, 0.25, 0, 0);
+  const shotgunPump = new THREE.Group();
+  shotgunPump.position.set(0, -0.018, -0.32);
+  shotgunGroup.add(shotgunPump);
+  addPart(shotgunPump, new THREE.BoxGeometry(0.058, 0.055, 0.17), woodStock, 0, 0, 0);
+  for (let i = 0; i < 5; i++) addPart(shotgunPump, new THREE.BoxGeometry(0.062, 0.006, 0.01), gripMat, 0, -0.012, -0.06 + i * 0.03);
+
+  // ---- pistol: big-bore semi-auto with a slide that kicks back on every shot ----
+  const pistolGroup = new THREE.Group();
+  addPart(pistolGroup, new THREE.BoxGeometry(0.034, 0.034, 0.2), metalMid, 0, -0.006, -0.03);   // frame
+  const pistolSlide = new THREE.Group();
+  pistolGroup.add(pistolSlide);
+  addPart(pistolSlide, new THREE.BoxGeometry(0.037, 0.04, 0.245), metalDark, 0, 0.031, -0.055);
+  for (let i = 0; i < 5; i++) addPart(pistolSlide, new THREE.BoxGeometry(0.039, 0.03, 0.004), metalMid, 0, 0.031, 0.035 + i * 0.01);
+  addPart(pistolSlide, new THREE.BoxGeometry(0.006, 0.01, 0.01), metalMid, 0, 0.055, -0.165);   // front sight
+  addPart(pistolSlide, new THREE.BoxGeometry(0.024, 0.01, 0.01), metalMid, 0, 0.055, 0.05);     // rear sight
+  addPart(pistolGroup, new THREE.CylinderGeometry(0.011, 0.011, 0.02, 10), metalDark, 0, 0.031, -0.18, HALF_PI, 0, 0);   // muzzle
+  addPart(pistolGroup, new THREE.BoxGeometry(0.034, 0.12, 0.052), gripMat, 0, -0.075, 0.058, 0.25, 0, 0);   // grip
+  addPart(pistolGroup, new THREE.TorusGeometry(0.022, 0.004, 6, 12, Math.PI), metalDark, 0, -0.025, -0.02, 0, HALF_PI, Math.PI);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.006, 0.022, 0.006), metalDark, 0, -0.03, -0.02, 0.25, 0, 0);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.012, 0.016, 0.012), metalDark, 0, 0.045, 0.075, -0.4, 0, 0);   // hammer
+  const pistolMag = addPart(pistolGroup, new THREE.BoxGeometry(0.026, 0.11, 0.04), metalDark, 0, -0.085, 0.062, 0.25, 0, 0);
+
+  const HELD = [rifleGroup, arGroup, shotgunGroup, pistolGroup, knifeGroup];
+  for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   // everything held sits under one root, so left-handed is a single mirror (three.js
   // flips face winding for negative scale, so the models still render correctly)
   const viewmodelRoot = new THREE.Group();
   camera.add(viewmodelRoot);
-  viewmodelRoot.add(rifleGroup);
-  viewmodelRoot.add(knifeGroup);
+  for (const g of HELD) { viewmodelRoot.add(g); g.visible = g === rifleGroup; }
   camera.add(muzzleLight);
-  knifeGroup.visible = false;
 
   // ---- inspect animation sets (3 per weapon, picked at random) ----
   function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
@@ -814,6 +883,8 @@
     },
   ];
 
+  const GUN_INSPECTS = [RIFLE_INSPECTS[0], RIFLE_INSPECTS[2]];
+
   const KNIFE_INSPECTS = [
     // classic spin in the hand
     function (t, p, r) {
@@ -835,30 +906,120 @@
     },
   ];
 
+  // Every weapon is data; all the guns share one firing path.
+  //   scope: sniper overlay; other guns aim down sights, zooming to adsZoom x FOV
+  //   spread/spreadAds: half-angle of the shot cone in radians; bloom widens it per shot
+  //   scoreScale: points multiplier, so spraying can't outscore a sniper trickshot
+  //   action: what cycles after a shot (bolt, pump, slide or nothing)
+  //   reload.keys: [time, x, y, rx, ry, rz] offsets from rest; mag* are seconds
+  //   sound: how the recorded report is played back (until each gun gets its own)
   const WEAPONS = {
     rifle: {
       name: "SNIPER", group: rifleGroup,
-      restPos: new THREE.Vector3(0.30, -0.30, -0.62),
-      restRot: new THREE.Euler(0.03, -0.09, 0.01),
-      adsPos: new THREE.Vector3(0.0, -0.118, -0.24),
-      adsRot: new THREE.Euler(0, 0, 0),
-      canADS: true, fireRate: 1.1, auto: false, isMelee: false,
-      usesAmmo: true, inspectDuration: 2.0, inspects: RIFLE_INSPECTS,
+      restPos: new THREE.Vector3(0.30, -0.30, -0.62), restRot: new THREE.Euler(0.03, -0.09, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.118, -0.24), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: true, fireRate: 1.1, auto: false, isMelee: false, usesAmmo: true,
+      magSize: CFG.magSize, ammoLabel: "ROUNDS", pellets: 1, spread: 0, spreadAds: 0, bloom: 0, bloomMax: 0, bloomRecover: 0,
+      scoreScale: 1, recoil: 1, kick: 1, flashScale: 1, brake: true, smoke: 1,
+      action: "bolt", ejectOnShot: false, casing: "rifle",
+      muzzle: new THREE.Vector3(0, 0.005, -1.20), eject: new THREE.Vector3(0.06, 0.035, 0.12),
+      sound: { rate: 1, lowcut: 60, length: 1.8, gain: 1 },
+      mag: magMesh, magRestY: magMesh.position.y,
+      reload: {
+        time: CFG.reloadTime, magOut: 0.18, magDrop: 0.32, magUp: 0.70, magSeat: 1.15, travel: 0.17, rise: 0.33,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.25, -0.09,  0.07,  0.12, 0.18, -0.70],  // lift it and roll the underside toward you
+          [0.85, -0.09,  0.05,  0.08, 0.18, -0.78],  // hold while the fresh mag comes up
+          [1.15, -0.09,  0.08,  0.14, 0.18, -0.66],  // seat it
+          [1.40, -0.04,  0.015, 0.08, 0.10,  0.34],  // roll over to the bolt side
+          [2.12, -0.04,  0.015, 0.08, 0.10,  0.34],
+          [2.30,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 2.0, inspects: RIFLE_INSPECTS,
+    },
+    ar: {
+      name: "RIFLE", group: arGroup,
+      restPos: new THREE.Vector3(0.22, -0.24, -0.50), restRot: new THREE.Euler(0.03, -0.08, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.077, -0.30), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.72, fireRate: 0.1, auto: true, isMelee: false, usesAmmo: true,
+      magSize: 30, ammoLabel: "ROUNDS", pellets: 1, spread: 0.007, spreadAds: 0.0025, bloom: 0.0035, bloomMax: 0.03, bloomRecover: 0.09,
+      scoreScale: 0.35, recoil: 0.35, kick: 0.22, flashScale: 0.55, brake: false, smoke: 0.3,
+      action: "none", ejectOnShot: true, casing: "small",
+      muzzle: new THREE.Vector3(0, 0.015, -0.68), eject: new THREE.Vector3(0.03, 0.025, -0.01),
+      sound: { rate: 1.55, lowcut: 220, length: 0.5, gain: 0.7 },
+      mag: arMag, magRestY: arMag.position.y,
+      reload: {
+        time: 2.0, magOut: 0.2, magDrop: 0.36, magUp: 0.75, magSeat: 1.2, travel: 0.15, rise: 0.3, charge: 1.5,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.25, -0.07,  0.06,  0.12, 0.15, -0.60],
+          [0.85, -0.07,  0.04,  0.08, 0.15, -0.66],
+          [1.20, -0.07,  0.07,  0.14, 0.15, -0.56],
+          [1.42, -0.03,  0.02,  0.10, 0.05,  0.25],  // roll back to work the charging handle
+          [1.75, -0.03,  0.02,  0.10, 0.05,  0.25],
+          [2.00,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 1.8, inspects: GUN_INSPECTS,
+    },
+    shotgun: {
+      name: "SHOTGUN", group: shotgunGroup,
+      restPos: new THREE.Vector3(0.26, -0.27, -0.55), restRot: new THREE.Euler(0.03, -0.07, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.051, -0.52), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.85, fireRate: 0.85, auto: false, isMelee: false, usesAmmo: true,
+      magSize: 6, ammoLabel: "SHELLS", pellets: 9, spread: 0.065, spreadAds: 0.05, bloom: 0, bloomMax: 0, bloomRecover: 0,
+      range: 70, scoreScale: 0.6, recoil: 1.15, kick: 0.9, flashScale: 1.25, brake: false, smoke: 1.1,
+      action: "pump", ejectOnShot: false, casing: "shell",
+      muzzle: new THREE.Vector3(0, 0.022, -0.77), eject: new THREE.Vector3(0.04, 0.02, 0.02),
+      sound: { rate: 0.82, lowcut: 45, length: 1.5, gain: 1.05 },
+      reload: { style: "shells", start: 0.35, perShell: 0.42, end: 0.3 },
+      inspectDuration: 1.9, inspects: GUN_INSPECTS,
+    },
+    pistol: {
+      name: "PISTOL", group: pistolGroup,
+      restPos: new THREE.Vector3(0.18, -0.19, -0.38), restRot: new THREE.Euler(0.02, -0.06, 0),
+      adsPos: new THREE.Vector3(0.0, -0.06, -0.30), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.82, fireRate: 0.26, auto: false, isMelee: false, usesAmmo: true,
+      magSize: 7, ammoLabel: "ROUNDS", pellets: 1, spread: 0.0035, spreadAds: 0.001, bloom: 0.004, bloomMax: 0.012, bloomRecover: 0.05,
+      scoreScale: 0.8, recoil: 0.75, kick: 0.55, flashScale: 0.7, brake: false, smoke: 0.5,
+      action: "slide", ejectOnShot: true, casing: "small",
+      muzzle: new THREE.Vector3(0, 0.031, -0.20), eject: new THREE.Vector3(0.022, 0.045, -0.02),
+      sound: { rate: 1.3, lowcut: 150, length: 0.9, gain: 0.85 },
+      mag: pistolMag, magRestY: pistolMag.position.y,
+      reload: {
+        time: 1.6, magOut: 0.12, magDrop: 0.26, magUp: 0.55, magSeat: 0.95, travel: 0.08, rise: 0.2, slideRelease: 1.2,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.18, -0.04,  0.06,  0.22, 0.10, -0.40],
+          [0.80, -0.04,  0.05,  0.18, 0.10, -0.45],
+          [0.98, -0.04,  0.07,  0.24, 0.10, -0.38],
+          [1.25, -0.02,  0.02,  0.05, 0.05,  0.10],
+          [1.60,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 1.7, inspects: GUN_INSPECTS,
     },
     knife: {
       name: "KNIFE", group: knifeGroup,
-      restPos: new THREE.Vector3(0.24, -0.24, -0.42),
-      restRot: new THREE.Euler(0.06, -0.26, 0.10),
-      adsPos: new THREE.Vector3(0.24, -0.24, -0.42),
-      adsRot: new THREE.Euler(0.06, -0.26, 0.10),
+      restPos: new THREE.Vector3(0.24, -0.24, -0.42), restRot: new THREE.Euler(0.06, -0.26, 0.10),
+      adsPos: new THREE.Vector3(0.24, -0.24, -0.42), adsRot: new THREE.Euler(0.06, -0.26, 0.10),
       canADS: false, fireRate: 0.38, auto: true, isMelee: true,
       usesAmmo: false, range: 3.0, inspectDuration: 1.9, inspects: KNIFE_INSPECTS,
       slashDuration: 0.42,
     },
   };
+  const WEAPON_ORDER = ["rifle", "ar", "shotgun", "pistol", "knife"];
+  for (const id of WEAPON_ORDER) {
+    const w = WEAPONS[id];
+    w.id = id;
+    if (w.usesAmmo) { w.ammo = w.magSize; w.bloomNow = 0; }
+  }
+  function refillAmmo() { for (const id of WEAPON_ORDER) if (WEAPONS[id].usesAmmo) WEAPONS[id].ammo = WEAPONS[id].magSize; }
 
   const vm = {
-    current: "rifle", pending: null,
+    current: "rifle", pending: null, last: "knife",
     switchTimer: 0, switchDuration: 0.44, swapped: true,
     drawTimer: 0.4, drawDuration: 0.4,
     inspectTimer: 0, inspectIndex: 0,
@@ -867,6 +1028,7 @@
     bobTimer: 0, adsProgress: 0, wantADS: false, adsStartTime: -99, flashTimer: 0,
     boltTime: -1, boltCues: [], spentCasing: false,
     throwTimer: 0,
+    pumpTime: -1, pumpCues: [], slideKick: 0,
     camKick: 0, camKickYaw: 0,
   };
 
@@ -874,6 +1036,7 @@
 
   function switchWeapon(name) {
     if (name === vm.current || vm.switchTimer > 0 || !WEAPONS[name]) return;
+    vm.last = vm.current;
     vm.pending = name;
     vm.switchTimer = vm.switchDuration;
     vm.swapped = false;
@@ -881,6 +1044,7 @@
     vm.wantADS = false;
     cancelReload();
     cancelBoltCycle();
+    cancelPump();
     vm.throwTimer = 0;
     vm.slashTimer = 0;
     vm.meleePending = false;
@@ -888,7 +1052,7 @@
   }
 
   function startInspect() {
-    if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.boltTime >= 0 || vm.throwTimer > 0) return;
+    if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.boltTime >= 0 || vm.pumpTime >= 0 || vm.throwTimer > 0) return;
     const w = currentWeapon();
     vm.inspectIndex = Math.floor(Math.random() * w.inspects.length);
     vm.inspectTimer = w.inspectDuration;
@@ -934,23 +1098,62 @@
     boltMesh.rotation.z = 0;
   }
 
-  // throw the fired case out of the port to the right, carrying the player's momentum
+  // throw the fired case out of the gun's port to the side, carrying the player's momentum
+  function ejectFrom(w) {
+    _ejectPos.copy(w.eject);
+    w.group.localToWorld(_ejectPos);
+    camera.getWorldQuaternion(_camQuat);
+    const k = w.casing === "small" ? 0.8 : 1;
+    _ejectVel.set((2.2 + Math.random() * 0.9) * k * handSign(), (1.9 + Math.random() * 0.8) * k, 0.5 + Math.random() * 0.5)
+      .applyQuaternion(_camQuat).add(player.velocity);
+    ejectCasing(_ejectPos, _ejectVel, w.casing);
+    if (w.casing !== "small") spawnSmoke(_ejectPos, player.velocity.x, 0.3, player.velocity.z, 0.8, 0.04, 0.22, 0.22);
+  }
+  // the bolt or pump throws out the case left in the chamber by the last shot
   function ejectSpentCasing() {
     if (!vm.spentCasing) return;
     vm.spentCasing = false;
-    _ejectPos.set(0.06, 0.035, 0.12);
-    rifleGroup.localToWorld(_ejectPos);
+    ejectFrom(currentWeapon());
+  }
+
+  // ---- shotgun pump: back (ejecting the shell), then forward, timed to the bolt recording's clacks ----
+  const PUMP = { delay: 0.14, back: [0, 0.11], forward: [0.17, 0.28], len: 0.34 };
+  const PUMP_TRAVEL = 0.10, PUMP_REST_Z = -0.32;
+  function startPump() {
+    vm.pumpTime = 0;
+    vm.pumpCues = [[PUMP.delay, () => playActionClack("back", 1.2)], [PUMP.delay + PUMP.back[1], ejectSpentCasing],
+      [PUMP.delay + PUMP.forward[0], () => playActionClack("forward", 1.2)]];
+  }
+  function posePump(t) {
+    const lin = (k) => Math.min(Math.max((t - k[0]) / (k[1] - k[0]), 0), 1);
+    const slam = (k) => { const x = lin(k); return x * x; };
+    shotgunPump.position.z = PUMP_REST_Z + (slam(PUMP.back) - slam(PUMP.forward)) * PUMP_TRAVEL;
+    const jolt = (at) => (t >= at ? Math.exp(-(t - at) * 25) : 0);
+    return jolt(PUMP.back[1]) + jolt(PUMP.forward[1]);
+  }
+  function cancelPump() {
+    vm.pumpTime = -1;
+    vm.pumpCues.length = 0;
+    shotgunPump.position.z = PUMP_REST_Z;
+  }
+
+  // shot spread: a random direction inside a cone around the aim
+  const _sprRight = new THREE.Vector3(), _sprUp = new THREE.Vector3();
+  function spreadDirection(base, halfAngle, out) {
+    out.copy(base);
+    if (halfAngle <= 0) return out;
     camera.getWorldQuaternion(_camQuat);
-    _ejectVel.set((2.2 + Math.random() * 0.9) * handSign(), 1.9 + Math.random() * 0.8, 0.5 + Math.random() * 0.5)
-      .applyQuaternion(_camQuat).add(player.velocity);
-    ejectCasing(_ejectPos, _ejectVel);
-    spawnSmoke(_ejectPos, player.velocity.x, 0.3, player.velocity.z, 0.8, 0.04, 0.22, 0.22);
+    _sprRight.set(1, 0, 0).applyQuaternion(_camQuat);
+    _sprUp.set(0, 1, 0).applyQuaternion(_camQuat);
+    const r = Math.tan(halfAngle * Math.sqrt(Math.random())), th = Math.random() * Math.PI * 2;
+    return out.addScaledVector(_sprRight, r * Math.cos(th)).addScaledVector(_sprUp, r * Math.sin(th)).normalize();
   }
 
   // blast smoke out the front plus a puff from each side of the muzzle brake;
-  // kept faint while scoped so it doesn't cloud the lens
-  function muzzleSmoke(pos, dir) {
-    const a = 1 - 0.8 * easeInOut(vm.adsProgress);
+  // kept faint while aiming so it doesn't cloud the view
+  function muzzleSmoke(pos, dir, amount) {
+    const a = (1 - 0.8 * easeInOut(vm.adsProgress)) * amount;
+    if (a < 0.05) return;
     const pv = player.velocity;
     for (let i = 0; i < 3; i++) {
       const sp = 2 + i * 2.2 + Math.random();
@@ -1019,6 +1222,7 @@
           currentWeapon().group.visible = false;
           vm.current = vm.pending; vm.pending = null; vm.swapped = true;
           currentWeapon().group.visible = true;
+          fitMuzzleFlash(currentWeapon());
           updateHotbar(); updateAmmoHud();
         }
         holster = 1 - easeInOut(Math.min((elapsed - half) / half, 1));
@@ -1057,7 +1261,7 @@
     // figure-eight breathing sway while scoped. Both move the real aim, so what
     // the reticle shows is where the shot goes.
     vm.camKick *= Math.max(0, 1 - dt * 10);
-    const sway = SETTINGS.scopeSway ? CFG.scopeSway * adsEased : 0;
+    const sway = SETTINGS.scopeSway && w.scope ? CFG.scopeSway * adsEased : 0;
     const kick = vm.camKick * SETTINGS.shake;
     camera.rotation.x = kick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway;
     camera.rotation.y = kick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3;
@@ -1073,10 +1277,28 @@
       const rollOut = Math.min(Math.max((BOLT_CYCLE - bt) / 0.18, 0), 1);
       boltTilt = easeInOut(Math.min(rollIn, rollOut)) * (1 - adsEased);
       if (bt >= BOLT_CYCLE) cancelBoltCycle();
-    } else if (reload.active && reload.elapsed >= RELOAD_BOLT_AT) {
+    } else if (reload.active && w.action === "bolt" && reload.elapsed >= RELOAD_BOLT_AT) {
       boltJolt = poseBolt(reload.elapsed - RELOAD_BOLT_AT);
     }
+    // shotgun pump, after a shot or at the end of a reload from empty
+    if (vm.pumpTime >= 0) {
+      vm.pumpTime += dt;
+      while (vm.pumpCues.length && vm.pumpTime >= vm.pumpCues[0][0]) vm.pumpCues.shift()[1]();
+      boltJolt += 0.6 * posePump(vm.pumpTime - PUMP.delay);
+      if (vm.pumpTime >= PUMP.delay + PUMP.len) cancelPump();
+    }
     boltJolt *= 1 - adsEased;
+
+    // pistol slide: kicks back on every shot, and stays locked back on an empty mag
+    vm.slideKick *= Math.max(0, 1 - dt * 26);
+    const lockedBack = WEAPONS.pistol.ammo <= 0 && !SETTINGS.unlimitedAmmo && !reload.active;
+    pistolSlide.position.z = 0.035 * Math.max(vm.slideKick, lockedBack ? 1 : 0);
+
+    // spread blooms while spraying and settles back when you stop
+    for (const id of WEAPON_ORDER) {
+      const g = WEAPONS[id];
+      if (g.bloomNow > 0) g.bloomNow = Math.max(0, g.bloomNow - g.bloomRecover * dt);
+    }
 
     // knife swing: play the keyframes, and land the hit when the blade crosses the centre
     _swing.fill(0);
@@ -1099,7 +1321,7 @@
       if (vm.inspectTimer <= 0) { vm.inspectTimer = 0; boltMesh.position.z = 0.20; }
     }
 
-    const rl = reload.active ? reloadPose(reload.elapsed) : RELOAD_REST;
+    const rl = reload.active ? (reload.shells ? shellReloadPose(reload.elapsed) : reloadPose(w, reload.elapsed)) : RELOAD_REST;
 
     // knife throw: snap forward and let go, then a fresh knife flips up from below
     let thX = 0, thY = 0, thZ = 0, thRX = 0;
@@ -1142,35 +1364,43 @@
       flashK *= flashK;
       muzzleFlash.visible = true;
       flashMat.opacity = flashK;
-      muzzleFlash.scale.setScalar(0.8 + Math.random() * 0.6);
+      muzzleFlash.scale.setScalar((0.8 + Math.random() * 0.6) * (w.flashScale || 1));
       muzzleLight.intensity = 2.0 * flashK;
       if (vm.flashTimer <= 0) { muzzleFlash.visible = false; vm.flashTimer = 0; muzzleLight.intensity = 0; }
     }
-    scopeFlashEl.style.opacity = (flashK * 0.55 * adsEased).toFixed(3);
+    scopeFlashEl.style.opacity = (flashK * 0.55 * (w.scope ? adsEased : 0)).toFixed(3);
 
     // FOV: scope zoom, plus a speed-driven widening for a sense of momentum
     const speedNow = Math.hypot(player.velocity.x, player.velocity.z);
     const speedT = Math.max(0, Math.min((speedNow - CFG.groundMaxSpeed) / (CFG.maxSpeed - CFG.groundMaxSpeed), 1));
     const speedFov = CFG.speedFovBoost * speedT * (1 - adsEased);
-    const targetFov = SETTINGS.fov + (CFG.scopedFov - SETTINGS.fov) * adsEased + speedFov;
+    const adsFov = w.scope ? CFG.scopedFov : SETTINGS.fov * (w.adsZoom || 1);
+    const targetFov = SETTINGS.fov + (adsFov - SETTINGS.fov) * adsEased + speedFov;
     if (Math.abs(camera.fov - targetFov) > 0.02) {
       camera.fov += (targetFov - camera.fov) * Math.min(dt * 12, 1);
       camera.updateProjectionMatrix();
     }
     speedlinesEl.style.opacity = SETTINGS.speedLines ? Math.max(0, (speedT - 0.35) / 0.65) * 0.85 * (1 - adsEased) : 0;
 
-    const scopeAlpha = Math.max(0, (adsEased - 0.55) / 0.45);
+    const scopeAlpha = w.scope ? Math.max(0, (adsEased - 0.55) / 0.45) : 0;
     scopeEl.style.opacity = scopeAlpha;
     // the lens closes in from slightly too big as your eye settles behind it
     scopeEl.style.transform = "translate(-50%, -50%) scale(" + (1.2 - 0.2 * scopeAlpha).toFixed(3) + ")";
     scopeLinesEl.style.opacity = scopeAlpha;
-    crosshairEl.style.opacity = adsEased > 0.5 ? 0 : 1;
+    crosshairEl.style.opacity = w.scope && adsEased > 0.5 ? 0 : 1;
     w.group.visible = scopeAlpha < 0.98;
   }
 
   function updateHotbar() {
-    slotRifle.classList.toggle("active", vm.current === "rifle");
-    slotKnife.classList.toggle("active", vm.current === "knife");
+    for (const id of WEAPON_ORDER) hotbarSlots[id].classList.toggle("active", vm.current === id);
+  }
+
+  // the one muzzle flash moves to whichever gun is held
+  function fitMuzzleFlash(w) {
+    if (!w.muzzle) return;
+    w.group.add(muzzleFlash);
+    muzzleFlash.position.copy(w.muzzle);
+    for (const j of flashJets) j.visible = !!w.brake;
   }
 
   // ======================================================================
@@ -1356,27 +1586,28 @@
 
   // the recording, processed as tuned in the shot lab: 60 Hz low cut, light
   // compression, full level for 0.9 s then a fade to silence at 1.8 s
-  function playShotSound() {
+  function playShotSound(profile) {
     if (!audioCtx) return;
+    const pf = profile || WEAPONS.rifle.sound;
     if (!rifleShotBuffer) { noiseHit(1400, 0.5, 1.2, 0.12, "lowpass", 0, 0.3, true); return; }   // still decoding
     const now = audioCtx.currentTime;
     const src = audioCtx.createBufferSource();
     src.buffer = rifleShotBuffer;
-    src.playbackRate.value = rnd(0.98, 1.02);   // tiny variation so repeat shots aren't identical
+    src.playbackRate.value = pf.rate * rnd(0.98, 1.02);   // tiny variation so repeat shots aren't identical
     const hp = audioCtx.createBiquadFilter();
-    hp.type = "highpass"; hp.frequency.value = 60; hp.Q.value = 0.7;
+    hp.type = "highpass"; hp.frequency.value = pf.lowcut; hp.Q.value = 0.7;
     const comp = audioCtx.createDynamicsCompressor();
     comp.threshold.value = -15.6; comp.ratio.value = 6; comp.knee.value = 6;
     comp.attack.value = 0.004; comp.release.value = 0.15;
     const makeup = audioCtx.createGain();
-    makeup.gain.value = 1.56;
+    makeup.gain.value = 1.56 * pf.gain;
     const env = audioCtx.createGain();
     env.gain.setValueAtTime(1, now);
-    env.gain.setValueAtTime(1, now + 0.9);
-    env.gain.linearRampToValueAtTime(0, now + 1.8);
+    env.gain.setValueAtTime(1, now + pf.length * 0.5);
+    env.gain.linearRampToValueAtTime(0, now + pf.length);
     src.connect(hp).connect(comp).connect(makeup).connect(env).connect(masterGain);
     src.start(now);
-    src.stop(now + 1.85);
+    src.stop(now + pf.length + 0.05);
   }
 
   function playDryFire() { noiseHit(3000, 6, 0.16, 0.04, "highpass", 0, 0.15); tone("square", 260, 150, 0.06, 0.05, 0, 0.1); }
@@ -1453,6 +1684,28 @@
     src.start(audioCtx.currentTime, BOLT.clipStart, BOLT.clipLen);
     boltSrc = src;
   }
+  // one clack from the bolt recording: "back" is the bolt slamming open, "forward" slamming home.
+  // Pump, slide and charging handle borrow these (sped up) until they get their own recordings.
+  const ACTION_CLACKS = { back: [0.70, 0.15], forward: [1.16, 0.16] };
+  function playActionClack(which, rate) {
+    if (!audioCtx) return;
+    if (!boltCycleBuffer) { playBolt(); return; }
+    const [at, len] = ACTION_CLACKS[which];
+    const src = audioCtx.createBufferSource();
+    src.buffer = boltCycleBuffer;
+    src.playbackRate.value = rate * rnd(0.97, 1.03);
+    const g = audioCtx.createGain();
+    g.gain.value = 0.85;
+    src.connect(g);
+    route(g, 0.08, false);
+    src.start(audioCtx.currentTime, at, len);
+  }
+  // a shotgun shell pushed into the tube
+  function playShellInsert() {
+    noiseHit(2600, 3, 0.14, 0.03, "highpass", 0, 0.12);
+    noiseHit(900, 2, 0.2, 0.06, "bandpass", 0.03, 0.15);
+  }
+
   function stopBoltSound() {
     if (!boltSrc) return;
     try { boltSrc.stop(); } catch (e) { /* already finished */ }
@@ -1490,8 +1743,23 @@
   const scoreEl = document.getElementById("score-val");
   const bonusTagsEl = document.getElementById("bonus-tags");
   const feedEl = document.getElementById("feed");
-  const slotRifle = document.getElementById("slot-rifle");
-  const slotKnife = document.getElementById("slot-knife");
+  // weapon icons for the hotbar, all pointing left, drawn in a 64 x 24 box
+  const WEAPON_ICONS = {
+    rifle: '<rect x="3" y="12.5" width="47" height="2.6" rx="1"/><rect x="2" y="11.6" width="5" height="4.4" rx="1"/><rect x="43" y="9.5" width="16" height="7.5" rx="2"/><rect x="22" y="5.5" width="17" height="4" rx="1.6"/><rect x="26" y="9" width="2" height="3"/><rect x="34" y="9" width="2" height="3"/><rect x="45" y="16" width="4" height="6" rx="1.2"/><rect x="55" y="15" width="8" height="4" rx="1.6"/>',
+    ar: '<rect x="4" y="10" width="14" height="2.6" rx="1"/><rect x="16" y="8.5" width="16" height="5.5" rx="1"/><rect x="30" y="7.5" width="16" height="7" rx="1"/><rect x="33" y="5" width="9" height="2.5" rx="1"/><path d="M34 14 L39 14 L37.5 22 L33 21 Z"/><path d="M43 14 L47 14 L47.5 19.5 L44 19.5 Z"/><rect x="46" y="9" width="7" height="3" rx="1"/><rect x="52" y="7.5" width="9" height="8" rx="1.5"/>',
+    shotgun: '<rect x="2" y="9" width="36" height="2.6" rx="1"/><rect x="8" y="12" width="26" height="2.4" rx="1"/><rect x="14" y="11" width="12" height="4.5" rx="1.5"/><rect x="36" y="8.5" width="12" height="6.5" rx="1"/><path d="M47 9 L62 11 L62 18 L47 15 Z"/><path d="M40 15 L44 15 L43 18 L40 17 Z"/>',
+    pistol: '<rect x="16" y="7" width="28" height="6" rx="1.2"/><rect x="18" y="12.5" width="22" height="3" rx="1"/><path d="M34 14 L42 14 L44.5 23 L37 23 Z"/><path d="M28 15 L33 15 L33 18 L29 18 Z"/>',
+    knife: '<path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/><rect x="41" y="8" width="3" height="9" rx="1"/><rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/><circle cx="60.5" cy="12.4" r="2.4"/>',
+  };
+  const hotbarSlots = {};
+  WEAPON_ORDER.forEach((id, i) => {
+    const slot = document.createElement("div");
+    slot.className = "slot";
+    slot.innerHTML = '<div class="num">' + (i + 1) + '</div><div class="icon"><svg viewBox="0 0 64 24" fill="currentColor">' +
+      WEAPON_ICONS[id] + '</svg></div><div class="name">' + WEAPONS[id].name + "</div>";
+    document.getElementById("hotbar").appendChild(slot);
+    hotbarSlots[id] = slot;
+  });
   const ammoCountEl = document.getElementById("ammo-count");
   const ammoLabelEl = document.getElementById("ammo-label");
 
@@ -1630,7 +1898,7 @@
   unlimitedAmmoEl.addEventListener("change", () => {
     SETTINGS.unlimitedAmmo = unlimitedAmmoEl.checked;
     if (SETTINGS.unlimitedAmmo) cancelReload();
-    ammo = CFG.magSize;
+    refillAmmo();
     updateAmmoHud();
     saveSettings();
   });
@@ -1662,7 +1930,7 @@
     sensLink.checked = true;
     if (masterGain) masterGain.gain.value = SETTINGS.volume;
     cancelReload();
-    ammo = CFG.magSize;
+    refillAmmo();
     updateAmmoHud();
     refreshSettingsUI();
   });
@@ -1712,7 +1980,9 @@
       accelMult = slow + (fast - slow) * t;
     }
 
-    const scopeMult = 1 + (SETTINGS.scopedSensMult - 1) * easeInOut(vm.adsProgress);
+    const cw = currentWeapon();
+    const adsSens = cw.scope ? SETTINGS.scopedSensMult : (cw.adsZoom || 1);
+    const scopeMult = 1 + (adsSens - 1) * easeInOut(vm.adsProgress);
     const s = CFG.baseSensitivity * scopeMult * accelMult;
     yawObject.rotation.y -= dx * s * SETTINGS.sensX;
     pitchObject.rotation.x -= dy * s * SETTINGS.sensY;
@@ -1727,9 +1997,9 @@
     if (e.code === "Space") { jumpQueued = true; jumpQueueTimer = 0.12; }
     if (e.code === "KeyF") startInspect();
     if (e.code === "KeyR") startReload();
-    if (e.code === "Digit1") switchWeapon("rifle");
-    if (e.code === "Digit2") switchWeapon("knife");
-    if (e.code === "KeyQ") switchWeapon(vm.current === "rifle" ? "knife" : "rifle");
+    const slot = /^Digit([1-9])$/.exec(e.code);
+    if (slot && WEAPON_ORDER[+slot[1] - 1]) switchWeapon(WEAPON_ORDER[+slot[1] - 1]);
+    if (e.code === "KeyQ") switchWeapon(vm.last);
   });
   window.addEventListener("keyup", (e) => { keys[e.code] = false; if (e.code === "Tab") mpRefreshScoreboard(); });
 
@@ -1753,14 +2023,14 @@
   domEl.addEventListener("wheel", (e) => {
     if (!pointerLocked) return;
     e.preventDefault();
-    switchWeapon(vm.current === "rifle" ? "knife" : "rifle");
+    const i = WEAPON_ORDER.indexOf(vm.pending || vm.current);
+    switchWeapon(WEAPON_ORDER[(i + (e.deltaY > 0 ? 1 : WEAPON_ORDER.length - 1)) % WEAPON_ORDER.length]);
   }, { passive: false });
 
   // ======================================================================
   // AMMO / RELOAD
   // ======================================================================
-  let ammo = CFG.magSize;
-  const reload = { active: false, timer: 0, elapsed: 0, cues: [] };
+  const reload = { active: false, timer: 0, elapsed: 0, cues: [], shells: false };
   let autoReloadTimer = 0;
 
   function updateAmmoHud() {
@@ -1779,57 +2049,53 @@
       ammoCountEl.classList.remove("low");
       return;
     }
-    ammoCountEl.innerHTML = ammo + '<span class="max"> / ' + CFG.magSize + "</span>";
-    ammoCountEl.classList.toggle("low", ammo <= 1);
-    ammoLabelEl.textContent = reload.active ? "RELOADING" : (ammo === 1 ? "LAST ROUND" : "ROUNDS");
+    ammoCountEl.innerHTML = w.ammo + '<span class="max"> / ' + w.magSize + "</span>";
+    ammoCountEl.classList.toggle("low", w.ammo <= Math.max(1, Math.floor(w.magSize / 6)));
+    ammoLabelEl.textContent = reload.active ? "RELOADING" : (w.ammo === 1 ? "LAST ROUND" : w.ammoLabel);
     ammoLabelEl.classList.toggle("reloading", reload.active);
   }
 
-  const RELOAD_BOLT_AT = CFG.reloadTime - BOLT.len - 0.02;
-
-  // Reload choreography for CFG.reloadTime = 2.3 s, keyed to the mag-out (0.18 s),
-  // mag-in (1.15 s) and bolt (RELOAD_BOLT_AT) sounds. Offsets from the rest pose:
-  //   [time, x, y, rx, ry, rz]
-  const RELOAD_KEYS = [
-    [0.00,  0,     0,     0,    0,     0   ],
-    [0.25, -0.09,  0.07,  0.12, 0.18, -0.70],  // lift it and roll the underside toward you
-    [0.85, -0.09,  0.05,  0.08, 0.18, -0.78],  // hold while the fresh mag comes up
-    [1.15, -0.09,  0.08,  0.14, 0.18, -0.66],  // seat it
-    [1.40, -0.04,  0.015, 0.08, 0.10,  0.34],  // roll over to the bolt side
-    [2.12, -0.04,  0.015, 0.08, 0.10,  0.34],
-    [2.30,  0,     0,     0,    0,     0   ],
-  ];
-  const MAG_REST_Y = -0.15, MAG_OUT_AT = 0.18, MAG_DROP_AT = 0.32, MAG_UP_AT = 0.70, MAG_SEAT_AT = 1.15;
+  const RELOAD_BOLT_AT = WEAPONS.rifle.reload.time - BOLT.len - 0.02;
   const RELOAD_REST = { x: 0, y: 0, rx: 0, ry: 0, rz: 0 };
   const _rlPose = { x: 0, y: 0, rx: 0, ry: 0, rz: 0 };
+  const _rlKeys = [0, 0, 0, 0, 0];
 
-  function reloadPose(t) {
-    let i = 1;
-    while (i < RELOAD_KEYS.length - 1 && t > RELOAD_KEYS[i][0]) i++;
-    const a = RELOAD_KEYS[i - 1], b = RELOAD_KEYS[i];
-    const k = easeInOut(Math.min(Math.max((t - a[0]) / (b[0] - a[0]), 0), 1));
-    const lerp = (j) => a[j] + (b[j] - a[j]) * k;
-    _rlPose.x = lerp(1); _rlPose.y = lerp(2); _rlPose.rx = lerp(3); _rlPose.ry = lerp(4); _rlPose.rz = lerp(5);
-
-    // the magazine: slides out, drops away, a fresh one rises in and seats with a jolt
-    let magY = MAG_REST_Y, magShown = true;
-    if (t >= MAG_OUT_AT && t < MAG_DROP_AT) {
-      const x = (t - MAG_OUT_AT) / (MAG_DROP_AT - MAG_OUT_AT);
-      magY = MAG_REST_Y - 0.17 * x * x;
-    } else if (t >= MAG_DROP_AT && t < MAG_UP_AT) {
+  // magazine reloads: the gun follows its keyframes while the mag slides out, drops
+  // away, and a fresh one rises in and seats with a jolt
+  function reloadPose(w, t) {
+    const R = w.reload;
+    sampleKeys(R.keys, t, _rlKeys);
+    _rlPose.x = _rlKeys[0]; _rlPose.y = _rlKeys[1]; _rlPose.rx = _rlKeys[2]; _rlPose.ry = _rlKeys[3]; _rlPose.rz = _rlKeys[4];
+    let magY = w.magRestY, magShown = true;
+    const seatGap = R.travel * 0.12;
+    if (t >= R.magOut && t < R.magDrop) {
+      const x = (t - R.magOut) / (R.magDrop - R.magOut);
+      magY = w.magRestY - R.travel * x * x;
+    } else if (t >= R.magDrop && t < R.magUp) {
       magShown = false;
-      if (!reload.magDropped) { reload.magDropped = true; dropMagazine(); }
-    } else if (t >= MAG_UP_AT && t < MAG_SEAT_AT) {
-      const x = (t - MAG_UP_AT) / (MAG_SEAT_AT - MAG_UP_AT);
-      magY = MAG_REST_Y - 0.33 * (1 - easeOut(Math.min(x / 0.85, 1))) - 0.02 * (x < 0.85 ? 1 : 1 - (x - 0.85) / 0.15);
+      if (!reload.magDropped) { reload.magDropped = true; dropMagazine(w); }
+    } else if (t >= R.magUp && t < R.magSeat) {
+      const x = (t - R.magUp) / (R.magSeat - R.magUp);
+      magY = w.magRestY - R.rise * (1 - easeOut(Math.min(x / 0.85, 1))) - seatGap * (x < 0.85 ? 1 : 1 - (x - 0.85) / 0.15);
     }
-    magMesh.position.y = magY;
-    magMesh.visible = magShown;
-    if (t >= MAG_SEAT_AT) {
-      const j = Math.exp(-(t - MAG_SEAT_AT) * 18);
+    w.mag.position.y = magY;
+    w.mag.visible = magShown;
+    if (t >= R.magSeat) {
+      const j = Math.exp(-(t - R.magSeat) * 18);
       _rlPose.rx -= 0.05 * j;
       _rlPose.y += 0.01 * j;
     }
+    return _rlPose;
+  }
+
+  // shotgun: tip it toward you and feed shells one at a time, with a push on each
+  function shellReloadPose(t) {
+    const R = WEAPONS.shotgun.reload;
+    const inK = easeInOut(Math.min(t / 0.25, 1));
+    const outK = reload.endAt !== undefined ? easeInOut(Math.min(Math.max((t - reload.endAt + R.end) / R.end, 0), 1)) : 0;
+    const k = inK * (1 - outK);
+    const push = reload.lastShellAt >= 0 ? Math.exp(-(t - reload.lastShellAt) * 16) : 0;
+    _rlPose.x = -0.05 * k; _rlPose.y = (0.05 - 0.02 * push) * k; _rlPose.rx = (0.18 + 0.04 * push) * k; _rlPose.ry = 0.10 * k; _rlPose.rz = -0.55 * k;
     return _rlPose;
   }
 
@@ -1840,37 +2106,77 @@
     stopBoltSound();
     boltMesh.position.z = 0.20;
     boltMesh.rotation.z = 0;
-    magMesh.position.y = MAG_REST_Y;
-    magMesh.visible = true;
+    for (const id of WEAPON_ORDER) {
+      const g = WEAPONS[id];
+      if (g.mag) { g.mag.position.y = g.magRestY; g.mag.visible = true; }
+    }
     updateAmmoHud();
   }
 
   function startReload() {
     const w = currentWeapon();
     if (!w.usesAmmo || SETTINGS.unlimitedAmmo) return;
-    if (reload.active || ammo >= CFG.magSize || vm.switchTimer > 0) return;
+    if (reload.active || w.ammo >= w.magSize || vm.switchTimer > 0) return;
     reload.active = true;
-    reload.timer = CFG.reloadTime;
+    reload.weapon = w.id;
+    reload.elapsed = 0;
+    reload.magDropped = false;
     vm.inspectTimer = 0;
     vm.wantADS = false;
     cancelBoltCycle();
-    reload.elapsed = 0;
-    reload.magDropped = false;
-    // the same recorded bolt as between shots, timed to finish as the reload does
-    reload.cues = [[0.18, playMagOut], [1.15, playMagIn], [RELOAD_BOLT_AT, playBoltCycleSound],
-      [RELOAD_BOLT_AT + BOLT.back[1], ejectSpentCasing]];
+    cancelPump();
+    if (w.reload.style === "shells") {
+      reload.shells = true;
+      reload.timer = Infinity;
+      reload.nextShell = w.reload.start;
+      reload.lastShellAt = -1;
+      reload.endAt = undefined;
+      reload.needsPump = w.ammo === 0;   // empty chamber: pump once the tube is loaded
+      reload.cues = [];
+    } else {
+      reload.shells = false;
+      reload.timer = w.reload.time;
+      reload.cues = [[w.reload.magOut, playMagOut], [w.reload.magSeat, playMagIn]];
+      if (w.action === "bolt") {
+        // the same recorded bolt as between shots, timed to finish as the reload does
+        reload.cues.push([RELOAD_BOLT_AT, playBoltCycleSound], [RELOAD_BOLT_AT + BOLT.back[1], ejectSpentCasing]);
+      }
+      if (w.reload.charge) reload.cues.push([w.reload.charge, () => playActionClack("back", 1.5)], [w.reload.charge + 0.12, () => playActionClack("forward", 1.5)]);
+      if (w.reload.slideRelease) reload.cues.push([w.reload.slideRelease, () => playActionClack("forward", 1.6)]);
+      reload.cues.sort((a, b) => a[0] - b[0]);
+    }
     updateAmmoHud();
   }
 
   function updateReload(dt) {
     if (!reload.active) return;
-    reload.timer -= dt;
+    const w = WEAPONS[reload.weapon];
     reload.elapsed += dt;
+    if (reload.shells) {
+      if (reload.endAt === undefined && reload.elapsed >= reload.nextShell) {
+        if (w.ammo < w.magSize) {
+          w.ammo++;
+          reload.lastShellAt = reload.elapsed;
+          reload.nextShell += w.reload.perShell;
+          playShellInsert();
+          updateAmmoHud();
+        }
+        if (w.ammo >= w.magSize) reload.endAt = reload.elapsed + w.reload.end;
+      }
+      if (reload.endAt !== undefined && reload.elapsed >= reload.endAt) {
+        reload.active = false;
+        reload.shells = false;
+        if (reload.needsPump) startPump();
+        updateAmmoHud();
+      }
+      return;
+    }
+    reload.timer -= dt;
     while (reload.cues.length && reload.elapsed >= reload.cues[0][0]) reload.cues.shift()[1]();
     if (reload.timer <= 0) {
       reload.active = false; reload.timer = 0;
       reload.cues.length = 0;
-      ammo = CFG.magSize;
+      w.ammo = w.magSize;
       updateAmmoHud();
     }
   }
@@ -2233,7 +2539,7 @@
     };
   }
 
-  function computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown) {
+  function computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon) {
     const tags = [];
     let mult = 1;
     const st = snap || trickState();
@@ -2264,10 +2570,10 @@
       for (const tier of CFG.distanceTiers) {
         if (dist >= tier[0]) { mult += tier[1]; tags.push(tier[2]); break; }
       }
-      if (vm.adsProgress < 0.35 && dist >= CFG.noScopeMinDist) {
+      if (weapon && weapon.scope && vm.adsProgress < 0.35 && dist >= CFG.noScopeMinDist) {
         mult += CFG.noScopeBonus;
         tags.push("NO-SCOPE");
-      } else if (vm.adsProgress >= 0.5 && (elapsedTime - vm.adsStartTime) <= CFG.quickscopeWindow) {
+      } else if (weapon && weapon.scope && vm.adsProgress >= 0.5 && (elapsedTime - vm.adsStartTime) <= CFG.quickscopeWindow) {
         // scoped in and fired almost immediately
         mult += CFG.quickscopeBonus;
         tags.push("QUICKSCOPE");
@@ -2298,12 +2604,12 @@
     const streakBonus = Math.min(streak * CFG.streakBonusPer, CFG.streakBonusCap);
     if (streakBonus > 0) { mult += streakBonus; tags.push("STREAK x" + (streak + 1)); }
 
-    return { mult, tags };
+    return { mult, tags, scale: weapon && weapon.scoreScale !== undefined ? weapon.scoreScale : 1 };
   }
 
   // score, streak, HUD popups and feedback for any scoring hit (target or player)
   function awardPoints(res) {
-    const pointsGained = Math.round(CFG.basePoints * res.mult);
+    const pointsGained = Math.round(CFG.basePoints * res.mult * (res.scale || 1));
     score += pointsGained;
     scoreEl.textContent = score;
     streak++;
@@ -2317,8 +2623,8 @@
     return pointsGained;
   }
 
-  function scoreHit(target, dist, isKnife, ammoBefore, snap, thrown) {
-    const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown);
+  function scoreHit(target, dist, isKnife, ammoBefore, snap, thrown, weapon) {
+    const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon);
     target.userData.alive = false;
     target.visible = false;
     burst(target.position, target.userData.small ? 0x22d3ee : 0xffd24a, target.userData.small ? 16 : 12);
@@ -2342,10 +2648,10 @@
     let hit = true;
     if (pres.p && pres.dist < occ) {
       playKnifeHit();
-      mpPvpKill(pres, true, ammo);
+      mpPvpKill(pres, true, 0);
     } else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) {
       playKnifeHit();
-      scoreHit(res.target, res.dist, true, ammo);
+      scoreHit(res.target, res.dist, true, 0);
     } else if (propHits.length) {
       const prop = props.find((p) => p.mesh === propHits[0].object);
       if (prop) {
@@ -2370,8 +2676,11 @@
     if (net.active && (localDead || net.phase !== "play")) return;
 
     if (w.usesAmmo && !SETTINGS.unlimitedAmmo) {
-      if (reload.active) return;
-      if (ammo <= 0) { playDryFire(); fireCooldown = 0.25; startReload(); return; }
+      if (reload.active) {
+        if (reload.shells && w.ammo > 0) cancelReload();   // shotgun: fire to stop loading
+        else return;
+      }
+      if (w.ammo <= 0) { playDryFire(); fireCooldown = 0.25; startReload(); return; }
     } else if (reload.active) {
       cancelReload();
     }
@@ -2390,61 +2699,90 @@
       playKnifeSwing();
       return;
     }
+    fireGun(w);
+  }
 
-    // ---- rifle ----
-    const ammoBefore = ammo;
-    if (!SETTINGS.unlimitedAmmo) { ammo--; updateAmmoHud(); }
-    playShotSound();
-    vm.recoil = 1;
-    vm.camKick = 1;
+  const _aimDir = new THREE.Vector3(), _pelletDir = new THREE.Vector3();
+
+  function fireGun(w) {
+    const ammoBefore = w.ammo;
+    if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); }
+    playShotSound(w.sound);
+    vm.recoil = w.recoil;
+    vm.camKick = w.kick;
     vm.camKickYaw = Math.random() * 2 - 1;
     vm.flashTimer = FLASH_TIME;
     muzzleFlash.rotation.z = Math.random() * Math.PI;
-    vm.spentCasing = true;
-    // an empty mag skips straight to the reload, which works the bolt itself
-    if (SETTINGS.unlimitedAmmo || ammo > 0) startBoltCycle();
-    raycaster.far = CFG.maxShootDistance;
+    const chambered = SETTINGS.unlimitedAmmo || w.ammo > 0;
+    if (w.action === "bolt") {
+      vm.spentCasing = true;
+      if (chambered) startBoltCycle();   // an empty mag skips to the reload, which works the bolt itself
+    } else if (w.action === "pump") {
+      vm.spentCasing = true;
+      if (chambered) startPump();
+    }
+    if (w.action === "slide") vm.slideKick = 1;
+    if (w.ejectOnShot) ejectFrom(w);
 
-    const occ = occluderDistance(CFG.maxShootDistance);
-    const res = raycastTargets(CFG.maxShootDistance);
-    if (res.dist >= occ) res.target = null;
-    const propHits = raycaster.intersectObjects(activeProps(), false).filter((h) => h.distance < occ);
-
-    // tracer runs from the muzzle to wherever the shot actually lands
-    const pres = raycastPlayers(CFG.maxShootDistance);
-    const playerHit = pres.p && pres.dist < occ && (!propHits.length || pres.dist < propHits[0].distance);
-    let impactDist = occ;
-    if (playerHit) impactDist = pres.dist;
-    else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) impactDist = res.dist;
-    else if (propHits.length) impactDist = propHits[0].distance;
+    // aim, plus this gun's spread: tighter aiming down sights, wider while the AR blooms
+    const ads = easeInOut(vm.adsProgress);
+    const cone = (w.spread + (w.spreadAds - w.spread) * ads) + (w.bloomNow || 0);
+    if (w.bloom) w.bloomNow = Math.min((w.bloomNow || 0) + w.bloom, w.bloomMax);
+    const maxD = w.range || CFG.maxShootDistance;
+    camera.getWorldDirection(_aimDir);
     muzzleFlash.getWorldPosition(_muzzleWorld);
-    spawnTracer(_muzzleWorld, raycaster.ray.direction, impactDist);
-    muzzleSmoke(_muzzleWorld, raycaster.ray.direction);
-    if (net.active) mpSendShot(_muzzleWorld, raycaster.ray.direction, impactDist);
+    muzzleSmoke(_muzzleWorld, _aimDir, w.smoke);
 
-    if (playerHit) {
-      mpPvpKill(pres, false, ammoBefore);
-    } else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) {
-      scoreHit(res.target, res.dist, false, ammoBefore);
-    } else if (propHits.length) {
-      const prop = props.find((p) => p.mesh === propHits[0].object);
-      if (prop) {
-        prop.velocity.addScaledVector(raycaster.ray.direction, CFG.shotForce);
-        prop.velocity.y += 2;
-      }
-      burst(propHits[0].point, 0xd2a679, 5);
-      flashCrosshair();
-    } else {
-      // in deathmatch a streak is broken by dying, not by missing
-      if (!(net.active && net.sub === "dm")) { streak = 0; streakEl.textContent = streak; }
-      playMissSound();
-      if (impactDist < CFG.maxShootDistance) {
-        _impactPt.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, impactDist);
-        burst(_impactPt, 0xb8c0c8, 4);
+    const targetHits = new Map();   // a target hit by several pellets scores once
+    let anyHit = false, pvp = null, puffs = 0;
+    for (let i = 0; i < w.pellets; i++) {
+      spreadDirection(_aimDir, cone, _pelletDir);
+      raycaster.ray.direction.copy(_pelletDir);
+      raycaster.far = maxD;
+      const occ = occluderDistance(maxD);
+      const res = raycastTargets(maxD);
+      if (res.dist >= occ) res.target = null;
+      const propHits = raycaster.intersectObjects(activeProps(), false).filter((h) => h.distance < occ);
+      const pres = raycastPlayers(maxD);
+      const playerHit = pres.p && pres.dist < occ && (!propHits.length || pres.dist < propHits[0].distance);
+      let impactDist = Math.min(occ, maxD);
+      if (playerHit) impactDist = pres.dist;
+      else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) impactDist = res.dist;
+      else if (propHits.length) impactDist = propHits[0].distance;
+      // tracers from the muzzle to wherever the shot lands (a few per shotgun blast)
+      if (i < 3) spawnTracer(_muzzleWorld, _pelletDir, impactDist);
+      if (i === 0 && net.active) mpSendShot(_muzzleWorld, _pelletDir, impactDist);
+
+      if (playerHit) {
+        anyHit = true;
+        if (!pvp) pvp = pres;
+      } else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) {
+        anyHit = true;
+        if (!targetHits.has(res.target) || targetHits.get(res.target) > res.dist) targetHits.set(res.target, res.dist);
+      } else if (propHits.length) {
+        anyHit = true;
+        const prop = props.find((pp) => pp.mesh === propHits[0].object);
+        if (prop) {
+          prop.velocity.addScaledVector(_pelletDir, CFG.shotForce * (w.pellets > 1 ? 0.35 : 1));
+          prop.velocity.y += w.pellets > 1 ? 0.6 : 2;
+        }
+        if (puffs++ < 4) burst(propHits[0].point, 0xd2a679, w.pellets > 1 ? 2 : 5);
+      } else if (impactDist < maxD && puffs++ < 4) {
+        _impactPt.copy(raycaster.ray.origin).addScaledVector(_pelletDir, impactDist);
+        burst(_impactPt, 0xb8c0c8, w.pellets > 1 ? 2 : 4);
       }
     }
 
-    if (!SETTINGS.unlimitedAmmo && ammo <= 0) autoReloadTimer = 0.25;
+    if (pvp) mpPvpKill(pvp, false, ammoBefore, w);
+    for (const [target, dist] of targetHits) scoreHit(target, dist, false, ammoBefore, undefined, false, w);
+    if (anyHit && !targetHits.size && !pvp) flashCrosshair();
+    if (!anyHit) {
+      // in deathmatch a streak is broken by dying, not by missing
+      if (!(net.active && net.sub === "dm")) { streak = 0; streakEl.textContent = streak; }
+      playMissSound();
+    }
+
+    if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
   }
 
   // ======================================================================
@@ -2588,7 +2926,7 @@
       if (kind === "target") {
         o.addScaledVector(d, hitDist);
         playKnifeHit();
-        scoreHit(hitTarget, k.from.distanceTo(o), true, ammo, k.snap, true);
+        scoreHit(hitTarget, k.from.distanceTo(o), true, 0, k.snap, true);
         retireKnife(k);
         continue;
       }
@@ -2952,7 +3290,7 @@
     streak = 0; streakEl.textContent = 0;
     score = 0; scoreEl.textContent = 0;
     cancelReload();
-    ammo = CFG.magSize;
+    refillAmmo();
     updateAmmoHud();
   }
 
@@ -3046,7 +3384,7 @@
           localDead = false;
           mpEls.dead.hidden = true;
           teleportLocal(m.pos[0], m.pos[1]);
-          cancelReload(); ammo = CFG.magSize; updateAmmoHud();
+          cancelReload(); refillAmmo(); updateAmmoHud();
         }
         break;
       }
@@ -3071,8 +3409,8 @@
   function mpTargetHit(target, pts) { sendToHost({ t: "hit", i: target.userData.idx, pts }); }
 
   const _pseudoTarget = { userData: { small: false, moving: false } };
-  function mpPvpKill(pres, isKnife, ammoBefore) {
-    const res = computeMultipliers(_pseudoTarget, pres.dist, isKnife, ammoBefore);
+  function mpPvpKill(pres, isKnife, ammoBefore, weapon) {
+    const res = computeMultipliers(_pseudoTarget, pres.dist, isKnife, ammoBefore, undefined, false, weapon);
     if (pres.head && !isKnife) { res.mult += 1; res.tags.push("HEADSHOT"); }
     const pts = awardPoints(res);
     burst(pres.point, 0xff5555, 14);
@@ -3537,6 +3875,7 @@
   }
 
   player.lastYaw = yawObject.rotation.y;
+  fitMuzzleFlash(currentWeapon());
   updateHotbar();
   updateAmmoHud();
   animate();

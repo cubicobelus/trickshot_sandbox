@@ -18,7 +18,7 @@
       <span class="key">Shift</span> sprint &nbsp;•&nbsp; <span class="key">Ctrl</span> slide &nbsp;•&nbsp;
       <span class="key">R</span> reload &nbsp;•&nbsp; <span class="key">F</span> inspect<br>
       <span class="key">Left click</span> attack &nbsp;•&nbsp; <span class="key">Right click</span> scope / throw knife &nbsp;•&nbsp;
-      <span class="key">1 / 2 / Q / wheel</span> switch
+      <span class="key">1–5 / Q / wheel</span> switch
     </p>
     <p>
       Base run speed is slow — you <em>build</em> speed by chaining slides, bunnyhops (hold jump on landing)
@@ -225,36 +225,7 @@
     <div class="count" id="ammo-count">5<span class="max"> / 5</span></div>
     <div class="label" id="ammo-label">ROUNDS</div>
   </div>
-  <div id="hotbar">
-    <div class="slot active" id="slot-rifle">
-      <div class="num">1</div>
-      <div class="icon">
-        <svg viewBox="0 0 64 24" fill="currentColor">
-          <rect x="3" y="12.5" width="47" height="2.6" rx="1"/>
-          <rect x="2" y="11.6" width="5" height="4.4" rx="1"/>
-          <rect x="43" y="9.5" width="16" height="7.5" rx="2"/>
-          <rect x="22" y="5.5" width="17" height="4" rx="1.6"/>
-          <rect x="26" y="9" width="2" height="3"/>
-          <rect x="34" y="9" width="2" height="3"/>
-          <rect x="45" y="16" width="4" height="6" rx="1.2"/>
-          <rect x="55" y="15" width="8" height="4" rx="1.6"/>
-        </svg>
-      </div>
-      <div class="name">SNIPER</div>
-    </div>
-    <div class="slot" id="slot-knife">
-      <div class="num">2</div>
-      <div class="icon">
-        <svg viewBox="0 0 64 24" fill="currentColor">
-          <path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/>
-          <rect x="41" y="8" width="3" height="9" rx="1"/>
-          <rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/>
-          <circle cx="60.5" cy="12.4" r="2.4"/>
-        </svg>
-      </div>
-      <div class="name">KNIFE</div>
-    </div>
-  </div>
+  <div id="hotbar"></div>   <!-- slots are built from the weapon list in game.js -->
 </div>
 
 <div id="scoreboard" hidden>

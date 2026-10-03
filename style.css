@@ -175,7 +175,7 @@
 
   #hotbar { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
   .slot {
-    width: 126px; padding: 7px 10px 8px; border-radius: 8px;
+    width: 92px; padding: 6px 8px 7px; border-radius: 8px;
     background: rgba(0,0,0,0.45); border: 2px solid rgba(255,255,255,0.15);
     color: #8b8b90; transition: all 0.12s;
   }

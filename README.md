@@ -20,7 +20,11 @@ unzip, and open `index.html`. An internet connection is still needed (three.js l
 ## How to play
 
 **Controls:** WASD move, Space jump, Shift sprint, Ctrl slide, R reload, F inspect, left click attack,
-right click scope (sniper) or throw (knife), 1 / 2 / Q / mouse wheel switch weapons.
+right click aim (scope on the sniper, sights on the others) or throw (knife),
+1–5 / Q (last weapon) / mouse wheel switch weapons.
+
+**Weapons:** 1 sniper, 2 assault rifle, 3 shotgun, 4 pistol, 5 knife. The sniper's no-scope and quickscope
+bonuses are its own, and the other guns score less per hit so trickshots stay king.
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (hold jump on landing) and wall
 bounces, up to 22 u/s. Score multipliers stack: air time, spins, speed, distance, no-scopes, quickscopes,
