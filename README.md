@@ -35,6 +35,9 @@ Settings (sensitivity, volume, unlimited ammo and so on) are saved in your brows
 - `game.js` — everything else (movement, scoring, weapons, audio). Tuning knobs live in the `CFG`
   object at the top.
 - `sounds.js` — recorded sounds, embedded so the game also works when opened from disk
+- `tools/shot-lab.html` — test bench for the sniper's sounds: the game's recordings with its processing
+  on sliders, plus the best synthesized versions
+  ([open it](https://cubicobelus.github.io/trickshot_sandbox/tools/shot-lab.html))
 
 Multiplayer code is in `game.js` but switched off for now (`MULTIPLAYER_ENABLED`).
 

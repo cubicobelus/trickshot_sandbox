@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shot Lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23ffd24a' stroke-width='3'/%3E%3Cpath d='M16 1v9M16 22v9M1 16h9M22 16h9' stroke='%23ffd24a' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23e02424'/%3E%3C/svg%3E">
+<style>
+  :root { --bg: #15161a; --panel: #1f2026; --line: #34353d; --text: #e8e8ea; --dim: #9a9ba3; --accent: #ffd24a; --go: #7CFC00; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 'Segoe UI', Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { color: var(--accent); margin: 0 0 4px; font-size: 24px; }
+  h2 { color: var(--accent); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; margin: 20px 0 6px; }
+  p { color: var(--dim); margin: 4px 0 10px; }
+  a { color: var(--accent); }
+  .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+  .preset { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; cursor: pointer; text-align: left; color: var(--text); font: inherit; }
+  .preset:hover { border-color: var(--accent); }
+  .preset.active { border-color: var(--go); box-shadow: 0 0 0 1px var(--go) inset; }
+  .preset b { display: block; color: var(--accent); }
+  .preset span { color: var(--dim); font-size: 12.5px; }
+  .fire { display: block; width: 100%; margin-top: 18px; padding: 16px; font: bold 18px 'Segoe UI', Arial, sans-serif; background: transparent; color: var(--go); border: 2px solid var(--go); border-radius: 8px; cursor: pointer; }
+  .fire:active { background: rgba(124,252,0,0.15); }
+  .knobs { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-top: 16px; }
+  .row { display: grid; grid-template-columns: 170px 1fr 56px; gap: 10px; align-items: center; margin: 6px 0; }
+  .row label { color: var(--dim); }
+  .row output { text-align: right; color: var(--accent); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  textarea { width: 100%; box-sizing: border-box; background: #0f1013; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: 12px Consolas, monospace; margin-top: 8px; }
+  .small { font-size: 12.5px; color: var(--dim); }
+  @media (max-width: 520px) { .row { grid-template-columns: 120px 1fr 48px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Shot Lab</h1>
+  <p>Test bench for the sniper's sounds. <b>In the game</b> plays the recordings the game uses, with the game's
+     processing, so the sliders show what a change would sound like in game. <b>Synth</b> keeps the best of the
+     sounds generated from scratch while the shot was being tuned (Lab 1's #10 and variations on it).</p>
+  <p class="small">Keys: <b>G</b> game shot + bolt, <b>B</b> bolt only, <b>1–9, 0</b> synth versions, <b>Space</b> repeats.
+     Letting go of a slider fires the sound. Uses the same volume and room reverb as the game.
+     <a href="../index.html">Back to the game</a></p>
+
+  <h2>In the game</h2>
+  <div class="presets" id="game-presets"></div>
+  <h2>Synth</h2>
+  <div class="presets" id="synth-presets"></div>
+
+  <button class="fire" id="fire">FIRE (Space)</button>
+  <div class="knobs" id="knobs"></div>
+  <div class="knobs">
+    <div class="small">Current settings:</div>
+    <textarea id="out" rows="3" readonly></textarea>
+  </div>
+</main>
+
+<script src="../sounds.js"></script>
+<script>
+(function () {
+  // ---------------- what can be played ----------------
+  // recording processing, defaults = what game.js does (playShotSound / BOLT)
+  const REC_KNOBS = [
+    ["pitch",  "Pitch (speed-up)",   0.7, 1.6, 0.01, 1.0],
+    ["lowcut", "Cut lows (Hz)",       20, 800, 5, 60],
+    ["bass",   "Bass (dB)",          -12, 12, 0.5, 0],
+    ["bright", "Brightness (dB)",    -12, 12, 0.5, 0],
+    ["punch",  "Punch / loudness",     0, 1, 0.01, 0.4],
+    ["grit",   "Grit (clip)",          0, 1, 0.01, 0],
+    ["length", "Length (s)",         0.3, 3, 0.05, 1.8],
+    ["wet",    "Room reverb",          0, 0.5, 0.01, 0],
+    ["boltDelay", "Bolt delay after shot (s)", 0, 0.8, 0.01, 0.25],
+    ["boltRate",  "Bolt speed",        0.8, 1.6, 0.01, 1.25],
+  ];
+  const SYNTH_KNOBS = [
+    ["pitch",  "Pitch",                   0.7, 1.6, 0.01],
+    ["crack",  "Snap (supersonic crack)",   0, 1.5, 0.01],
+    ["bright", "Blast: bright edge",        0, 1.5, 0.01],
+    ["mid",    "Mid bark",                  0, 1.5, 0.01],
+    ["body",   "Blast: body",               0, 1.5, 0.01],
+    ["boom",   "Low boom",                  0, 1.5, 0.01],
+    ["slap",   "Slapback echo",             0, 1.0, 0.01],
+    ["tail",   "Rolling tail",              0, 1.0, 0.01],
+    ["tailLen","Tail length (s)",         0.3, 2.0, 0.05],
+    ["wet",    "Room reverb",               0, 0.6, 0.01],
+    ["drive",  "Clip / grit",               0, 1.0, 0.01],
+    ["comp",   "Loudness / compression",    0, 1.0, 0.01],
+    ["swell",  "Swell (build-up, ms)",      0, 60, 1],
+  ];
+  const P = (pitch, crack, bright, mid, body, boom, slap, tail, tailLen, wet, drive, comp, swell) =>
+    ({ pitch, crack, bright, mid, body, boom, slap, tail, tailLen, wet, drive, comp, swell });
+  const GAME = [
+    { id: "game", key: "g", name: "Game shot + bolt", desc: "\"Rifle Gun Shot 01\" by LilMati, then the bolt, as in game." },
+    { id: "bolt", key: "b", name: "Bolt only", desc: "Bolt action from \"Sniper Rifle M24 SFX\" by kennysvoice." },
+  ];
+  const SYNTH = [
+    { id: "1",  key: "1", name: "1. Arena",        desc: "Lab 1 #10, the closest synth.",           v: P(1.20, 1.0, 0.9, 0.9, 0.8, 0.8, 0.4, 0.6, 1.8, 0.25, 0.6, 0.8, 22) },
+    { id: "2",  key: "2", name: "2. Less hiss",    desc: "Bright edge and snap pulled back.",       v: P(1.20, 0.7, 0.3, 0.9, 0.8, 0.8, 0.4, 0.6, 1.8, 0.25, 0.6, 0.8, 22) },
+    { id: "3",  key: "3", name: "3. No hiss",      desc: "Bright edge off, more bark.",             v: P(1.20, 0.5, 0.0, 1.1, 0.9, 0.8, 0.4, 0.6, 1.8, 0.25, 0.6, 0.8, 22) },
+    { id: "4",  key: "4", name: "4. Bigger room",  desc: "More reverb and a longer roll.",          v: P(1.20, 0.8, 0.5, 0.9, 0.8, 0.8, 0.4, 0.8, 2.0, 0.40, 0.6, 0.8, 22) },
+    { id: "5",  key: "5", name: "5. Higher",       desc: "Pitched up, less hiss.",                  v: P(1.35, 0.8, 0.5, 0.9, 0.8, 0.8, 0.4, 0.6, 1.8, 0.25, 0.6, 0.8, 22) },
+    { id: "6",  key: "6", name: "6. Lower",        desc: "Pitched down, more boom.",                v: P(1.05, 0.8, 0.5, 0.9, 0.8, 1.1, 0.4, 0.6, 1.8, 0.25, 0.6, 0.8, 22) },
+    { id: "7",  key: "7", name: "7. Punchy",       desc: "Aimed at a game-style AWP.",              v: P(1.15, 1.0, 0.9, 1.0, 0.8, 0.8, 0.35, 0.35, 1.1, 0.08, 0.6, 0.8, 18) },
+    { id: "8",  key: "8", name: "8. Punchier",     desc: "More squash and grit, quicker swell.",    v: P(1.20, 0.8, 0.5, 1.0, 0.8, 0.8, 0.4, 0.6, 1.8, 0.25, 0.8, 1.0, 12) },
+    { id: "9",  key: "9", name: "9. Slower swell", desc: "Body rolls in later after the snap.",     v: P(1.20, 0.8, 0.5, 0.9, 0.8, 0.8, 0.4, 0.6, 1.8, 0.25, 0.6, 0.8, 40) },
+    { id: "10", key: "0", name: "10. Dark & big",  desc: "Least hiss, most weight and space.",      v: P(1.15, 0.6, 0.2, 0.7, 1.0, 1.2, 0.4, 0.8, 2.0, 0.35, 0.6, 0.8, 22) },
+  ];
+
+  const rec = {}; for (const k of REC_KNOBS) rec[k[0]] = k[5];
+  const syn = Object.assign({}, SYNTH[0].v);
+  let current = "game";
+
+  // ---------------- UI ----------------
+  const knobsEl = document.getElementById("knobs");
+  function fmt(v) { return Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2); }
+  function isSynth() { return SYNTH.some((s) => s.id === current); }
+
+  function buildKnobs() {
+    knobsEl.innerHTML = "";
+    const synth = isSynth(), list = synth ? SYNTH_KNOBS : REC_KNOBS, st = synth ? syn : rec;
+    for (const [key, label, min, max, step] of list) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = '<label></label><input type="range"><output></output>';
+      row.querySelector("label").textContent = label;
+      const inp = row.querySelector("input"), out = row.querySelector("output");
+      inp.min = min; inp.max = max; inp.step = step; inp.value = st[key];
+      out.textContent = fmt(st[key]);
+      inp.addEventListener("input", () => { st[key] = parseFloat(inp.value); out.textContent = fmt(st[key]); writeOut(); });
+      inp.addEventListener("change", () => fire());
+      knobsEl.appendChild(row);
+    }
+  }
+  function writeOut() {
+    const synth = isSynth(), list = synth ? SYNTH_KNOBS : REC_KNOBS, st = synth ? syn : rec;
+    document.getElementById("out").value = (synth ? "synth #" + current : "game recording") + ": " +
+      list.map(([k]) => k + "=" + fmt(st[k])).join(" ");
+  }
+  function select(id) {
+    const changedGroup = isSynth() !== SYNTH.some((s) => s.id === id);
+    current = id;
+    const p = SYNTH.find((s) => s.id === id);
+    if (p) Object.assign(syn, p.v);
+    if (p || changedGroup) buildKnobs();
+    document.querySelectorAll(".preset").forEach((b) => b.classList.toggle("active", b.dataset.id === current));
+    writeOut();
+    fire();
+  }
+  function addButtons(list, el) {
+    for (const p of list) {
+      const b = document.createElement("button");
+      b.className = "preset"; b.dataset.id = p.id;
+      b.innerHTML = "<b></b><span></span>";
+      b.querySelector("b").textContent = p.name + "  [" + p.key.toUpperCase() + "]";
+      b.querySelector("span").textContent = p.desc;
+      b.addEventListener("click", () => { b.blur(); select(p.id); });
+      el.appendChild(b);
+    }
+  }
+  addButtons(GAME, document.getElementById("game-presets"));
+  addButtons(SYNTH, document.getElementById("synth-presets"));
+
+  // ---------------- audio: same master chain as the game ----------------
+  let ctx = null, master = null, convolver = null, variants = [], shotBuf = null, boltBuf = null;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  function makeImpulseResponse(duration, decay) {
+    const rate = ctx.sampleRate, len = Math.floor(rate * duration), imp = ctx.createBuffer(2, len, rate);
+    for (let c = 0; c < 2; c++) {
+      const d = imp.getChannelData(c);
+      for (let i = 0; i < len; i++) {
+        const t = i / len, early = (i < rate * 0.06 && Math.random() < 0.02) ? 2.5 : 1;
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay) * early;
+      }
+    }
+    return imp;
+  }
+  function makeSaturationCurve(amount) {
+    const n = 1024, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = (i * 2) / n - 1; curve[i] = Math.tanh(x * amount) / Math.tanh(amount); }
+    return curve;
+  }
+  function decodeEmbedded(name) {
+    const b64 = window.TSB_SOUNDS && window.TSB_SOUNDS[name];
+    if (!b64) return Promise.resolve(null);
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return ctx.decodeAudioData(bytes.buffer).catch(() => null);
+  }
+  let ready = null;
+  function init() {
+    if (ctx) { if (ctx.state === "suspended") ctx.resume(); return ready; }
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain(); master.gain.value = 0.55; master.connect(ctx.destination);
+    convolver = ctx.createConvolver(); convolver.buffer = makeImpulseResponse(1.9, 2.6);
+    const wetGain = ctx.createGain(); wetGain.gain.value = 0.42;
+    convolver.connect(wetGain).connect(master);
+    for (let v = 0; v < 4; v++) variants.push(makeLayers());
+    ready = Promise.all([decodeEmbedded("rifleShot"), decodeEmbedded("boltCycle")]).then(([s, b]) => {
+      shotBuf = s ? trimToFirstShot(s) : null;
+      boltBuf = b;
+    });
+    return ready;
+  }
+
+  // same as trimToFirstShot in game.js
+  function trimToFirstShot(buf) {
+    const sr = buf.sampleRate, ch = buf.numberOfChannels, mono = new Float32Array(buf.length);
+    for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) mono[i] += d[i] / ch; }
+    let peak = 0; for (let i = 0; i < mono.length; i++) peak = Math.max(peak, Math.abs(mono[i]));
+    let start = 0;
+    for (let i = 0; i < mono.length; i++) if (Math.abs(mono[i]) > peak * 0.3) { start = Math.max(0, i - Math.floor(sr * 0.004)); break; }
+    const win = Math.floor(sr * 0.005);
+    let end = Math.min(mono.length, start + sr * 3.2), level = 0;
+    for (let i = start + Math.floor(sr * 0.35); i + win < end; i += win) {
+      let e = 0; for (let j = i; j < i + win; j++) e = Math.max(e, Math.abs(mono[j]));
+      if (level > 0 && e > peak * 0.45 && e > level * 4) { end = i - Math.floor(sr * 0.01); break; }
+      level = level ? level * 0.7 + e * 0.3 : e;
+    }
+    const len = Math.max(1, Math.floor(end - start)), out = ctx.createBuffer(2, len, sr);
+    let pk = 0;
+    for (let c = 0; c < 2; c++) {
+      const src = buf.getChannelData(Math.min(c, ch - 1)), d = out.getChannelData(c);
+      for (let i = 0; i < len; i++) { d[i] = src[start + i]; pk = Math.max(pk, Math.abs(d[i])); }
+    }
+    for (let c = 0; c < 2; c++) { const d = out.getChannelData(c); for (let i = 0; i < len; i++) d[i] *= 0.95 / (pk || 1); }
+    return out;
+  }
+
+  // ---------------- game recordings ----------------
+  function playRecording(now) {
+    if (!shotBuf) return;
+    const st = rec;
+    const src = ctx.createBufferSource(); src.buffer = shotBuf; src.playbackRate.value = st.pitch;
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = st.lowcut; hp.Q.value = 0.7;
+    const lo = ctx.createBiquadFilter(); lo.type = "lowshelf"; lo.frequency.value = 180; lo.gain.value = st.bass;
+    const hi = ctx.createBiquadFilter(); hi.type = "highshelf"; hi.frequency.value = 2500; hi.gain.value = st.bright;
+    let node = src.connect(hp).connect(lo).connect(hi);
+    if (st.grit > 0.01) {
+      const pre = ctx.createGain(); pre.gain.value = 1 + st.grit * 2;
+      const ws = ctx.createWaveShaper(); ws.curve = makeSaturationCurve(1 + st.grit * 4); ws.oversample = "4x";
+      node = node.connect(pre).connect(ws);
+    }
+    if (st.punch > 0.01) {
+      const c = ctx.createDynamicsCompressor();
+      c.threshold.value = -6 - st.punch * 24; c.ratio.value = 2 + st.punch * 10;
+      c.knee.value = 6; c.attack.value = 0.004; c.release.value = 0.15;
+      const makeup = ctx.createGain(); makeup.gain.value = 1 + st.punch * 1.4;
+      node = node.connect(c).connect(makeup);
+    }
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(1, now);
+    env.gain.setValueAtTime(1, now + st.length * 0.5);
+    env.gain.linearRampToValueAtTime(0, now + st.length);
+    node = node.connect(env);
+    node.connect(master);
+    if (st.wet > 0) { const send = ctx.createGain(); send.gain.value = st.wet; node.connect(send).connect(convolver); }
+    src.start(now); src.stop(now + st.length + 0.05);
+  }
+  function playBolt(now) {
+    if (!boltBuf) return;
+    const src = ctx.createBufferSource(); src.buffer = boltBuf; src.playbackRate.value = rec.boltRate;
+    const g = ctx.createGain(); g.gain.value = 0.9;
+    src.connect(g).connect(master);
+    const send = ctx.createGain(); send.gain.value = 0.08; g.connect(send).connect(convolver);
+    src.start(now, 0.42, 1.05);   // the bolt section of the recording, as BOLT.clipStart / clipLen in game.js
+  }
+
+  // ---------------- synth (Lab 1 engine) ----------------
+  function makeLayers() {
+    const sr = ctx.sampleRate, white = () => Math.random() * 2 - 1, k = (fc) => 1 - Math.exp(-2 * Math.PI * fc / sr);
+    function mono(seconds, fill) {
+      const len = Math.floor(sr * seconds), buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+      fill(d, len);
+      let peak = 0; for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
+      if (peak > 0) for (let i = 0; i < len; i++) d[i] /= peak;
+      return buf;
+    }
+    // snap: a high-passed N-wave, two needle-sharp clicks about 1 ms apart
+    const crack = mono(0.012, (d, len) => {
+      const T = Math.round(sr * rnd(0.0009, 0.0013)), kh = k(2500), kh2 = k(1200); let l1 = 0, l2 = 0;
+      for (let i = 0; i < len; i++) {
+        const x = (i < T ? 1 - 2 * i / T : 0) + white() * 0.35 * Math.exp(-i / (sr * 0.0007));
+        l1 += kh * (x - l1); const h1 = x - l1; l2 += kh2 * (h1 - l2); d[i] = h1 - l2;
+      }
+    });
+    // bright edge: broadband hiss gone in ~4 ms
+    const bright = mono(0.03, (d, len) => {
+      const kl = k(1800); let l = 0;
+      for (let i = 0; i < len; i++) { const w = white(); l += kl * (w - l); d[i] = (w - l) * Math.exp(-i / (sr * 0.0035)); }
+    });
+    // mid bark: roughly 900 Hz - 3 kHz
+    const mid = mono(0.12, (d, len) => {
+      const ka = k(3000), kb = k(900); let a = 0, a2 = 0, b = 0;
+      for (let i = 0; i < len; i++) {
+        const w = white(); a += ka * (w - a); a2 += ka * (a - a2); b += kb * (a2 - b);
+        d[i] = (a2 - b) * Math.min(i / (sr * 0.0004), 1) * Math.exp(-i / (sr * 0.028));
+      }
+    });
+    // body: mid-band blast with fixed filters (a swept one sounds like a "zap")
+    const body = mono(0.25, (d, len) => {
+      const ka = k(2200), kb = k(250); let a = 0, b = 0;
+      for (let i = 0; i < len; i++) {
+        const w = white(); a += ka * (w - a); b += kb * (a - b);
+        d[i] = (a - b) * Math.min(i / (sr * 0.0002), 1) * Math.exp(-i / (sr * 0.02));
+      }
+    });
+    // boom: low noise, not a tone, so nothing slides in pitch
+    const boom = mono(0.6, (d, len) => {
+      const kl = k(160); let a = 0, b = 0, c = 0;
+      for (let i = 0; i < len; i++) {
+        const w = white(); a += kl * (w - a); b += kl * (a - b); c += kl * (b - c);
+        d[i] = c * Math.min(i / (sr * 0.003), 1) * Math.exp(-i / (sr * 0.11));
+      }
+    });
+    // tail: smooth and steady (a slow swell in loudness reads as "boing")
+    const tailLen = Math.floor(sr * 2.2), tail = ctx.createBuffer(2, tailLen, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = tail.getChannelData(ch), ka = k(550), kb = k(200);
+      let a1 = 0, a2 = 0, b1 = 0, b2 = 0, peak = 0;
+      for (let i = 0; i < tailLen; i++) {
+        const t = i / sr, w = white();
+        a1 += ka * (w - a1); a2 += ka * (a1 - a2); b1 += kb * (w - b1); b2 += kb * (b1 - b2);
+        const r = Math.min(Math.max((t - 0.03) / 0.15, 0), 1);
+        const v = r * r * (3 - 2 * r) * (a2 * Math.exp(-t / 0.25) + b2 * 1.8 * Math.exp(-t / 0.55));
+        d[i] = v; peak = Math.max(peak, Math.abs(v));
+      }
+      for (let i = 0; i < tailLen; i++) d[i] /= peak;
+    }
+    return { crack, bright, mid, body, boom, tail };
+  }
+
+  function playSynth(now) {
+    const st = syn, v = variants[Math.floor(Math.random() * variants.length)];
+    // one bus with headroom; grit pushes it into a soft clipper on purpose
+    const bus = ctx.createGain(); bus.gain.value = 0.5 + st.drive * 0.8;
+    let out = bus;
+    if (st.drive > 0.01) {
+      const ws = ctx.createWaveShaper(); ws.curve = makeSaturationCurve(1 + st.drive * 4); ws.oversample = "4x";
+      bus.connect(ws); out = ws;
+    }
+    // compressor with a slow-ish attack so the snap slips through before it clamps
+    if (st.comp > 0.01) {
+      const c = ctx.createDynamicsCompressor();
+      c.threshold.value = -8 - st.comp * 22; c.ratio.value = 3 + st.comp * 9;
+      c.knee.value = 6; c.attack.value = 0.004; c.release.value = 0.12;
+      const makeup = ctx.createGain(); makeup.gain.value = 1 + st.comp * 1.2;
+      out.connect(c).connect(makeup); out = makeup;
+    }
+    out.connect(master);
+    const send = ctx.createGain(); send.gain.value = st.wet; out.connect(send).connect(convolver);
+
+    // swell: start a layer at a quarter level and ease it up over `swell` ms
+    const layer = (buf, gain, delay, dest, swells) => {
+      if (gain <= 0.001) return null;
+      const t0 = now + (delay || 0);
+      const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = st.pitch;
+      const g = ctx.createGain(), rise = swells ? st.swell / 1000 : 0;
+      if (rise > 0.001) {
+        g.gain.setValueAtTime(gain * 0.25, t0);
+        g.gain.setTargetAtTime(gain * 1.6, t0, rise * 0.6);
+        g.gain.setTargetAtTime(gain, t0 + rise, rise);
+      } else {
+        g.gain.value = gain;
+      }
+      s.connect(g).connect(dest || bus); s.start(t0);
+      return g;
+    };
+    layer(v.crack, st.crack);
+    layer(v.bright, st.bright);
+    layer(v.mid, st.mid, 0, null, true);
+    layer(v.body, st.body, 0, null, true);
+    layer(v.boom, st.boom, 0, null, true);
+    if (st.slap > 0.01) {   // one dull copy of the blast off a nearby wall
+      const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 2200 * st.pitch; f.connect(bus);
+      const d = rnd(0.095, 0.125);
+      layer(v.mid, st.slap * 0.5, d, f);
+      layer(v.body, st.slap * 0.6, d + 0.002, f);
+    }
+    const tg = layer(v.tail, st.tail * 0.6);
+    if (tg) {
+      const end = now + st.tailLen;
+      tg.gain.setValueAtTime(st.tail * 0.6, now);
+      tg.gain.setValueAtTime(st.tail * 0.6, Math.max(now, end - st.tailLen * 0.6));
+      tg.gain.exponentialRampToValueAtTime(0.0005, end);
+    }
+  }
+
+  function fire() {
+    init().then(() => {
+      const now = ctx.currentTime + 0.02;
+      if (current === "game") { playRecording(now); playBolt(now + rec.boltDelay); }
+      else if (current === "bolt") playBolt(now);
+      else playSynth(now);
+    });
+  }
+
+  document.getElementById("fire").addEventListener("click", (e) => { e.currentTarget.blur(); fire(); });
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") { e.preventDefault(); fire(); return; }
+    if (e.target.tagName === "INPUT") return;
+    const p = GAME.concat(SYNTH).find((q) => q.key === e.key.toLowerCase());
+    if (p) select(p.id);
+  });
+  buildKnobs();
+  document.querySelectorAll(".preset").forEach((b) => b.classList.toggle("active", b.dataset.id === current));
+  writeOut();
+})();
+</script>
+</body>
+</html>
