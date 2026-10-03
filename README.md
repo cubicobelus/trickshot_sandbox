@@ -3,21 +3,22 @@
 A browser FPS where you chain slides, bunnyhops and wall bounces to build speed, then land
 absurd trickshots for a big score multiplier. No build step: three.js and PeerJS load from a CDN.
 
-## Run it
+## Play
+
+**[▶ Play in your browser](https://cubicobelus.github.io/trickshot_sandbox/)** — nothing to download or install.
+Click the link, then click **Click to play**. Press **Esc** for the menu.
+
+To play with friends: pick **Multiplayer → Create room**, then send them the page link and the 5-letter
+room code (the **Copy** button in the room copies an invite link that fills the code in for them).
+
+<details>
+<summary>Running it offline</summary>
 
 The game is three files that must sit **in the same folder**: `index.html`, `style.css` and `game.js`.
-Downloading only `index.html` gives you an unstyled page that does nothing.
+Downloading only `index.html` gives you an unstyled page that does nothing. Use **Code → Download ZIP**,
+unzip, and open `index.html`. An internet connection is still needed (three.js and PeerJS load from a CDN).
 
-**Easiest (no download):** open the GitHub Pages link for this repo, if it's enabled
-(repo **Settings → Pages → Deploy from a branch → `main` → `/ (root)`**).
-
-**On your computer:**
-1. On the repo page click **Code → Download ZIP**.
-2. Unzip it, open the unzipped folder, and double-click `index.html` (Chrome works well).
-3. You need an internet connection (three.js and PeerJS load from a CDN).
-4. Click **Click to play**. Press **Esc** to get the menu back.
-
-To play with friends, share the Pages URL, or the invite link the room gives you.
+</details>
 
 ## Modes
 
