@@ -115,8 +115,10 @@
   // SCENE
   // ======================================================================
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87b7d9);
-  scene.fog = new THREE.Fog(0x87b7d9, 40, 120);
+  const SKY_TOP = 0x3f7dc6, SKY_HORIZON = 0xcfe2ee;
+  scene.background = new THREE.Color(SKY_HORIZON);
+  scene.fog = new THREE.Fog(SKY_HORIZON, 45, 140);
+  const SUN_DIR = new THREE.Vector3(30, 50, 20).normalize();
 
   const camera = new THREE.PerspectiveCamera(CFG.baseFov, window.innerWidth / window.innerHeight, 0.02, 500);
   const pitchObject = new THREE.Object3D();
@@ -140,14 +142,181 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.9));
-  const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-  sun.position.set(30, 50, 20);
+  // the environment map below already lights everything softly from the sky, so the
+  // fill light is low and the sun does the shaping
+  scene.add(new THREE.HemisphereLight(0xdbe9ff, 0x56663f, 0.62));
+  const sun = new THREE.DirectionalLight(0xfff0d8, 1.05);
+  sun.position.copy(SUN_DIR).multiplyScalar(60);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0004;
   sun.shadow.camera.left = -50; sun.shadow.camera.right = 50;
   sun.shadow.camera.top = 50; sun.shadow.camera.bottom = -50;
   scene.add(sun);
+
+  // ---- sky: a gradient dome with a soft sun glow, and a few slow low-poly clouds ----
+  function makeSkyDome(radius) {
+    return new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, fog: false,
+      uniforms: {
+        top: { value: new THREE.Color(SKY_TOP) },
+        horizon: { value: new THREE.Color(SKY_HORIZON) },
+        sunDir: { value: SUN_DIR },
+      },
+      vertexShader: "varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+      fragmentShader: [
+        "uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; varying vec3 vDir;",
+        "void main() {",
+        "  float h = vDir.y;",
+        "  vec3 c = mix(horizon, top, pow(clamp(h, 0.0, 1.0), 0.55));",
+        "  c = mix(c, horizon * 0.82, clamp(-h * 3.0, 0.0, 1.0));",          // a little darker below the horizon
+        "  float s = max(dot(normalize(vDir), sunDir), 0.0);",
+        "  c += vec3(1.0, 0.92, 0.75) * (pow(s, 400.0) * 1.2 + pow(s, 12.0) * 0.18);",  // sun disc and halo
+        "  gl_FragColor = vec4(c, 1.0);",
+        "}",
+      ].join("\n"),
+    }));
+  }
+  const skyDome = makeSkyDome(450);
+  skyDome.renderOrder = -1;
+  scene.add(skyDome);
+
+  const clouds = new THREE.Group();
+  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x9aa6b4, fog: false });
+  for (let i = 0; i < 9; i++) {
+    const c = new THREE.Group();
+    const puffs = 3 + Math.floor(Math.random() * 3);
+    for (let j = 0; j < puffs; j++) {
+      const r = 9 + Math.random() * 9;
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), cloudMat);
+      m.position.set((j - puffs / 2) * r * 1.1, Math.random() * 4, Math.random() * 8);
+      m.scale.y = 0.45;
+      c.add(m);
+    }
+    const ang = (i / 9) * Math.PI * 2 + Math.random() * 0.5, dist = 220 + Math.random() * 90;
+    c.position.set(Math.cos(ang) * dist, 70 + Math.random() * 40, Math.sin(ang) * dist);
+    c.lookAt(0, c.position.y, 0);
+    clouds.add(c);
+  }
+  scene.add(clouds);
+
+  // Environment map: six small canvases painted with the same sky (and the ground below), so
+  // shiny surfaces have something to reflect; without one, metal renders nearly black.
+  // Plain 8-bit canvases rather than rendering the sky into float targets, which some
+  // GPUs and software renderers get badly wrong.
+  (function buildEnvironment() {
+    const css = (hex) => "#" + new THREE.Color(hex).getHexString();
+    const n = 64;
+    const face = (kind) => {
+      const c = document.createElement("canvas");
+      c.width = c.height = n;
+      const g = c.getContext("2d");
+      if (kind === "up") { g.fillStyle = css(SKY_TOP); g.fillRect(0, 0, n, n); }
+      else if (kind === "down") { g.fillStyle = "#6c7268"; g.fillRect(0, 0, n, n); }   // muted, so chrome doesn't turn green
+      else {
+        const grad = g.createLinearGradient(0, 0, 0, n);
+        grad.addColorStop(0, css(SKY_TOP));
+        grad.addColorStop(0.48, css(SKY_HORIZON));
+        grad.addColorStop(0.52, "#868c80");
+        grad.addColorStop(1, "#6c7268");
+        g.fillStyle = grad; g.fillRect(0, 0, n, n);
+      }
+      return c;
+    };
+    // +x, -x, +y, -y, +z, -z
+    const env = new THREE.CubeTexture([face("side"), face("side"), face("up"), face("down"), face("side"), face("side")]);
+    env.needsUpdate = true;
+    scene.environment = env;
+  })();
+
+  // ---- surface textures, drawn in code: small canvases tiled across each surface ----
+  function canvasTexture(size, draw, repeatX, repeatY) {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    draw(c.getContext("2d"), size);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    t.repeat.set(repeatX || 1, repeatY || 1);
+    return t;
+  }
+  function speckle(g, n, size, alpha, light) {
+    for (let i = 0; i < n; i++) {
+      g.fillStyle = (Math.random() < 0.5 ? "rgba(0,0,0," : (light ? "rgba(255,255,255," : "rgba(0,0,0,")) + (Math.random() * alpha).toFixed(3) + ")";
+      const w = 1 + Math.random() * 3;
+      g.fillRect(Math.random() * size, Math.random() * size, w, w);
+    }
+  }
+  const SURFACE_DRAW = {
+    // turf with a faint line every tile (4 m), handy for judging distance
+    grass(g, n) {
+      g.fillStyle = "#6f9a52"; g.fillRect(0, 0, n, n);
+      speckle(g, 2600, n, 0.16, true);
+      g.strokeStyle = "rgba(255,255,255,0.13)"; g.lineWidth = 3;
+      g.strokeRect(0, 0, n, n);
+    },
+    // concrete panels with seams
+    concrete(g, n) {
+      g.fillStyle = "#a5afb9"; g.fillRect(0, 0, n, n);
+      speckle(g, 1400, n, 0.08, true);
+      g.strokeStyle = "rgba(40,48,58,0.35)"; g.lineWidth = 3;
+      g.strokeRect(1.5, 1.5, n - 3, n - 3);
+      g.fillStyle = "rgba(40,48,58,0.25)";
+      for (const [x, y] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]]) { g.beginPath(); g.arc(x * n, y * n, 3, 0, 7); g.fill(); }
+    },
+    // painted blocks
+    brick(g, n) {
+      g.fillStyle = "#b06a62"; g.fillRect(0, 0, n, n);
+      speckle(g, 900, n, 0.08, true);
+      g.strokeStyle = "rgba(60,30,28,0.35)"; g.lineWidth = 2;
+      const rows = 8;
+      for (let r = 0; r < rows; r++) {
+        const y = (r / rows) * n;
+        g.beginPath(); g.moveTo(0, y); g.lineTo(n, y); g.stroke();
+        for (let k = 0; k < 4; k++) {
+          const x = ((k + (r % 2) * 0.5) / 4) * n;
+          g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + n / rows); g.stroke();
+        }
+      }
+    },
+    // steel deck plate inside a yellow and black hazard border
+    deck(g, n) {
+      g.fillStyle = "#8d949c"; g.fillRect(0, 0, n, n);
+      g.strokeStyle = "rgba(255,255,255,0.12)"; g.lineWidth = 2;
+      for (let y = 8; y < n; y += 16) for (let x = 8 + (y % 32 ? 8 : 0); x < n; x += 16) {
+        g.beginPath(); g.moveTo(x - 4, y + 3); g.lineTo(x + 4, y - 3); g.stroke();
+      }
+      const b = n * 0.11;
+      g.save();
+      g.beginPath(); g.rect(0, 0, n, n); g.rect(b, b, n - 2 * b, n - 2 * b); g.clip("evenodd");
+      g.fillStyle = "#e3b53a"; g.fillRect(0, 0, n, n);
+      g.fillStyle = "#2a2a2a";
+      for (let x = -n; x < n * 2; x += 28) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 14, 0); g.lineTo(x + 14 - n, n); g.lineTo(x - n, n); g.fill(); }
+      g.restore();
+    },
+    // wooden crate: planks in a frame with a cross brace
+    crate(g, n) {
+      g.fillStyle = "#c3965f"; g.fillRect(0, 0, n, n);
+      g.strokeStyle = "rgba(80,50,25,0.35)"; g.lineWidth = 2;
+      for (let y = n / 5; y < n; y += n / 5) { g.beginPath(); g.moveTo(0, y); g.lineTo(n, y); g.stroke(); }
+      speckle(g, 500, n, 0.1, false);
+      const f = n * 0.12;
+      g.fillStyle = "#a87a45";
+      g.fillRect(0, 0, n, f); g.fillRect(0, n - f, n, f); g.fillRect(0, 0, f, n); g.fillRect(n - f, 0, f, n);
+      g.strokeStyle = "#a87a45"; g.lineWidth = f * 0.9;
+      g.beginPath(); g.moveTo(f, f); g.lineTo(n - f, n - f); g.stroke();
+      g.strokeStyle = "rgba(60,35,15,0.5)"; g.lineWidth = 2;
+      g.strokeRect(1, 1, n - 2, n - 2); g.strokeRect(f, f, n - 2 * f, n - 2 * f);
+    },
+  };
+  const surfaceCanvases = {};
+  function surfaceMaterial(kind, repeatX, repeatY) {
+    if (!surfaceCanvases[kind]) surfaceCanvases[kind] = canvasTexture(256, SURFACE_DRAW[kind]);
+    const t = surfaceCanvases[kind].clone();
+    t.needsUpdate = true;
+    t.repeat.set(repeatX, repeatY);
+    return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.6 : 0.9, metalness: kind === "deck" ? 0.3 : 0 });
+  }
 
   // ======================================================================
   // LEVEL
@@ -155,8 +324,10 @@
   const groundMeshes = [];
   const wallBoxes = [];
 
-  function addGround(x, y, z, w, d, color, solid) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), new THREE.MeshStandardMaterial({ color }));
+  // surfaces: "grass" for the floor, "deck" for platforms, "concrete" and "brick" for walls
+  function addGround(x, y, z, w, d, surface, solid) {
+    const tile = surface === "grass" ? 4 : Math.max(w, d);   // grass tiles every 4 m; decks show one border
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), surfaceMaterial(surface, w / tile, d / tile));
     mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -164,42 +335,57 @@
     groundMeshes.push(mesh);
     if (solid) wallBoxes.push(new THREE.Box3().setFromObject(mesh));
   }
-  function addWall(x, y, z, w, h, d, color) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color }));
+  function addWall(x, y, z, w, h, d, surface) {
+    const span = Math.max(w, d), tile = surface === "concrete" ? 4 : 3;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), surfaceMaterial(surface, span / tile, h / tile));
     mesh.position.set(x, y, z);
     mesh.castShadow = true; mesh.receiveShadow = true;
     scene.add(mesh);
     wallBoxes.push(new THREE.Box3().setFromObject(mesh));
   }
 
-  addGround(0, 0, 0, CFG.arenaHalfSize * 2, CFG.arenaHalfSize * 2, 0x6b8f4e);
+  addGround(0, 0, 0, CFG.arenaHalfSize * 2, CFG.arenaHalfSize * 2, "grass");
   const H = CFG.arenaHalfSize;
-  addWall(0, 6, -H, H * 2, 12, 1, 0x8899aa);
-  addWall(0, 6, H, H * 2, 12, 1, 0x8899aa);
-  addWall(-H, 6, 0, 1, 12, H * 2, 0x8899aa);
-  addWall(H, 6, 0, 1, 12, H * 2, 0x8899aa);
+  addWall(0, 6, -H, H * 2, 12, 1, "concrete");
+  addWall(0, 6, H, H * 2, 12, 1, "concrete");
+  addWall(-H, 6, 0, 1, 12, H * 2, "concrete");
+  addWall(H, 6, 0, 1, 12, H * 2, "concrete");
 
-  addGround(-10, 1.5, -6, 4, 4, 0xc9a24b, true);
-  addGround(-4, 2.5, -10, 4, 4, 0xc9a24b, true);
-  addGround(2, 3.5, -14, 4, 4, 0xc9a24b, true);
-  addGround(9, 2.0, -8, 6, 4, 0xc9a24b, true);
+  addGround(-10, 1.5, -6, 4, 4, "deck", true);
+  addGround(-4, 2.5, -10, 4, 4, "deck", true);
+  addGround(2, 3.5, -14, 4, 4, "deck", true);
+  addGround(9, 2.0, -8, 6, 4, "deck", true);
 
-  addWall(16, 4, 4, 1, 8, 12, 0xaa6666);
-  addWall(23, 4, 4, 1, 8, 12, 0xaa6666);
-  addWall(-16, 4, -16, 3, 8, 3, 0xaa6666);
-  addWall(-22, 4, -8, 3, 8, 3, 0xaa6666);
-  addWall(-20, 4, 14, 3, 8, 3, 0xaa6666);
+  addWall(16, 4, 4, 1, 8, 12, "brick");
+  addWall(23, 4, 4, 1, 8, 12, "brick");
+  addWall(-16, 4, -16, 3, 8, 3, "brick");
+  addWall(-22, 4, -8, 3, 8, 3, "brick");
+  addWall(-20, 4, 14, 3, 8, 3, "brick");
 
   // ======================================================================
   // TARGETS (standard / moving / small)
   // ======================================================================
   const targets = [];
-  const ringGeo = new THREE.TorusGeometry(1, 0.15, 10, 20);
-  const centerGeo = new THREE.CircleGeometry(0.55, 14);
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0xff3b3b });
-  const ringMovingMat = new THREE.MeshStandardMaterial({ color: 0xff8c1a });
-  const ringSmallMat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0a5f70, emissiveIntensity: 0.5 });
-  const centerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+  // a plate (cylinder turned to face +Z) painted with a bullseye in the target type's colour;
+  // the rim and back are bare steel. Colours: red standard, orange moving, cyan small.
+  const plateGeo = new THREE.CylinderGeometry(1, 1, 0.07, 40);
+  plateGeo.rotateX(Math.PI / 2);
+  const plateRimGeo = new THREE.TorusGeometry(1, 0.06, 8, 40);
+  const plateSteel = new THREE.MeshStandardMaterial({ color: 0x8e959d, roughness: 0.45, metalness: 0.7 });
+  function bullseyeMaterial(color) {
+    const tex = canvasTexture(256, (g, n) => {
+      const rings = [color, "#f4f4f2", color, "#f4f4f2", color];
+      rings.forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (1 - i * 0.19), 0, Math.PI * 2); g.fill(); });
+      g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
+      for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (1 - i * 0.19) - 1, 0, Math.PI * 2); g.stroke(); }
+    });
+    // a touch of glow so a plate in shadow still reads against the sky
+    return new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.38, roughness: 0.55, metalness: 0.1 });
+  }
+  // materials for the plate's [rim, front, back] faces
+  const ringMat = [plateSteel, bullseyeMaterial("#e5352f"), plateSteel];
+  const ringMovingMat = [plateSteel, bullseyeMaterial("#ff8a1c"), plateSteel];
+  const ringSmallMat = [plateSteel, bullseyeMaterial("#19c6e0"), plateSteel];
 
   const PLAYER_SPAWN = new THREE.Vector3(0, 1.7, 8);
 
@@ -258,7 +444,10 @@
 
   function makeTarget() {
     const group = new THREE.Group();
-    group.add(new THREE.Mesh(ringGeo, ringMat), new THREE.Mesh(centerGeo, centerMat));
+    const plate = new THREE.Mesh(plateGeo, ringMat);
+    const rim = new THREE.Mesh(plateRimGeo, plateSteel);
+    plate.castShadow = rim.castShadow = false;
+    group.add(plate, rim);
     group.userData = { idx: targets.length, alive: true, hitRadius: 1.1, base: new THREE.Vector3(), moving: false, vertical: false, small: false, scale: 1 };
     scene.add(group);
     targets.push(group);
@@ -312,7 +501,9 @@
         if (ud.respawnTimer <= 0) { respawnTarget(t); if (net.role === "host") mpAnnounceSpawn(t); }
         continue;
       }
-      t.rotation.y += dt * (ud.small ? 2.4 : 1.5);
+      // face the player, with a gentle sway so they don't look pinned in place
+      t.rotation.y = Math.atan2(yawObject.position.x - t.position.x, yawObject.position.z - t.position.z) +
+        Math.sin(clock * (ud.small ? 2.1 : 1.3) + (ud.phase || t.userData.idx)) * 0.22;
       if (!ud.moving) continue;
       const off = Math.cos(clock * ud.speedH + ud.phase) * ud.ampH;
       t.position.x = ud.base.x + off * ud.axisX;
@@ -326,7 +517,7 @@
   // ======================================================================
   const props = [];
   const propMeshes = [];
-  const crateMat = new THREE.MeshStandardMaterial({ color: 0xd2a679 });
+  const crateMat = surfaceMaterial("crate", 1, 1);
   function makeCrate(x, y, z, size) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), crateMat);
     mesh.position.set(x, y, z);
@@ -913,10 +1104,8 @@
   for (let i = 0; i < 7; i++) addPart(shotgunPump, new THREE.TorusGeometry(0.0285, 0.0028, 4, 14), gripMat, 0, 0.002, -0.066 + i * 0.022);
   // ---- Desert Eagle: polished stainless, a long triangular barrel with a top rail over
   // a short slide, a squared trigger guard and a chunky rubber grip ----
-  // kept only mildly metallic: there's no environment to reflect yet, and fully metallic
-  // surfaces with nothing to reflect render nearly black
-  const stainlessMat = new THREE.MeshStandardMaterial({ color: 0xdadde2, roughness: 0.32, metalness: 0.35 });
-  const stainlessDark = new THREE.MeshStandardMaterial({ color: 0xa9adb4, roughness: 0.38, metalness: 0.35 });
+  const stainlessMat = new THREE.MeshStandardMaterial({ color: 0xd4d8de, roughness: 0.22, metalness: 0.9 });
+  const stainlessDark = new THREE.MeshStandardMaterial({ color: 0xa7acb3, roughness: 0.3, metalness: 0.85 });
   const pistolGroup = new THREE.Group();
   addPart(pistolGroup, new THREE.BoxGeometry(0.036, 0.032, 0.21), stainlessDark, 0, -0.008, -0.03);    // frame
   // barrel: a triangular prism, point down, flat face up, with the rail along the top
@@ -4028,6 +4217,7 @@
       updateParticles(dt);
       updateTracers(dt);
       updateSmoke(dt);
+      clouds.rotation.y += dt * 0.004;
       updateCasings(dt);
       updateMagDrops(dt);
       updateThrownKnives(dt);
