@@ -651,6 +651,63 @@
   addPart(rifleGroup, new THREE.CircleGeometry(0.012, 10), glintMat, -0.016, 0.137, -0.354);
   addPart(rifleGroup, new THREE.CircleGeometry(0.038, 20), scopeGlass, 0, 0.12, 0.196, 0, Math.PI, 0);
   const magMesh = addPart(rifleGroup, new THREE.BoxGeometry(0.055, 0.19, 0.07), metalDark, 0, -0.15, 0.02, -0.15, 0, 0);
+
+  // ---- dropped magazines: the empty mag falls out during a reload and lies on the floor ----
+  const magDropPool = [];
+  for (let i = 0; i < 3; i++) {
+    const mesh = new THREE.Mesh(magMesh.geometry, metalDark);
+    mesh.rotation.order = "YXZ";
+    mesh.visible = false; mesh.frustumCulled = false;
+    mesh.castShadow = false;   // shadows are baked; a moving caster would leave a stale one
+    scene.add(mesh);
+    magDropPool.push({ mesh, vel: new THREE.Vector3(), spin: new THREE.Vector3(), age: 0, bounces: 0, resting: false, active: false });
+  }
+  const _magDropVel = new THREE.Vector3();
+  const _magDropQuat = new THREE.Quaternion();
+
+  function dropMagazine() {
+    let m = magDropPool.find((k) => !k.active);
+    if (!m) m = magDropPool.reduce((a, b) => (a.age > b.age ? a : b));   // recycle the oldest
+    m.active = true; m.age = 0; m.bounces = 0; m.resting = false;
+    magMesh.getWorldPosition(m.mesh.position);
+    magMesh.getWorldQuaternion(_magDropQuat);
+    m.mesh.quaternion.copy(_magDropQuat);
+    m.mesh.scale.setScalar(1);
+    m.mesh.visible = true;
+    camera.getWorldQuaternion(_magDropQuat);
+    _magDropVel.set(0.25 + Math.random() * 0.3, -1.4, 0.2).applyQuaternion(_magDropQuat);
+    m.vel.copy(_magDropVel).add(player.velocity);
+    m.spin.set((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 8);
+  }
+
+  function updateMagDrops(dt) {
+    for (const m of magDropPool) {
+      if (!m.active) continue;
+      m.age += dt;
+      const o = m.mesh;
+      if (m.age > 8 || o.position.y < -60) { m.active = false; o.visible = false; continue; }
+      if (m.age > 7.5) o.scale.setScalar(Math.max((8 - m.age) / 0.5, 0.01));
+      if (m.resting) continue;
+      m.vel.y -= CFG.gravity * dt;
+      o.position.addScaledVector(m.vel, dt);
+      o.rotation.x += m.spin.x * dt; o.rotation.y += m.spin.y * dt; o.rotation.z += m.spin.z * dt;
+      const gy = currentGroundY(o.position.x, o.position.z, o.position.y + 0.3);
+      if (o.position.y - 0.05 <= gy && m.vel.y < 0) {
+        if (m.bounces < 2) playMagLand(Math.min(-m.vel.y / 6, 1) * (m.bounces ? 0.5 : 1));
+        m.bounces++;
+        m.vel.y = -m.vel.y * 0.22;
+        m.vel.x *= 0.4; m.vel.z *= 0.4;
+        m.spin.multiplyScalar(0.3);
+        o.position.y = gy + 0.05;
+        if (m.vel.y < 0.5) {
+          // lie flat on its side
+          m.resting = true;
+          o.rotation.set(Math.PI / 2, o.rotation.y, 0);
+          o.position.y = gy + 0.036;
+        }
+      }
+    }
+  }
   // bolt: pivots on the receiver so the handle can lift, pull back and slam home
   const boltMesh = new THREE.Group();
   boltMesh.position.set(0.05, 0.02, 0.20);
@@ -678,6 +735,7 @@
   // of the scene (an invisible parent would remove it and force a shader rebuild)
   const muzzleLight = new THREE.PointLight(0xffb060, 0, 10, 2);
   muzzleLight.position.set(0.3, -0.15, -1.6);
+  const FLASH_TIME = 0.09;   // seconds; the flash fades out over this
 
   const knifeGroup = new THREE.Group();
   (function buildKnife() {
@@ -990,38 +1048,36 @@
       if (vm.inspectTimer <= 0) { vm.inspectTimer = 0; boltMesh.position.z = 0.20; }
     }
 
-    let rlY = 0, rlX = 0, rlZ = 0;
-    if (reload.active) {
-      const p = 1 - reload.timer / CFG.reloadTime;
-      const arc = Math.sin(Math.PI * p);
-      rlY = -0.20 * arc; rlX = 0.55 * arc; rlZ = 0.45 * arc;
-      magMesh.position.y = -0.15 - 0.14 * Math.sin(Math.PI * Math.min(p * 1.6, 1));
-    } else {
-      magMesh.position.y = -0.15;
-    }
+    const rl = reload.active ? reloadPose(reload.elapsed) : RELOAD_REST;
 
     const holsterDrop = holster * 0.45;
     const holsterTilt = holster * 1.1;
 
     w.group.position.set(
-      px + bobX + ipx + swing * 0.16 - boltTilt * 0.04,
-      py + bobY + ipy - holsterDrop + rlY - Math.abs(slash) * 0.05 + boltTilt * 0.015,
+      px + bobX + ipx + rl.x + swing * 0.16 - boltTilt * 0.04,
+      py + bobY + ipy + rl.y - holsterDrop - Math.abs(slash) * 0.05 + boltTilt * 0.015,
       pz + ipz + vm.recoil * 0.16 - Math.abs(slash) * 0.13 + boltJolt * 0.012
     );
     w.group.rotation.set(
-      rx + irx - vm.recoil * 0.34 + holsterTilt + rlX - Math.abs(slash) * 0.45 + boltTilt * 0.08 - boltJolt * 0.03,
-      ry + iry + swing * 0.7 + boltTilt * 0.10,
-      rz + irz + rlZ + swing * 1.05 + boltTilt * 0.34
+      rx + irx + rl.rx - vm.recoil * 0.34 + holsterTilt - Math.abs(slash) * 0.45 + boltTilt * 0.08 - boltJolt * 0.03,
+      ry + iry + rl.ry + swing * 0.7 + boltTilt * 0.10,
+      rz + irz + rl.rz + swing * 1.05 + boltTilt * 0.34
     );
 
+    // muzzle flash: a hot first frame, then a quick fade so it lingers just long enough to catch.
+    // Scoped, the rifle is hidden, so a faint warm glow rises into the lens instead.
+    let flashK = 0;
     if (vm.flashTimer > 0) {
       vm.flashTimer -= dt;
+      flashK = Math.max(vm.flashTimer / FLASH_TIME, 0);
+      flashK *= flashK;
       muzzleFlash.visible = true;
-      flashMat.opacity = Math.max(vm.flashTimer / 0.06, 0);
-      muzzleFlash.scale.setScalar(0.9 + Math.random() * 0.8);
-      muzzleLight.intensity = 2.4 * Math.max(vm.flashTimer / 0.06, 0);
+      flashMat.opacity = flashK;
+      muzzleFlash.scale.setScalar(0.8 + Math.random() * 0.6);
+      muzzleLight.intensity = 2.0 * flashK;
       if (vm.flashTimer <= 0) { muzzleFlash.visible = false; vm.flashTimer = 0; muzzleLight.intensity = 0; }
     }
+    scopeFlashEl.style.opacity = (flashK * 0.55 * adsEased).toFixed(3);
 
     // FOV: scope zoom, plus a speed-driven widening for a sense of momentum
     const speedNow = Math.hypot(player.velocity.x, player.velocity.z);
@@ -1298,6 +1354,13 @@
   function playSlideScrape() { noiseHit(520, 0.9, 0.07, 0.16, "lowpass", 0, 0.35); }
   function playMagOut() { noiseHit(1600, 3, 0.18, 0.09, "bandpass", 0, 0.3); tone("square", 340, 210, 0.06, 0.08, 0, 0.25); }
   function playMagIn() { noiseHit(900, 2, 0.24, 0.12, "lowpass", 0, 0.35); tone("square", 200, 130, 0.09, 0.11, 0, 0.3); }
+  // empty magazine hitting the floor: a dull metal clunk
+  function playMagLand(vol) {
+    if (vol < 0.05) return;
+    noiseHit(700, 1.2, 0.30 * vol, 0.09, "bandpass", 0, 0.25);
+    noiseHit(2400, 4, 0.08 * vol, 0.03, "highpass", 0, 0.2);
+    tone("triangle", 260, 190, 0.10 * vol, 0.07, 0, 0.2);
+  }
   function playBolt() { noiseHit(2800, 3.5, 0.20, 0.07, "highpass", 0, 0.3); noiseHit(1100, 2, 0.16, 0.10, "bandpass", 0.06, 0.35); }
   // the recorded bolt action (see BOLT); stopped early if the cycle is interrupted
   let boltSrc = null;
@@ -1343,6 +1406,7 @@
   const crosshairEl = document.getElementById("crosshair");
   const scopeEl = document.getElementById("scope");
   const scopeLinesEl = document.getElementById("scope-lines");
+  const scopeFlashEl = document.getElementById("scope-flash");
   const speedlinesEl = document.getElementById("speedlines");
   const speedEl = document.getElementById("speed-val");
   const speedbarEl = document.getElementById("speedbar-fill");
@@ -1552,6 +1616,52 @@
 
   const RELOAD_BOLT_AT = CFG.reloadTime - BOLT.len - 0.02;
 
+  // Reload choreography for CFG.reloadTime = 2.3 s, keyed to the mag-out (0.18 s),
+  // mag-in (1.15 s) and bolt (RELOAD_BOLT_AT) sounds. Offsets from the rest pose:
+  //   [time, x, y, rx, ry, rz]
+  const RELOAD_KEYS = [
+    [0.00,  0,     0,     0,    0,     0   ],
+    [0.25, -0.09,  0.07,  0.12, 0.18, -0.70],  // lift it and roll the underside toward you
+    [0.85, -0.09,  0.05,  0.08, 0.18, -0.78],  // hold while the fresh mag comes up
+    [1.15, -0.09,  0.08,  0.14, 0.18, -0.66],  // seat it
+    [1.40, -0.04,  0.015, 0.08, 0.10,  0.34],  // roll over to the bolt side
+    [2.12, -0.04,  0.015, 0.08, 0.10,  0.34],
+    [2.30,  0,     0,     0,    0,     0   ],
+  ];
+  const MAG_REST_Y = -0.15, MAG_OUT_AT = 0.18, MAG_DROP_AT = 0.32, MAG_UP_AT = 0.70, MAG_SEAT_AT = 1.15;
+  const RELOAD_REST = { x: 0, y: 0, rx: 0, ry: 0, rz: 0 };
+  const _rlPose = { x: 0, y: 0, rx: 0, ry: 0, rz: 0 };
+
+  function reloadPose(t) {
+    let i = 1;
+    while (i < RELOAD_KEYS.length - 1 && t > RELOAD_KEYS[i][0]) i++;
+    const a = RELOAD_KEYS[i - 1], b = RELOAD_KEYS[i];
+    const k = easeInOut(Math.min(Math.max((t - a[0]) / (b[0] - a[0]), 0), 1));
+    const lerp = (j) => a[j] + (b[j] - a[j]) * k;
+    _rlPose.x = lerp(1); _rlPose.y = lerp(2); _rlPose.rx = lerp(3); _rlPose.ry = lerp(4); _rlPose.rz = lerp(5);
+
+    // the magazine: slides out, drops away, a fresh one rises in and seats with a jolt
+    let magY = MAG_REST_Y, magShown = true;
+    if (t >= MAG_OUT_AT && t < MAG_DROP_AT) {
+      const x = (t - MAG_OUT_AT) / (MAG_DROP_AT - MAG_OUT_AT);
+      magY = MAG_REST_Y - 0.17 * x * x;
+    } else if (t >= MAG_DROP_AT && t < MAG_UP_AT) {
+      magShown = false;
+      if (!reload.magDropped) { reload.magDropped = true; dropMagazine(); }
+    } else if (t >= MAG_UP_AT && t < MAG_SEAT_AT) {
+      const x = (t - MAG_UP_AT) / (MAG_SEAT_AT - MAG_UP_AT);
+      magY = MAG_REST_Y - 0.33 * (1 - easeOut(Math.min(x / 0.85, 1))) - 0.02 * (x < 0.85 ? 1 : 1 - (x - 0.85) / 0.15);
+    }
+    magMesh.position.y = magY;
+    magMesh.visible = magShown;
+    if (t >= MAG_SEAT_AT) {
+      const j = Math.exp(-(t - MAG_SEAT_AT) * 18);
+      _rlPose.rx -= 0.05 * j;
+      _rlPose.y += 0.01 * j;
+    }
+    return _rlPose;
+  }
+
   function cancelReload() {
     if (!reload.active) return;
     reload.active = false; reload.timer = 0;
@@ -1559,6 +1669,8 @@
     stopBoltSound();
     boltMesh.position.z = 0.20;
     boltMesh.rotation.z = 0;
+    magMesh.position.y = MAG_REST_Y;
+    magMesh.visible = true;
     updateAmmoHud();
   }
 
@@ -1572,6 +1684,7 @@
     vm.wantADS = false;
     cancelBoltCycle();
     reload.elapsed = 0;
+    reload.magDropped = false;
     // the same recorded bolt as between shots, timed to finish as the reload does
     reload.cues = [[0.18, playMagOut], [1.15, playMagIn], [RELOAD_BOLT_AT, playBoltCycleSound],
       [RELOAD_BOLT_AT + BOLT.back[1], ejectSpentCasing]];
@@ -2081,7 +2194,7 @@
     vm.recoil = 1;
     vm.camKick = 1;
     vm.camKickYaw = Math.random() * 2 - 1;
-    vm.flashTimer = 0.06;
+    vm.flashTimer = FLASH_TIME;
     muzzleFlash.rotation.z = Math.random() * Math.PI;
     vm.spentCasing = true;
     // an empty mag skips straight to the reload, which works the bolt itself
@@ -3008,6 +3121,7 @@
       updateTracers(dt);
       updateSmoke(dt);
       updateCasings(dt);
+      updateMagDrops(dt);
       updateTargets(net.active ? realDt : dt);
     }
 

@@ -56,6 +56,11 @@
     background: radial-gradient(circle, transparent 58%, rgba(0,0,0,0.22) 80%, rgba(0,0,0,0.75) 100%);
     box-shadow: inset 0 0 6px 2px rgba(255,140,60,0.16), inset 0 0 16px 5px rgba(60,120,255,0.12);
   }
+  /* muzzle glow seen through the lens when firing scoped */
+  #scope-flash {
+    position: absolute; inset: 0; border-radius: 50%; opacity: 0; pointer-events: none;
+    background: radial-gradient(ellipse 70% 55% at 50% 95%, rgba(255,180,90,0.9), rgba(255,140,60,0.25) 55%, transparent 80%);
+  }
   #scope-lines { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
   #scope-lines .l { position: absolute; background: rgba(10,10,10,0.85); }
   #scope-lines .lv { left: 50%; top: 0; width: 1px; height: 100%; transform: translateX(-50%); }
@@ -68,15 +73,19 @@
   #scope-lines .pl, #scope-lines .pr { top: 50%; height: 6px; width: 32%; transform: translateY(-50%); }
   #scope-lines .pl { left: 0; }
   #scope-lines .pr { right: 0; }
-  /* range dots along the thin centre lines */
+  /* range ticks across the thin centre lines: long every other step, short in between */
   #scope-lines .mils { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
   #scope-lines .mh {
-    width: 36%; height: 5px;
-    background: radial-gradient(circle, #0a0a0a 2px, transparent 2.5px) center / 11.111% 100% repeat-x;
+    width: 36%; height: 14px;
+    background:
+      linear-gradient(to right, transparent calc(50% - 1px), #0a0a0a calc(50% - 1px), #0a0a0a calc(50% + 1px), transparent calc(50% + 1px)) center / 22.222% 100% repeat-x,
+      linear-gradient(to right, transparent calc(50% - 0.5px), #0a0a0a calc(50% - 0.5px), #0a0a0a calc(50% + 0.5px), transparent calc(50% + 0.5px)) center / 11.111% 50% repeat-x;
   }
   #scope-lines .mv {
-    width: 5px; height: 36%;
-    background: radial-gradient(circle, #0a0a0a 2px, transparent 2.5px) center / 100% 11.111% repeat-y;
+    width: 14px; height: 36%;
+    background:
+      linear-gradient(to bottom, transparent calc(50% - 1px), #0a0a0a calc(50% - 1px), #0a0a0a calc(50% + 1px), transparent calc(50% + 1px)) center / 100% 22.222% repeat-y,
+      linear-gradient(to bottom, transparent calc(50% - 0.5px), #0a0a0a calc(50% - 0.5px), #0a0a0a calc(50% + 0.5px), transparent calc(50% + 0.5px)) center / 50% 11.111% repeat-y;
   }
   #scope-lines .dot {
     position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; border-radius: 50%;
