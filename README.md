@@ -41,4 +41,5 @@ Multiplayer code is in `game.js` but switched off for now (`MULTIPLAYER_ENABLED`
 ## Credits
 
 Rifle shot: ["Rifle Gun Shot 01"](https://freesound.org/people/LilMati/sounds/433858/) by LilMati (CC0).
+Bolt action: from ["Sniper Rifle M24 SFX"](https://freesound.org/people/kennysvoice/sounds/351777/) by kennysvoice (CC0).
 All other sounds are generated in code.

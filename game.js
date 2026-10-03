@@ -769,7 +769,7 @@
       restRot: new THREE.Euler(0.03, -0.09, 0.01),
       adsPos: new THREE.Vector3(0.0, -0.118, -0.24),
       adsRot: new THREE.Euler(0, 0, 0),
-      canADS: true, fireRate: 0.62, auto: false, isMelee: false,
+      canADS: true, fireRate: 1.1, auto: false, isMelee: false,
       usesAmmo: true, inspectDuration: 2.0, inspects: RIFLE_INSPECTS,
     },
     knife: {
@@ -819,7 +819,15 @@
   }
 
   // ---- bolt cycle after each rifle shot (lift, rack back, push home, lock) ----
-  const BOLT_CYCLE = 0.52;   // keep under the rifle's fireRate so it never delays the next shot
+  // The sound is a recorded bolt action (freesound 351777, CC0) played a little fast.
+  // The animation keys are lined up with its clicks, in seconds from when the sound starts.
+  const BOLT = {
+    clipStart: 0.42, clipLen: 1.05, rate: 1.25,   // where the bolt sits in the recording
+    lift: [0, 0.03], back: [0.13, 0.296], forward: [0.48, 0.664], lock: [0.664, 0.728],
+    len: 0.84,
+    delay: 0.25,   // after a shot, let it ring before working the bolt
+  };
+  const BOLT_CYCLE = BOLT.delay + BOLT.len;   // keep under the rifle's fireRate
   const _ejectPos = new THREE.Vector3();
   const _ejectVel = new THREE.Vector3();
   const _camQuat = new THREE.Quaternion();
@@ -827,12 +835,24 @@
 
   function startBoltCycle() {
     vm.boltTime = 0;
-    vm.boltCues = [[0.10, playBoltLift], [0.18, playBoltBack], [0.25, ejectSpentCasing], [0.31, playBoltForward], [0.44, playBoltLock]];
+    vm.boltCues = [[BOLT.delay, playBoltCycleSound], [BOLT.delay + BOLT.back[1], ejectSpentCasing]];
+  }
+
+  // bolt handle pose for t seconds into the bolt sound; the travel eases in so it
+  // hits each stop at speed. Returns a 0..1 jolt that spikes on the two slams.
+  function poseBolt(t) {
+    const lin = (k) => Math.min(Math.max((t - k[0]) / (k[1] - k[0]), 0), 1);
+    const slam = (k) => { const x = lin(k); return x * x; };
+    boltMesh.rotation.z = (easeInOut(lin(BOLT.lift)) - easeInOut(lin(BOLT.lock))) * 1.15;
+    boltMesh.position.z = 0.20 + (slam(BOLT.back) - slam(BOLT.forward)) * 0.13;
+    const jolt = (at) => (t >= at ? Math.exp(-(t - at) * 22) : 0);
+    return jolt(BOLT.back[1]) + jolt(BOLT.forward[1]);
   }
 
   function cancelBoltCycle() {
     vm.boltTime = -1;
     vm.boltCues.length = 0;
+    stopBoltSound();
     boltMesh.position.z = 0.20;
     boltMesh.rotation.z = 0;
   }
@@ -933,18 +953,21 @@
     camera.rotation.x = vm.camKick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway;
     camera.rotation.y = vm.camKick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3;
 
-    let boltTilt = 0;
+    // bolt: roll the rifle toward you while it works, with a jolt on each slam
+    let boltTilt = 0, boltJolt = 0;
     if (vm.boltTime >= 0) {
       vm.boltTime += dt;
       while (vm.boltCues.length && vm.boltTime >= vm.boltCues[0][0]) vm.boltCues.shift()[1]();
       const bt = vm.boltTime;
-      const seg = (a, b) => easeInOut(Math.min(Math.max((bt - a) / (b - a), 0), 1));
-      boltMesh.rotation.z = (seg(0.10, 0.17) - seg(0.43, 0.50)) * 1.15;
-      boltMesh.position.z = 0.20 + (seg(0.18, 0.27) - seg(0.31, 0.41)) * 0.10;
-      // roll the rifle a little so you can see the handle work
-      boltTilt = Math.sin(Math.PI * Math.min(bt / BOLT_CYCLE, 1)) * (1 - adsEased);
+      boltJolt = poseBolt(bt - BOLT.delay);
+      const rollIn = Math.min(Math.max((bt - BOLT.delay + 0.08) / 0.16, 0), 1);
+      const rollOut = Math.min(Math.max((BOLT_CYCLE - bt) / 0.18, 0), 1);
+      boltTilt = easeInOut(Math.min(rollIn, rollOut)) * (1 - adsEased);
       if (bt >= BOLT_CYCLE) cancelBoltCycle();
+    } else if (reload.active && reload.elapsed >= RELOAD_BOLT_AT) {
+      boltJolt = poseBolt(reload.elapsed - RELOAD_BOLT_AT);
     }
+    boltJolt *= 1 - adsEased;
 
     // slash progresses on a timeline rather than decaying
     let slash = 0;
@@ -981,14 +1004,14 @@
     const holsterTilt = holster * 1.1;
 
     w.group.position.set(
-      px + bobX + ipx + swing * 0.16,
-      py + bobY + ipy - holsterDrop + rlY - Math.abs(slash) * 0.05 - boltTilt * 0.02,
-      pz + ipz + vm.recoil * 0.16 - Math.abs(slash) * 0.13
+      px + bobX + ipx + swing * 0.16 - boltTilt * 0.04,
+      py + bobY + ipy - holsterDrop + rlY - Math.abs(slash) * 0.05 + boltTilt * 0.015,
+      pz + ipz + vm.recoil * 0.16 - Math.abs(slash) * 0.13 + boltJolt * 0.012
     );
     w.group.rotation.set(
-      rx + irx - vm.recoil * 0.34 + holsterTilt + rlX - Math.abs(slash) * 0.45 + boltTilt * 0.05,
-      ry + iry + swing * 0.7,
-      rz + irz + rlZ + swing * 1.05 + boltTilt * 0.22
+      rx + irx - vm.recoil * 0.34 + holsterTilt + rlX - Math.abs(slash) * 0.45 + boltTilt * 0.08 - boltJolt * 0.03,
+      ry + iry + swing * 0.7 + boltTilt * 0.10,
+      rz + irz + rlZ + swing * 1.05 + boltTilt * 0.34
     );
 
     if (vm.flashTimer > 0) {
@@ -1086,20 +1109,22 @@
       d[i] = white * 0.75 + last * 0.6;
     }
 
-    decodeRifleShot();
+    decodeEmbedded("rifleShot", (buf) => { rifleShotBuffer = trimToFirstShot(buf); });
+    decodeEmbedded("boltCycle", (buf) => { boltCycleBuffer = buf; });
   }
 
-  // The rifle report is a recording: "Rifle Gun Shot 01" by LilMati (freesound 433858,
-  // CC0), embedded in sounds.js. Decoded once and trimmed to start right on the shot.
-  let rifleShotBuffer = null;
+  // Recorded sounds (CC0, from freesound) are embedded in sounds.js and decoded once:
+  //  rifleShot - "Rifle Gun Shot 01" by LilMati (433858), trimmed to start on the shot
+  //  boltCycle - "Sniper Rifle M24 SFX" by kennysvoice (351777); only its bolt action is used
+  let rifleShotBuffer = null, boltCycleBuffer = null;
 
-  function decodeRifleShot() {
-    const b64 = window.TSB_SOUNDS && window.TSB_SOUNDS.rifleShot;
+  function decodeEmbedded(name, done) {
+    const b64 = window.TSB_SOUNDS && window.TSB_SOUNDS[name];
     if (!b64) return;
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    audioCtx.decodeAudioData(bytes.buffer).then((buf) => { rifleShotBuffer = trimToFirstShot(buf); }, () => {});
+    audioCtx.decodeAudioData(bytes.buffer).then(done, () => {});
   }
 
   // start just before the first big transient, stop before a second shot if the
@@ -1274,19 +1299,27 @@
   function playMagOut() { noiseHit(1600, 3, 0.18, 0.09, "bandpass", 0, 0.3); tone("square", 340, 210, 0.06, 0.08, 0, 0.25); }
   function playMagIn() { noiseHit(900, 2, 0.24, 0.12, "lowpass", 0, 0.35); tone("square", 200, 130, 0.09, 0.11, 0, 0.3); }
   function playBolt() { noiseHit(2800, 3.5, 0.20, 0.07, "highpass", 0, 0.3); noiseHit(1100, 2, 0.16, 0.10, "bandpass", 0.06, 0.35); }
-  // bolt cycle between shots: lift, rack back, push home, lock down
-  function playBoltLift() { noiseHit(3400, 5, 0.10, 0.03, "highpass", 0, 0.15); tone("square", 1900, 1500, 0.025, 0.025, 0, 0.1); }
-  function playBoltBack() {
-    noiseSweep(2600, 1300, 2.5, 0.14, 0.09, "bandpass", 0, 0.2);
-    noiseHit(1500, 3, 0.20, 0.05, "bandpass", 0.08, 0.25);
-    tone("triangle", 620, 420, 0.06, 0.05, 0.08, 0.2);
+  // the recorded bolt action (see BOLT); stopped early if the cycle is interrupted
+  let boltSrc = null;
+  function playBoltCycleSound() {
+    if (!audioCtx) return;
+    stopBoltSound();
+    if (!boltCycleBuffer) { playBolt(); return; }   // still decoding
+    const src = audioCtx.createBufferSource();
+    src.buffer = boltCycleBuffer;
+    src.playbackRate.value = BOLT.rate;
+    const g = audioCtx.createGain();
+    g.gain.value = 0.9;
+    src.connect(g);
+    route(g, 0.08, false);
+    src.start(audioCtx.currentTime, BOLT.clipStart, BOLT.clipLen);
+    boltSrc = src;
   }
-  function playBoltForward() {
-    noiseSweep(1300, 2600, 2.5, 0.12, 0.08, "bandpass", 0, 0.2);
-    noiseHit(1900, 3, 0.22, 0.05, "bandpass", 0.075, 0.25);
-    tone("triangle", 720, 480, 0.07, 0.05, 0.075, 0.2);
+  function stopBoltSound() {
+    if (!boltSrc) return;
+    try { boltSrc.stop(); } catch (e) { /* already finished */ }
+    boltSrc = null;
   }
-  function playBoltLock() { noiseHit(2600, 4, 0.16, 0.04, "highpass", 0, 0.2); tone("square", 520, 300, 0.05, 0.04, 0, 0.15); }
   // brass landing: a short bright ring
   function playCasingPing(vol) {
     if (vol < 0.05) return;
@@ -1517,10 +1550,15 @@
     ammoLabelEl.classList.toggle("reloading", reload.active);
   }
 
+  const RELOAD_BOLT_AT = CFG.reloadTime - BOLT.len - 0.02;
+
   function cancelReload() {
     if (!reload.active) return;
     reload.active = false; reload.timer = 0;
     reload.cues.length = 0;
+    stopBoltSound();
+    boltMesh.position.z = 0.20;
+    boltMesh.rotation.z = 0;
     updateAmmoHud();
   }
 
@@ -1534,7 +1572,9 @@
     vm.wantADS = false;
     cancelBoltCycle();
     reload.elapsed = 0;
-    reload.cues = [[0.18, playMagOut], [1.15, playMagIn], [1.8, () => { playBolt(); ejectSpentCasing(); }]];
+    // the same recorded bolt as between shots, timed to finish as the reload does
+    reload.cues = [[0.18, playMagOut], [1.15, playMagIn], [RELOAD_BOLT_AT, playBoltCycleSound],
+      [RELOAD_BOLT_AT + BOLT.back[1], ejectSpentCasing]];
     updateAmmoHud();
   }
 
