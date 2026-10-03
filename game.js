@@ -1085,6 +1085,83 @@
       last = 0.82 * last + 0.18 * white;
       d[i] = white * 0.75 + last * 0.6;
     }
+
+    for (let v = 0; v < 4; v++) shotVariants.push(makeShotLayers(audioCtx));
+  }
+
+  // The rifle report is built sample by sample rather than from oscillators: a real
+  // gunshot has no pitch, so any tone sweep reads as a synth "pew". Three layers:
+  //  crack - the supersonic N-wave (a sharp jump, a straight ramp down, a sharp return)
+  //  blast - broadband muzzle blast whose brightness collapses within a few ms
+  //  thump - low rumble from heavily low-passed noise
+  // Four random variants so back-to-back shots aren't identical.
+  const shotVariants = [];
+
+  function makeShotLayers(ctx) {
+    const sr = ctx.sampleRate;
+    const white = () => Math.random() * 2 - 1;
+    const onePole = (fc) => 1 - Math.exp(-2 * Math.PI * fc / sr);
+
+    function buffer(seconds, fill) {
+      const len = Math.floor(sr * seconds);
+      const buf = ctx.createBuffer(1, len, sr);
+      const d = buf.getChannelData(0);
+      fill(d, len);
+      let peak = 0;
+      for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
+      if (peak > 0) for (let i = 0; i < len; i++) d[i] /= peak;
+      return buf;
+    }
+
+    const crack = buffer(0.02, (d, len) => {
+      const T = sr * rnd(0.0014, 0.0022);
+      let hp = 0, prev = 0;
+      for (let i = 0; i < len; i++) {
+        const n = i < T ? 1 - 2 * i / T : 0;                // N-wave body
+        const fizz = white() * 0.5 * Math.exp(-i / (sr * 0.0018));
+        const x = n + fizz;
+        hp = 0.92 * (hp + x - prev); prev = x;              // gentle high-pass keeps it a snap, not a pop
+        d[i] = hp;
+      }
+    });
+
+    const blast = buffer(0.5, (d, len) => {
+      let lp = 0;
+      const atk = sr * 0.0004;
+      for (let i = 0; i < len; i++) {
+        const t = i / sr;
+        const env = Math.min(i / atk, 1) * (0.8 * Math.exp(-t / 0.010) + 0.3 * Math.exp(-t / 0.075));
+        const fc = 250 + 9000 * Math.exp(-t / 0.025);      // bright at the front, dull in the tail
+        lp += onePole(fc) * (white() - lp);
+        d[i] = lp * env;
+      }
+    });
+
+    const thump = buffer(0.45, (d, len) => {
+      let a = 0, b = 0;
+      const k = onePole(140);
+      const atk = sr * 0.002;
+      for (let i = 0; i < len; i++) {
+        const t = i / sr;
+        a += k * (white() - a);
+        b += k * (a - b);
+        d[i] = b * Math.min(i / atk, 1) * Math.exp(-t / 0.085);
+      }
+    });
+
+    return { crack, blast, thump };
+  }
+
+  function playBuffer(buf, gain, delay, wet, saturate, rate) {
+    const now = audioCtx.currentTime + (delay || 0);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate || 1;
+    const g = audioCtx.createGain();
+    g.gain.value = gain;
+    src.connect(g);
+    route(g, wet, saturate);
+    src.start(now);
   }
 
   // route a node to dry master (optionally through saturation) and the reverb send
@@ -1158,20 +1235,16 @@
     o.start(now); o.stop(now + dur + 0.02);
   }
 
-  // Layered, saturated .50-cal report: a hard supersonic crack, a heavy blast and
-  // body, then echoes rolling off into the distance. `scoped` (0..1) pulls the
-  // sound in closer: more low end and stock thump, a bit less room.
+  // .50-cal report from the pre-built layers above, then echoes rolling off into the
+  // distance. `scoped` (0..1) pulls the sound in closer: more low end, a bit less room.
   function playShotSound(scoped) {
     if (!audioCtx) return;
     const s = scoped || 0;
     const room = 1 - 0.3 * s;
-    noiseHit(7000, 0.7, 0.80, 0.022, "highpass", 0, 0.08 * room, false);          // supersonic crack
-    noiseHit(3200, 1.2, 0.45, 0.035, "bandpass", 0.001, 0.12 * room, false);      // crack edge
-    noiseHit(1700, 0.5, 1.30, 0.080, "lowpass", 0.002, 0.30 * room, true);        // blast front (saturated)
-    noiseHit(480, 0.7, 1.15 + 0.25 * s, 0.30, "lowpass", 0.008, 0.50 * room, true); // body
-    tone("sine", 105, 28, 1.25 + 0.35 * s, 0.62, 0, 0.28 * room, true);           // sub thump
-    tone("triangle", 290, 55, 0.55, 0.22, 0.004, 0.22 * room, true);              // mid punch
-    if (s > 0.3) noiseHit(260, 0.8, 0.45 * s, 0.10, "lowpass", 0.003, 0.1, true); // stock into the shoulder
+    const v = shotVariants[Math.floor(Math.random() * shotVariants.length)];
+    playBuffer(v.crack, 0.75, 0, 0.06 * room, false);
+    playBuffer(v.blast, 0.85, 0.0005, 0.32 * room, true, rnd(0.96, 1.04));
+    playBuffer(v.thump, 0.65 + 0.3 * s, 0.001, 0.22 * room, false, rnd(0.95, 1.05));
     // rolling echoes: each later, darker and quieter than the last
     let t = rnd(0.10, 0.14);
     const echoes = [[900, 0.34, 0.35], [620, 0.24, 0.45], [430, 0.16, 0.55], [300, 0.10, 0.70]];
