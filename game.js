@@ -50,6 +50,7 @@
 
     baseFov: 78,
     scopedFov: 26,
+    scopeSway: 0.0016,          // breathing drift while scoped, radians (0 turns it off)
     speedFovBoost: 12,          // extra FOV at max speed
     adsTime: 0.20,
     baseSensitivity: 0.00073,
@@ -588,7 +589,9 @@
   const metalDark = new THREE.MeshStandardMaterial({ color: 0x232427, roughness: 0.4, metalness: 0.6 });
   const metalMid = new THREE.MeshStandardMaterial({ color: 0x3c3f45, roughness: 0.5, metalness: 0.5 });
   const woodStock = new THREE.MeshStandardMaterial({ color: 0x4b3a2a, roughness: 0.8, metalness: 0.05 });
-  const scopeGlass = new THREE.MeshStandardMaterial({ color: 0x2ea8ff, emissive: 0x1466aa, emissiveIntensity: 0.6 });
+  const scopeGlass = new THREE.MeshStandardMaterial({ color: 0x0b1820, emissive: 0x06202c, emissiveIntensity: 0.5, roughness: 0.05, metalness: 0.9 });
+  const glintMat = new THREE.MeshBasicMaterial({ color: 0xbfe4ff, transparent: true, opacity: 0.35 });
+  const portMat = new THREE.MeshBasicMaterial({ color: 0x050506 });
   const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcfd6dd, roughness: 0.12, metalness: 0.95 });
   const bladeEdgeMat = new THREE.MeshStandardMaterial({ color: 0xf2f5f8, roughness: 0.05, metalness: 1.0 });
   const gripMat = new THREE.MeshStandardMaterial({ color: 0x232326, roughness: 0.85, metalness: 0.1 });
@@ -603,18 +606,50 @@
   }
 
   const rifleGroup = new THREE.Group();
+  const HALF_PI = Math.PI / 2;
+  // receiver, top rail and bolt shroud
   addPart(rifleGroup, new THREE.BoxGeometry(0.10, 0.115, 0.46), metalMid, 0, 0, 0);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.045, 0.014, 0.44), metalDark, 0, 0.064, -0.02);
+  for (let i = 0; i < 9; i++) addPart(rifleGroup, new THREE.BoxGeometry(0.05, 0.006, 0.012), metalDark, 0, 0.073, -0.21 + i * 0.045);
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.026, 0.028, 0.05, 12), metalMid, 0, 0.02, 0.255, HALF_PI, 0, 0);
+  // stock: wood with a raised cheek rest and a rubber butt pad
   addPart(rifleGroup, new THREE.BoxGeometry(0.08, 0.10, 0.34), woodStock, 0, -0.01, 0.36);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.07, 0.06, 0.20), woodStock, 0, -0.07, 0.42, -0.12, 0, 0);
   addPart(rifleGroup, new THREE.BoxGeometry(0.055, 0.04, 0.18), woodStock, 0, 0.07, 0.30);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.028, 0.032, 0.92, 12), metalDark, 0, 0.005, -0.66, Math.PI / 2, 0, 0);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.045, 0.045, 0.14, 12), metalDark, 0, 0.005, -1.10, Math.PI / 2, 0, 0);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.115, 0.016, 0.05), metalDark, 0, 0.005, -1.09);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.115, 0.016, 0.05), metalDark, 0, 0.005, -1.02);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.036, 0.036, 0.44, 14), metalDark, 0, 0.12, -0.05, Math.PI / 2, 0, 0);
-  addPart(rifleGroup, new THREE.CircleGeometry(0.037, 14), scopeGlass, 0, 0.12, -0.27);
-  addPart(rifleGroup, new THREE.CircleGeometry(0.031, 14), scopeGlass, 0, 0.12, 0.17, 0, Math.PI, 0);
-  addPart(rifleGroup, new THREE.TorusGeometry(0.043, 0.013, 8, 12), metalDark, 0, 0.082, -0.13);
-  addPart(rifleGroup, new THREE.TorusGeometry(0.043, 0.013, 8, 12), metalDark, 0, 0.082, 0.07);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.085, 0.15, 0.03), gripMat, 0, -0.03, 0.54);
+  // pistol grip, trigger guard and trigger
+  addPart(rifleGroup, new THREE.BoxGeometry(0.05, 0.13, 0.055), gripMat, 0, -0.11, 0.19, 0.32, 0, 0);
+  addPart(rifleGroup, new THREE.TorusGeometry(0.032, 0.006, 6, 14, Math.PI), metalDark, 0, -0.058, 0.10, 0, HALF_PI, Math.PI);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.008, 0.035, 0.008), metalDark, 0, -0.075, 0.10, 0.25, 0, 0);
+  // wooden forend under the barrel
+  addPart(rifleGroup, new THREE.BoxGeometry(0.075, 0.07, 0.36), woodStock, 0, -0.025, -0.40);
+  // tapered barrel
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.023, 0.033, 0.88, 16), metalDark, 0, 0.005, -0.64, HALF_PI, 0, 0);
+  // muzzle brake: a block with three gas ports cut into each side
+  addPart(rifleGroup, new THREE.BoxGeometry(0.068, 0.058, 0.15), metalDark, 0, 0.005, -1.11);
+  for (let i = 0; i < 3; i++) {
+    for (const side of [-1, 1]) {
+      addPart(rifleGroup, new THREE.BoxGeometry(0.004, 0.036, 0.022), portMat, side * 0.0335, 0.005, -1.065 - i * 0.04);
+    }
+  }
+  // folded bipod, legs tucked along the barrel
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.034, 0.034, 0.03, 12), metalDark, 0, 0.0, -0.62, HALF_PI, 0, 0);
+  // scope: tube, objective bell, eyepiece, turrets and mounts
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.034, 0.034, 0.38, 16), metalDark, 0, 0.12, -0.05, HALF_PI, 0, 0);
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.052, 0.034, 0.09, 16), metalDark, 0, 0.12, -0.285, HALF_PI, 0, 0);
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.054, 0.054, 0.025, 16), metalDark, 0, 0.12, -0.34, HALF_PI, 0, 0);
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.034, 0.042, 0.06, 16), metalDark, 0, 0.12, 0.165, HALF_PI, 0, 0);
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.019, 0.019, 0.032, 12), metalMid, 0, 0.165, -0.04);
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.019, 0.019, 0.032, 12), metalMid, 0.045, 0.12, -0.04, 0, 0, HALF_PI);
+  addPart(rifleGroup, new THREE.CylinderGeometry(0.044, 0.044, 0.07, 16), metalMid, 0, 0.12, -0.04, HALF_PI, 0, 0);
+  addPart(rifleGroup, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0.12, -0.14);
+  addPart(rifleGroup, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0.12, 0.07);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, 0.085, -0.14);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, 0.085, 0.07);
+  // lenses: dark coated glass with a faint glint
+  addPart(rifleGroup, new THREE.CircleGeometry(0.048, 20), scopeGlass, 0, 0.12, -0.353);
+  addPart(rifleGroup, new THREE.CircleGeometry(0.012, 10), glintMat, -0.016, 0.137, -0.354);
+  addPart(rifleGroup, new THREE.CircleGeometry(0.038, 20), scopeGlass, 0, 0.12, 0.196, 0, Math.PI, 0);
   const magMesh = addPart(rifleGroup, new THREE.BoxGeometry(0.055, 0.19, 0.07), metalDark, 0, -0.15, 0.02, -0.15, 0, 0);
   // bolt: pivots on the receiver so the handle can lift, pull back and slam home
   const boltMesh = new THREE.Group();
@@ -622,8 +657,10 @@
   rifleGroup.add(boltMesh);
   addPart(boltMesh, new THREE.CylinderGeometry(0.008, 0.008, 0.055, 8), metalMid, 0.027, 0, 0, 0, 0, Math.PI / 2);
   addPart(boltMesh, new THREE.SphereGeometry(0.018, 10, 10), metalMid, 0.058, -0.004, 0);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.012, 0.10, 0.012), metalDark, 0.03, -0.09, -0.72, 0, 0, 0.25);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.012, 0.10, 0.012), metalDark, -0.03, -0.09, -0.72, 0, 0, -0.25);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.012, 0.012, 0.24), metalDark, 0.022, -0.035, -0.75);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.012, 0.012, 0.24), metalDark, -0.022, -0.035, -0.75);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.018, 0.016, 0.02), gripMat, 0.022, -0.035, -0.88);
+  addPart(rifleGroup, new THREE.BoxGeometry(0.018, 0.016, 0.02), gripMat, -0.022, -0.035, -0.88);
 
   const flashMat = new THREE.MeshBasicMaterial({
     color: 0xffc66a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
@@ -888,10 +925,13 @@
 
     vm.recoil *= Math.max(0, 1 - dt * 11);
 
-    // camera punch: visual only, gone long before the bolt lets you fire again
+    // camera punch (gone long before the bolt lets you fire again), plus a slow
+    // figure-eight breathing sway while scoped. Both move the real aim, so what
+    // the reticle shows is where the shot goes.
     vm.camKick *= Math.max(0, 1 - dt * 10);
-    camera.rotation.x = vm.camKick * 0.032 * (1 + 0.6 * adsEased);
-    camera.rotation.y = vm.camKick * vm.camKickYaw * 0.008;
+    const sway = CFG.scopeSway * adsEased;
+    camera.rotation.x = vm.camKick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway;
+    camera.rotation.y = vm.camKick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3;
 
     let boltTilt = 0;
     if (vm.boltTime >= 0) {
@@ -973,6 +1013,8 @@
 
     const scopeAlpha = Math.max(0, (adsEased - 0.55) / 0.45);
     scopeEl.style.opacity = scopeAlpha;
+    // the lens closes in from slightly too big as your eye settles behind it
+    scopeEl.style.transform = "translate(-50%, -50%) scale(" + (1.2 - 0.2 * scopeAlpha).toFixed(3) + ")";
     scopeLinesEl.style.opacity = scopeAlpha;
     crosshairEl.style.opacity = adsEased > 0.5 ? 0 : 1;
     w.group.visible = scopeAlpha < 0.98;

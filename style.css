@@ -46,13 +46,37 @@
     box-shadow: 0 0 0 100vmax rgba(0,0,0,0.97), inset 0 0 70px rgba(0,0,0,0.85);
     border: 2px solid #000; opacity: 0; pointer-events: none;
   }
+  /* lens edge: darkening toward the rim with a faint colour fringe, drawn over the reticle */
+  #scope::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, transparent 58%, rgba(0,0,0,0.22) 80%, rgba(0,0,0,0.75) 100%);
+    box-shadow: inset 0 0 6px 2px rgba(255,140,60,0.16), inset 0 0 16px 5px rgba(60,120,255,0.12);
+  }
   #scope-lines { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
   #scope-lines .l { position: absolute; background: rgba(10,10,10,0.85); }
   #scope-lines .lv { left: 50%; top: 0; width: 1px; height: 100%; transform: translateX(-50%); }
   #scope-lines .lh { top: 50%; left: 0; height: 1px; width: 100%; transform: translateY(-50%); }
+  /* thick outer posts that stop short of the centre */
+  #scope-lines .post { position: absolute; background: #0a0a0a; }
+  #scope-lines .pt, #scope-lines .pb { left: 50%; width: 6px; height: 32%; transform: translateX(-50%); }
+  #scope-lines .pt { top: 0; }
+  #scope-lines .pb { bottom: 0; }
+  #scope-lines .pl, #scope-lines .pr { top: 50%; height: 6px; width: 32%; transform: translateY(-50%); }
+  #scope-lines .pl { left: 0; }
+  #scope-lines .pr { right: 0; }
+  /* range dots along the thin centre lines */
+  #scope-lines .mils { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+  #scope-lines .mh {
+    width: 36%; height: 5px;
+    background: radial-gradient(circle, #0a0a0a 2px, transparent 2.5px) center / 11.111% 100% repeat-x;
+  }
+  #scope-lines .mv {
+    width: 5px; height: 36%;
+    background: radial-gradient(circle, #0a0a0a 2px, transparent 2.5px) center / 100% 11.111% repeat-y;
+  }
   #scope-lines .dot {
-    position: absolute; top: 50%; left: 50%; width: 5px; height: 5px; border-radius: 50%;
-    background: #d02020; transform: translate(-50%, -50%);
+    position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; border-radius: 50%;
+    background: #e02424; box-shadow: 0 0 4px rgba(255,40,40,0.8); transform: translate(-50%, -50%);
   }
 
   /* speed lines that streak in when you're moving fast */
