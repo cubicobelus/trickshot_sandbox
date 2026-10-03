@@ -49,7 +49,7 @@ Multiplayer code is in `game.js` but switched off for now (`MULTIPLAYER_ENABLED`
 ## Credits
 
 Rifle shot: ["Rifle Gun Shot 01"](https://freesound.org/people/LilMati/sounds/433858/) by LilMati (CC0).
-Pistol: ["gun shot.aif"](https://freesound.org/people/trip2000/sounds/52357/) by trip2000 (CC0).
+Pistol: ["Gunshot.wav"](https://freesound.org/people/Cloud-10/sounds/632821/) by Cloud-10 (CC0).
 Rifle: ["AssaultRifle1.wav"](https://freesound.org/people/SuperPhat/sounds/404562/) by SuperPhat (CC0).
 AK: ["AK47 Shot"](https://freesound.org/people/LeMudCrab/sounds/163457/) by LeMudCrab (CC0).
 Bolt action: from ["Sniper Rifle M24 SFX"](https://freesound.org/people/kennysvoice/sounds/351777/) by kennysvoice (CC0).

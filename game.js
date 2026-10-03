@@ -1598,7 +1598,7 @@
   // Recorded sounds (CC0, from freesound) are embedded in sounds.js and decoded once:
   //  rifleShot - "Rifle Gun Shot 01" by LilMati (433858), trimmed to start on the shot
   //  boltCycle - "Sniper Rifle M24 SFX" by kennysvoice (351777); only its bolt action is used
-  //  pistolShot - "gun shot.aif" by trip2000 (52357)
+  //  pistolShot - "Gunshot.wav" by Cloud-10 (632821)
   //  arShot - "AssaultRifle1.wav" by SuperPhat (404562)
   //  akShot - "AK47 Shot" by LeMudCrab (163457)
   let rifleShotBuffer = null, boltCycleBuffer = null;
