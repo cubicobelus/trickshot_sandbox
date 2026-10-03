@@ -75,6 +75,11 @@
     spinBonusPer360: 1,
     spin180Bonus: 0.5,
     knifeBonus: 2,
+    knifeThrowBonus: 1,         // on top of the knife bonus; thrown knives also earn distance tiers
+    knifeThrowCooldown: 0.6,    // unlimited knives, one per this many seconds
+    knifeThrowSpeed: 32,
+    knifeThrowGravity: 9,       // lighter than the world's, so throws carry
+    knifeStickTime: 6,          // how long a stuck knife stays in a wall
     slideBonus: 0.75,
     wallRideBonus: 1,
     movingTargetBonus: 0.75,
@@ -861,6 +866,7 @@
     slashTimer: 0, slashDir: 1,
     bobTimer: 0, adsProgress: 0, wantADS: false, adsStartTime: -99, flashTimer: 0,
     boltTime: -1, boltCues: [], spentCasing: false,
+    throwTimer: 0,
     camKick: 0, camKickYaw: 0,
   };
 
@@ -875,11 +881,12 @@
     vm.wantADS = false;
     cancelReload();
     cancelBoltCycle();
+    vm.throwTimer = 0;
     playSwitchSound();
   }
 
   function startInspect() {
-    if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.boltTime >= 0) return;
+    if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.boltTime >= 0 || vm.throwTimer > 0) return;
     const w = currentWeapon();
     vm.inspectIndex = Math.floor(Math.random() * w.inspects.length);
     vm.inspectTimer = w.inspectDuration;
@@ -1061,16 +1068,34 @@
 
     const rl = reload.active ? reloadPose(reload.elapsed) : RELOAD_REST;
 
+    // knife throw: snap forward and let go, then a fresh knife flips up from below
+    let thX = 0, thY = 0, thZ = 0, thRX = 0;
+    if (vm.throwTimer > 0) {
+      vm.throwTimer -= dt;
+      const t = CFG.knifeThrowCooldown - Math.max(vm.throwTimer, 0);
+      if (!vm.throwReleased && t >= THROW_RELEASE) { vm.throwReleased = true; releaseKnife(); }
+      if (t < THROW_RELEASE) {
+        const k = easeOut(t / THROW_RELEASE);
+        thZ = -0.22 * k; thY = 0.06 * k; thRX = -0.9 * k; thX = -0.05 * k;
+      } else {
+        const back = Math.min((t - THROW_RELEASE) / (CFG.knifeThrowCooldown - THROW_RELEASE), 1);
+        const up = easeOut(Math.max((back - 0.25) / 0.75, 0));
+        thY = -0.35 * (1 - up); thRX = 1.2 * (1 - up);
+      }
+      knifeGroup.visible = !(t >= THROW_RELEASE && t < THROW_RELEASE + 0.12) && vm.current === "knife";
+      if (vm.throwTimer <= 0) { vm.throwTimer = 0; knifeGroup.visible = vm.current === "knife"; }
+    }
+
     const holsterDrop = holster * 0.45;
     const holsterTilt = holster * 1.1;
 
     w.group.position.set(
-      px + bobX + ipx + rl.x + swing * 0.16 - boltTilt * 0.04,
-      py + bobY + ipy + rl.y - holsterDrop - Math.abs(slash) * 0.05 + boltTilt * 0.015,
-      pz + ipz + vm.recoil * 0.16 - Math.abs(slash) * 0.13 + boltJolt * 0.012
+      px + bobX + ipx + rl.x + thX + swing * 0.16 - boltTilt * 0.04,
+      py + bobY + ipy + rl.y + thY - holsterDrop - Math.abs(slash) * 0.05 + boltTilt * 0.015,
+      pz + ipz + thZ + vm.recoil * 0.16 - Math.abs(slash) * 0.13 + boltJolt * 0.012
     );
     w.group.rotation.set(
-      rx + irx + rl.rx - vm.recoil * 0.34 + holsterTilt - Math.abs(slash) * 0.45 + boltTilt * 0.08 - boltJolt * 0.03,
+      rx + irx + rl.rx + thRX - vm.recoil * 0.34 + holsterTilt - Math.abs(slash) * 0.45 + boltTilt * 0.08 - boltJolt * 0.03,
       ry + iry + rl.ry + swing * 0.7 + boltTilt * 0.10,
       rz + irz + rl.rz + swing * 1.05 + boltTilt * 0.34
     );
@@ -1353,6 +1378,12 @@
     noiseHit(4400, 3.5, 0.28, 0.07, "highpass", 0, 0.4);
     tone("triangle", 1500, 520, 0.12, 0.12, 0, 0.45);
     tone("sine", 250, 85, 0.16, 0.14, 0, 0.3);
+  }
+  // thrown knife biting into a surface: a dull thunk with a short blade ring
+  function playKnifeStick() {
+    noiseHit(1800, 2.5, 0.22, 0.04, "bandpass", 0, 0.2);
+    noiseHit(380, 1, 0.30, 0.07, "lowpass", 0, 0.2, true);
+    tone("triangle", 2300, 2250, 0.03, 0.18, 0.005, 0.25);
   }
   function playWallBounce(perfect) {
     if (perfect) { tone("triangle", 500, 1150, 0.18, 0.16, 0, 0.4); noiseHit(1300, 1.5, 0.16, 0.11, "bandpass", 0, 0.4); }
@@ -1673,6 +1704,7 @@
     if (!pointerLocked) return;
     if (e.button === 0) { mouseHeld = true; attackPressed = true; }
     if (e.button === 2) {
+      if (currentWeapon().isMelee) { throwKnife(); return; }
       if (currentWeapon().canADS && !vm.wantADS) { playScopeSound(true); vm.adsStartTime = elapsedTime; }
       vm.wantADS = true;
     }
@@ -2156,18 +2188,31 @@
     return { target: best, dist: bestDist };
   }
 
-  function computeMultipliers(target, dist, isKnife, ammoBefore) {
+  // what the player is doing right now, for scoring. A thrown knife takes this
+  // snapshot when it leaves the hand, so the trick you threw it during is what counts.
+  function trickState() {
+    return {
+      onGround: player.onGround,
+      spin: player.airSpinAccum,
+      speed: Math.hypot(player.velocity.x, player.velocity.z),
+      sliding: player.sliding,
+      wallRide: elapsedTime - player.lastWallBounceAt <= CFG.wallRideScoreWindow,
+    };
+  }
+
+  function computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown) {
     const tags = [];
     let mult = 1;
+    const st = snap || trickState();
 
-    if (!player.onGround) { mult += CFG.airBonus; tags.push("AIR"); }
+    if (!st.onGround) { mult += CFG.airBonus; tags.push("AIR"); }
 
     // spins: full 360s stack, a lone 180 gets a smaller bonus
-    const fullSpins = Math.floor(player.airSpinAccum / (Math.PI * 2));
+    const fullSpins = Math.floor(st.spin / (Math.PI * 2));
     if (fullSpins >= 1) {
       mult += fullSpins * CFG.spinBonusPer360;
       tags.push(fullSpins * 360 + "\u00B0 SPIN");
-    } else if (player.airSpinAccum >= Math.PI) {
+    } else if (st.spin >= Math.PI) {
       mult += CFG.spin180Bonus;
       tags.push("180\u00B0");
     }
@@ -2175,6 +2220,13 @@
     if (isKnife) {
       mult += CFG.knifeBonus;
       tags.push("KNIFE");
+      if (thrown) {
+        mult += CFG.knifeThrowBonus;
+        tags.push("THROWN");
+        for (const tier of CFG.distanceTiers) {
+          if (dist >= tier[0]) { mult += tier[1]; tags.push(tier[2]); break; }
+        }
+      }
     } else {
       for (const tier of CFG.distanceTiers) {
         if (dist >= tier[0]) { mult += tier[1]; tags.push(tier[2]); break; }
@@ -2193,14 +2245,13 @@
       }
     }
 
-    const speed = Math.hypot(player.velocity.x, player.velocity.z);
     for (const tier of CFG.speedTiers) {
-      if (speed >= tier[0]) { mult += tier[1]; tags.push(tier[2]); break; }
+      if (st.speed >= tier[0]) { mult += tier[1]; tags.push(tier[2]); break; }
     }
 
-    if (player.sliding) { mult += CFG.slideBonus; tags.push("SLIDING"); }
+    if (st.sliding) { mult += CFG.slideBonus; tags.push("SLIDING"); }
 
-    if (elapsedTime - player.lastWallBounceAt <= CFG.wallRideScoreWindow) {
+    if (st.wallRide) {
       mult += CFG.wallRideBonus;
       tags.push("WALL RIDE");
     }
@@ -2233,8 +2284,8 @@
     return pointsGained;
   }
 
-  function scoreHit(target, dist, isKnife, ammoBefore) {
-    const res = computeMultipliers(target, dist, isKnife, ammoBefore);
+  function scoreHit(target, dist, isKnife, ammoBefore, snap, thrown) {
+    const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown);
     target.userData.alive = false;
     target.visible = false;
     burst(target.position, target.userData.small ? 0x22d3ee : 0xffd24a, target.userData.small ? 16 : 12);
@@ -2347,6 +2398,180 @@
     }
 
     if (!SETTINGS.unlimitedAmmo && ammo <= 0) autoReloadTimer = 0.25;
+  }
+
+  // ======================================================================
+  // THROWN KNIVES (unlimited, on a cooldown; each sticks where it lands for a while)
+  // ======================================================================
+  const THROW_RELEASE = 0.09;   // seconds into the throw motion when the knife leaves the hand
+  const KNIFE_SPIN = 24;        // end-over-end spin, radians per second
+  const thrownPool = [];
+  for (let i = 0; i < 14; i++) {
+    const model = knifeGroup.clone();
+    model.visible = true;
+    model.position.set(0, 0, 0.06);   // spin about the knife's balance point
+    const spin = new THREE.Group();
+    spin.add(model);
+    const root = new THREE.Group();
+    root.add(spin);
+    root.visible = false;
+    root.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+    scene.add(root);
+    thrownPool.push({ root, spin, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", snap: null });
+  }
+
+  const _thFwd = new THREE.Vector3(), _thRight = new THREE.Vector3(), _thLook = new THREE.Vector3();
+
+  function throwKnife() {
+    if (vm.throwTimer > 0 || vm.switchTimer > 0) return;
+    if (net.active && (localDead || net.phase !== "play")) return;
+    vm.throwTimer = CFG.knifeThrowCooldown;
+    vm.throwReleased = false;
+    vm.inspectTimer = 0;
+    vm.slashTimer = 0;
+    fireCooldown = Math.max(fireCooldown, CFG.knifeThrowCooldown * 0.75);   // no slashing with an empty hand
+    playKnifeSwing();
+  }
+
+  // called by the viewmodel when the throw motion reaches the release point
+  function releaseKnife() {
+    const k = thrownPool.find((q) => q.state === "idle") || thrownPool.reduce((a, b) => (a.age > b.age ? a : b));
+    camera.getWorldDirection(_thFwd);
+    camera.getWorldQuaternion(_camQuat);
+    _thRight.set(1, 0, 0).applyQuaternion(_camQuat);
+    if (k.root.parent !== scene) scene.add(k.root);
+    camera.getWorldPosition(k.root.position);
+    k.root.position.addScaledVector(_thFwd, 0.35).addScaledVector(_thRight, 0.08 * handSign());
+    k.from.copy(k.root.position);
+    k.vel.copy(_thFwd).multiplyScalar(CFG.knifeThrowSpeed).add(player.velocity);
+    k.snap = trickState();
+    k.age = 0;
+    k.state = "flying";
+    k.root.visible = true;
+    k.root.scale.setScalar(1);
+    k.spin.rotation.set(0, 0, 0);
+    faceAlongVelocity(k);
+  }
+
+  function faceAlongVelocity(k) {
+    // the blade points down -Z, so aim +Z backwards along the flight path
+    _thLook.copy(k.root.position).sub(k.vel);
+    k.root.lookAt(_thLook);
+  }
+
+  function retireKnife(k) {
+    k.state = "idle";
+    k.root.visible = false;
+    if (k.root.parent !== scene) scene.add(k.root);
+  }
+
+  // which face of an axis-aligned box a point on its surface lies on
+  function boxFaceNormal(box, p, out) {
+    const faces = [
+      [Math.abs(p.x - box.min.x), -1, 0, 0], [Math.abs(p.x - box.max.x), 1, 0, 0],
+      [Math.abs(p.y - box.min.y), 0, -1, 0], [Math.abs(p.y - box.max.y), 0, 1, 0],
+      [Math.abs(p.z - box.min.z), 0, 0, -1], [Math.abs(p.z - box.max.z), 0, 0, 1],
+    ];
+    faces.sort((a, b) => a[0] - b[0]);
+    return out.set(faces[0][1], faces[0][2], faces[0][3]);
+  }
+
+  let groundBoxes = null;   // platforms you can stand on, built once on first use
+  const _kRay = new THREE.Ray(), _kStep = new THREE.Vector3(), _kTmp = new THREE.Vector3();
+  const _kHit = new THREE.Vector3(), _kNormal = new THREE.Vector3(), _kStickDir = new THREE.Vector3();
+  const _kRaycaster = new THREE.Raycaster();
+
+  function updateThrownKnives(dt) {
+    if (!groundBoxes) groundBoxes = groundMeshes.map((m) => new THREE.Box3().setFromObject(m));
+    for (const k of thrownPool) {
+      if (k.state === "idle") continue;
+      k.age += dt;
+
+      if (k.state === "stuck") {
+        const left = CFG.knifeStickTime - k.age;
+        if (left < 0.4) k.root.scale.setScalar(Math.max(left / 0.4, 0.01));
+        if (left <= 0) retireKnife(k);
+        continue;
+      }
+
+      if (k.age > 4) { retireKnife(k); continue; }
+      k.vel.y -= CFG.knifeThrowGravity * dt;
+      _kStep.copy(k.vel).multiplyScalar(dt);
+      const len = _kStep.length();
+      if (len < 1e-6) continue;
+      const o = k.root.position;
+      _kRay.origin.copy(o);
+      _kRay.direction.copy(_kStep).divideScalar(len);
+      const d = _kRay.direction;
+
+      // find the nearest thing along this frame's path
+      let hitDist = len, kind = null, hitTarget = null, hitProp = null;
+      for (const t of targets) {
+        if (!t.userData.alive) continue;
+        const ox = t.position.x - o.x, oy = t.position.y - o.y, oz = t.position.z - o.z;
+        const proj = ox * d.x + oy * d.y + oz * d.z;
+        if (proj < 0 || proj > hitDist + t.userData.hitRadius) continue;
+        const cx = ox - d.x * proj, cy = oy - d.y * proj, cz = oz - d.z * proj;
+        if (Math.sqrt(cx * cx + cy * cy + cz * cz) < t.userData.hitRadius) { hitDist = Math.max(proj, 0); kind = "target"; hitTarget = t; }
+      }
+      for (const list of [wallBoxes, groundBoxes]) {
+        for (const box of list) {
+          const p = _kRay.intersectBox(box, _kTmp);
+          if (!p) continue;
+          const dist = o.distanceTo(p);
+          if (dist < hitDist) { hitDist = dist; kind = "wall"; _kHit.copy(p); boxFaceNormal(box, p, _kNormal); }
+        }
+      }
+      if (d.y < 0) {
+        const t = (o.y - 0.25) / -d.y;
+        if (t >= 0 && t < hitDist) { hitDist = t; kind = "wall"; _kHit.copy(o).addScaledVector(d, t); _kNormal.set(0, 1, 0); }
+      }
+      const propList = activeProps();
+      if (propList.length) {
+        _kRaycaster.set(o, d);
+        _kRaycaster.far = hitDist;
+        const ph = _kRaycaster.intersectObjects(propList, false);
+        if (ph.length && ph[0].face) {
+          hitDist = ph[0].distance; kind = "prop"; hitProp = ph[0].object; _kHit.copy(ph[0].point);
+          _kNormal.copy(ph[0].face.normal).transformDirection(ph[0].object.matrixWorld);
+        }
+      }
+
+      if (kind === "target") {
+        o.addScaledVector(d, hitDist);
+        playKnifeHit();
+        scoreHit(hitTarget, k.from.distanceTo(o), true, ammo, k.snap, true);
+        retireKnife(k);
+        continue;
+      }
+      if (kind === "wall" || kind === "prop") {
+        // stick in, tip first, leaning back toward where it came from
+        _kStickDir.copy(_kNormal).multiplyScalar(0.65).addScaledVector(d, -0.35).normalize();
+        o.copy(_kHit).addScaledVector(_kStickDir, 0.2);
+        _thLook.copy(o).add(_kStickDir);
+        k.root.lookAt(_thLook);
+        k.root.rotateZ(Math.random() * Math.PI * 2);
+        k.spin.rotation.set(0, 0, 0);
+        k.state = "stuck";
+        k.age = 0;
+        playKnifeStick();
+        if (kind === "prop") {
+          const prop = props.find((pr) => pr.mesh === hitProp);
+          if (prop) {
+            prop.velocity.addScaledVector(d, CFG.shotForce * 0.8);
+            prop.mesh.attach(k.root);   // ride along with the crate
+          }
+          burst(_kHit, 0xd2a679, 4);
+        } else {
+          burst(_kHit, 0xb8c0c8, 3);
+        }
+        continue;
+      }
+
+      o.add(_kStep);
+      faceAlongVelocity(k);
+      k.spin.rotation.x -= KNIFE_SPIN * dt;
+    }
   }
 
   // ======================================================================
@@ -3228,6 +3453,7 @@
       updateSmoke(dt);
       updateCasings(dt);
       updateMagDrops(dt);
+      updateThrownKnives(dt);
       updateTargets(net.active ? realDt : dt);
     }
 

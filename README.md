@@ -20,7 +20,7 @@ unzip, and open `index.html`. An internet connection is still needed (three.js l
 ## How to play
 
 **Controls:** WASD move, Space jump, Shift sprint, Ctrl slide, R reload, F inspect, left click attack,
-right click scope, 1 / 2 / Q / mouse wheel switch weapons.
+right click scope (sniper) or throw (knife), 1 / 2 / Q / mouse wheel switch weapons.
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (hold jump on landing) and wall
 bounces, up to 22 u/s. Score multipliers stack: air time, spins, speed, distance, no-scopes, quickscopes,
