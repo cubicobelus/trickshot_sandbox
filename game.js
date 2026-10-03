@@ -1125,15 +1125,23 @@
       }
     });
 
+    // Fixed bands that each die at their own rate: the highs vanish in a few ms, the
+    // lows hang on. (A single swept filter does the same darkening but the ear hears
+    // the sweep itself as a "zap".)
     const blast = buffer(0.5, (d, len) => {
-      let lp = 0;
-      const atk = sr * 0.0004;
+      let hLp = 0, mA = 0, mB = 0, l1 = 0, l2 = 0;
+      const kH = onePole(3500), kMa = onePole(2600), kMb = onePole(280), kL = onePole(420);
+      const atk = sr * 0.0003;
       for (let i = 0; i < len; i++) {
         const t = i / sr;
-        const env = Math.min(i / atk, 1) * (0.8 * Math.exp(-t / 0.010) + 0.3 * Math.exp(-t / 0.075));
-        const fc = 250 + 9000 * Math.exp(-t / 0.025);      // bright at the front, dull in the tail
-        lp += onePole(fc) * (white() - lp);
-        d[i] = lp * env;
+        const wh = white(), wm = white(), wl = white();
+        hLp += kH * (wh - hLp);
+        mA += kMa * (wm - mA); mB += kMb * (mA - mB);
+        l1 += kL * (wl - l1); l2 += kL * (l1 - l2);
+        const hi = (wh - hLp) * Math.exp(-t / 0.004);
+        const mid = (mA - mB) * 1.4 * Math.exp(-t / 0.018);
+        const low = l2 * 3.0 * Math.exp(-t / 0.075);
+        d[i] = Math.min(i / atk, 1) * (hi * 0.9 + mid + low);
       }
     });
 
@@ -1149,7 +1157,38 @@
       }
     });
 
-    return { crack, blast, thump };
+    // Rolling tail: the report coming back off distant terrain. One continuous, smeared
+    // rumble with slow irregular swells, different in each ear. Discrete repeats would
+    // read as a bouncy "boing-oing".
+    const tailLen = Math.floor(sr * 1.8);
+    const tail = ctx.createBuffer(2, tailLen, sr);
+    const kA = onePole(650), kB = onePole(240), kMod = onePole(7);
+    for (let c = 0; c < 2; c++) {
+      const d = tail.getChannelData(c);
+      const mod = new Float32Array(tailLen);
+      let m1 = 0, m2 = 0, mMin = Infinity, mMax = -Infinity;
+      for (let i = 0; i < tailLen; i++) {
+        m1 += kMod * (white() - m1); m2 += kMod * (m1 - m2);
+        mod[i] = m2;
+        if (m2 < mMin) mMin = m2;
+        if (m2 > mMax) mMax = m2;
+      }
+      let a1 = 0, a2 = 0, b1 = 0, b2 = 0, peak = 0;
+      for (let i = 0; i < tailLen; i++) {
+        const t = i / sr;
+        const w = white();
+        a1 += kA * (w - a1); a2 += kA * (a1 - a2);
+        b1 += kB * (w - b1); b2 += kB * (b1 - b2);
+        const rise = t < 0.04 ? 0 : Math.min((t - 0.04) / 0.12, 1);
+        const swell = 0.45 + 0.55 * (mod[i] - mMin) / (mMax - mMin || 1);
+        const v = rise * rise * (3 - 2 * rise) * swell * (a2 * Math.exp(-t / 0.30) + b2 * 1.6 * Math.exp(-t / 0.65));
+        d[i] = v;
+        peak = Math.max(peak, Math.abs(v));
+      }
+      if (peak > 0) for (let i = 0; i < tailLen; i++) d[i] /= peak;
+    }
+
+    return { crack, blast, thump, tail };
   }
 
   function playBuffer(buf, gain, delay, wet, saturate, rate) {
@@ -1242,16 +1281,11 @@
     const s = scoped || 0;
     const room = 1 - 0.3 * s;
     const v = shotVariants[Math.floor(Math.random() * shotVariants.length)];
-    playBuffer(v.crack, 0.75, 0, 0.06 * room, false);
-    playBuffer(v.blast, 0.85, 0.0005, 0.32 * room, true, rnd(0.96, 1.04));
-    playBuffer(v.thump, 0.65 + 0.3 * s, 0.001, 0.22 * room, false, rnd(0.95, 1.05));
-    // rolling echoes: each later, darker and quieter than the last
-    let t = rnd(0.10, 0.14);
-    const echoes = [[900, 0.34, 0.35], [620, 0.24, 0.45], [430, 0.16, 0.55], [300, 0.10, 0.70]];
-    for (const [freq, gain, dur] of echoes) {
-      noiseHit(freq, 0.8, gain * room, dur, "lowpass", t, 0.85, false);
-      t += rnd(0.16, 0.28);
-    }
+    // light reverb sends only: the synthetic room smears transients into a metallic ring
+    playBuffer(v.crack, 0.75, 0, 0.04 * room, false);
+    playBuffer(v.blast, 0.85, 0.0005, 0.14 * room, true);
+    playBuffer(v.thump, 0.65 + 0.3 * s, 0.001, 0.10 * room, false);
+    playBuffer(v.tail, 0.42 * room, 0, 0.18, false);
   }
 
   function playDryFire() { noiseHit(3000, 6, 0.16, 0.04, "highpass", 0, 0.15); tone("square", 260, 150, 0.06, 0.05, 0, 0.1); }
