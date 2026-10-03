@@ -1116,16 +1116,27 @@
     o.start(now); o.stop(now + dur + 0.02);
   }
 
-  // Layered, saturated .50-cal report with a real transient and a reverb tail.
-  function playShotSound() {
+  // Layered, saturated .50-cal report: a hard supersonic crack, a heavy blast and
+  // body, then echoes rolling off into the distance. `scoped` (0..1) pulls the
+  // sound in closer: more low end and stock thump, a bit less room.
+  function playShotSound(scoped) {
     if (!audioCtx) return;
-    noiseHit(6000, 0.6, 0.85, 0.030, "highpass", 0, 0.10, false);   // supersonic snap
-    noiseHit(1400, 0.5, 1.30, 0.090, "lowpass", 0.002, 0.30, true); // blast front (saturated)
-    noiseHit(420, 0.7, 1.10, 0.320, "lowpass", 0.010, 0.55, true);  // body
-    tone("sine", 120, 26, 1.20, 0.55, 0, 0.30, true);               // sub thump
-    tone("triangle", 340, 62, 0.55, 0.24, 0.004, 0.25, true);       // mid punch
-    noiseHit(760, 1.0, 0.30, 0.40, "bandpass", rnd(0.11, 0.15), 0.7, false);  // slap-back
-    noiseHit(430, 0.9, 0.16, 0.55, "lowpass", rnd(0.28, 0.36), 0.8, false);   // far tail
+    const s = scoped || 0;
+    const room = 1 - 0.3 * s;
+    noiseHit(7000, 0.7, 0.80, 0.022, "highpass", 0, 0.08 * room, false);          // supersonic crack
+    noiseHit(3200, 1.2, 0.45, 0.035, "bandpass", 0.001, 0.12 * room, false);      // crack edge
+    noiseHit(1700, 0.5, 1.30, 0.080, "lowpass", 0.002, 0.30 * room, true);        // blast front (saturated)
+    noiseHit(480, 0.7, 1.15 + 0.25 * s, 0.30, "lowpass", 0.008, 0.50 * room, true); // body
+    tone("sine", 105, 28, 1.25 + 0.35 * s, 0.62, 0, 0.28 * room, true);           // sub thump
+    tone("triangle", 290, 55, 0.55, 0.22, 0.004, 0.22 * room, true);              // mid punch
+    if (s > 0.3) noiseHit(260, 0.8, 0.45 * s, 0.10, "lowpass", 0.003, 0.1, true); // stock into the shoulder
+    // rolling echoes: each later, darker and quieter than the last
+    let t = rnd(0.10, 0.14);
+    const echoes = [[900, 0.34, 0.35], [620, 0.24, 0.45], [430, 0.16, 0.55], [300, 0.10, 0.70]];
+    for (const [freq, gain, dur] of echoes) {
+      noiseHit(freq, 0.8, gain * room, dur, "lowpass", t, 0.85, false);
+      t += rnd(0.16, 0.28);
+    }
   }
 
   function playDryFire() { noiseHit(3000, 6, 0.16, 0.04, "highpass", 0, 0.15); tone("square", 260, 150, 0.06, 0.05, 0, 0.1); }
@@ -1139,9 +1150,18 @@
     noiseHit(1200, 2, 0.12, 0.07, "bandpass", 0.19, 0.25);
   }
   function playInspectSound() { noiseHit(1700, 2, 0.09, 0.09, "bandpass", 0, 0.25); }
+  // scoping in: cloth rustle and a zoom-ring slide, then the eye settles with a lens click.
+  // scoping out: a shorter slide back down.
   function playScopeSound(inward) {
-    if (inward) { noiseHit(3200, 4, 0.11, 0.05, "highpass", 0, 0.15); tone("square", 900, 1250, 0.035, 0.05, 0, 0.1); }
-    else tone("square", 1100, 700, 0.035, 0.05, 0, 0.1);
+    if (inward) {
+      noiseHit(650, 0.8, 0.05, 0.12, "lowpass", 0, 0.1);
+      noiseSweep(900, 2300, 2.2, 0.07, 0.17, "bandpass", 0, 0.12);
+      noiseHit(4200, 5, 0.07, 0.025, "highpass", 0.15, 0.12);
+      tone("square", 1650, 1450, 0.018, 0.025, 0.15, 0.08);
+    } else {
+      noiseSweep(2100, 800, 2.2, 0.06, 0.12, "bandpass", 0, 0.12);
+      noiseHit(520, 0.8, 0.04, 0.09, "lowpass", 0.02, 0.1);
+    }
   }
   function playKnifeSwing() {
     noiseSweep(3400, 480, 1.1, 0.26, 0.22, "bandpass", 0, 0.35);
@@ -1900,7 +1920,7 @@
     // ---- rifle ----
     const ammoBefore = ammo;
     if (!SETTINGS.unlimitedAmmo) { ammo--; updateAmmoHud(); }
-    playShotSound();
+    playShotSound(easeInOut(vm.adsProgress));
     vm.recoil = 1;
     vm.camKick = 1;
     vm.camKickYaw = Math.random() * 2 - 1;
