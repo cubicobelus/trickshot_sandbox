@@ -474,6 +474,115 @@
   }
 
   // ======================================================================
+  // SMOKE (pooled soft sprites: muzzle blast and barrel wisps)
+  // ======================================================================
+  const smokeTex = (function () {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.45, "rgba(255,255,255,0.45)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const smokePool = [];
+  for (let i = 0; i < 28; i++) {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: smokeTex, color: 0xa9a9a4, transparent: true, opacity: 0, depthWrite: false,
+    }));
+    sprite.visible = false; sprite.frustumCulled = false;
+    scene.add(sprite);
+    smokePool.push({ sprite, vel: new THREE.Vector3(), age: 0, life: 0, size0: 0, size1: 0, alpha: 0, active: false });
+  }
+
+  function spawnSmoke(pos, vx, vy, vz, life, size0, size1, alpha) {
+    for (const s of smokePool) {
+      if (s.active) continue;
+      s.active = true; s.age = 0; s.life = life;
+      s.size0 = size0; s.size1 = size1; s.alpha = alpha;
+      s.sprite.position.copy(pos);
+      s.sprite.scale.setScalar(size0);
+      s.sprite.material.rotation = Math.random() * Math.PI * 2;
+      s.sprite.material.opacity = 0;
+      s.sprite.visible = true;
+      s.vel.set(vx, vy, vz);
+      return s;
+    }
+    return null;
+  }
+
+  function updateSmoke(dt) {
+    const drag = Math.max(0, 1 - dt * 3.2);
+    for (const s of smokePool) {
+      if (!s.active) continue;
+      s.age += dt;
+      if (s.age >= s.life) { s.active = false; s.sprite.visible = false; continue; }
+      s.vel.multiplyScalar(drag);
+      s.vel.y += 0.5 * dt;   // warm smoke drifts up
+      s.sprite.position.addScaledVector(s.vel, dt);
+      const t = s.age / s.life;
+      s.sprite.scale.setScalar(s.size0 + (s.size1 - s.size0) * easeOut(t));
+      s.sprite.material.opacity = s.alpha * Math.min(s.age / 0.04, 1) * (1 - t) * (1 - t);
+    }
+  }
+
+  // ======================================================================
+  // SHELL CASINGS (pooled, thrown out by the bolt)
+  // ======================================================================
+  const brassMat = new THREE.MeshStandardMaterial({ color: 0xc9a14a, roughness: 0.3, metalness: 0.85 });
+  const casingGeo = new THREE.CylinderGeometry(0.010, 0.012, 0.08, 8);
+  const casingPool = [];
+  for (let i = 0; i < 8; i++) {
+    const mesh = new THREE.Mesh(casingGeo, brassMat);
+    mesh.visible = false; mesh.frustumCulled = false;
+    scene.add(mesh);
+    casingPool.push({ mesh, vel: new THREE.Vector3(), spin: new THREE.Vector3(), age: 0, bounces: 0, resting: false, active: false });
+  }
+
+  function ejectCasing(pos, vel) {
+    let c = casingPool.find((k) => !k.active);
+    if (!c) c = casingPool.reduce((a, b) => (a.age > b.age ? a : b));   // recycle the oldest
+    c.active = true; c.age = 0; c.bounces = 0; c.resting = false;
+    c.mesh.visible = true;
+    c.mesh.scale.setScalar(1);
+    c.mesh.position.copy(pos);
+    c.mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+    c.vel.copy(vel);
+    c.spin.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 12, 18 + Math.random() * 14);
+  }
+
+  function updateCasings(dt) {
+    for (const c of casingPool) {
+      if (!c.active) continue;
+      c.age += dt;
+      const m = c.mesh;
+      if (c.age > 4 || m.position.y < -60) { c.active = false; m.visible = false; continue; }
+      if (c.age > 3.5) m.scale.setScalar(Math.max((4 - c.age) / 0.5, 0.01));
+      if (c.resting) continue;
+      c.vel.y -= CFG.gravity * dt;
+      m.position.addScaledVector(c.vel, dt);
+      m.rotation.x += c.spin.x * dt; m.rotation.y += c.spin.y * dt; m.rotation.z += c.spin.z * dt;
+      const gy = currentGroundY(m.position.x, m.position.z, m.position.y + 0.3);
+      if (m.position.y - 0.012 <= gy && c.vel.y < 0) {
+        m.position.y = gy + 0.012;
+        if (c.bounces < 3) playCasingPing(Math.min(-c.vel.y / 6, 1) * (c.bounces ? 0.5 : 1));
+        c.bounces++;
+        c.vel.y = -c.vel.y * 0.32;
+        c.vel.x *= 0.55; c.vel.z *= 0.55;
+        c.spin.multiplyScalar(0.45);
+        if (c.vel.y < 0.6) {
+          // settle on its side
+          c.resting = true;
+          m.rotation.set(0, Math.random() * Math.PI * 2, Math.PI / 2);
+        }
+      }
+    }
+  }
+
+  // ======================================================================
   // VIEWMODELS
   // ======================================================================
   const metalDark = new THREE.MeshStandardMaterial({ color: 0x232427, roughness: 0.4, metalness: 0.6 });
@@ -507,15 +616,31 @@
   addPart(rifleGroup, new THREE.TorusGeometry(0.043, 0.013, 8, 12), metalDark, 0, 0.082, -0.13);
   addPart(rifleGroup, new THREE.TorusGeometry(0.043, 0.013, 8, 12), metalDark, 0, 0.082, 0.07);
   const magMesh = addPart(rifleGroup, new THREE.BoxGeometry(0.055, 0.19, 0.07), metalDark, 0, -0.15, 0.02, -0.15, 0, 0);
-  const boltMesh = addPart(rifleGroup, new THREE.SphereGeometry(0.02, 8, 8), metalMid, 0.075, 0.02, 0.20);
+  // bolt: pivots on the receiver so the handle can lift, pull back and slam home
+  const boltMesh = new THREE.Group();
+  boltMesh.position.set(0.05, 0.02, 0.20);
+  rifleGroup.add(boltMesh);
+  addPart(boltMesh, new THREE.CylinderGeometry(0.008, 0.008, 0.055, 8), metalMid, 0.027, 0, 0, 0, 0, Math.PI / 2);
+  addPart(boltMesh, new THREE.SphereGeometry(0.018, 10, 10), metalMid, 0.058, -0.004, 0);
   addPart(rifleGroup, new THREE.BoxGeometry(0.012, 0.10, 0.012), metalDark, 0.03, -0.09, -0.72, 0, 0, 0.25);
   addPart(rifleGroup, new THREE.BoxGeometry(0.012, 0.10, 0.012), metalDark, -0.03, -0.09, -0.72, 0, 0, -0.25);
 
-  const flashMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0 });
-  const muzzleFlash = new THREE.Mesh(new THREE.SphereGeometry(0.10, 8, 8), flashMat);
+  const flashMat = new THREE.MeshBasicMaterial({
+    color: 0xffc66a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const muzzleFlash = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), flashMat);
   muzzleFlash.position.set(0, 0.005, -1.20);
   muzzleFlash.visible = false;
   rifleGroup.add(muzzleFlash);
+  // forward plume, plus the sideways jets the muzzle brake throws out
+  addPart(muzzleFlash, new THREE.ConeGeometry(0.06, 0.38, 8), flashMat, 0, 0, -0.17, -Math.PI / 2, 0, 0);
+  addPart(muzzleFlash, new THREE.BoxGeometry(0.34, 0.03, 0.03), flashMat, 0, 0, 0.13);
+  addPart(muzzleFlash, new THREE.BoxGeometry(0.26, 0.022, 0.022), flashMat, 0, 0, 0.06);
+
+  // lights up the surroundings for a frame; lives on the camera so it never drops out
+  // of the scene (an invisible parent would remove it and force a shader rebuild)
+  const muzzleLight = new THREE.PointLight(0xffb060, 0, 10, 2);
+  muzzleLight.position.set(0.3, -0.15, -1.6);
 
   const knifeGroup = new THREE.Group();
   (function buildKnife() {
@@ -547,6 +672,7 @@
   knifeGroup.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   camera.add(rifleGroup);
   camera.add(knifeGroup);
+  camera.add(muzzleLight);
   knifeGroup.visible = false;
 
   // ---- inspect animation sets (3 per weapon, picked at random) ----
@@ -629,6 +755,8 @@
     recoil: 0,
     slashTimer: 0, slashDir: 1,
     bobTimer: 0, adsProgress: 0, wantADS: false, adsStartTime: -99, flashTimer: 0,
+    boltTime: -1, boltCues: [], spentCasing: false,
+    camKick: 0, camKickYaw: 0,
   };
 
   function currentWeapon() { return WEAPONS[vm.current]; }
@@ -641,15 +769,64 @@
     vm.inspectTimer = 0;
     vm.wantADS = false;
     cancelReload();
+    cancelBoltCycle();
     playSwitchSound();
   }
 
   function startInspect() {
-    if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active) return;
+    if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.boltTime >= 0) return;
     const w = currentWeapon();
     vm.inspectIndex = Math.floor(Math.random() * w.inspects.length);
     vm.inspectTimer = w.inspectDuration;
     playInspectSound();
+  }
+
+  // ---- bolt cycle after each rifle shot (lift, rack back, push home, lock) ----
+  const BOLT_CYCLE = 0.52;   // keep under the rifle's fireRate so it never delays the next shot
+  const _ejectPos = new THREE.Vector3();
+  const _ejectVel = new THREE.Vector3();
+  const _camQuat = new THREE.Quaternion();
+  const _smokeRight = new THREE.Vector3();
+
+  function startBoltCycle() {
+    vm.boltTime = 0;
+    vm.boltCues = [[0.10, playBoltLift], [0.18, playBoltBack], [0.25, ejectSpentCasing], [0.31, playBoltForward], [0.44, playBoltLock]];
+  }
+
+  function cancelBoltCycle() {
+    vm.boltTime = -1;
+    vm.boltCues.length = 0;
+    boltMesh.position.z = 0.20;
+    boltMesh.rotation.z = 0;
+  }
+
+  // throw the fired case out of the port to the right, carrying the player's momentum
+  function ejectSpentCasing() {
+    if (!vm.spentCasing) return;
+    vm.spentCasing = false;
+    _ejectPos.set(0.06, 0.035, 0.12);
+    rifleGroup.localToWorld(_ejectPos);
+    camera.getWorldQuaternion(_camQuat);
+    _ejectVel.set(2.2 + Math.random() * 0.9, 1.9 + Math.random() * 0.8, 0.5 + Math.random() * 0.5)
+      .applyQuaternion(_camQuat).add(player.velocity);
+    ejectCasing(_ejectPos, _ejectVel);
+    spawnSmoke(_ejectPos, player.velocity.x, 0.3, player.velocity.z, 0.8, 0.04, 0.22, 0.22);
+  }
+
+  // blast smoke out the front plus a puff from each side of the muzzle brake;
+  // kept faint while scoped so it doesn't cloud the lens
+  function muzzleSmoke(pos, dir) {
+    const a = 1 - 0.8 * easeInOut(vm.adsProgress);
+    const pv = player.velocity;
+    for (let i = 0; i < 3; i++) {
+      const sp = 2 + i * 2.2 + Math.random();
+      spawnSmoke(pos, pv.x + dir.x * sp, dir.y * sp + 0.3, pv.z + dir.z * sp,
+        0.8 + Math.random() * 0.5, 0.14, 0.8 + i * 0.3, 0.45 * a);
+    }
+    _smokeRight.set(1, 0, 0).applyQuaternion(camera.getWorldQuaternion(_camQuat));
+    for (const side of [-1, 1]) {
+      spawnSmoke(pos, pv.x + _smokeRight.x * side * 3, 0.4, pv.z + _smokeRight.z * side * 3, 0.7, 0.1, 0.6, 0.36 * a);
+    }
   }
 
   const _tmpPos = new THREE.Vector3();
@@ -711,6 +888,24 @@
 
     vm.recoil *= Math.max(0, 1 - dt * 11);
 
+    // camera punch: visual only, gone long before the bolt lets you fire again
+    vm.camKick *= Math.max(0, 1 - dt * 10);
+    camera.rotation.x = vm.camKick * 0.032 * (1 + 0.6 * adsEased);
+    camera.rotation.y = vm.camKick * vm.camKickYaw * 0.008;
+
+    let boltTilt = 0;
+    if (vm.boltTime >= 0) {
+      vm.boltTime += dt;
+      while (vm.boltCues.length && vm.boltTime >= vm.boltCues[0][0]) vm.boltCues.shift()[1]();
+      const bt = vm.boltTime;
+      const seg = (a, b) => easeInOut(Math.min(Math.max((bt - a) / (b - a), 0), 1));
+      boltMesh.rotation.z = (seg(0.10, 0.17) - seg(0.43, 0.50)) * 1.15;
+      boltMesh.position.z = 0.20 + (seg(0.18, 0.27) - seg(0.31, 0.41)) * 0.10;
+      // roll the rifle a little so you can see the handle work
+      boltTilt = Math.sin(Math.PI * Math.min(bt / BOLT_CYCLE, 1)) * (1 - adsEased);
+      if (bt >= BOLT_CYCLE) cancelBoltCycle();
+    }
+
     // slash progresses on a timeline rather than decaying
     let slash = 0;
     if (vm.slashTimer > 0) {
@@ -747,13 +942,13 @@
 
     w.group.position.set(
       px + bobX + ipx + swing * 0.16,
-      py + bobY + ipy - holsterDrop + rlY - Math.abs(slash) * 0.05,
+      py + bobY + ipy - holsterDrop + rlY - Math.abs(slash) * 0.05 - boltTilt * 0.02,
       pz + ipz + vm.recoil * 0.16 - Math.abs(slash) * 0.13
     );
     w.group.rotation.set(
-      rx + irx - vm.recoil * 0.34 + holsterTilt + rlX - Math.abs(slash) * 0.45,
+      rx + irx - vm.recoil * 0.34 + holsterTilt + rlX - Math.abs(slash) * 0.45 + boltTilt * 0.05,
       ry + iry + swing * 0.7,
-      rz + irz + rlZ + swing * 1.05
+      rz + irz + rlZ + swing * 1.05 + boltTilt * 0.22
     );
 
     if (vm.flashTimer > 0) {
@@ -761,7 +956,8 @@
       muzzleFlash.visible = true;
       flashMat.opacity = Math.max(vm.flashTimer / 0.06, 0);
       muzzleFlash.scale.setScalar(0.9 + Math.random() * 0.8);
-      if (vm.flashTimer <= 0) { muzzleFlash.visible = false; vm.flashTimer = 0; }
+      muzzleLight.intensity = 2.4 * Math.max(vm.flashTimer / 0.06, 0);
+      if (vm.flashTimer <= 0) { muzzleFlash.visible = false; vm.flashTimer = 0; muzzleLight.intensity = 0; }
     }
 
     // FOV: scope zoom, plus a speed-driven widening for a sense of momentum
@@ -968,6 +1164,27 @@
   function playMagOut() { noiseHit(1600, 3, 0.18, 0.09, "bandpass", 0, 0.3); tone("square", 340, 210, 0.06, 0.08, 0, 0.25); }
   function playMagIn() { noiseHit(900, 2, 0.24, 0.12, "lowpass", 0, 0.35); tone("square", 200, 130, 0.09, 0.11, 0, 0.3); }
   function playBolt() { noiseHit(2800, 3.5, 0.20, 0.07, "highpass", 0, 0.3); noiseHit(1100, 2, 0.16, 0.10, "bandpass", 0.06, 0.35); }
+  // bolt cycle between shots: lift, rack back, push home, lock down
+  function playBoltLift() { noiseHit(3400, 5, 0.10, 0.03, "highpass", 0, 0.15); tone("square", 1900, 1500, 0.025, 0.025, 0, 0.1); }
+  function playBoltBack() {
+    noiseSweep(2600, 1300, 2.5, 0.14, 0.09, "bandpass", 0, 0.2);
+    noiseHit(1500, 3, 0.20, 0.05, "bandpass", 0.08, 0.25);
+    tone("triangle", 620, 420, 0.06, 0.05, 0.08, 0.2);
+  }
+  function playBoltForward() {
+    noiseSweep(1300, 2600, 2.5, 0.12, 0.08, "bandpass", 0, 0.2);
+    noiseHit(1900, 3, 0.22, 0.05, "bandpass", 0.075, 0.25);
+    tone("triangle", 720, 480, 0.07, 0.05, 0.075, 0.2);
+  }
+  function playBoltLock() { noiseHit(2600, 4, 0.16, 0.04, "highpass", 0, 0.2); tone("square", 520, 300, 0.05, 0.04, 0, 0.15); }
+  // brass landing: a short bright ring
+  function playCasingPing(vol) {
+    if (vol < 0.05) return;
+    const p = rnd(0.92, 1.1);
+    tone("sine", 3900 * p, 3850 * p, 0.05 * vol, 0.22, 0, 0.3);
+    tone("sine", 6100 * p, 6000 * p, 0.03 * vol, 0.15, 0, 0.3);
+    noiseHit(5200, 2, 0.06 * vol, 0.02, "highpass", 0, 0.2);
+  }
 
   // ======================================================================
   // DOM
@@ -1178,8 +1395,9 @@
     reload.timer = CFG.reloadTime;
     vm.inspectTimer = 0;
     vm.wantADS = false;
+    cancelBoltCycle();
     reload.elapsed = 0;
-    reload.cues = [[0.18, playMagOut], [1.15, playMagIn], [1.8, playBolt]];
+    reload.cues = [[0.18, playMagOut], [1.15, playMagIn], [1.8, () => { playBolt(); ejectSpentCasing(); }]];
     updateAmmoHud();
   }
 
@@ -1684,7 +1902,13 @@
     if (!SETTINGS.unlimitedAmmo) { ammo--; updateAmmoHud(); }
     playShotSound();
     vm.recoil = 1;
+    vm.camKick = 1;
+    vm.camKickYaw = Math.random() * 2 - 1;
     vm.flashTimer = 0.06;
+    muzzleFlash.rotation.z = Math.random() * Math.PI;
+    vm.spentCasing = true;
+    // an empty mag skips straight to the reload, which works the bolt itself
+    if (SETTINGS.unlimitedAmmo || ammo > 0) startBoltCycle();
     raycaster.far = CFG.maxShootDistance;
 
     const occ = occluderDistance(CFG.maxShootDistance);
@@ -1701,6 +1925,7 @@
     else if (propHits.length) impactDist = propHits[0].distance;
     muzzleFlash.getWorldPosition(_muzzleWorld);
     spawnTracer(_muzzleWorld, raycaster.ray.direction, impactDist);
+    muzzleSmoke(_muzzleWorld, raycaster.ray.direction);
     if (net.active) mpSendShot(_muzzleWorld, raycaster.ray.direction, impactDist);
 
     if (playerHit) {
@@ -2587,6 +2812,8 @@
       updateProps(dt);
       updateParticles(dt);
       updateTracers(dt);
+      updateSmoke(dt);
+      updateCasings(dt);
       updateTargets(net.active ? realDt : dt);
     }
 
