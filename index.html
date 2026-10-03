@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Browser FPS: chain slides, bunnyhops and wall bounces to build speed, then land trickshots for stacking score multipliers.">
 <title>Trickshot Sandbox</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23ffd24a' stroke-width='3'/%3E%3Cpath d='M16 1v9M16 22v9M1 16h9M22 16h9' stroke='%23ffd24a' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23e02424'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -28,6 +31,8 @@
       <button type="button" class="tab active" data-mode="solo">Singleplayer</button>
       <button type="button" class="tab" data-mode="mp">Multiplayer</button>
     </div>
+
+    <p id="touch-note" hidden>This game needs a keyboard and mouse. Open it on a computer to play.</p>
 
     <div id="panel-solo">
       <div class="start" id="start-btn">Click to play</div>
@@ -170,8 +175,11 @@
   <p id="sb-foot"></p>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<!-- integrity: the browser refuses the file if the CDN ever serves anything else -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+  integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ=="
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- PeerJS (multiplayer) is only loaded when MULTIPLAYER_ENABLED is true in game.js -->
 <script src="game.js"></script>
 </body>
 </html>

@@ -1,0 +1,2 @@
+# keep line endings consistent (LF) whatever the OS or git settings
+* text=auto eol=lf

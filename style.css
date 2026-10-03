@@ -3,13 +3,17 @@
 
   #blocker {
     position: absolute; inset: 0; background: rgba(0,0,0,0.78);
-    display: flex; align-items: center; justify-content: center; z-index: 30; overflow-y: auto;
+    display: flex; align-items: safe center; justify-content: center; z-index: 30; overflow-y: auto;
   }
   #instructions {
     color: #fff; text-align: center; max-width: 660px; padding: 22px 30px; margin: 20px;
     background: rgba(20,20,25,0.94); border-radius: 10px; border: 1px solid #444;
   }
   #instructions h1 { margin: 0 0 8px; font-size: 26px; color: #ffd24a; }
+  #instructions #touch-note {
+    color: #ffd24a; font-size: 14px; font-weight: bold; margin: 12px 0 4px;
+    padding: 10px; border: 1px solid #ffd24a; border-radius: 6px;
+  }
   #instructions p { line-height: 1.6; font-size: 12.5px; color: #ccc; margin: 6px 0; }
   #instructions .key { color: #ffd24a; font-weight: bold; }
   #instructions .start {

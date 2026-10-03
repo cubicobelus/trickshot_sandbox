@@ -1360,6 +1360,8 @@
   // ======================================================================
   const blocker = document.getElementById("blocker");
   const startBtn = document.getElementById("start-btn");
+  // phones and tablets can't pointer-lock or use WASD; say so instead of failing silently
+  if (!matchMedia("(any-pointer: fine)").matches) document.getElementById("touch-note").hidden = false;
   const settingsPanel = document.getElementById("settings");
   const hud = document.getElementById("hud");
   const domEl = renderer.domElement;
@@ -1407,7 +1409,31 @@
     volumeEl.value = SETTINGS.volume;
     sensYEl.disabled = sensLink.checked;
     accelStrengthEl.disabled = !SETTINGS.mouseAccel;
+    saveSettings();
   }
+
+  // settings survive a reload; storage can be blocked (private windows), so it's optional
+  const SETTINGS_KEY = "tsb-settings";
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(Object.assign({ linkY: sensLink.checked }, SETTINGS)));
+    } catch (e) { /* ignore */ }
+  }
+  (function loadSettings() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) { /* ignore */ }
+    if (!saved || typeof saved !== "object") return;
+    // only take values that fit the sliders' own ranges
+    const num = (key, el) => {
+      const v = Number(saved[key]);
+      if (Number.isFinite(v) && v >= parseFloat(el.min) && v <= parseFloat(el.max)) SETTINGS[key] = v;
+    };
+    num("sensX", sensXEl); num("sensY", sensYEl); num("scopedSensMult", sensScopeEl);
+    num("accelStrength", accelStrengthEl); num("volume", volumeEl);
+    if (typeof saved.mouseAccel === "boolean") SETTINGS.mouseAccel = mouseAccelEl.checked = saved.mouseAccel;
+    if (typeof saved.unlimitedAmmo === "boolean") SETTINGS.unlimitedAmmo = unlimitedAmmoEl.checked = saved.unlimitedAmmo;
+    if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
+  })();
   sensXEl.addEventListener("input", () => {
     SETTINGS.sensX = parseFloat(sensXEl.value);
     if (sensLink.checked) SETTINGS.sensY = SETTINGS.sensX;
@@ -1431,6 +1457,7 @@
     if (SETTINGS.unlimitedAmmo) cancelReload();
     ammo = CFG.magSize;
     updateAmmoHud();
+    saveSettings();
   });
   settingsPanel.addEventListener("click", (e) => e.stopPropagation());
   refreshSettingsUI();
@@ -2219,8 +2246,24 @@
   document.getElementById("mode-tabs").addEventListener("click", (e) => e.stopPropagation());
   mpEls.playBtn.addEventListener("click", (e) => { e.stopPropagation(); requestPlay(); });
 
+  // Multiplayer is switched off for now: the mode tabs are hidden, invite links are
+  // ignored and PeerJS is never loaded, so the game makes no connections beyond the
+  // three.js download. Set to true to bring it all back.
+  const MULTIPLAYER_ENABLED = false;
+  const PEERJS_SRI = "sha512-iFU+yF1keEaLDC9HEwPfLMSRaS0unBHE14GEgx6pQKJXjp5v0tvX8xpfp2lgJ62XEjbYp/M5C3CAmej/PWXMyA==";
+  if (MULTIPLAYER_ENABLED) {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js";
+    s.integrity = PEERJS_SRI;
+    s.crossOrigin = "anonymous";
+    s.referrerPolicy = "no-referrer";
+    document.head.appendChild(s);
+  } else {
+    document.getElementById("mode-tabs").style.display = "none";
+  }
+
   function setUiMode(mode) {
-    if (net.active) return;
+    if (net.active || (mode === "mp" && !MULTIPLAYER_ENABLED)) return;
     uiMode = mode;
     mpEls.tabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === mode));
     mpEls.panelSolo.hidden = mode !== "solo";
@@ -2892,6 +2935,7 @@
 
   // an invite link (?room=CODE) drops straight into the join box
   (function readInvite() {
+    if (!MULTIPLAYER_ENABLED) return;
     const code = (new URLSearchParams(location.search).get("room") || "").toUpperCase().slice(0, 5);
     if (code) { mpEls.code.value = code; setUiMode("mp"); }
   })();
