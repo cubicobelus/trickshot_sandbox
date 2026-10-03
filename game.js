@@ -1747,6 +1747,20 @@
   const SPAWNS = [[0, 8], [-28, 28], [28, 28], [28, -28], [-28, -28], [0, 28], [-28, 2], [8, -26]];
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
 
+  // STUN lets two browsers discover how to reach each other; TURN is a relay of last resort for networks
+  // (mobile data, school/work, some home routers) that block direct connections. The TURN entry is a free,
+  // shared public relay and may be slow or rate-limited. To use your own, replace it with your credentials.
+  const PEER_OPTS = {
+    config: {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun.cloudflare.com:3478" },
+        { urls: ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443", "turn:openrelay.metered.ca:443?transport=tcp"],
+          username: "openrelayproject", credential: "openrelayproject" },
+      ],
+    },
+  };
+
   const net = {
     active: false, role: null,            // role: "host" | "client"
     peer: null, hostConn: null, conns: new Map(),
@@ -2384,7 +2398,7 @@
 
     const open = () => {
       const code = randomCode();
-      const peer = new Peer(ROOM_PREFIX + code);
+      const peer = new Peer(ROOM_PREFIX + code, PEER_OPTS);
       peer.on("open", (id) => {
         opened = true;
         net.peer = peer; net.id = id;
@@ -2428,27 +2442,43 @@
     if (code.length !== 5) { mpStatus("Enter the 5-character room code."); return; }
     setConnectBusy(true);
     mpStatus("Connecting…", true);
-    const peer = new Peer();
-    let timeout = setTimeout(() => { if (!net.active) { mpTeardownPending(peer); mpLeave("Couldn't reach that room."); } }, 15000);
+    const peer = new Peer(PEER_OPTS);
+    const fail = (msg) => {
+      clearTimeout(timeout);
+      if (net.active) return;
+      mpTeardownPending(peer);
+      mpLeave(msg);
+    };
+    const timeout = setTimeout(() => fail("Couldn't connect to that room. Check the code and that the host's tab is still open. " +
+      "If it keeps failing, one of your networks may be blocking direct connections."), 25000);
     net.peer = peer;
 
     peer.on("open", (id) => {
       net.id = id;
       const conn = peer.connect(ROOM_PREFIX + code, { reliable: true, serialization: "json" });
       net.hostConn = conn;
+      // surface a blocked direct connection right away instead of waiting out the timer
+      setTimeout(() => {
+        const pc = conn.peerConnection;
+        if (pc) pc.addEventListener("iceconnectionstatechange", () => {
+          if (pc.iceConnectionState === "failed") fail("Couldn't make a connection. One of your networks is blocking direct connections to the host.");
+        });
+      }, 0);
       conn.on("open", () => conn.send({ t: "hello", name: myName() }));
       conn.on("data", (m) => {
         if (!m) return;
-        if (m.t === "full") { clearTimeout(timeout); mpLeave("That room is full."); return; }
+        if (m.t === "full") { fail("That room is full."); return; }
         if (!net.active && m.t === "round") { clearTimeout(timeout); mpEnter("client", code); net.lastTick = nowMs(); }
         if (net.active) applyEvent(m);
       });
-      conn.on("close", () => { clearTimeout(timeout); if (net.active) mpLeave("The host closed the room."); });
+      conn.on("close", () => { if (net.active) mpLeave("The host closed the room."); else fail("The host closed the connection."); });
+      conn.on("error", (err) => fail("Connection failed (" + (err && err.type || "error") + ")."));
     });
     peer.on("error", (err) => {
-      clearTimeout(timeout);
       if (net.active) { feedLine("Network warning: " + esc(err.type)); return; }
-      mpLeave(err.type === "peer-unavailable" ? "Room not found. Check the code." : "Connection failed (" + err.type + ").");
+      if (err.type === "peer-unavailable") fail("Room not found. Check the code, and make sure the host's room is still open (their tab must stay open).");
+      else if (["network", "server-error", "socket-error", "socket-closed"].includes(err.type)) fail("Couldn't reach the matchmaking server (" + err.type + "). Try again in a moment.");
+      else fail("Connection failed (" + err.type + ").");
     });
   }
   function mpTeardownPending(peer) { try { peer.destroy(); } catch (e) { /* ignore */ } net.peer = null; net.hostConn = null; }
