@@ -863,7 +863,7 @@
     drawTimer: 0.4, drawDuration: 0.4,
     inspectTimer: 0, inspectIndex: 0,
     recoil: 0,
-    slashTimer: 0, slashDir: 1,
+    slashTimer: 0, swingIndex: -1, swingKind: "fore", meleePending: false,
     bobTimer: 0, adsProgress: 0, wantADS: false, adsStartTime: -99, flashTimer: 0,
     boltTime: -1, boltCues: [], spentCasing: false,
     throwTimer: 0,
@@ -882,6 +882,8 @@
     cancelReload();
     cancelBoltCycle();
     vm.throwTimer = 0;
+    vm.slashTimer = 0;
+    vm.meleePending = false;
     playSwitchSound();
   }
 
@@ -964,14 +966,45 @@
   const _tmpPos = new THREE.Vector3();
   const _tmpRot = new THREE.Euler();
 
-  // Smooth knife arc. Three keyframed segments (rest -> wind-up -> peak -> settle),
-  // each eased with easeInOut so the slope is zero at every seam. That makes the
-  // whole swing C1-continuous: no corners, no velocity spikes, one flowing motion.
-  function slashCurve(t) {
-    if (t < 0.28) return -0.32 * easeInOut(t / 0.28);
-    if (t < 0.62) return -0.32 + 1.22 * easeInOut((t - 0.28) / 0.34);
-    return 0.90 * (1 - easeInOut((t - 0.62) / 0.38));
+  // Sample keyframes [time, ...values] at time t, easing in and out of every key so the
+  // motion has no corners. Writes the values into `out` and returns it.
+  function sampleKeys(keys, t, out) {
+    let i = 1;
+    while (i < keys.length - 1 && t > keys[i][0]) i++;
+    const a = keys[i - 1], b = keys[i];
+    const k = easeInOut(Math.min(Math.max((t - a[0]) / (b[0] - a[0]), 0), 1));
+    for (let j = 1; j < a.length; j++) out[j - 1] = a[j] + (b[j] - a[j]) * k;
+    return out;
   }
+
+  // Knife swings, as offsets from the rest pose: [time, x, y, z, rx, ry, rz].
+  // Each has a wind-up, a fast cut through the middle of the screen, a follow-through
+  // and a recovery. `contact` is when the blade crosses the centre and the hit lands.
+  const SWINGS = {
+    fore: { contact: 0.13, keys: [   // upper right to lower left
+      [0.00,  0,     0,     0,     0,     0,     0   ],
+      [0.09,  0.06,  0.10, -0.02,  0.50, -0.40, -0.50],
+      [0.17, -0.24,  0.00, -0.16, -0.25,  0.85,  0.50],
+      [0.26, -0.30, -0.06, -0.12, -0.35,  0.95,  0.60],
+      [0.42,  0,     0,     0,     0,     0,     0   ],
+    ] },
+    back: { contact: 0.13, keys: [   // left to lower right, backhand
+      [0.00,  0,     0,     0,     0,     0,     0   ],
+      [0.09, -0.20,  0.08, -0.02,  0.40,  0.65,  0.55],
+      [0.17,  0.10, -0.04, -0.14, -0.25, -0.65, -0.50],
+      [0.26,  0.14, -0.08, -0.10, -0.35, -0.75, -0.60],
+      [0.42,  0,     0,     0,     0,     0,     0   ],
+    ] },
+    stab: { contact: 0.15, keys: [   // draw back, then thrust in toward the crosshair
+      [0.00,  0,     0,     0,     0,     0,     0   ],
+      [0.10,  0.03, -0.04,  0.10,  0.15,  0.05,  0   ],
+      [0.16, -0.12,  0.06, -0.26, -0.05,  0.30,  0   ],
+      [0.24, -0.12,  0.06, -0.23, -0.05,  0.30,  0   ],
+      [0.42,  0,     0,     0,     0,     0,     0   ],
+    ] },
+  };
+  const SWING_ORDER = ["fore", "back", "fore", "back", "stab"];
+  const _swing = [0, 0, 0, 0, 0, 0];
 
   function updateViewmodel(dt, moving, sprinting, onGround) {
     let holster = 0;
@@ -1045,16 +1078,16 @@
     }
     boltJolt *= 1 - adsEased;
 
-    // slash progresses on a timeline rather than decaying
-    let slash = 0;
+    // knife swing: play the keyframes, and land the hit when the blade crosses the centre
+    _swing.fill(0);
     if (vm.slashTimer > 0) {
       vm.slashTimer -= dt;
-      const dur = w.slashDuration || 0.3;
-      const t = 1 - Math.max(vm.slashTimer, 0) / dur;
-      slash = slashCurve(Math.min(t, 1));
-      if (vm.slashTimer <= 0) { vm.slashTimer = 0; slash = 0; }
+      const sw = SWINGS[vm.swingKind];
+      const t = w.slashDuration - Math.max(vm.slashTimer, 0);
+      sampleKeys(sw.keys, t, _swing);
+      if (vm.meleePending && t >= sw.contact) { vm.meleePending = false; meleeStrike(); }
+      if (vm.slashTimer <= 0) { vm.slashTimer = 0; _swing.fill(0); }
     }
-    const swing = slash * vm.slashDir;
 
     let ipx = 0, ipy = 0, ipz = 0, irx = 0, iry = 0, irz = 0;
     if (vm.inspectTimer > 0) {
@@ -1090,14 +1123,14 @@
     const holsterTilt = holster * 1.1;
 
     w.group.position.set(
-      px + bobX + ipx + rl.x + thX + swing * 0.16 - boltTilt * 0.04,
-      py + bobY + ipy + rl.y + thY - holsterDrop - Math.abs(slash) * 0.05 + boltTilt * 0.015,
-      pz + ipz + thZ + vm.recoil * 0.16 - Math.abs(slash) * 0.13 + boltJolt * 0.012
+      px + bobX + ipx + rl.x + thX + _swing[0] - boltTilt * 0.04,
+      py + bobY + ipy + rl.y + thY + _swing[1] - holsterDrop + boltTilt * 0.015,
+      pz + ipz + thZ + _swing[2] + vm.recoil * 0.16 + boltJolt * 0.012
     );
     w.group.rotation.set(
-      rx + irx + rl.rx + thRX - vm.recoil * 0.34 + holsterTilt - Math.abs(slash) * 0.45 + boltTilt * 0.08 - boltJolt * 0.03,
-      ry + iry + rl.ry + swing * 0.7 + boltTilt * 0.10,
-      rz + irz + rl.rz + swing * 1.05 + boltTilt * 0.34
+      rx + irx + rl.rx + thRX + _swing[3] - vm.recoil * 0.34 + holsterTilt + boltTilt * 0.08 - boltJolt * 0.03,
+      ry + iry + rl.ry + _swing[4] + boltTilt * 0.10,
+      rz + irz + rl.rz + _swing[5] + boltTilt * 0.34
     );
 
     // muzzle flash: a hot first frame, then a quick fade so it lingers just long enough to catch.
@@ -2294,6 +2327,40 @@
     if (net.active) mpTargetHit(target, pointsGained);
   }
 
+  // the knife's hit, landed at the swing's contact point, along wherever you're aiming then
+  function meleeStrike() {
+    const w = currentWeapon();
+    if (!w.isMelee) return;
+    camera.getWorldDirection(raycaster.ray.direction);
+    raycaster.ray.origin.setFromMatrixPosition(camera.matrixWorld);
+    raycaster.far = w.range;
+    const occ = occluderDistance(w.range);
+    const res = raycastTargets(w.range);
+    if (res.dist >= occ) res.target = null;
+    const propHits = raycaster.intersectObjects(activeProps(), false).filter((h) => h.distance < occ);
+    const pres = raycastPlayers(w.range);
+    let hit = true;
+    if (pres.p && pres.dist < occ) {
+      playKnifeHit();
+      mpPvpKill(pres, true, ammo);
+    } else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) {
+      playKnifeHit();
+      scoreHit(res.target, res.dist, true, ammo);
+    } else if (propHits.length) {
+      const prop = props.find((p) => p.mesh === propHits[0].object);
+      if (prop) {
+        prop.velocity.addScaledVector(raycaster.ray.direction, CFG.shotForce * 1.6);
+        prop.velocity.y += 3.5;
+      }
+      playKnifeHit();
+      burst(propHits[0].point, 0xd2a679, 5);
+      flashCrosshair();
+    } else {
+      hit = false;
+    }
+    if (hit) { vm.camKick = Math.max(vm.camKick, 0.35); vm.camKickYaw = vm.swingKind === "back" ? 1 : -1; }
+  }
+
   const _muzzleWorld = new THREE.Vector3();
   const _impactPt = new THREE.Vector3();
 
@@ -2316,31 +2383,11 @@
     raycaster.ray.origin.setFromMatrixPosition(camera.matrixWorld);
 
     if (w.isMelee) {
+      vm.swingIndex = (vm.swingIndex + 1) % SWING_ORDER.length;
+      vm.swingKind = SWING_ORDER[vm.swingIndex];
       vm.slashTimer = w.slashDuration;
-      vm.slashDir = -vm.slashDir;
+      vm.meleePending = true;
       playKnifeSwing();
-      raycaster.far = w.range;
-      const occ = occluderDistance(w.range);
-      const res = raycastTargets(w.range);
-      if (res.dist >= occ) res.target = null;
-      const propHits = raycaster.intersectObjects(activeProps(), false).filter((h) => h.distance < occ);
-      const pres = raycastPlayers(w.range);
-      if (pres.p && pres.dist < occ) {
-        playKnifeHit();
-        mpPvpKill(pres, true, ammo);
-      } else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) {
-        playKnifeHit();
-        scoreHit(res.target, res.dist, true, ammo);
-      } else if (propHits.length) {
-        const prop = props.find((p) => p.mesh === propHits[0].object);
-        if (prop) {
-          prop.velocity.addScaledVector(raycaster.ray.direction, CFG.shotForce * 1.6);
-          prop.velocity.y += 3.5;
-        }
-        playKnifeHit();
-        burst(propHits[0].point, 0xd2a679, 5);
-        flashCrosshair();
-      }
       return;
     }
 
@@ -2429,6 +2476,7 @@
     vm.throwReleased = false;
     vm.inspectTimer = 0;
     vm.slashTimer = 0;
+    vm.meleePending = false;
     fireCooldown = Math.max(fireCooldown, CFG.knifeThrowCooldown * 0.75);   // no slashing with an empty hand
     playKnifeSwing();
   }
