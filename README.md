@@ -21,10 +21,11 @@ unzip, and open `index.html`. An internet connection is still needed (three.js l
 
 **Controls:** WASD move, Space jump, Shift sprint, Ctrl slide, R reload, F inspect, left click attack,
 right click aim (scope on the sniper, sights on the others) or throw (knife),
-1–5 / Q (last weapon) / mouse wheel switch weapons.
+1 / 2 / Q / mouse wheel switch between gun and knife.
 
-**Weapons:** 1 sniper, 2 assault rifle, 3 shotgun, 4 pistol, 5 knife. The sniper's no-scope and quickscope
-bonuses are its own, and the other guns score less per hit so trickshots stay king.
+**Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or pistol); you always carry the knife too.
+1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns
+score less per hit so trickshots stay king.
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (hold jump on landing) and wall
 bounces, up to 22 u/s. Score multipliers stack: air time, spins, speed, distance, no-scopes, quickscopes,
@@ -48,5 +49,8 @@ Multiplayer code is in `game.js` but switched off for now (`MULTIPLAYER_ENABLED`
 ## Credits
 
 Rifle shot: ["Rifle Gun Shot 01"](https://freesound.org/people/LilMati/sounds/433858/) by LilMati (CC0).
+Pistol: ["gun shot.aif"](https://freesound.org/people/trip2000/sounds/52357/) by trip2000 (CC0).
+Rifle: ["AssaultRifle1.wav"](https://freesound.org/people/SuperPhat/sounds/404562/) by SuperPhat (CC0).
+AK: ["AK47 Shot"](https://freesound.org/people/LeMudCrab/sounds/163457/) by LeMudCrab (CC0).
 Bolt action: from ["Sniper Rifle M24 SFX"](https://freesound.org/people/kennysvoice/sounds/351777/) by kennysvoice (CC0).
 All other sounds are generated in code.
