@@ -145,6 +145,16 @@ def test_game(browser, base):
     reset = page.input_value("#vol-move")
     check("a setting survives a reload, and Reset restores it", kept == "0.4" and reset == "1", f"{kept} -> {reset}")
 
+    # sensitivity import: CS2 sens 1.0 matches 0.53 here (0.022 / 0.0418 degrees per count)
+    page.click(".stab[data-tab=mouse]")
+    page.select_option("#si-game", "cs2")
+    page.fill("#si-sens", "1")
+    page.fill("#si-dpi", "800")
+    page.click("#si-apply")
+    check("sensitivity import converts CS2 1.0 to 0.53 (52.0 cm/360 at 800 DPI)",
+          page.inner_text("#sens-x-val") == "0.53" and "52.0 cm" in page.inner_text("#si-result"), page.inner_text("#si-result"))
+    page.click("#settings-reset")
+
     check("no errors in the game page", not errors, "; ".join(errors[:3]))
     if not all(ok for _, ok, _ in results):
         page.screenshot(path=os.path.join(OUT, "game.png"))

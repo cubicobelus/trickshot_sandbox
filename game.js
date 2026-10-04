@@ -63,8 +63,8 @@
     scopeSway: 0.0016,          // breathing drift while scoped, radians (0 turns it off)
     speedFovBoost: 12,          // extra FOV at max speed
     adsTime: 0.20,
-    baseSensitivity: 0.00073,
-    maxMouseDelta: 180,
+    baseSensitivity: 0.00073,   // radians per mouse count at sensitivity 1 (0.0418 degrees)
+    maxMouseDelta: 1200,        // counts per event; only throws out browser glitch jumps, never a real flick
     accelThreshold: 25,         // px/event where accel reaches ~63% of its range
 
     maxShootDistance: 250,
@@ -2579,6 +2579,44 @@
     });
   }
 
+  // ---- import a sensitivity from another game ----
+  // Each game turns a fixed number of degrees per mouse count per point of sensitivity. Matching that turn
+  // means the same hand movement turns you the same amount here (with mouse acceleration off in both).
+  const SENS_GAMES = {
+    cs2: { name: "CS2 / CS:GO / Apex / TF2", yaw: 0.022 },
+    valorant: { name: "Valorant", yaw: 0.07 },
+    overwatch: { name: "Overwatch 2", yaw: 0.0066 },
+    cod: { name: "Call of Duty (MW 2019 and later)", yaw: 0.0066 },
+  };
+  const OUR_YAW = CFG.baseSensitivity * 180 / Math.PI;   // degrees per count at sensitivity 1
+  const siGameEl = document.getElementById("si-game"), siSensEl = document.getElementById("si-sens");
+  const siDpiEl = document.getElementById("si-dpi"), siResultEl = document.getElementById("si-result");
+  for (const [id, g] of Object.entries(SENS_GAMES)) siGameEl.add(new Option(g.name, id));
+  function sensImport() {
+    const g = SENS_GAMES[siGameEl.value], their = parseFloat(siSensEl.value), dpi = parseFloat(siDpiEl.value);
+    if (!g || !(their > 0)) return null;
+    const ours = their * g.yaw / OUR_YAW;
+    const cm360 = dpi > 0 ? 360 / (their * g.yaw) / dpi * 2.54 : null;
+    return { ours, cm360, clamped: Math.min(Math.max(ours, parseFloat(sensXEl.min)), parseFloat(sensXEl.max)) };
+  }
+  function showSensImport() {
+    const r = sensImport();
+    if (!r) { siResultEl.textContent = "Pick the game, type your sensitivity there, and press Apply. Turn mouse acceleration off in both games."; return; }
+    siResultEl.textContent = "That's " + r.ours.toFixed(2) + " here" + (r.cm360 ? " (" + r.cm360.toFixed(1) + " cm per 360\u00B0 at " + siDpiEl.value + " DPI)" : "") +
+      (r.clamped !== r.ours ? ", past this game's range, so it would be set to " + r.clamped.toFixed(2) : "") + ".";
+  }
+  for (const el of [siGameEl, siSensEl, siDpiEl]) el.addEventListener("input", showSensImport);
+  document.getElementById("si-apply").addEventListener("click", () => {
+    const r = sensImport();
+    if (!r) { showSensImport(); return; }
+    SETTINGS.sensX = SETTINGS.sensY = Math.round(r.clamped * 1000) / 1000;
+    sensLink.checked = true;
+    SETTINGS.mouseAccel = false;
+    refreshSettingsUI();
+    siResultEl.textContent = "Set to " + SETTINGS.sensX.toFixed(2) + " (X and Y), mouse acceleration off." + (r.cm360 ? " " + r.cm360.toFixed(1) + " cm per 360\u00B0." : "");
+  });
+  showSensImport();
+
   // quick colour picks next to the colour input
   const swatchesEl = document.getElementById("xh-swatches");
   for (const c of ["#eeeeee", "#7cfc00", "#22d3ee", "#ffd24a", "#ff4fd8", "#ff3b3b"]) {
@@ -2616,12 +2654,23 @@
   let mouseHeld = false, attackPressed = false;
   let jumpQueued = false, jumpQueueTimer = 0;
 
+  // raw mouse input where the browser offers it, so the OS's pointer acceleration doesn't bend your aim
+  // (other shooters read the mouse raw too, which is what makes an imported sensitivity match)
+  function lockPointer() {
+    try {
+      const p = domEl.requestPointerLock({ unadjustedMovement: true });
+      if (p && p.catch) p.catch(() => domEl.requestPointerLock());
+    } catch (e) {
+      domEl.requestPointerLock();
+    }
+  }
+
   function requestPlay() {
     if (uiMode === "mp" && !net.active) return;   // nothing to play until you're in a room
     if (!resultsEl.hidden) return;                  // the results screen has its own buttons
     initAudio();
     if (uiMode === "solo" && isRunMode() && !runInProgress()) startRun();
-    domEl.requestPointerLock();
+    lockPointer();
   }
   startBtn.addEventListener("click", requestPlay);
   blocker.addEventListener("click", requestPlay);

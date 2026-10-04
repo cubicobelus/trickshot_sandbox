@@ -102,12 +102,12 @@
       <div class="spanel" data-panel="mouse">
         <div class="slider-row">
           <label for="sens-x">Sens X</label>
-          <input type="range" id="sens-x" min="0.05" max="4" step="0.05" value="1">
+          <input type="range" id="sens-x" min="0.02" max="4" step="0.01" value="1">
           <div class="val" id="sens-x-val">1.00</div>
         </div>
         <div class="slider-row">
           <label for="sens-y">Sens Y</label>
-          <input type="range" id="sens-y" min="0.05" max="4" step="0.05" value="1">
+          <input type="range" id="sens-y" min="0.02" max="4" step="0.01" value="1">
           <div class="val" id="sens-y-val">1.00</div>
         </div>
         <div class="slider-row">
@@ -123,6 +123,16 @@
         <div class="check-row">
           <label><input type="checkbox" id="sens-link" checked>Link Y to X</label>
           <label><input type="checkbox" id="mouse-accel">Mouse acceleration</label>
+        </div>
+        <div class="sens-import">
+          <div class="si-title">Import from another game</div>
+          <div class="si-row">
+            <select id="si-game" aria-label="Game"></select>
+            <input type="number" id="si-sens" placeholder="Your sens there" min="0" step="any" aria-label="Your sensitivity in that game">
+            <input type="number" id="si-dpi" placeholder="DPI (optional)" min="50" step="50" aria-label="Mouse DPI (optional)">
+            <button type="button" class="btn small" id="si-apply">Apply</button>
+          </div>
+          <p class="set-hint" id="si-result"></p>
         </div>
       </div>
 

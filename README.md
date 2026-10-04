@@ -44,7 +44,8 @@ Targets come in four kinds: red (standard, still), orange (always moving), blue 
 purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
 
 Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo and so on) are saved in your
-browser. **Realistic accuracy** (Settings > Other, off by default) makes shots spread while you're in the air
+browser. **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
+Call of Duty, so the same hand movement turns you the same amount here. **Realistic accuracy** (Settings > Other, off by default) makes shots spread while you're in the air
 and gives the sniper a little spread when it isn't scoped.
 
 ## Files
