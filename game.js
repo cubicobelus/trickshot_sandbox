@@ -5697,7 +5697,7 @@
         }
       }
       if (replay.phase !== "bullet") {
-        replayEvents(dt);
+        replayEvents(dt, replay.phase === "aimhold");   // holding on the scope: the hit lands after the bullet cam
         // targets that move: their recorded spot, interpolated
         while (replay.frameIdx < frames.length - 2 && frames[replay.frameIdx + 1].t <= replay.time) replay.frameIdx++;
         const a = frames[replay.frameIdx], b = frames[Math.min(replay.frameIdx + 1, frames.length - 1)];
@@ -5762,6 +5762,7 @@
     replayCam.aspect = window.innerWidth / window.innerHeight;
     replayCam.updateProjectionMatrix();
     renderer.render(scene, replayCam);
+    if (videoRec) composeVideoFrame();   // right after drawing, while the picture is still in the canvas
     updateReplayBar();
     stopVideoIfDone();
   }
@@ -5838,9 +5839,12 @@
   let videoRec = null;
   function saveReplayVideo() {
     if (videoRec || !replay.clip) return;
-    const canvas = renderer.domElement;
-    if (!canvas.captureStream || typeof MediaRecorder === "undefined") { flashReplayNote("This browser can't record video."); return; }
-    const stream = canvas.captureStream(60);
+    const gl = renderer.domElement;
+    if (!gl.captureStream || typeof MediaRecorder === "undefined") { flashReplayNote("This browser can't record video."); return; }
+    // the video is a 2D canvas with the 3D view copied in each frame and the score painted on top
+    videoCanvas = videoCanvas || document.createElement("canvas");
+    videoCanvas.width = gl.width; videoCanvas.height = gl.height;
+    const stream = videoCanvas.captureStream(60);
     let audioOut = null;
     if (audioCtx && audioCtx.createMediaStreamDestination) {
       audioOut = audioCtx.createMediaStreamDestination();
@@ -5863,6 +5867,56 @@
     restartReplay();
     replay.paused = false;
     mr.start(250);
+  }
+  let videoCanvas = null;
+  // one frame of the video: the 3D view, the scope if you were scoped in, the title, and the
+  // trick breakdown once the shot has landed (penalties in red), as the replay shows them
+  function composeVideoFrame() {
+    const gl = renderer.domElement, c = videoCanvas, g = c.getContext("2d");
+    if (c.width !== gl.width || c.height !== gl.height) { c.width = gl.width; c.height = gl.height; }
+    const W = c.width, H = c.height, k = H / 720;   // sizes scale with the video's height
+    g.drawImage(gl, 0, 0, W, H);
+    const scope = parseFloat(scopeEl.style.opacity) || 0;
+    if (scope > 0.02) {
+      const r = Math.min(W, H) * 0.44;
+      g.save();
+      g.globalAlpha = Math.min(scope, 1);
+      g.fillStyle = "#000";
+      g.beginPath(); g.rect(0, 0, W, H); g.arc(W / 2, H / 2, r, 0, Math.PI * 2, true); g.fill();
+      g.strokeStyle = "#000"; g.lineWidth = 2 * k;
+      g.beginPath(); g.moveTo(W / 2 - r, H / 2); g.lineTo(W / 2 + r, H / 2); g.moveTo(W / 2, H / 2 - r); g.lineTo(W / 2, H / 2 + r); g.stroke();
+      g.restore();
+    }
+    g.textBaseline = "top";
+    // title, top left
+    g.font = "bold " + Math.round(15 * k) + "px Segoe UI, Arial, sans-serif";
+    const title = "TRICKSHOT SANDBOX  ·  " + replay.label.replace(/\s*\(P to keep playing\)/, "");
+    g.fillStyle = "rgba(0,0,0,0.5)";
+    g.fillRect(14 * k, 14 * k, g.measureText(title).width + 20 * k, 28 * k);
+    g.fillStyle = "#fff";
+    g.fillText(title, 24 * k, 20 * k);
+    // the breakdown, top right, once the shot has landed
+    if (replayTagsEl.classList.contains("show")) {
+      const m = replay.clip.meta;
+      const lines = [[m.mult.toFixed(2) + "x" + (Number.isFinite(m.dist) ? " - " + Math.round(m.dist) + "m" : ""), m.mult < 1 ? "#ff5a4f" : "#ffd24a", 24],
+        ["+" + m.points + " points", "#ffffff", 16]]
+        .concat(m.tags.map((t) => [t, "#ff9d3b", 16]), m.pens.map((t) => [t, "#ff5a4f", 16]));
+      let w = 0;
+      for (const [t, , sz] of lines) { g.font = "bold " + Math.round(sz * k) + "px Segoe UI, Arial, sans-serif"; w = Math.max(w, g.measureText(t).width); }
+      const lh = (sz) => Math.round(sz * 1.45 * k);
+      const boxH = lines.reduce((h, l) => h + lh(l[2]), 0) + 16 * k;
+      g.fillStyle = "rgba(0,0,0,0.5)";
+      g.fillRect(W - w - 38 * k, 14 * k, w + 24 * k, boxH);
+      let y = 22 * k;
+      g.textAlign = "right";
+      for (const [t, col, sz] of lines) {
+        g.font = "bold " + Math.round(sz * k) + "px Segoe UI, Arial, sans-serif";
+        g.fillStyle = col;
+        g.fillText(t, W - 26 * k, y);
+        y += lh(sz);
+      }
+      g.textAlign = "left";
+    }
   }
   let videoEndAt = 0;   // when playback reached the end; the video keeps half a second after that
   function stopVideoIfDone() {
