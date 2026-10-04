@@ -101,6 +101,16 @@
     movingTargetBonus: 0.75,
     smallTargetBonus: 2,
     tinyTargetBonus: 3.5,       // purple: tiny and fast, so it also gets the moving bonus
+    // penalties scale the whole multiplier down, after the bonuses add up
+    pointBlankRange: 8,         // closer than this costs you, sliding down to...
+    pointBlankMin: 2,           // ...the full penalty at this distance and under
+    pointBlankMult: 0.5,
+    standingStillSpeed: 2,      // on the ground and slower than this when you fire...
+    standingStillMult: 0.75,    // ...scales the shot by this
+    // the purple target keeps away from you, like a snitch
+    snitchRange: 12,            // starts running when you're this close
+    snitchFlee: 7,              // how far it can pull away from its path
+    snitchSpeedUp: 1.5,         // and its path speeds up by up to this much more
     noScopeBonus: 1.5,
     noScopeMinDist: 20,
     quickscopeBonus: 1.5,
@@ -693,6 +703,7 @@
 
   function respawnTarget(t) {
     resetTargetParts(t);
+    t.userData.tclock = undefined;
     placeTarget(t);
     t.userData.alive = true;
     t.visible = true;
@@ -714,6 +725,31 @@
     t.visible = d.a;
   }
 
+  // The purple target is a snitch: get close and it speeds up and pulls away from you, back
+  // toward its own path once you back off. It won't run through walls or out of the arena,
+  // so you can corner it.
+  function snitchStep(t, dt) {
+    const ud = t.userData;
+    if (ud.tclock === undefined) { ud.tclock = elapsedTime; ud.fear = 0; ud.fleeX = 0; ud.fleeY = 0; ud.fleeZ = 0; }
+    const dx = t.position.x - yawObject.position.x, dz = t.position.z - yawObject.position.z;
+    const d = Math.hypot(dx, t.position.y - yawObject.position.y, dz);
+    const fear = Math.max(0, 1 - d / CFG.snitchRange);
+    ud.fear += (fear - ud.fear) * Math.min(1, dt * 4);
+    ud.tclock += dt * (1 + CFG.snitchSpeedUp * ud.fear);
+    const hd = Math.hypot(dx, dz) || 1, want = CFG.snitchFlee * ud.fear, k = Math.min(1, dt * 3);
+    ud.fleeX += (dx / hd * want - ud.fleeX) * k;
+    ud.fleeZ += (dz / hd * want - ud.fleeZ) * k;
+    ud.fleeY += (want * 0.35 - ud.fleeY) * k;
+    targetPositionAt(ud, ud.tclock, _tgtPos);
+    const bound = CFG.arenaHalfSize - 2;
+    for (let i = 0; i < 4; i++) {
+      const x = _tgtPos.x + ud.fleeX, y = _tgtPos.y + ud.fleeY, z = _tgtPos.z + ud.fleeZ;
+      if (Math.abs(x) < bound && Math.abs(z) < bound && y > 1.3 && y < 14 && !insideSolid(x, y, z, 0.6)) break;
+      ud.fleeX *= 0.6; ud.fleeY *= 0.6; ud.fleeZ *= 0.6;   // blocked: give up some of the getaway
+    }
+    t.position.set(_tgtPos.x + ud.fleeX, _tgtPos.y + ud.fleeY, _tgtPos.z + ud.fleeZ);
+  }
+
   let elapsedTime = 0;
   function updateTargets(dt) {
     elapsedTime += dt;
@@ -728,7 +764,8 @@
         if (ud.respawnTimer <= 0) { respawnTarget(t); if (net.role === "host") mpAnnounceSpawn(t); }
         continue;
       }
-      if (ud.motion) t.position.copy(targetPositionAt(ud, clock, _tgtPos));
+      if (ud.type === "tiny" && !net.active) snitchStep(t, dt);
+      else if (ud.motion) t.position.copy(targetPositionAt(ud, clock, _tgtPos));
       // face the player, with a gentle sway so they don't look pinned in place
       t.rotation.y = Math.atan2(yawObject.position.x - t.position.x, yawObject.position.z - t.position.z) +
         Math.sin(clock * (ud.scale < 1 ? 2.1 : 1.3) + (ud.motion ? ud.motion.phase : ud.idx)) * 0.22;
@@ -3214,11 +3251,12 @@
   // the best single shot so far, kept across sessions
   const BEST_KEY = "tsb-best-shot";
   const bestEl = document.getElementById("best");
-  let bestShot = { points: 0, mult: 1, tags: [] };
+  let bestShot = { points: 0, mult: 1, tags: [], pens: [] };
   try {
     const b = JSON.parse(localStorage.getItem(BEST_KEY));
     if (b && Number.isFinite(b.points) && Number.isFinite(b.mult) && Array.isArray(b.tags)) {
-      bestShot = { points: b.points, mult: b.mult, tags: b.tags.filter((t) => typeof t === "string").slice(0, 12) };
+      const strs = (a) => (Array.isArray(a) ? a.filter((t) => typeof t === "string").slice(0, 12) : []);
+      bestShot = { points: b.points, mult: b.mult, tags: strs(b.tags), pens: strs(b.pens) };
     }
   } catch (e) { /* storage blocked or empty */ }
   function saveBestShot() {
@@ -3227,19 +3265,26 @@
   function showBestShot(isNew) {
     bestEl.hidden = bestShot.points <= 0;
     document.getElementById("best-val").textContent = bestShot.points;
-    document.getElementById("best-tags").textContent =
-      "x" + bestShot.mult.toFixed(2) + (bestShot.tags.length ? "\n" + bestShot.tags.join("\n") : "");
+    fillTagList(document.getElementById("best-tags"), bestShot.mult, bestShot.tags, bestShot.pens);
     if (isNew) { bestEl.classList.remove("new"); void bestEl.offsetWidth; bestEl.classList.add("new"); }
   }
   showBestShot(false);
   document.getElementById("best-clear").addEventListener("click", () => {
-    bestShot = { points: 0, mult: 1, tags: [] };
+    bestShot = { points: 0, mult: 1, tags: [], pens: [] };
     saveBestShot();
     showBestShot(false);
   });
 
-  function showBonusTags(text) {
-    bonusTagsEl.textContent = text;
+  // the multiplier on top, then each bonus, then any penalties in red
+  function fillTagList(el, mult, tags, pens) {
+    el.textContent = "";
+    const line = (text, cls) => { const d = document.createElement("div"); d.textContent = text; if (cls) d.className = cls; el.appendChild(d); };
+    line("x" + mult.toFixed(2), "mult" + (mult < 1 ? " low" : ""));
+    for (const t of tags) line(t);
+    for (const t of pens) line(t, "pen");
+  }
+  function showBonusTags(mult, tags, pens) {
+    fillTagList(bonusTagsEl, mult, tags, pens);
     bonusTagsEl.classList.add("show");
     clearTimeout(bonusTagsTimer);
     bonusTagsTimer = setTimeout(() => bonusTagsEl.classList.remove("show"), 4000);
@@ -3357,7 +3402,20 @@
     const streakBonus = Math.min(streak * CFG.streakBonusPer, CFG.streakBonusCap);
     if (streakBonus > 0) { mult += streakBonus; tags.push("STREAK x" + (streak + 1)); }
 
-    return { mult, tags, scale: weapon && weapon.scoreScale !== undefined ? weapon.scoreScale : 1 };
+    // penalties: walking up to a target, or standing still to shoot, isn't a trickshot.
+    // A knife swing is meant to be close, so only ranged hits pay the point-blank cost.
+    const pens = [];
+    if (!(isKnife && !thrown) && dist < CFG.pointBlankRange) {
+      const k = Math.min(Math.max((dist - CFG.pointBlankMin) / (CFG.pointBlankRange - CFG.pointBlankMin), 0), 1);
+      const f = CFG.pointBlankMult + (1 - CFG.pointBlankMult) * k;
+      if (f < 0.995) { mult *= f; pens.push("POINT BLANK x" + f.toFixed(2)); }
+    }
+    if (st.onGround && !st.sliding && st.speed < CFG.standingStillSpeed) {
+      mult *= CFG.standingStillMult;
+      pens.push("STANDING STILL x" + CFG.standingStillMult.toFixed(2));
+    }
+
+    return { mult, tags, pens, scale: weapon && weapon.scoreScale !== undefined ? weapon.scoreScale : 1 };
   }
 
   // score, streak, HUD popups and feedback for any scoring hit (target or player)
@@ -3368,13 +3426,13 @@
     streak++;
     streakEl.textContent = streak;
 
-    if (res.tags.length) showBonusTags("x" + res.mult.toFixed(2) + "\n" + res.tags.join("\n"));
+    if (res.tags.length || (res.pens && res.pens.length)) showBonusTags(res.mult, res.tags, res.pens || []);
     flashCrosshair();
     hitStopTimer = CFG.hitStopTime;
     playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
     showFeed("+" + pointsGained + (res.tags.length ? "  x" + res.mult.toFixed(1) : ""));
     if (pointsGained > bestShot.points) {
-      bestShot = { points: pointsGained, mult: res.mult, tags: res.tags.slice() };
+      bestShot = { points: pointsGained, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice() };
       saveBestShot();
       showBestShot(true);
     }

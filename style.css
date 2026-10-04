@@ -156,7 +156,8 @@
   }
   #best[hidden] { display: none; }
   #best span { color: #ffd24a; font-weight: bold; font-size: 17px; }
-  #best-tags { color: #ff9d3b; font-size: 11px; font-weight: bold; white-space: pre-line; line-height: 1.45; margin-top: 2px; }
+  #best-tags { color: #ff9d3b; font-size: 11px; font-weight: bold; line-height: 1.45; margin-top: 2px; }
+  #best-tags .mult { color: #ffd24a; }
   #best.new { animation: best-new 1.2s ease-out; }
   @keyframes best-new {
     0% { box-shadow: 0 0 0 0 rgba(255,210,74,0.9); background: rgba(255,210,74,0.35); }
@@ -170,11 +171,13 @@
   #streak span { color: #7CFC00; font-weight: bold; font-size: 18px; }
 
   #bonus-tags {
-    color: #ff9d3b; text-align: right; white-space: pre-line;
+    color: #ff9d3b; text-align: right;
     font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.35); padding: 5px 10px;
     border-radius: 6px; opacity: 0; transition: opacity 0.6s; max-width: 320px; line-height: 1.55;
   }
-  #bonus-tags::first-line { color: #ffd24a; font-size: 15px; }
+  #bonus-tags .mult { color: #ffd24a; font-size: 15px; }
+  /* penalties, and a multiplier dragged under 1 */
+  #bonus-tags .pen, #best-tags .pen, #bonus-tags .mult.low, #best-tags .mult.low { color: #ff5a4f; }
   #bonus-tags.show { opacity: 1; transition: opacity 0.15s; }
 
   #feed {
