@@ -29,8 +29,8 @@
     airAccel: 46,
     jumpSpeed: 8.6,
     bhopWindow: 0.12,           // land-and-jump inside this window skips ground friction...
-    bhopKeep: 0.86,             // ...but each hop keeps only this share of the speed above a sprint,
-    bhopKeepHeld: 0.62,         // and less when space is just held down instead of pressed on landing
+    bhopKeep: 0.93,             // ...but each hop keeps only this share of the speed above a sprint,
+    bhopKeepHeld: 0.81,         // and less when space is just held down instead of pressed on landing
 
     slideBoost: 5.5,
     slideMaxSpeed: 20,
@@ -453,11 +453,11 @@
   addWall(H, 6, 0, 1, 12, H * 2, "concrete");
 
   // bounce corridors: parallel walls to chain wall bounces down. The wall nearer the middle is
-  // low enough that three bounces (outer, inner, outer) carry you over it, out into the open.
-  addWall(-31, 4, -8, 1, 8, 22, "concrete");
-  addWall(-25, 2.25, -8, 1, 4.5, 22, "concrete");
-  addWall(18, 2.25, 6, 1, 4.5, 12, "brick");
-  addWall(24, 4, 6, 1, 8, 12, "brick");
+  // 3.5 m lower than the outer one, so climbing the corridor gets you out over it into the open.
+  addWall(-31, 5.75, -8, 1, 11.5, 22, "concrete");
+  addWall(-25, 4, -8, 1, 8, 22, "concrete");
+  addWall(18, 4, 6, 1, 8, 12, "brick");
+  addWall(24, 5.75, 6, 1, 11.5, 12, "brick");
 
   // pillars to bounce off and duck behind
   addWall(-15, 4, -24, 3, 8, 3, "brick");
@@ -475,11 +475,14 @@
   addRamp(-4, -30, "x", 4, 7, 2.4, -1);
 
   // jump pads: teal ones for about 1 s of air, magenta mega pads for about 1.5 s
-  addJumpPad(0, FLOOR_Y, -2, "normal");
-  addJumpPad(-28, FLOOR_Y, 12, "normal");
-  addJumpPad(30, FLOOR_Y, 18, "mega");
-  addJumpPad(-28, FLOOR_Y, -27, "mega");
-  addJumpPad(24, FLOOR_Y, -24, "mega");   // the tower pad
+  // A mega pad in the middle; mega pads in two opposite corners (north-east, at the tower, and
+  // south-west) and normal pads in the other two.
+  addJumpPad(0, FLOOR_Y, -2, "mega");
+  addJumpPad(24, FLOOR_Y, -24, "mega");   // north-east: the tower pad
+  addJumpPad(-30, FLOOR_Y, 30, "mega");   // south-west
+  addJumpPad(-28, FLOOR_Y, -27, "normal");   // north-west
+  addJumpPad(30, FLOOR_Y, 30, "normal");     // south-east
+  addJumpPad(-28, FLOOR_Y, 12, "normal");    // off the end of the west bounce corridor
 
   // ======================================================================
   // TARGETS (standard / moving / small)
@@ -2535,6 +2538,9 @@
   });
 
   window.addEventListener("keydown", (e) => {
+    // Ctrl is the slide key, so Ctrl+D (bookmark), Ctrl+S, Ctrl+A and friends would fire while
+    // strafing; keep them from reaching the browser while playing
+    if (pointerLocked && (e.ctrlKey || e.metaKey)) e.preventDefault();
     if (keys[e.code]) return;
     keys[e.code] = true;
     if (e.code === "Tab" && pointerLocked) { e.preventDefault(); mpRefreshScoreboard(); }
