@@ -5,7 +5,8 @@ Run:            python tests/run_tests.py   (from the repo folder)
 
 It serves the repo on a local port (127.0.0.1 only), opens the game and the sound lab, and checks the things
 that most often break: the page loads without errors, every loadout fires and reloads, weapon switching,
-the trickshot list popup, settings saving and resetting, and every sound in the sound lab playing.
+the trickshot list popup, settings saving and resetting, a full Score Attack run, and every sound in the
+sound lab playing.
 Screenshots of failures go to tests/output/ (ignored by git).
 """
 import functools
@@ -26,6 +27,7 @@ INIT = """
 Object.defineProperty(Document.prototype, 'pointerLockElement', { get() { return window.__pl || null; } });
 Element.prototype.requestPointerLock = function () { window.__pl = this; document.dispatchEvent(new Event('pointerlockchange')); };
 window.__unlock = () => { window.__pl = null; document.dispatchEvent(new Event('pointerlockchange')); };
+Document.prototype.exitPointerLock = function () { window.__unlock(); };
 let __t = 1000; performance.now = () => __t;
 window.__step = (n, ms) => new Promise((res) => { let i = 0; (function f() { if (i++ >= n) return res(); __t += ms; requestAnimationFrame(f); })(); });
 window.__played = 0;
@@ -149,6 +151,36 @@ def test_game(browser, base):
     page.close()
 
 
+def test_score_attack(browser, base):
+    page, errors = open_page(browser, base + "/index.html")
+    timer = lambda: page.inner_text("#mp-timer-val") if page.is_visible("#mp-timer") else "-"
+    page.click("[data-play-mode=sa60]")
+    page.click("#start-btn")
+    step(page, 5)
+    check("Score Attack starts with a countdown and a 1:00 clock", timer() == "1:00" and page.inner_text("#run-count") == "3", timer())
+    step(page, 260)   # through the countdown and about a second of the run
+    check("the clock runs after GO", timer() == "0:59", timer())
+    page.evaluate("__unlock()")
+    step(page, 5)
+    before = page.inner_text("#start-btn")
+    step(page, 120)
+    check("the menu pauses the run", before.startswith("Resume run") and page.inner_text("#start-btn") == before, before)
+    page.click("#start-btn")
+    page.evaluate("__step(1250, 50)")   # the rest of the minute
+    shown = page.evaluate("!document.getElementById('results').hidden")
+    saved = page.evaluate("JSON.parse(localStorage.getItem('tsb-score-attack') || '{}').sa60 || []")
+    check("time up shows the results and saves the score", shown and len(saved) == 1, page.inner_text("#r-score") if shown else "no results")
+    page.keyboard.press("Enter")
+    step(page, 5)
+    check("Enter on the results starts a new run", timer() == "1:00" and page.evaluate("document.getElementById('results').hidden"))
+    page.evaluate("__unlock()")
+    step(page, 3)
+    page.click("[data-play-mode=free]")
+    check("switching back to free play ends the run", not page.is_visible("#mp-timer") and page.inner_text("#start-btn") == "Click to play")
+    check("no errors in Score Attack", not errors, "; ".join(errors[:3]))
+    page.close()
+
+
 def test_sound_lab(browser, base):
     page, errors = open_page(browser, base + "/tools/sound-lab.html", 1366, 768)
     check("sound lab fits the window (no page scroll)", not page.evaluate("document.documentElement.scrollHeight > innerHeight + 1"))
@@ -171,7 +203,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_sound_lab):
+        for test in (test_game, test_score_attack, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:

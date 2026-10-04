@@ -156,6 +156,7 @@
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
+    playMode: "free",   // "free" play, or a Score Attack run: "sa60" / "sa120"
     // how many of each target kind are up at once
     tgtNormal: 6, tgtMoving: 4, tgtSmall: 3, tgtTiny: 2,
   };
@@ -2539,6 +2540,7 @@
     if (typeof saved.unlimitedAmmo === "boolean") SETTINGS.unlimitedAmmo = saved.unlimitedAmmo;
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
+    if (["free", "sa60", "sa120"].includes(saved.playMode)) SETTINGS.playMode = saved.playMode;
     for (const el of boundEls) {
       const key = el.dataset.setting;
       if (validBound(el, saved[key])) SETTINGS[key] = saved[key];
@@ -2616,7 +2618,9 @@
 
   function requestPlay() {
     if (uiMode === "mp" && !net.active) return;   // nothing to play until you're in a room
+    if (!resultsEl.hidden) return;                  // the results screen has its own buttons
     initAudio();
+    if (uiMode === "solo" && isRunMode() && !runInProgress()) startRun();
     domEl.requestPointerLock();
   }
   startBtn.addEventListener("click", requestPlay);
@@ -2626,7 +2630,7 @@
     pointerLocked = document.pointerLockElement === domEl;
     blocker.style.display = pointerLocked ? "none" : "flex";
     hud.style.display = pointerLocked ? "block" : "none";
-    if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; }
+    if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; refreshModeUI(); }
     mpRefreshScoreboard();
   });
 
@@ -3580,6 +3584,12 @@
     hitStopTimer = CFG.hitStopTime;
     playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
     showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x");
+    if (run.state === "live") {
+      run.hits++;
+      if (!run.best || pointsGained > run.best.points) {
+        run.best = { points: pointsGained, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice(), dist: res.dist };
+      }
+    }
     if (pointsGained > bestShot.points) {
       bestShot = { points: pointsGained, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice(), dist: res.dist };
       saveBestShot();
@@ -3589,6 +3599,7 @@
   }
 
   function scoreHit(target, dist, isKnife, ammoBefore, snap, thrown, weapon) {
+    if (run.state === "done" || run.state === "countdown") return;   // a knife still in the air when time runs out
     const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon);
     target.userData.alive = false;
     knockOutTarget(target);
@@ -3636,6 +3647,7 @@
   const _impactPt = new THREE.Vector3();
 
   function attack() {
+    if (run.state === "countdown" || run.state === "done") return;
     const w = currentWeapon();
     if (fireCooldown > 0 || vm.switchTimer > 0) return;
     if (net.active && (localDead || net.phase !== "play")) return;
@@ -3773,6 +3785,7 @@
     for (const [target, dist] of targetHits) scoreHit(target, dist, false, ammoBefore, undefined, false, w);
     if (anyHit && !targetHits.size && !pvp) flashCrosshair();
     if (!targetHits.size && !pvp) breakStreak();   // hitting only a crate or a wall is a miss
+    if (run.state === "live") { run.shots++; if (targetHits.size) run.shotsHit++; }
     if (ammoBefore === 1) w.lastRoundReady = false;
     w.lastFiredAt = elapsedTime;
 
@@ -3804,6 +3817,8 @@
 
   function throwKnife() {
     if (vm.throwTimer > 0 || vm.switchTimer > 0) return;
+    if (run.state === "countdown" || run.state === "done") return;
+    if (run.state === "live") run.shots++;
     if (net.active && (localDead || net.phase !== "play")) return;
     vm.throwTimer = CFG.knifeThrowCooldown;
     vm.throwReleased = false;
@@ -3921,6 +3936,7 @@
       if (kind === "target") {
         o.addScaledVector(d, hitDist);
         playKnifeHit();
+        if (run.state === "live") run.shotsHit++;
         scoreHit(hitTarget, k.from.distanceTo(o), true, 0, k.snap, true);
         retireKnife(k);
         continue;
@@ -4807,6 +4823,178 @@
   }
 
   // ======================================================================
+  // SCORE ATTACK: a timed run. A 3-2-1 countdown (you can look around but not move or shoot), then the
+  // clock runs; it pauses while the menu is open. At zero the results come up and the score goes on
+  // your top-5 list for that length, kept in this browser.
+  // ======================================================================
+  const RUN_LENGTHS = { sa60: 60, sa120: 120 };
+  const RUN_KEY = "tsb-score-attack";
+  const run = { state: "off", mode: null, left: 0, count: 0, shots: 0, shotsHit: 0, hits: 0, best: null };
+  const runTimerEl = document.getElementById("mp-timer"), runTimerVal = document.getElementById("mp-timer-val");
+  const runTimerMode = document.getElementById("mp-timer-mode"), runCountEl = document.getElementById("run-count");
+  const resultsEl = document.getElementById("results");
+  const isRunMode = () => Object.prototype.hasOwnProperty.call(RUN_LENGTHS, SETTINGS.playMode);
+  const runInProgress = () => run.state === "countdown" || run.state === "live";
+  const fmtClock = (sec) => { const t = Math.max(0, Math.ceil(sec)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+
+  function loadRunTops() {
+    try { const o = JSON.parse(localStorage.getItem(RUN_KEY)); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; }
+  }
+  function runTopsFor(mode) {
+    const list = loadRunTops()[mode];
+    return Array.isArray(list) ? list.filter((e) => e && Number.isFinite(e.score)).slice(0, 5) : [];
+  }
+
+  function startRun() {
+    Object.assign(run, { state: "countdown", mode: SETTINGS.playMode, left: RUN_LENGTHS[SETTINGS.playMode], count: 3,
+      shots: 0, shotsHit: 0, hits: 0, best: null });
+    score = 0; scoreEl.textContent = 0;
+    streak = 0; streakEl.textContent = 0;
+    teleportLocal(PLAYER_SPAWN.x, PLAYER_SPAWN.z);
+    cancelReload(); refillAmmo(); updateAmmoHud();
+    for (const t of targets) respawnTarget(t);   // a fresh, spread-out set for every run
+    showRunCount("3");
+    runBeep(false);
+    updateRunHud();
+  }
+
+  function updateRun(dt) {
+    if (run.state === "countdown") {
+      const before = Math.ceil(run.count);
+      run.count -= dt;
+      if (run.count <= 0) { run.state = "live"; showRunCount("GO!"); runBeep(true); }
+      else if (Math.ceil(run.count) !== before) { showRunCount(String(Math.ceil(run.count))); runBeep(false); }
+    } else if (run.state === "live") {
+      const before = Math.ceil(run.left);
+      run.left -= dt;
+      if (run.left <= 0) { run.left = 0; endRun(); }
+      else if (run.left < 10 && Math.ceil(run.left) !== before) runBeep(false, 0.5);   // the last ten seconds tick
+    }
+    updateRunHud();
+  }
+
+  function updateRunHud() {
+    const show = runInProgress();
+    runTimerEl.hidden = !show;
+    if (!show) return;
+    runTimerVal.textContent = fmtClock(run.state === "countdown" ? RUN_LENGTHS[run.mode] : run.left);
+    runTimerMode.textContent = "Score Attack";
+    runTimerEl.classList.toggle("low", run.state === "live" && run.left < 10);
+  }
+  function showRunCount(text) {
+    runCountEl.textContent = text;
+    runCountEl.classList.remove("pop"); void runCountEl.offsetWidth; runCountEl.classList.add("pop");
+  }
+  function runBeep(go, vol) {
+    const v = (vol || 1) * SETTINGS.volHits;
+    if (v > 0) tone("sine", go ? 1320 : 880, go ? 1320 : 880, (go ? 0.16 : 0.1) * v, go ? 0.28 : 0.12, 0, 0.05);
+  }
+
+  function endRun() {
+    run.state = "done";
+    mouseHeld = false; attackPressed = false;
+    const entry = { score, hits: run.hits, acc: run.shots ? run.shotsHit / run.shots : 0,
+      gun: WEAPONS[SETTINGS.loadout].name, date: new Date().toISOString().slice(0, 10),
+      notes: [SETTINGS.unlimitedAmmo ? "unlimited ammo" : "", SETTINGS.realisticAccuracy ? "realistic accuracy" : ""].filter(Boolean) };
+    const list = runTopsFor(run.mode);
+    list.push(entry);
+    list.sort((a, b) => b.score - a.score);
+    const rank = list.indexOf(entry) + 1;
+    const tops = loadRunTops();
+    tops[run.mode] = list.slice(0, 5);
+    try { localStorage.setItem(RUN_KEY, JSON.stringify(tops)); } catch (e) { /* storage blocked */ }
+    showResults(entry, rank, tops[run.mode]);
+    runTimerEl.hidden = true;
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  function showResults(entry, rank, tops) {
+    document.getElementById("r-title").textContent = "Time! Score Attack " + fmtClock(RUN_LENGTHS[run.mode]);
+    document.getElementById("r-score").textContent = entry.score.toLocaleString();
+    document.getElementById("r-rank").textContent = rank === 1 && tops.length > 1 ? "New best!" : rank === 1 ? "First run on the board!" : rank <= 5 ? "#" + rank + " on your top 5" : "";
+    const stats = document.getElementById("r-stats");
+    stats.textContent = "";
+    for (const [label, value] of [["hits", entry.hits], ["shots fired", run.shots],
+      ["accuracy", run.shots ? Math.round(entry.acc * 100) + "%" : "-"], ["gun", entry.gun]]) {
+      const d = document.createElement("div");
+      const b = document.createElement("b"); b.textContent = value;
+      d.append(b, label);
+      stats.appendChild(d);
+    }
+    const best = document.getElementById("r-best");
+    if (run.best) {
+      fillTagList(best, run.best.mult, run.best.tags, run.best.pens, run.best.dist);
+      const pts = document.createElement("div");
+      pts.textContent = "+" + run.best.points + " points";
+      best.prepend(pts);
+    } else {
+      best.innerHTML = '<span class="none">No hits this run.</span>';
+    }
+    document.getElementById("r-top-title").textContent = "Your top 5 (" + fmtClock(RUN_LENGTHS[run.mode]) + ")";
+    const ol = document.getElementById("r-top");
+    ol.textContent = "";
+    for (const e of tops) {
+      const li = document.createElement("li");
+      if (e === entry) li.className = "me";
+      li.textContent = Number(e.score).toLocaleString() + "  ";
+      const small = document.createElement("small");
+      small.textContent = [String(e.gun || ""), String(e.date || "")].concat(Array.isArray(e.notes) ? e.notes.map(String) : []).filter(Boolean).join(" \u00B7 ");
+      li.appendChild(small);
+      ol.appendChild(li);
+    }
+    resultsEl.hidden = false;
+  }
+  function closeResults(again) {
+    resultsEl.hidden = true;
+    refreshModeUI();
+    if (again) requestPlay();
+  }
+  document.getElementById("r-again").addEventListener("click", () => closeResults(true));
+  document.getElementById("r-menu").addEventListener("click", () => closeResults(false));
+  window.addEventListener("keydown", (e) => {
+    if (resultsEl.hidden) return;
+    if (e.code === "Enter" || e.code === "NumpadEnter") { e.preventDefault(); closeResults(true); }
+    if (e.code === "Escape") closeResults(false);
+  });
+
+  // ---- the mode buttons in the menu ----
+  const modeButtons = document.querySelectorAll("#play-modes button");
+  function refreshModeUI() {
+    modeButtons.forEach((b) => b.classList.toggle("active", b.dataset.playMode === SETTINGS.playMode));
+    const note = document.getElementById("mode-note");
+    const quit = document.getElementById("run-quit");
+    if (!isRunMode()) {
+      note.textContent = "Endless: targets keep coming back, play as long as you like.";
+      startBtn.textContent = "Click to play";
+    } else {
+      const tops = runTopsFor(SETTINGS.playMode);
+      note.textContent = fmtClock(RUN_LENGTHS[SETTINGS.playMode]) + " to score as much as you can. Esc pauses the clock." +
+        (tops.length ? "  Best: " + Number(tops[0].score).toLocaleString() : "");
+      startBtn.textContent = runInProgress() && run.mode === SETTINGS.playMode
+        ? "Resume run (" + fmtClock(run.state === "countdown" ? RUN_LENGTHS[run.mode] : run.left) + " left)"
+        : "Start Score Attack";
+    }
+    quit.hidden = !runInProgress();
+  }
+  function quitRun() {
+    run.state = "off";
+    score = 0; scoreEl.textContent = 0;
+    streak = 0; streakEl.textContent = 0;
+    updateRunHud();
+  }
+  modeButtons.forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();   // the menu backdrop starts the game
+    if (b.dataset.playMode === SETTINGS.playMode) return;
+    if (runInProgress() || run.state === "done") quitRun();
+    SETTINGS.playMode = b.dataset.playMode;
+    saveSettings();
+    refreshModeUI();
+  }));
+  document.getElementById("run-quit").addEventListener("click", (e) => { e.stopPropagation(); quitRun(); refreshModeUI(); });
+  document.getElementById("play-modes").addEventListener("click", (e) => e.stopPropagation());
+  refreshModeUI();
+
+  // ======================================================================
   // MAIN LOOP
   // ======================================================================
   const clock = new THREE.Clock();
@@ -4828,7 +5016,7 @@
 
     // in a room the world keeps running while the menu is up, so everyone else's view stays correct
     if (pointerLocked || net.active) {
-      if (pointerLocked && !localDead) updatePlayer(dt);
+      if (pointerLocked && !localDead && run.state !== "countdown") updatePlayer(dt);
       updateProps(dt);
       updateParticles(dt);
       updateTracers(dt);
@@ -4842,6 +5030,7 @@
     }
 
     if (pointerLocked) {
+      updateRun(realDt);   // real time, so hit-stop slow-mo doesn't stretch the clock
       updateReload(dt);
       if (autoReloadTimer > 0) { autoReloadTimer -= dt; if (autoReloadTimer <= 0) startReload(); }
 

@@ -35,9 +35,17 @@
     <p id="touch-note" hidden>This game needs a keyboard and mouse. Open it on a computer to play.</p>
 
     <div id="panel-solo">
+      <div id="play-modes">
+        <span class="lo-label">Mode</span>
+        <button type="button" data-play-mode="free">Free play</button>
+        <button type="button" data-play-mode="sa60">Score Attack &middot; 1:00</button>
+        <button type="button" data-play-mode="sa120">Score Attack &middot; 2:00</button>
+      </div>
+      <p id="mode-note"></p>
       <div id="loadout"><span class="lo-label">Loadout</span></div>   <!-- gun buttons are built in game.js -->
       <div class="start" id="start-btn">Click to play</div>
       <button type="button" class="btn" id="glossary-open">Trickshot list</button>
+      <button type="button" class="btn" id="run-quit" hidden>Quit run</button>
     </div>
 
     <div id="panel-mp" hidden>
@@ -280,6 +288,7 @@
     <div id="bonus-tags"></div>
   </div>
   <div id="feed"></div>
+  <div id="run-count"></div>   <!-- Score Attack countdown: 3, 2, 1, GO -->
   <div id="mp-timer" hidden><span id="mp-timer-val">3:00</span><div id="mp-timer-mode"></div></div>
   <div id="killfeed"></div>
   <div id="dead-screen" hidden><div>ELIMINATED</div><small id="dead-by"></small></div>
@@ -294,6 +303,24 @@
   <h2 id="sb-title">Scoreboard</h2>
   <table><thead><tr><th>#</th><th>Player</th><th>Score</th><th>Kills</th><th>Deaths</th></tr></thead><tbody id="sb-body"></tbody></table>
   <p id="sb-foot"></p>
+</div>
+
+<!-- Score Attack results, shown when the clock runs out -->
+<div id="results" hidden>
+  <div class="r-panel" role="dialog" aria-label="Score Attack results">
+    <div class="r-title" id="r-title">Time!</div>
+    <div class="r-score" id="r-score">0</div>
+    <div class="r-rank" id="r-rank"></div>
+    <div class="r-stats" id="r-stats"></div>
+    <div class="r-cols">
+      <div><h3>Best shot of the run</h3><div id="r-best"></div></div>
+      <div><h3 id="r-top-title">Your top 5</h3><ol id="r-top"></ol></div>
+    </div>
+    <div class="r-buttons">
+      <button type="button" class="r-again" id="r-again">Play again (Enter)</button>
+      <button type="button" class="btn" id="r-menu">Menu (Esc)</button>
+    </div>
+  </div>
 </div>
 
 <!-- the trickshot list, a popup over everything; filled in game.js from the scoring values -->

@@ -23,6 +23,9 @@ unzip, and open `index.html`. No internet connection is needed.
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
 
+**Modes:** Free play is endless. **Score Attack** gives you 1 or 2 minutes (after a 3-2-1 countdown) to
+score as much as you can; Esc pauses the clock, and your top 5 runs for each length are kept in your browser.
+
 **Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too.
 1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns
 score less per hit so trickshots stay king.
@@ -61,8 +64,8 @@ Multiplayer code is in `game.js` but switched off for now (`MULTIPLAYER_ENABLED`
 ## Development
 
 Open `index.html` in a browser to play your local copy; refresh after editing. To run the tests (they drive the
-real page in a headless browser and check loadouts, weapon switching, the trickshot list, settings and every
-sound in the sound lab):
+real page in a headless browser and check loadouts, weapon switching, the trickshot list, settings, a full Score
+Attack run and every sound in the sound lab):
 
 ```
 pip install playwright
