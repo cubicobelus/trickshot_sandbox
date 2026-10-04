@@ -155,6 +155,16 @@ def test_game(browser, base):
           page.inner_text("#sens-x-val") == "0.53" and "52.0 cm" in page.inner_text("#si-result"), page.inner_text("#si-result"))
     page.click("#settings-reset")
 
+    # stats: the shots fired above are counted, survive a reload, and show in the Stats popup
+    page.reload()
+    page.wait_for_timeout(900)
+    page.click("#stats-open")
+    page.wait_for_timeout(150)
+    rows = page.eval_on_selector_all("#stats-list .g-row", "rs => rs.map(r => r.textContent)")
+    acc = next((r for r in rows if r.startswith("Accuracy")), "")
+    check("stats count the shots fired and show them after a reload", "of 0 shots" not in acc and "shots and throws" in acc, acc)
+    page.keyboard.press("Escape")
+
     check("no errors in the game page", not errors, "; ".join(errors[:3]))
     if not all(ok for _, ok, _ in results):
         page.screenshot(path=os.path.join(OUT, "game.png"))

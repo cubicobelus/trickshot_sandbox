@@ -45,6 +45,7 @@
       <div id="loadout"><span class="lo-label">Loadout</span></div>   <!-- gun buttons are built in game.js -->
       <div class="start" id="start-btn">Click to play</div>
       <button type="button" class="btn" id="glossary-open">Trickshot list</button>
+      <button type="button" class="btn" id="stats-open">Stats</button>
       <button type="button" class="btn" id="run-quit" hidden>Quit run</button>
     </div>
 
@@ -330,6 +331,16 @@
       <button type="button" class="r-again" id="r-again">Play again (Enter)</button>
       <button type="button" class="btn" id="r-menu">Menu (Esc)</button>
     </div>
+  </div>
+</div>
+
+<!-- lifetime stats, a popup over everything; filled in game.js -->
+<div id="stats" hidden>
+  <div class="g-panel" role="dialog" aria-label="Stats">
+    <div class="g-head"><h2>Stats</h2><button type="button" class="g-close" id="stats-close" aria-label="Close">&times;</button></div>
+    <p class="g-note">Everything you've done, kept in this browser.</p>
+    <div id="stats-list"></div>
+    <div class="st-foot"><button type="button" class="btn small" id="stats-reset">Reset stats</button></div>
   </div>
 </div>
 

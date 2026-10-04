@@ -2679,7 +2679,7 @@
     pointerLocked = document.pointerLockElement === domEl;
     blocker.style.display = pointerLocked ? "none" : "flex";
     hud.style.display = pointerLocked ? "block" : "none";
-    if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; refreshModeUI(); }
+    if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; refreshModeUI(); saveStats(); }
     mpRefreshScoreboard();
   });
 
@@ -3078,6 +3078,7 @@
     player.launch = null;   // rising off the bounce isn't a pad launch (WALL BOUNCE pays for it)
 
     playWallBounce(perfect);
+    stat("wallBounces"); if (perfect) stat("perfectBounces");
     if (perfect) burst(yawObject.position, 0x7CFC00, 5);
     return true;
   }
@@ -3149,6 +3150,7 @@
         horizSpeed = boosted;
       }
       playSlideStart();
+      stat("slides");
       // kick up a puff of dust at the start of the slide
       const gy = currentGroundY(yawObject.position.x, yawObject.position.z, player.feetY + CFG.stepHeight);
       for (let i = 0; i < 8; i++) {
@@ -3212,6 +3214,7 @@
           }
         }
         player.velocity.y = CFG.jumpSpeed + player.groundRise;   // jumping off a ramp adds its lift
+        stat("jumps");
         if (player.groundRise > 2) { player.launch = "ramp"; player.launchRun = Math.hypot(player.velocity.x, player.velocity.z); }
         player.onGround = false;
         player.sliding = false;
@@ -3235,6 +3238,7 @@
             player.wallContactTime = -1;
             pad.flash = 1;
             playPadLaunch(pad.power);
+            stat("padLaunches");
             break;
           }
         }
@@ -3289,6 +3293,8 @@
     _nextPos.x = Math.max(-B, Math.min(B, _nextPos.x));
     _nextPos.z = Math.max(-B, Math.min(B, _nextPos.z));
     const movedXZ = Math.hypot(_nextPos.x - yawObject.position.x, _nextPos.z - yawObject.position.z);
+    stats.distance += movedXZ;
+    statMax("topSpeed", Math.hypot(player.velocity.x, player.velocity.z));
     yawObject.position.x = _nextPos.x;
     yawObject.position.z = _nextPos.z;
     if (player.onGround && !player.sliding) {
@@ -3633,6 +3639,7 @@
     hitStopTimer = CFG.hitStopTime;
     playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
     showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x");
+    statHit(res, pointsGained);
     if (run.state === "live") {
       run.hits++;
       if (!run.best || pointsGained > run.best.points) {
@@ -3654,6 +3661,9 @@
     knockOutTarget(target);
     burst(target.position, new THREE.Color(TARGET_TYPES[target.userData.type].color).getHex(), target.userData.small ? 8 : 6);
     const pointsGained = awardPoints(res);
+    stats.kinds[target.userData.type] = (stats.kinds[target.userData.type] || 0) + 1;
+    if (isKnife && !thrown) stat("knifeSwingHits");
+    else { statMax("longestShot", dist); if (thrown) stat("knifeThrowHits"); else gunStat(vm.current).points += pointsGained; }
     target.userData.respawnTimer = 1.1;
     if (net.active) mpTargetHit(target, pointsGained);
   }
@@ -3835,6 +3845,11 @@
     if (anyHit && !targetHits.size && !pvp) flashCrosshair();
     if (!targetHits.size && !pvp) breakStreak();   // hitting only a crate or a wall is a miss
     if (run.state === "live") { run.shots++; if (targetHits.size) run.shotsHit++; }
+    if (!net.active) {
+      const gs = gunStat(vm.current);
+      gs.shots++; stat("shots");
+      if (targetHits.size) { gs.hits++; stat("shotsHit"); }
+    }
     if (ammoBefore === 1) w.lastRoundReady = false;
     w.lastFiredAt = elapsedTime;
 
@@ -3868,6 +3883,7 @@
     if (vm.throwTimer > 0 || vm.switchTimer > 0) return;
     if (run.state === "countdown" || run.state === "done") return;
     if (run.state === "live") run.shots++;
+    stat("knifeThrows"); stat("shots");
     if (net.active && (localDead || net.phase !== "play")) return;
     vm.throwTimer = CFG.knifeThrowCooldown;
     vm.throwReleased = false;
@@ -3986,6 +4002,7 @@
         o.addScaledVector(d, hitDist);
         playKnifeHit();
         if (run.state === "live") run.shotsHit++;
+        stat("shotsHit");
         scoreHit(hitTarget, k.from.distanceTo(o), true, 0, k.snap, true);
         retireKnife(k);
         continue;
@@ -4872,6 +4889,146 @@
   }
 
   // ======================================================================
+  // STATS: lifetime numbers, kept in this browser. Counted as things happen, saved every few seconds and
+  // whenever the menu opens; the Stats popup in the menu shows them.
+  // ======================================================================
+  const STATS_KEY = "tsb-stats";
+  const STAT_NUMBERS = ["time", "points", "hits", "shots", "shotsHit", "knifeSwingHits", "knifeThrows", "knifeThrowHits",
+    "longestShot", "bestMult", "longestStreak", "bestCombo", "topSpeed", "distance", "jumps", "wallBounces",
+    "perfectBounces", "slides", "padLaunches", "runs"];
+  function freshStats() {
+    const s = { since: new Date().toISOString().slice(0, 10), kinds: {}, guns: {}, tricks: {} };
+    for (const k of STAT_NUMBERS) s[k] = 0;
+    return s;
+  }
+  let stats = freshStats(), statsDirty = false, statsSaveTimer = 0;
+  try {
+    const saved = JSON.parse(localStorage.getItem(STATS_KEY));
+    if (saved && typeof saved === "object") {
+      for (const k of STAT_NUMBERS) if (Number.isFinite(saved[k])) stats[k] = saved[k];
+      if (typeof saved.since === "string") stats.since = saved.since.slice(0, 10);
+      const counts = (o) => { const out = {}; if (o && typeof o === "object") for (const [k, v] of Object.entries(o)) if (Number.isFinite(v)) out[String(k).slice(0, 40)] = v; return out; };
+      stats.kinds = counts(saved.kinds);
+      stats.tricks = counts(saved.tricks);
+      if (saved.guns && typeof saved.guns === "object") {
+        for (const id of GUNS) {
+          const g = saved.guns[id];
+          if (g && typeof g === "object") stats.guns[id] = { shots: +g.shots || 0, hits: +g.hits || 0, points: +g.points || 0 };
+        }
+      }
+    }
+  } catch (e) { /* storage blocked or empty: start fresh */ }
+  function saveStats() {
+    if (!statsDirty) return;
+    statsDirty = false;
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) { /* ignore */ }
+  }
+  function stat(key, n) { stats[key] += n === undefined ? 1 : n; statsDirty = true; }
+  function statMax(key, v) { if (v > stats[key]) { stats[key] = v; statsDirty = true; } }
+  function gunStat(id) { return stats.guns[id] || (stats.guns[id] = { shots: 0, hits: 0, points: 0 }); }
+  // "FLICK 80° x1.40" -> "FLICK", "HANG TIME 1.4s x1.16" -> "HANG TIME"; spins keep their size; streaks are counted apart
+  function trickKey(tag) {
+    const name = tag.replace(/ x[\d.]+$/, "");
+    if (/SPIN$/.test(name)) return name;
+    if (/^STREAK /.test(name)) return null;
+    if (/-HIT COMBO$/.test(name)) return "5+ HIT COMBO";
+    return name.replace(/ \d.*$/, "");
+  }
+  // called from awardPoints for every scoring hit
+  function statHit(res, points) {
+    stat("hits"); stat("points", points);
+    statMax("bestMult", res.mult);
+    statMax("longestStreak", streak);
+    for (const tag of res.tags) {
+      const k = trickKey(tag);
+      if (k) stats.tricks[k] = (stats.tricks[k] || 0) + 1;
+      const combo = { DOUBLE: 2, TRIPLE: 3, QUAD: 4 }[k] || (k === "5+ HIT COMBO" ? parseInt(tag, 10) : 0);
+      if (combo) statMax("bestCombo", combo);
+    }
+  }
+  window.addEventListener("pagehide", saveStats);
+
+  // ---- the popup ----
+  const statsEl = document.getElementById("stats");
+  function fmtDuration(sec) {
+    const m = Math.floor(sec / 60), h = Math.floor(m / 60);
+    return h ? h + " h " + (m % 60) + " min" : m + " min " + Math.floor(sec % 60) + " s";
+  }
+  const num = (n) => Math.round(n).toLocaleString();
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) + "%" : "-");
+  function buildStats() {
+    saveStats();
+    const S = stats;
+    const groups = [
+      ["Overview", [
+        ["Time played", fmtDuration(S.time), "since " + S.since],
+        ["Points scored", num(S.points), ""],
+        ["Targets hit", num(S.hits), ""],
+        ["Accuracy", pct(S.shotsHit, S.shots), num(S.shotsHit) + " of " + num(S.shots) + " shots and throws hit"],
+        ["Score Attack runs", num(S.runs), ""],
+      ]],
+      ["Records", [
+        ["Best trickshot", bestShot.points ? num(bestShot.points) + " points" : "-", bestShot.points ? bestShot.mult.toFixed(2) + "x" + (Number.isFinite(bestShot.dist) ? " - " + Math.round(bestShot.dist) + "m" : "") : ""],
+        ["Highest multiplier", S.bestMult ? S.bestMult.toFixed(2) + "x" : "-", ""],
+        ["Longest shot", S.longestShot ? Math.round(S.longestShot) + " m" : "-", "a gun hit or a thrown knife"],
+        ["Longest streak", num(S.longestStreak), ""],
+        ["Biggest combo", S.bestCombo ? S.bestCombo + " hits" : "-", "hits in one jump"],
+        ["Top speed", S.topSpeed.toFixed(1) + " u/s", ""],
+      ]],
+      ["Targets", [["red", "normal"], ["orange", "moving"], ["blue", "small"], ["purple", "tiny"]].map(([c, k]) =>
+        [c[0].toUpperCase() + c.slice(1), num(S.kinds[k] || 0), ""])],
+      ["Guns", GUNS.map((id) => {
+        const g = S.guns[id] || { shots: 0, hits: 0, points: 0 };
+        return [WEAPONS[id].name, num(g.points) + " pts", num(g.hits) + " hits, " + pct(g.hits, g.shots) + " of " + num(g.shots) + " shots"];
+      }).concat([["Knife", num(S.knifeSwingHits) + " swings", num(S.knifeThrowHits) + " of " + num(S.knifeThrows) + " throws hit"]])],
+      ["Movement", [
+        ["Distance travelled", S.distance >= 1000 ? (S.distance / 1000).toFixed(2) + " km" : num(S.distance) + " m", ""],
+        ["Jumps", num(S.jumps), ""],
+        ["Wall bounces", num(S.wallBounces), num(S.perfectBounces) + " perfect"],
+        ["Slides", num(S.slides), ""],
+        ["Pad launches", num(S.padLaunches), ""],
+      ]],
+      ["Tricks landed", Object.entries(S.tricks).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, num(v), ""])],
+    ];
+    const list = document.getElementById("stats-list");
+    list.textContent = "";
+    for (const [title, rows] of groups) {
+      const h = document.createElement("h3");
+      h.textContent = title;
+      list.appendChild(h);
+      if (!rows.length) { const p = document.createElement("div"); p.className = "g-row"; p.textContent = "None yet."; list.appendChild(p); }
+      for (const [name, val, how] of rows) {
+        const row = document.createElement("div");
+        row.className = "g-row";
+        for (const [cls, text] of [["g-name", name], ["g-val", val], ["g-how", how]]) {
+          const c = document.createElement("div");
+          c.className = cls; c.textContent = text;
+          row.appendChild(c);
+        }
+        list.appendChild(row);
+      }
+    }
+  }
+  function setStats(open) { if (open) buildStats(); statsEl.hidden = !open; }
+  document.getElementById("stats-open").addEventListener("click", (e) => { e.stopPropagation(); setStats(true); });
+  document.getElementById("stats-close").addEventListener("click", () => setStats(false));
+  statsEl.addEventListener("click", (e) => { if (e.target === statsEl) setStats(false); });   // the backdrop
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !statsEl.hidden) setStats(false); });
+  const statsResetBtn = document.getElementById("stats-reset");
+  let statsResetArmed = 0;
+  statsResetBtn.addEventListener("click", () => {
+    if (!statsResetArmed) {   // a second click within 3 s confirms
+      statsResetBtn.textContent = "Click again to reset all stats";
+      statsResetArmed = setTimeout(() => { statsResetArmed = 0; statsResetBtn.textContent = "Reset stats"; }, 3000);
+      return;
+    }
+    clearTimeout(statsResetArmed); statsResetArmed = 0;
+    stats = freshStats(); statsDirty = true; saveStats();
+    statsResetBtn.textContent = "Reset stats";
+    buildStats();
+  });
+
+  // ======================================================================
   // SCORE ATTACK: a timed run. A 3-2-1 countdown (you can look around but not move or shoot), then the
   // clock runs; it pauses while the menu is open. At zero the results come up and the score goes on
   // your top-5 list for that length, kept in this browser.
@@ -4941,6 +5098,7 @@
 
   function endRun() {
     run.state = "done";
+    stat("runs");
     mouseHeld = false; attackPressed = false;
     const entry = { score, hits: run.hits, acc: run.shots ? run.shotsHit / run.shots : 0,
       gun: WEAPONS[SETTINGS.loadout].name, date: new Date().toISOString().slice(0, 10),
@@ -5080,6 +5238,9 @@
 
     if (pointerLocked) {
       updateRun(realDt);   // real time, so hit-stop slow-mo doesn't stretch the clock
+      stats.time += realDt; statsDirty = true;
+      statsSaveTimer -= realDt;
+      if (statsSaveTimer <= 0) { statsSaveTimer = 5; saveStats(); }
       updateReload(dt);
       if (autoReloadTimer > 0) { autoReloadTimer -= dt; if (autoReloadTimer <= 0) startReload(); }
 

@@ -26,6 +26,10 @@ right click aim (scope on the sniper, sights on the others) or throw (knife),
 **Modes:** Free play is endless. **Score Attack** gives you 1 or 2 minutes (after a 3-2-1 countdown) to
 score as much as you can; Esc pauses the clock, and your top 5 runs for each length are kept in your browser.
 
+**Stats:** the Stats button in the menu shows your lifetime numbers: play time, accuracy, records (longest
+shot, highest multiplier, top speed...), each gun, targets by colour, movement, and how often you've landed
+each trick. They're kept in your browser.
+
 **Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too.
 1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns
 score less per hit so trickshots stay king.

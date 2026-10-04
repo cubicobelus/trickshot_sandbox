@@ -23,12 +23,13 @@
   #instructions .start:hover { background: rgba(124,252,0,0.12); }
 
   /* the trickshot list: a popup over everything */
-  #glossary-open { margin-top: 10px; }
-  #glossary {
+  #glossary-open, #stats-open { margin-top: 10px; }
+  #glossary, #stats {
     position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.7);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
-  #glossary[hidden] { display: none; }
+  #glossary[hidden], #stats[hidden] { display: none; }
+  .st-foot { text-align: right; margin-top: 12px; }
   .g-panel {
     width: min(760px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; color: #fff;
     background: rgba(20,20,25,0.97); border: 1px solid #444; border-radius: 10px; padding: 16px 22px 20px;
@@ -48,8 +49,8 @@
   /* wide screens: two columns, so the whole list fits without scrolling */
   @media (min-width: 1000px) {
     .g-panel { width: min(1240px, 100%); }
-    #glossary-list { columns: 2; column-gap: 30px; }
-    #glossary-list h3 { break-after: avoid; }
+    #glossary-list, #stats-list { columns: 2; column-gap: 30px; }
+    #glossary-list h3, #stats-list h3 { break-after: avoid; }
     .g-row { grid-template-columns: 140px 96px 1fr; break-inside: avoid; font-size: 12px; }
   }
 
