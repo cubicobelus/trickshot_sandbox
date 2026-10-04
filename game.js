@@ -91,7 +91,7 @@
     spinMultPer360: 1.4,        // each full 360 multiplies again (720 = x1.96)...
     spinMaxCount: 3,            // ...counting up to 3 turns (x2.74), so turning sensitivity up can't run away with it
     spin180Mult: 1.2,
-    knifeMult: 1.8,             // a knife swing
+    knifeMult: 1,               // a knife swing has no multiplier of its own: it scores on its tricks
     thrownKnifeMult: 0.65,      // throws are unlimited, so a thrown knife scales the shot down (shown in red)
     knifeThrowCooldown: 0.6,    // unlimited knives, one per this many seconds
     knifeThrowSpeed: 32,
@@ -3446,7 +3446,7 @@
     // distance: a knife swing is meant to be close, so it skips this
     if (!(isKnife && !thrown)) { const df = distanceFactor(dist); if (Math.abs(df[1] - 1) > 0.005) add(df[0], df[1]); }
 
-    if (isKnife && !thrown) add("KNIFE", CFG.knifeMult);
+    if (isKnife && !thrown && CFG.knifeMult !== 1) add("KNIFE", CFG.knifeMult);
     else if (isKnife) add("THROWN KNIFE", CFG.thrownKnifeMult);
     else {
       if (weapon && weapon.scope && vm.adsProgress < 0.35 && dist >= CFG.noScopeMinDist) add("NO-SCOPE", CFG.noScopeMult);
@@ -3521,7 +3521,7 @@
         ["LAST ROUND", x(C.lastRoundMult), "The final round of a full magazine (not with unlimited ammo)."],
       ]],
       ["Knife", [
-        ["KNIFE", x(C.knifeMult), "A knife swing. Swings skip the distance and target-size multipliers."],
+        ["KNIFE SWING", x(C.knifeMult), "No multiplier of its own: a swing scores on its tricks (air, spins, speed, flicks, combos...). Swings skip the distance and target-size multipliers."],
       ]],
       ["Targets", [
         ["MOVING TARGET", x(C.movingTargetMult), "Orange targets (and purple ones, as DARTING TARGET)."],

@@ -132,6 +132,7 @@
     ["Movement", "land", "Landing", 0.25, 1, 0.08, "louder the harder you land"],
     ["Movement", "slide", "Slide", 0.35, 1, 0.1, ""],
     ["Movement", "wallBounce", "Wall bounce", 0.6, 1, 0.1, ""],
+    ["Movement", "wallBounce", "Perfect wall bounce", 0.6, 1, 0.1, "the bounce plus a generated ping", "perfect"],
     ["Movement", "jumpPad", "Jump pad", 0.7, 1.05, 0.25, "normal pad"],
     ["Movement", "jumpPad", "Mega jump pad", 0.7, 0.8, 0.25, "same clip, deeper"],
     ["Hits and knife", "targetDing", "Target hit", 0.55, 0.92, 0.2, "rises with the multiplier"],
@@ -169,7 +170,7 @@
   const ITEMS = [];   // everything selectable, in list order
   for (const g of GUNS) ITEMS.push(Object.assign({ key: "gun:" + g.id, kind: "gun", group: "Guns" }, g));
   ACTIONS.forEach(([name, note, rate, ...steps], i) => ITEMS.push({ key: "act:" + i, kind: "action", group: "Gun actions", name, note, rate, steps }));
-  CLIPS.forEach(([group, clip, name, vol, rate, wet, note], i) => ITEMS.push({ key: "clip:" + i, kind: "clip", group, clip, name, vol, rate, wet, note }));
+  CLIPS.forEach(([group, clip, name, vol, rate, wet, note, extra], i) => ITEMS.push({ key: "clip:" + i, kind: "clip", group, clip, name, vol, rate, wet, note, extra }));
   for (const s of SYNTH) ITEMS.push(Object.assign({ key: "synth:" + s.id, kind: "synth", group: "Old synth tries" }, s));
   let current = ITEMS[0];
   const tweak = {};   // per item: knob values
@@ -449,7 +450,31 @@
     }
     return end;
   }
+  // the perfect-wall-bounce ping, generated like tone() and noiseHit() in game.js
+  let noiseBuf = null;
+  function routeOut(node, wet) {
+    node.connect(master);
+    if (wet > 0) { const sg = ctx.createGain(); sg.gain.value = wet; node.connect(sg).connect(convolver); }
+  }
+  function playPerfectCue(now, level) {
+    if (!noiseBuf) {   // slightly correlated noise, as the game makes it
+      const n = Math.floor(ctx.sampleRate), d = (noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate)).getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; last = 0.82 * last + 0.18 * w; d[i] = w * 0.75 + last * 0.6; }
+    }
+    const j = rnd(0.97, 1.03), o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "triangle";
+    o.frequency.setValueAtTime(500 * j, now); o.frequency.exponentialRampToValueAtTime(1150 * j, now + 0.16);
+    g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.18 * level, now + 0.003); g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    o.connect(g); routeOut(g, 0.4); o.start(now); o.stop(now + 0.18);
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true; src.playbackRate.value = rnd(0.85, 1.18);
+    const f = ctx.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 1300 * rnd(0.94, 1.06); f.Q.value = 1.5;
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, now); g2.gain.linearRampToValueAtTime(0.16 * level, now + 0.002); g2.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    src.connect(f).connect(g2); routeOut(g2, 0.4); src.start(now); src.stop(now + 0.13);
+  }
   function playClip(it, v, now) {
+    if (it.extra === "perfect") playPerfectCue(now, v.vol / 0.6);
     const name = it.clip === "step" ? "step" + (1 + Math.floor(Math.random() * 4)) : it.clip;
     const buf = clipBufs[name];
     if (!buf) return;
