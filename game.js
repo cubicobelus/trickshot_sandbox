@@ -114,6 +114,8 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
+    // sound levels, on top of the master volume
+    volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
   };
   const DEFAULT_SETTINGS = Object.assign({}, SETTINGS);
@@ -2121,7 +2123,7 @@
     comp.threshold.value = -15.6; comp.ratio.value = 6; comp.knee.value = 6;
     comp.attack.value = 0.004; comp.release.value = 0.15;
     const makeup = audioCtx.createGain();
-    makeup.gain.value = 1.56 * pf.gain;
+    makeup.gain.value = 1.56 * pf.gain * SETTINGS.volGuns;
     const env = audioCtx.createGain();
     env.gain.setValueAtTime(1, now);
     env.gain.setValueAtTime(1, now + pf.length * 0.5);
@@ -2132,7 +2134,8 @@
   }
 
   // play a recorded clip; a small random pitch change keeps repeats from sounding identical
-  function playSfx(name, vol, rate, wet) {
+  function playSfx(name, vol, rate, wet, group) {
+    vol *= SETTINGS[group] === undefined ? 1 : SETTINGS[group];
     if (!audioCtx || !sfxBuffers[name] || vol <= 0.001) return;
     const src = audioCtx.createBufferSource();
     src.buffer = sfxBuffers[name];
@@ -2144,33 +2147,34 @@
     src.start();
   }
 
-  function playDryFire() { playSfx("dryFire", 0.6); }
+  function playDryFire() { playSfx("dryFire", 0.6, 1, 0.1, "volGuns"); }
   // steel plate ping; bigger multipliers ring a little higher, like the old beep did
-  function playHitSound(pitch) { playSfx("targetDing", 0.55, 0.92 + (pitch - 1) * 0.3, 0.2); }
-  function playSwitchSound() { playSfx("draw", 0.5); }
-  function playInspectSound() { playSfx("inspect", 0.45); }
+  function playHitSound(pitch) { playSfx("targetDing", 0.55, 0.92 + (pitch - 1) * 0.3, 0.2, "volHits"); }
+  function playSwitchSound() { playSfx("draw", 0.5, 1, 0.1, "volGear"); }
+  function playInspectSound() { playSfx("inspect", 0.45, 1, 0.1, "volGear"); }
   // scope ring turning: as recorded going in, a little lower coming out
-  function playScopeSound(inward) { playSfx("scope", 0.45, inward ? 1 : 0.82); }
-  function playKnifeSwing() { playSfx("knifeSwing", 0.6, 1.15); }
-  function playKnifeHit() { playSfx("knifeHit", 0.6, 1, 0.2); }
+  function playScopeSound(inward) { playSfx("scope", 0.45, inward ? 1 : 0.82, 0.1, "volGear"); }
+  function playKnifeSwing() { playSfx("knifeSwing", 0.6, 1.15, 0.1, "volKnife"); }
+  function playKnifeHit() { playSfx("knifeHit", 0.6, 1, 0.2, "volKnife"); }
   // jump pad: an air rush, deeper for the mega pads
-  function playPadLaunch(power) { playSfx("jumpPad", 0.7, power > 15 ? 0.8 : 1.05, 0.25); }
+  function playPadLaunch(power) { playSfx("jumpPad", 0.7, power > 15 ? 0.8 : 1.05, 0.25, "volMove"); }
 
-  // thrown knife biting into a surface
-  function playKnifeStick() { playSfx("knifeStick", 0.6, 1, 0.15); }
+  // thrown knife biting into a surface: quieter the further away it lands
+  function playKnifeStick(dist) { playSfx("knifeStick", 0.6 / (1 + dist / 6), 1, 0.15 + Math.min(dist / 80, 0.25), "volKnife"); }
   // the kick off the wall, plus the perfect-bounce cue on top of a perfect one
   function playWallBounce(perfect) {
-    playSfx("wallBounce", 0.6);
-    if (perfect) { tone("triangle", 500, 1150, 0.18, 0.16, 0, 0.4); noiseHit(1300, 1.5, 0.16, 0.11, "bandpass", 0, 0.4); }
+    playSfx("wallBounce", 0.6, 1, 0.1, "volMove");
+    const v = SETTINGS.volMove;
+    if (perfect && v > 0) { tone("triangle", 500, 1150, 0.18 * v, 0.16, 0, 0.4); noiseHit(1300, 1.5, 0.16 * v, 0.11, "bandpass", 0, 0.4); }
   }
   // footsteps and landings: kept quiet, so movement sounds like movement without getting in the way
-  function playFootstep(speed) { playSfx("step" + (1 + Math.floor(Math.random() * 4)), 0.09 + 0.06 * Math.min(speed / 9, 1), 1, 0.05); }
-  function playLanding(vol) { playSfx("land", vol, rnd(0.95, 1.05), 0.08); }
-  function playSlideStart() { playSfx("slide", 0.35); }
-  function playMagOut() { playSfx("magOut", 0.55); }
-  function playMagIn() { playSfx("magIn", 0.55); }
+  function playFootstep(speed) { playSfx("step" + (1 + Math.floor(Math.random() * 4)), 0.09 + 0.06 * Math.min(speed / 9, 1), 1, 0.05, "volMove"); }
+  function playLanding(vol) { playSfx("land", vol, rnd(0.95, 1.05), 0.08, "volMove"); }
+  function playSlideStart() { playSfx("slide", 0.35, 1, 0.1, "volMove"); }
+  function playMagOut() { playSfx("magOut", 0.55, 1, 0.1, "volGear"); }
+  function playMagIn() { playSfx("magIn", 0.55, 1, 0.1, "volGear"); }
   // empty magazine hitting the floor: a dull metal clunk
-  function playMagLand(vol) { playSfx("magLand", 0.5 * vol, 1, 0.15); }
+  function playMagLand(vol) { playSfx("magLand", 0.5 * vol, 1, 0.15, "volGear"); }
   function playBolt() { noiseHit(2800, 3.5, 0.20, 0.07, "highpass", 0, 0.3); noiseHit(1100, 2, 0.16, 0.10, "bandpass", 0.06, 0.35); }
   // the recorded bolt action (see BOLT); stopped early if the cycle is interrupted
   let boltSrc = null;
@@ -2182,7 +2186,7 @@
     src.buffer = boltCycleBuffer;
     src.playbackRate.value = BOLT.rate;
     const g = audioCtx.createGain();
-    g.gain.value = 0.9;
+    g.gain.value = 0.9 * SETTINGS.volGuns;
     src.connect(g);
     route(g, 0.08, false);
     src.start(audioCtx.currentTime, BOLT.clipStart, BOLT.clipLen);
@@ -2199,13 +2203,13 @@
     src.buffer = boltCycleBuffer;
     src.playbackRate.value = rate * rnd(0.97, 1.03);
     const g = audioCtx.createGain();
-    g.gain.value = 0.85;
+    g.gain.value = 0.85 * SETTINGS.volGuns;
     src.connect(g);
     route(g, 0.08, false);
     src.start(audioCtx.currentTime, at, len);
   }
   // a shotgun shell pushed into the tube
-  function playShellInsert() { playSfx("shellInsert", 0.55); }
+  function playShellInsert() { playSfx("shellInsert", 0.55, 1, 0.1, "volGear"); }
 
   function stopBoltSound() {
     if (!boltSrc) return;
@@ -2213,7 +2217,7 @@
     boltSrc = null;
   }
   // brass hitting the floor: a tiny tink, pitched a little differently each bounce
-  function playCasingPing(vol) { if (vol >= 0.05) playSfx("casing", 0.35 * vol, rnd(0.9, 1.2), 0.15); }
+  function playCasingPing(vol) { if (vol >= 0.05) playSfx("casing", 0.35 * vol, rnd(0.9, 1.2), 0.15, "volGear"); }
 
   // ======================================================================
   // DOM
@@ -3115,13 +3119,40 @@
     feedEl.textContent = text;
     feedEl.classList.add("show");
     clearTimeout(feedTimer);
-    feedTimer = setTimeout(() => feedEl.classList.remove("show"), 620);
+    feedTimer = setTimeout(() => feedEl.classList.remove("show"), 1500);
   }
+  // the best single shot so far, kept across sessions
+  const BEST_KEY = "tsb-best-shot";
+  const bestEl = document.getElementById("best");
+  let bestShot = { points: 0, mult: 1, tags: [] };
+  try {
+    const b = JSON.parse(localStorage.getItem(BEST_KEY));
+    if (b && Number.isFinite(b.points) && Number.isFinite(b.mult) && Array.isArray(b.tags)) {
+      bestShot = { points: b.points, mult: b.mult, tags: b.tags.filter((t) => typeof t === "string").slice(0, 12) };
+    }
+  } catch (e) { /* storage blocked or empty */ }
+  function saveBestShot() {
+    try { localStorage.setItem(BEST_KEY, JSON.stringify(bestShot)); } catch (e) { /* ignore */ }
+  }
+  function showBestShot(isNew) {
+    bestEl.hidden = bestShot.points <= 0;
+    document.getElementById("best-val").textContent = bestShot.points;
+    document.getElementById("best-tags").textContent =
+      "x" + bestShot.mult.toFixed(2) + (bestShot.tags.length ? "\n" + bestShot.tags.join("\n") : "");
+    if (isNew) { bestEl.classList.remove("new"); void bestEl.offsetWidth; bestEl.classList.add("new"); }
+  }
+  showBestShot(false);
+  document.getElementById("best-clear").addEventListener("click", () => {
+    bestShot = { points: 0, mult: 1, tags: [] };
+    saveBestShot();
+    showBestShot(false);
+  });
+
   function showBonusTags(text) {
     bonusTagsEl.textContent = text;
     bonusTagsEl.classList.add("show");
     clearTimeout(bonusTagsTimer);
-    bonusTagsTimer = setTimeout(() => bonusTagsEl.classList.remove("show"), 1700);
+    bonusTagsTimer = setTimeout(() => bonusTagsEl.classList.remove("show"), 4000);
   }
   function flashCrosshair() {
     crosshairEl.classList.add("hit");
@@ -3245,11 +3276,16 @@
     streak++;
     streakEl.textContent = streak;
 
-    if (res.tags.length) showBonusTags(res.tags.join("  \u2022  ") + "   (x" + res.mult.toFixed(2) + ")");
+    if (res.tags.length) showBonusTags("x" + res.mult.toFixed(2) + "\n" + res.tags.join("\n"));
     flashCrosshair();
     hitStopTimer = CFG.hitStopTime;
     playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
     showFeed("+" + pointsGained + (res.tags.length ? "  x" + res.mult.toFixed(1) : ""));
+    if (pointsGained > bestShot.points) {
+      bestShot = { points: pointsGained, mult: res.mult, tags: res.tags.slice() };
+      saveBestShot();
+      showBestShot(true);
+    }
     return pointsGained;
   }
 
@@ -3590,7 +3626,7 @@
         k.spin.rotation.set(0, 0, 0);
         k.state = "stuck";
         k.age = 0;
-        playKnifeStick();
+        playKnifeStick(o.distanceTo(yawObject.position));
         if (kind === "prop") {
           const prop = props.find((pr) => pr.mesh === hitProp);
           if (prop) {

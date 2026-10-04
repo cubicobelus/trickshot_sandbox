@@ -84,6 +84,7 @@
           <button type="button" class="stab active" data-tab="mouse">Mouse</button>
           <button type="button" class="stab" data-tab="crosshair">Crosshair</button>
           <button type="button" class="stab" data-tab="view">View</button>
+          <button type="button" class="stab" data-tab="sound">Sound</button>
           <button type="button" class="stab" data-tab="other">Other</button>
         </div>
       </div>
@@ -186,17 +187,47 @@
         </div>
       </div>
 
-      <div class="spanel" data-panel="other" hidden>
+      <div class="spanel" data-panel="sound" hidden>
         <div class="slider-row">
-          <label for="volume">Volume</label>
+          <label for="volume">Master volume</label>
           <input type="range" id="volume" min="0" max="1" step="0.05" value="0.55">
           <div class="val" id="volume-val">0.55</div>
         </div>
+        <div class="slider-row">
+          <label for="vol-guns">Guns</label>
+          <input type="range" id="vol-guns" data-setting="volGuns" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-move">Movement</label>
+          <input type="range" id="vol-move" data-setting="volMove" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-hits">Target hits</label>
+          <input type="range" id="vol-hits" data-setting="volHits" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-knife">Knife</label>
+          <input type="range" id="vol-knife" data-setting="volKnife" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-gear">Reloads</label>
+          <input type="range" id="vol-gear" data-setting="volGear" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+      </div>
+
+      <div class="spanel" data-panel="other" hidden>
         <div class="check-row">
           <label><input type="checkbox" id="unlimited-ammo">Unlimited ammo</label>
         </div>
-        <button type="button" class="btn small" id="settings-reset">Reset all settings</button>
+        <button type="button" class="btn small" id="best-clear">Clear best trickshot</button>
       </div>
+
+      <button type="button" class="btn small" id="settings-reset">Reset settings to defaults</button>
     </div>
 
   </div>
@@ -215,9 +246,12 @@
     Speed: <span id="speed-val">0</span> u/s <span class="state" id="state-val"></span>
     <div id="speedbar"><div id="speedbar-fill"></div></div>
   </div>
-  <div id="score">Score<br><span id="score-val">0</span></div>
-  <div id="streak">Streak<br><span id="streak-val">0</span></div>
-  <div id="bonus-tags"></div>
+  <div id="hud-right">
+    <div id="score">Score<br><span id="score-val">0</span></div>
+    <div id="best" hidden>Best trickshot<br><span id="best-val">0</span><div id="best-tags"></div></div>
+    <div id="streak">Streak<br><span id="streak-val">0</span></div>
+    <div id="bonus-tags"></div>
+  </div>
   <div id="feed"></div>
   <div id="mp-timer" hidden><span id="mp-timer-val">3:00</span><div id="mp-timer-mode"></div></div>
   <div id="killfeed"></div>

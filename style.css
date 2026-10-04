@@ -56,7 +56,8 @@
     background: linear-gradient(90deg, #87b7d9 0 33%, #b4e77f 33% 66%, #6e6e78 66%);
     display: flex; align-items: center; justify-content: space-around;
   }
-  #settings-reset { margin-top: 14px; }
+  #settings-reset { margin: 16px 0 0; display: block; }
+  #best-clear { margin: 14px 0 0; }
 
   /* the crosshair is an SVG drawn from the settings; colour comes from `color` */
   #crosshair { color: #eee; }
@@ -137,31 +138,51 @@
   }
   #speedbar-fill { height: 100%; width: 0%; background: #ffd24a; transition: width 0.08s linear; }
 
+  /* top right: score, best trickshot, streak, then the multipliers of the last hit */
+  #hud-right {
+    position: absolute; top: 18px; right: 18px; display: flex; flex-direction: column;
+    align-items: flex-end; gap: 8px;
+  }
   #score {
-    position: absolute; top: 18px; right: 18px; color: #fff; text-align: right;
+    color: #fff; text-align: right;
     font-size: 14px; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 6px;
   }
   #score span { color: #ffd24a; font-weight: bold; font-size: 20px; }
 
+  #best {
+    color: #fff; text-align: right; font-size: 12px; background: rgba(0,0,0,0.4);
+    padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,210,74,0.35); max-width: 220px;
+  }
+  #best[hidden] { display: none; }
+  #best span { color: #ffd24a; font-weight: bold; font-size: 17px; }
+  #best-tags { color: #ff9d3b; font-size: 11px; font-weight: bold; white-space: pre-line; line-height: 1.45; margin-top: 2px; }
+  #best.new { animation: best-new 1.2s ease-out; }
+  @keyframes best-new {
+    0% { box-shadow: 0 0 0 0 rgba(255,210,74,0.9); background: rgba(255,210,74,0.35); }
+    100% { box-shadow: 0 0 0 10px rgba(255,210,74,0); background: rgba(0,0,0,0.4); }
+  }
+
   #streak {
-    position: absolute; top: 78px; right: 18px; color: #fff; text-align: right;
+    color: #fff; text-align: right;
     font-size: 14px; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 6px;
   }
   #streak span { color: #7CFC00; font-weight: bold; font-size: 18px; }
 
   #bonus-tags {
-    position: absolute; top: 132px; right: 18px; color: #ff9d3b; text-align: right;
-    font-size: 12px; font-weight: bold; background: rgba(0,0,0,0.35); padding: 5px 10px;
-    border-radius: 6px; opacity: 0; transition: opacity 0.2s; max-width: 320px; line-height: 1.55;
+    color: #ff9d3b; text-align: right; white-space: pre-line;
+    font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.35); padding: 5px 10px;
+    border-radius: 6px; opacity: 0; transition: opacity 0.6s; max-width: 320px; line-height: 1.55;
   }
-  #bonus-tags.show { opacity: 1; }
+  #bonus-tags::first-line { color: #ffd24a; font-size: 15px; }
+  #bonus-tags.show { opacity: 1; transition: opacity 0.15s; }
 
   #feed {
     position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%);
     font-size: 30px; font-weight: bold; color: #ffd24a; text-shadow: 0 0 12px rgba(255,210,74,0.8);
     opacity: 0; transition: opacity 0.15s, transform 0.15s; white-space: nowrap;
   }
-  #feed.show { opacity: 1; transform: translate(-50%, -62%); }
+  #feed { transition: opacity 0.5s, transform 0.15s; }
+  #feed.show { opacity: 1; transform: translate(-50%, -62%); transition: opacity 0.12s, transform 0.15s; }
 
   #ammo {
     position: absolute; bottom: 178px; right: 18px; text-align: right;
