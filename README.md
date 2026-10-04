@@ -39,7 +39,9 @@ standing still (moving under 2 u/s when you fire, even if you hop in place).
 Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
 purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
 
-Settings (sensitivity, volume, unlimited ammo and so on) are saved in your browser.
+Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo and so on) are saved in your
+browser. **Realistic accuracy** (Settings > Other, off by default) makes shots spread while you're in the air
+and gives the sniper a little spread when it isn't scoped.
 
 ## Files
 

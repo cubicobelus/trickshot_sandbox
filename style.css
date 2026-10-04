@@ -89,6 +89,7 @@
   }
   .tdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
   #settings-reset { margin: 16px 0 0; display: block; }
+  .set-hint { font-size: 11.5px; color: #8d8d96; margin: 2px 0 0; }
   #best-clear { margin: 14px 0 0; }
 
   /* the crosshair is an SVG drawn from the settings; colour comes from `color` */

@@ -139,12 +139,16 @@
     megaLaunchMult: 1.4,
     reverseSpeed: 8,            // moving at least this fast...
     reverseMult: 1.4,           // ...away from where you're aiming
+    // Realistic accuracy (a setting, off by default): extra spread, in radians
+    realisticAirSpread: 0.025,  // any gun, while you're in the air
+    realisticHipSpread: 0.012,  // the sniper when it isn't scoped, so a no-scope is a real gamble
 
   };
 
   const SETTINGS = {
     sensX: 1.0, sensY: 1.0, scopedSensMult: 0.35, volume: 0.55,
     unlimitedAmmo: false, mouseAccel: false, accelStrength: 0.7,
+    realisticAccuracy: false,   // shots spread mid-jump, and the unscoped sniper isn't laser-accurate
     // crosshair
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
     // view
@@ -2003,7 +2007,8 @@
     // the lens closes in from slightly too big as your eye settles behind it
     scopeEl.style.transform = "translate(-50%, -50%) scale(" + (1.2 - 0.2 * scopeAlpha).toFixed(3) + ")";
     scopeLinesEl.style.opacity = scopeAlpha;
-    crosshairEl.style.opacity = w.scope && adsEased > 0.5 ? 0 : 1;
+    // the scope has its own reticle; iron sights are the aim, so the crosshair fades out while aiming
+    crosshairEl.style.opacity = w.scope ? (adsEased > 0.5 ? 0 : 1) : Math.max(0, 1 - adsEased * 2);
     w.group.visible = scopeAlpha < 0.98;
   }
 
@@ -3509,7 +3514,7 @@
       ["Aim", [
         ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per meter past " + C.distanceFrom + " m: " +
           x(1 + 15 * C.distanceMultPerM) + " at 30 m, " + x(1 + 35 * C.distanceMultPerM) + " at 50 m, " + x(1 + 65 * C.distanceMultPerM) + " at 80 m."],
-        ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more."],
+        ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more. With Realistic accuracy on, unscoped shots spread a little."],
         ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of scoping in."],
         ["FLICK", x(C.flickMult), "Snap your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
         ["QUICK SWITCH", x(C.quickSwitchMult), "Hit within " + C.quickSwitchWindow + " s of finishing a weapon swap, with a gun that hadn't just fired."],
@@ -3707,7 +3712,11 @@
 
     // aim, plus this gun's spread: tighter aiming down sights, wider while the AR blooms
     const ads = easeInOut(vm.adsProgress);
-    const cone = (w.spread + (w.spreadAds - w.spread) * ads) + (w.bloomNow || 0);
+    let cone = (w.spread + (w.spreadAds - w.spread) * ads) + (w.bloomNow || 0);
+    if (SETTINGS.realisticAccuracy) {
+      if (w.scope) cone += CFG.realisticHipSpread * (1 - ads);
+      if (!player.onGround) cone += CFG.realisticAirSpread;
+    }
     if (w.bloom) w.bloomNow = Math.min((w.bloomNow || 0) + w.bloom, w.bloomMax);
     const maxD = w.range || CFG.maxShootDistance;
     camera.getWorldDirection(_aimDir);
