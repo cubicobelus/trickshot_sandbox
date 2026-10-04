@@ -65,7 +65,8 @@
     magSize: 5,
     reloadTime: 2.3,
 
-    arenaHalfSize: 34,
+    arenaHalfSize: 40,
+    jumpPadPower: 17,           // upward speed a jump pad gives: about 5.5 m of air
     hitStopScale: 0.55,
     hitStopTime: 0.07,
 
@@ -294,20 +295,6 @@
       for (let x = -n; x < n * 2; x += 28) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 14, 0); g.lineTo(x + 14 - n, n); g.lineTo(x - n, n); g.fill(); }
       g.restore();
     },
-    // wooden crate: planks in a frame with a cross brace
-    crate(g, n) {
-      g.fillStyle = "#c3965f"; g.fillRect(0, 0, n, n);
-      g.strokeStyle = "rgba(80,50,25,0.35)"; g.lineWidth = 2;
-      for (let y = n / 5; y < n; y += n / 5) { g.beginPath(); g.moveTo(0, y); g.lineTo(n, y); g.stroke(); }
-      speckle(g, 500, n, 0.1, false);
-      const f = n * 0.12;
-      g.fillStyle = "#a87a45";
-      g.fillRect(0, 0, n, f); g.fillRect(0, n - f, n, f); g.fillRect(0, 0, f, n); g.fillRect(n - f, 0, f, n);
-      g.strokeStyle = "#a87a45"; g.lineWidth = f * 0.9;
-      g.beginPath(); g.moveTo(f, f); g.lineTo(n - f, n - f); g.stroke();
-      g.strokeStyle = "rgba(60,35,15,0.5)"; g.lineWidth = 2;
-      g.strokeRect(1, 1, n - 2, n - 2); g.strokeRect(f, f, n - 2 * f, n - 2 * f);
-    },
   };
   const surfaceCanvases = {};
   function surfaceMaterial(kind, repeatX, repeatY) {
@@ -344,23 +331,124 @@
     wallBoxes.push(new THREE.Box3().setFromObject(mesh));
   }
 
-  addGround(0, 0, 0, CFG.arenaHalfSize * 2, CFG.arenaHalfSize * 2, "grass");
+  // ---- kicker ramps: a sloped floor rising along x or z. Running off the high end turns
+  // your speed into lift (see player.groundRise), so a fast run-up throws you into the air ----
+  const FLOOR_Y = 0.25;   // top of the main ground
+  const ramps = [];
+  function addRamp(cx, cz, along, width, length, height, dir) {
+    const r = { cx, cz, along, dir, length, height,
+      halfW: along === "x" ? length / 2 : width / 2, halfD: along === "x" ? width / 2 : length / 2 };
+    ramps.push(r);
+    // a wedge: profile in x (length) and y (height), extruded across the width
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0); shape.lineTo(length, 0); shape.lineTo(length, height); shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: false });
+    geo.translate(-length / 2, 0, -width / 2);
+    if (along === "x") { if (dir < 0) geo.rotateY(Math.PI); }
+    else geo.rotateY(dir > 0 ? -Math.PI / 2 : Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, surfaceMaterial("deck", 0.25, 0.25));
+    mesh.position.set(cx, FLOOR_Y, cz);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    scene.add(mesh);
+    // the sides and the tall end block you; on the slope your feet are always within a step
+    // of these, so they never get in the way of running up it
+    const along0 = (u) => (along === "x" ? cx : cz) + dir * (u - 0.5) * length;
+    const box = (a0, a1, c0, c1, h) => {
+      const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+      wallBoxes.push(along === "x"
+        ? new THREE.Box3(new THREE.Vector3(lo, FLOOR_Y, c0), new THREE.Vector3(hi, FLOOR_Y + h, c1))
+        : new THREE.Box3(new THREE.Vector3(c0, FLOOR_Y, lo), new THREE.Vector3(c1, FLOOR_Y + h, hi)));
+    };
+    const across = along === "x" ? cz : cx, half = width / 2, segs = Math.ceil(length);
+    for (let i = 0; i < segs; i++) {
+      const h = height * (i + 1) / segs;
+      if (h <= CFG.stepHeight) continue;
+      box(along0(i / segs), along0((i + 1) / segs), across - half - 0.1, across - half + 0.1, h);
+      box(along0(i / segs), along0((i + 1) / segs), across + half - 0.1, across + half + 0.1, h);
+    }
+    box(along0(1) - 0.15 * dir, along0(1) + 0.15 * dir, across - half, across + half, height);
+  }
+  function rampHeight(r, x, z) {
+    if (Math.abs(x - r.cx) > r.halfW || Math.abs(z - r.cz) > r.halfD) return -Infinity;
+    const a = r.along === "x" ? x - r.cx : z - r.cz;
+    return FLOOR_Y + r.height * Math.min(Math.max(0.5 + r.dir * a / r.length, 0), 1);
+  }
+  function rampAt(x, z, groundY) {
+    for (const r of ramps) if (Math.abs(rampHeight(r, x, z) - groundY) < 0.001) return r;
+    return null;
+  }
+
+  // ---- jump pads: stand on one and it fires you straight up, keeping your speed ----
+  const jumpPads = [];
+  const padBaseMat = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
+  function addJumpPad(x, y, z, power) {
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.6, 0.14, 32), padBaseMat);
+    base.position.y = 0.07;
+    base.receiveShadow = true;
+    const glowMat = new THREE.MeshStandardMaterial({ color: 0x1bd6c8, emissive: 0x1bd6c8, emissiveIntensity: 0.8, roughness: 0.4 });
+    const glow = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.16, 32), glowMat);
+    glow.position.y = 0.08;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.05, 6, 40), glowMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.16;
+    // a faint column of light so pads read from across the map
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.15, 3.2, 24, 1, true), new THREE.MeshBasicMaterial({
+      color: 0x5ff0e4, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = 1.7;
+    g.add(base, glow, ring, beam);
+    scene.add(g);
+    jumpPads.push({ x, y: y + 0.16, z, r: 1.3, power, glowMat, beam, flash: 0 });
+  }
+  function updateJumpPads(dt) {
+    for (const p of jumpPads) {
+      p.flash = Math.max(0, p.flash - dt * 3);
+      p.glowMat.emissiveIntensity = 0.7 + 0.25 * Math.sin(elapsedTime * 4 + p.x) + p.flash * 1.5;
+      p.beam.material.opacity = 0.1 + 0.04 * Math.sin(elapsedTime * 4 + p.x) + p.flash * 0.25;
+    }
+  }
+
   const H = CFG.arenaHalfSize;
+  addGround(0, 0, 0, H * 2, H * 2, "grass");
   addWall(0, 6, -H, H * 2, 12, 1, "concrete");
   addWall(0, 6, H, H * 2, 12, 1, "concrete");
   addWall(-H, 6, 0, 1, 12, H * 2, "concrete");
   addWall(H, 6, 0, 1, 12, H * 2, "concrete");
 
+  // parkour line of floating decks over the middle
   addGround(-10, 1.5, -6, 4, 4, "deck", true);
   addGround(-4, 2.5, -10, 4, 4, "deck", true);
   addGround(2, 3.5, -14, 4, 4, "deck", true);
   addGround(9, 2.0, -8, 6, 4, "deck", true);
 
-  addWall(16, 4, 4, 1, 8, 12, "brick");
-  addWall(23, 4, 4, 1, 8, 12, "brick");
-  addWall(-16, 4, -16, 3, 8, 3, "brick");
-  addWall(-22, 4, -8, 3, 8, 3, "brick");
-  addWall(-20, 4, 14, 3, 8, 3, "brick");
+  // bounce corridors: parallel walls to chain wall bounces down
+  addWall(-31, 4, -8, 1, 8, 22, "concrete");
+  addWall(-25, 4, -8, 1, 8, 22, "concrete");
+  addWall(18, 4, 6, 1, 8, 12, "brick");
+  addWall(24, 4, 6, 1, 8, 12, "brick");
+
+  // pillars to bounce off and duck behind
+  addWall(-15, 4, -24, 3, 8, 3, "brick");
+  addWall(13, 4, -24, 3, 8, 3, "brick");
+  addWall(-18, 4, 20, 3, 8, 3, "brick");
+  addWall(-6, 3, 30, 3, 6, 3, "brick");
+
+  // sniper tower in the north-east corner, reached by its own jump pad
+  addGround(30, 7.5, -30, 7, 7, "deck", true);
+  for (const [lx, lz] of [[27, -33], [33, -33], [27, -27], [33, -27]]) addWall(lx, 3.75, lz, 0.8, 7.5, 0.8, "concrete");
+
+  // kicker ramps, aimed out into open ground
+  addRamp(-8, 18, "x", 4, 7, 2.4, 1);
+  addRamp(12, 22, "z", 4, 7, 2.4, -1);
+  addRamp(-4, -30, "x", 4, 7, 2.4, -1);
+
+  // jump pads
+  addJumpPad(0, FLOOR_Y, -2, CFG.jumpPadPower);
+  addJumpPad(-28, FLOOR_Y, 12, CFG.jumpPadPower);
+  addJumpPad(30, FLOOR_Y, 18, CFG.jumpPadPower);
+  addJumpPad(-28, FLOOR_Y, -27, CFG.jumpPadPower);
+  addJumpPad(24, FLOOR_Y, -24, 21);   // the tower pad: high enough to land on its deck
 
   // ======================================================================
   // TARGETS (standard / moving / small)
@@ -396,6 +484,7 @@
       const z = (Math.random() * 2 - 1) * lim;
       const y = 1.7 + Math.random() * 7.3;
       if (Math.hypot(x - PLAYER_SPAWN.x, z - PLAYER_SPAWN.z) < 11) continue;
+      if (insideSolid(x, y, z, 1.6)) continue;
       let ok = true;
       for (const p of occupied) {
         if (Math.hypot(x - p.x, z - p.z) < 7.5 && Math.abs(y - p.y) < 3.5) { ok = false; break; }
@@ -403,6 +492,14 @@
       if (ok) return new THREE.Vector3(x, y, z);
     }
     return new THREE.Vector3((Math.random() * 2 - 1) * lim, 2 + Math.random() * 6, -(8 + Math.random() * 18));
+  }
+
+  const _spawnProbe = new THREE.Vector3();
+  function insideSolid(x, y, z, margin) {
+    _spawnProbe.set(x, y, z);
+    for (const b of wallBoxes) if (b.distanceToPoint(_spawnProbe) < margin) return true;
+    for (const r of ramps) if (rampHeight(r, x, z) > -Infinity && y < r.height + FLOOR_Y + margin) return true;
+    return false;
   }
 
   function occupiedPoints(exclude) {
@@ -517,18 +614,6 @@
   // ======================================================================
   const props = [];
   const propMeshes = [];
-  const crateMat = surfaceMaterial("crate", 1, 1);
-  function makeCrate(x, y, z, size) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), crateMat);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    scene.add(mesh);
-    props.push({ mesh, half: size / 2, velocity: new THREE.Vector3() });
-    propMeshes.push(mesh);
-  }
-  for (let i = 0; i < 10; i++) {
-    makeCrate((Math.random() - 0.5) * 20, 2 + Math.random() * 4, -2 + (Math.random() - 0.5) * 14, 0.8 + Math.random() * 0.6);
-  }
   let propsWereMoving = false;
   function activeProps() { return net.active ? [] : propMeshes; }
   function setPropsEnabled(on) {
@@ -1982,6 +2067,12 @@
     tone("triangle", 1500, 520, 0.12, 0.12, 0, 0.45);
     tone("sine", 250, 85, 0.16, 0.14, 0, 0.3);
   }
+  // jump pad launch: a rising rush of air
+  function playPadLaunch() {
+    noiseSweep(300, 2600, 0.9, 0.35, 0.45, "bandpass", 0, 0.35);
+    noiseHit(180, 0.8, 0.3, 0.18, "lowpass", 0, 0.2);
+  }
+
   // thrown knife biting into a surface: a dull thunk with a short blade ring
   function playKnifeStick() {
     noiseHit(1800, 2.5, 0.22, 0.04, "bandpass", 0, 0.2);
@@ -2573,6 +2664,7 @@
     wallContactTime: -1, wallBounceCooldown: 0,
     lastWallBounceAt: -99, lastLandTime: -99,
     lastYaw: 0, airSpinAccum: 0, airSpinNet: 0, feetY: 0.25,
+    groundRise: 0,   // how fast the ramp under you is lifting you (m/s); becomes a launch off the top
     viewRoll: 0,
   };
 
@@ -2583,6 +2675,10 @@
     for (const g of groundMeshes) {
       const ud = g.userData;
       if (Math.abs(x - ud.cx) <= ud.halfW && Math.abs(z - ud.cz) <= ud.halfD && ud.topY > best && ud.topY <= cap) best = ud.topY;
+    }
+    for (const r of ramps) {
+      const h = rampHeight(r, x, z);
+      if (h > best && h <= cap) best = h;
     }
     return best;
   }
@@ -2792,11 +2888,25 @@
       }
 
       if (keys["Space"]) {
-        player.velocity.y = CFG.jumpSpeed;
+        player.velocity.y = CFG.jumpSpeed + player.groundRise;   // jumping off a ramp adds its lift
         player.onGround = false;
         player.sliding = false;
         jumpQueued = false;
         player.wallContactTime = -1;
+      }
+      // jump pads fire you straight up and leave your horizontal speed alone
+      if (player.onGround) {
+        for (const pad of jumpPads) {
+          if (Math.hypot(yawObject.position.x - pad.x, yawObject.position.z - pad.z) < pad.r && Math.abs(player.feetY - pad.y) < 0.35) {
+            player.velocity.y = pad.power;
+            player.onGround = false;
+            player.sliding = false;
+            player.wallContactTime = -1;
+            pad.flash = 1;
+            playPadLaunch();
+            break;
+          }
+        }
       }
     } else {
       accelerate(player.velocity, _wishDir, CFG.airWishSpeedCap, CFG.airAccel, dt);
@@ -2848,7 +2958,12 @@
         player.lastLandTime = elapsedTime;
       }
       player.onGround = true;
+      const r = rampAt(yawObject.position.x, yawObject.position.z, groundY);
+      player.groundRise = r ? Math.max(0, (r.along === "x" ? player.velocity.x : player.velocity.z) * r.dir * r.height / r.length) : 0;
     } else {
+      // running off the top of a ramp: the lift it was giving you becomes a launch
+      if (player.onGround && player.groundRise > 0 && player.velocity.y <= 0) player.velocity.y = player.groundRise;
+      player.groundRise = 0;
       player.onGround = false;
       player.sliding = false;
     }
@@ -4218,6 +4333,7 @@
       updateTracers(dt);
       updateSmoke(dt);
       clouds.rotation.y += dt * 0.004;
+      updateJumpPads(dt);
       updateCasings(dt);
       updateMagDrops(dt);
       updateThrownKnives(dt);
