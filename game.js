@@ -2719,11 +2719,17 @@
   function lockPointer() {
     try {
       const p = domEl.requestPointerLock({ unadjustedMovement: true });
-      if (p && p.catch) p.catch(() => domEl.requestPointerLock());
+      if (p && p.catch) p.catch(() => { const q = domEl.requestPointerLock(); if (q && q.catch) q.catch(() => {}); });
     } catch (e) {
       domEl.requestPointerLock();
     }
   }
+
+  // after a replay from the middle of a game was closed with Esc (the browser won't let Esc grab the mouse
+  // back): one click carries on, Esc again goes to the menu
+  const resumeEl = document.getElementById("resume");
+  resumeEl.addEventListener("click", (e) => { e.stopPropagation(); requestPlay(); });
+  window.addEventListener("keydown", (e) => { if (!resumeEl.hidden && e.code === "Escape") showScreen("menu"); });
 
   function requestPlay() {
     if (uiMode === "mp" && !net.active) return;   // nothing to play until you're in a room
@@ -2735,11 +2741,22 @@
   startBtn.addEventListener("click", requestPlay);
   blocker.addEventListener("click", requestPlay);
 
+  // What's on screen, decided in one place. "play": the game (mouse captured); "menu"; "results" (Score
+  // Attack's, over the menu); "replay" (the game view with the replay bar, mouse free for its buttons);
+  // "resume" (the game view with "click to keep playing", after a replay closed by Esc).
+  function showScreen(name) {
+    blocker.style.display = name === "menu" || name === "results" ? "flex" : "none";
+    hud.style.display = name === "play" || name === "replay" || name === "resume" ? "block" : "none";
+    hud.classList.toggle("replaying", name === "replay");
+    resumeEl.hidden = name !== "resume";
+    replayEl.hidden = name !== "replay";
+    if (name === "menu" || name === "results") { refreshModeUI(); refreshReplayButtons(); }
+  }
   document.addEventListener("pointerlockchange", () => {
     pointerLocked = document.pointerLockElement === domEl;
-    blocker.style.display = pointerLocked ? "none" : "flex";
-    hud.style.display = pointerLocked ? "block" : "none";
-    if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; refreshModeUI(); saveStats(); }
+    if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; saveStats(); }
+    if (replay.active) return;   // a replay frees the mouse on purpose and runs its own screens
+    showScreen(pointerLocked ? "play" : resultsEl.hidden ? "menu" : "results");
     mpRefreshScoreboard();
   });
 
@@ -5423,7 +5440,7 @@
     rec.snapTimer -= realDt;
     if (rec.snapTimer <= 0 || !rec.events.some((e) => e.type === "snap")) { rec.snapTimer = 1; recSnapshot(); }
     camera.getWorldPosition(_rp); camera.getWorldQuaternion(_rq);
-    const f = { t: r3(rec.t), c: [r3(_rp.x), r3(_rp.y), r3(_rp.z), r4(_rq.x), r4(_rq.y), r4(_rq.z), r4(_rq.w), r2(camera.fov), r2(lastScopeAlpha)] };
+    const f = { t: r3(rec.t), c: [r3(_rp.x), r3(_rp.y), r3(_rp.z), r4(_rq.x), r4(_rq.y), r4(_rq.z), r4(_rq.w), r2(camera.fov), r2(lastScopeAlpha)], w: vm.current };
     const tg = [];
     targets.forEach((t, i) => { if (t.userData.motion && t.userData.alive) tg.push([i, r3(t.position.x), r3(t.position.y), r3(t.position.z)]); });
     if (tg.length) f.tg = tg;
@@ -5478,6 +5495,7 @@
   const replay = { active: false, clip: null, time: 0, speed: 1, paused: false, bulletCam: true, slowMo: true,
     frameIdx: 0, evIdx: 0, phase: "play", flightT: 0, flightDur: 1, hit: null, saved: null, from: null, label: "" };
   const replayCam = new THREE.PerspectiveCamera(CFG.baseFov, window.innerWidth / window.innerHeight, 0.02, 500);
+  scene.add(replayCam);   // so the gun riding on it gets drawn
   const replayEl = document.getElementById("replay"), replayTagsEl = document.getElementById("replay-tags");
   let replayKnives = null, bulletMesh = null;
   function replayProps() {
@@ -5491,26 +5509,24 @@
   }
 
   function startReplay(clip, label, from) {
-    if (!clip) return;
-    if (from !== "game" && document.pointerLockElement) document.exitPointerLock();
+    if (!clip || replay.active) return;
     replayProps();
     // put the live world aside
     replay.saved = {
       targets: targets.map((t) => ({ pos: t.position.clone(), visible: t.visible })),
       knives: thrownPool.map((k) => k.root.visible),
-      hudDisplay: hud.style.display,
       viewmodel: viewmodelRoot.visible,
+      guns: WEAPON_ORDER.map((id) => WEAPONS[id].group.visible),
     };
-    viewmodelRoot.visible = false;   // the gun hangs off the live camera; a replay is shown without it
+    // the gun moves from the live camera onto the replay camera, holding whatever was in your hand
+    replayCam.add(viewmodelRoot);
     for (const k of thrownPool) k.root.visible = false;
     Object.assign(replay, { active: true, clip, label, from, time: 0, paused: false, speed: 1, phase: "play", frameIdx: 0, evIdx: 0, hit: null });
     replay.hit = clip.events.find((e) => e.type === "hit" && Math.abs(e.t - clip.hitT) < 0.05) || null;
     applySnapshot(clip.snap);
-    blocker.style.display = "none";
     resultsEl.hidden = true;
-    hud.style.display = "block";
-    hud.classList.add("replaying");
-    replayEl.hidden = false;
+    showScreen("replay");
+    if (document.pointerLockElement) document.exitPointerLock();   // a cursor, for the replay bar
     replayTagsEl.textContent = "";
     replayTagsEl.classList.remove("show");
     document.getElementById("replay-label").textContent = label;
@@ -5542,20 +5558,27 @@
       if (!t.userData.alive) t.visible = false;
     });
     thrownPool.forEach((k, i) => { k.root.visible = replay.saved.knives[i]; });
+    camera.add(viewmodelRoot);
     viewmodelRoot.visible = replay.saved.viewmodel;
+    WEAPON_ORDER.forEach((id, i) => { WEAPONS[id].group.visible = replay.saved.guns[i]; });
     for (const k of replayKnives) k.visible = false;
     bulletMesh.visible = false;
     for (const p of particlePool) { p.active = false; p.mesh.visible = false; }
     for (const t of tracerPool) { t.active = false; t.mesh.visible = false; }
-    hud.classList.remove("replaying");
-    hud.style.display = replay.saved.hudDisplay;
     scopeEl.style.opacity = 0; scopeLinesEl.style.opacity = 0;
-    replayEl.hidden = true;
-    if (replay.from === "results") resultsEl.hidden = false;
-    else if (replay.from === "game" && pointerLocked) blocker.style.display = "none";   // straight back into play
-    else blocker.style.display = "flex";
     for (const k in keys) keys[k] = false;   // nothing held over from before the replay
     mouseHeld = false; attackPressed = false;
+    if (replay.from === "game") {
+      // straight back into the game: a key press or click lets the browser take the mouse again at once;
+      // if it won't (Esc), the "click to keep playing" prompt stays up
+      showScreen("resume");
+      lockPointer();
+    } else if (replay.from === "results") {
+      showScreen("results");
+      resultsEl.hidden = false;
+    } else {
+      showScreen("menu");
+    }
   }
 
   // run the clip's events up to the current time
@@ -5616,6 +5639,7 @@
       replayCam.position.copy(bulletMesh.position).addScaledVector(dir, -0.9).add(_rp.set(0, 0.18, 0));
       replayCam.lookAt(_tmpV2);
       replayCam.fov = 62; replayCam.updateProjectionMatrix();
+      viewmodelRoot.visible = false;   // the bullet cam is out ahead of you
       scopeEl.style.opacity = 0; scopeLinesEl.style.opacity = 0;
       if (k >= 1) { replay.phase = "impact"; bulletMesh.visible = false; }
     } else {
@@ -5652,6 +5676,7 @@
           if (ka) { m.position.set(ka[0], ka[1], ka[2]); m.quaternion.set(ka[3], ka[4], ka[5], ka[6]); if (m.children[0]) m.children[0].rotation.x = ka[7]; }
         });
         if (replay.phase === "impact" && replay.hit) {
+          viewmodelRoot.visible = false;
           // after the bullet cam: watch the plate go, from just in front of it
           _tmpV1.fromArray(replay.hit.o); _tmpV2.fromArray(replay.hit.p);
           const dir = _tmpV2.clone().sub(_tmpV1).normalize();
@@ -5665,6 +5690,9 @@
           replayCam.updateProjectionMatrix();
           const sa = a.c[8] + (b.c[8] - a.c[8]) * u;
           scopeEl.style.opacity = sa; scopeLinesEl.style.opacity = sa;
+          viewmodelRoot.visible = sa < 0.98;   // scoped in, the scope fills the view, as it did live
+          const held = a.w && WEAPONS[a.w] ? a.w : null;
+          if (held) for (const id of WEAPON_ORDER) WEAPONS[id].group.visible = id === held;
           scopeEl.style.transform = "translate(-50%, -50%) scale(" + (1.2 - 0.2 * sa).toFixed(3) + ")";
         }
       }
@@ -5753,6 +5781,7 @@
     for (const f of c.frames) {
       if (!f || !fin(f.t) || !nums(f.c, 9)) return null;
       const g = { t: f.t, c: f.c.slice() };
+      if (typeof f.w === "string" && WEAPONS[f.w]) g.w = f.w;
       if (f.tg !== undefined) {
         if (!Array.isArray(f.tg) || f.tg.length > 64 || !f.tg.every((q) => Array.isArray(q) && q.length === 4 && int(q[0], 64) && q.slice(1).every(fin))) return null;
         g.tg = f.tg.map((q) => q.slice());

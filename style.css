@@ -334,6 +334,11 @@
   @media (max-width: 560px) { .r-cols { grid-template-columns: 1fr; } }
 
   /* ---------------- replays ---------------- */
+  #resume { position: fixed; inset: 0; z-index: 64; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.25); }
+  #resume[hidden] { display: none; }
+  #resume div { background: rgba(15,15,20,0.88); border: 1px solid #7CFC00; color: #7CFC00; font: bold 18px 'Segoe UI', Arial, sans-serif;
+    padding: 14px 26px; border-radius: 10px; text-align: center; }
+  #resume small { display: block; color: #9a9aa3; font-weight: normal; font-size: 12px; margin-top: 2px; }
   #watch-row { margin-top: 8px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
   #hud.replaying > *:not(#scope) { display: none !important; }
   #replay { position: fixed; inset: 0; z-index: 65; pointer-events: none; color: #fff; }
