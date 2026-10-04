@@ -2744,7 +2744,7 @@
   });
 
   document.addEventListener("mousemove", (e) => {
-    if (!pointerLocked) return;
+    if (!pointerLocked || replay.active) return;
     let dx = e.movementX, dy = e.movementY;
     const M = CFG.maxMouseDelta;
     if (dx > M) dx = M; else if (dx < -M) dx = -M;
@@ -2777,7 +2777,13 @@
     if (keys[e.code]) return;
     keys[e.code] = true;
     if (e.code === "Tab" && pointerLocked) { e.preventDefault(); mpRefreshScoreboard(); }
-    if (!pointerLocked) return;
+    if (!pointerLocked || replay.active) return;
+    // P: watch your last hit (out of the way of the movement keys, so it's never pressed by accident)
+    if (e.code === "KeyP" && (lastClip || rec.pending.length) && !net.active) {
+      finishAllClips();   // a hit from a moment ago may still be waiting for its "after" part
+      if (lastClip) { startReplay(lastClip, "Last hit \u00B7 " + lastClip.meta.points + " points  (P to keep playing)", "game"); e.stopImmediatePropagation(); }
+      return;
+    }
     if (e.code === "Space") { jumpQueued = true; jumpQueueTimer = 0.12; }
     if (e.code === "KeyF") startInspect();
     if (e.code === "KeyR") startReload();
@@ -2788,7 +2794,7 @@
   window.addEventListener("keyup", (e) => { keys[e.code] = false; if (e.code === "Tab") mpRefreshScoreboard(); });
 
   domEl.addEventListener("mousedown", (e) => {
-    if (!pointerLocked) return;
+    if (!pointerLocked || replay.active) return;
     if (e.button === 0) { mouseHeld = true; attackPressed = true; }
     if (e.button === 2) {
       if (currentWeapon().isMelee) { throwKnife(); return; }
@@ -5486,6 +5492,7 @@
 
   function startReplay(clip, label, from) {
     if (!clip) return;
+    if (from !== "game" && document.pointerLockElement) document.exitPointerLock();
     replayProps();
     // put the live world aside
     replay.saved = {
@@ -5545,7 +5552,10 @@
     scopeEl.style.opacity = 0; scopeLinesEl.style.opacity = 0;
     replayEl.hidden = true;
     if (replay.from === "results") resultsEl.hidden = false;
+    else if (replay.from === "game" && pointerLocked) blocker.style.display = "none";   // straight back into play
     else blocker.style.display = "flex";
+    for (const k in keys) keys[k] = false;   // nothing held over from before the replay
+    mouseHeld = false; attackPressed = false;
   }
 
   // run the clip's events up to the current time
@@ -5665,6 +5675,7 @@
     replayCam.updateProjectionMatrix();
     renderer.render(scene, replayCam);
     updateReplayBar();
+    stopVideoIfDone();
   }
 
   function restartReplay() {
@@ -5698,13 +5709,14 @@
   document.getElementById("rp-slow").addEventListener("click", (e) => { e.currentTarget.blur(); replay.slowMo = !replay.slowMo; });
   document.getElementById("rp-exit").addEventListener("click", (e) => { e.currentTarget.blur(); stopReplay(); });
   window.addEventListener("keydown", (e) => {
-    if (!replay.active) return;
+    if (!replay.active || videoRec) return;
     if (e.code === "Space") { e.preventDefault(); replayPauseOrRestart(); }
     else if (e.code === "KeyR") restartReplay();
     else if (e.code === "KeyS") cycleReplaySpeed();
     else if (e.code === "KeyB") { replay.bulletCam = !replay.bulletCam; restartReplay(); }
     else if (e.code === "KeyM") replay.slowMo = !replay.slowMo;
     else if (e.code === "Escape") stopReplay();
+    else if (e.code === "KeyP" && replay.from === "game") stopReplay();
   });
 
   // ---- the buttons that start one ----
@@ -5725,6 +5737,131 @@
     if (run.bestClip) startReplay(run.bestClip, "Best shot of the run · " + run.bestClip.meta.points + " points", "results");
   });
   refreshReplayButtons();
+
+  // ---- saving and sharing: a replay file (opened in the game) or a video of the replay ----
+  // A replay file from someone else is untrusted: every value is checked and a clean copy rebuilt,
+  // and none of its text is ever put into the page as HTML.
+  const REPLAY_FILE_MAX = 3 * 1024 * 1024;
+  function cleanClip(c) {
+    const fin = (n) => typeof n === "number" && Number.isFinite(n);
+    const nums = (a, n) => Array.isArray(a) && a.length === n && a.every(fin);
+    const int = (n, max) => Number.isInteger(n) && n >= 0 && n < max;
+    const strs = (a) => (Array.isArray(a) ? a.filter((s) => typeof s === "string").slice(0, 30).map((s) => s.slice(0, 40)) : []);
+    if (!c || typeof c !== "object" || c.v !== 1 || !Array.isArray(c.frames) || !Array.isArray(c.events) || !Array.isArray(c.snap)) return null;
+    if (c.frames.length < 2 || c.frames.length > 4000 || c.events.length > 5000 || c.snap.length > 64) return null;
+    const frames = [];
+    for (const f of c.frames) {
+      if (!f || !fin(f.t) || !nums(f.c, 9)) return null;
+      const g = { t: f.t, c: f.c.slice() };
+      if (f.tg !== undefined) {
+        if (!Array.isArray(f.tg) || f.tg.length > 64 || !f.tg.every((q) => Array.isArray(q) && q.length === 4 && int(q[0], 64) && q.slice(1).every(fin))) return null;
+        g.tg = f.tg.map((q) => q.slice());
+      }
+      if (f.kn !== undefined) {
+        if (!Array.isArray(f.kn) || f.kn.length > 8 || !f.kn.every((q) => nums(q, 8))) return null;
+        g.kn = f.kn.map((q) => q.slice());
+      }
+      frames.push(g);
+    }
+    const events = [];
+    for (const e of c.events) {
+      if (!e || !fin(e.t)) return null;
+      if (e.type === "shot" && nums(e.o, 3) && nums(e.d, 3) && fin(e.l) && typeof e.w === "string" && WEAPONS[e.w]) events.push({ t: e.t, type: "shot", w: e.w, snd: !!e.snd, o: e.o.slice(), d: e.d.slice(), l: e.l });
+      else if (e.type === "throw") events.push({ t: e.t, type: "throw" });
+      else if (e.type === "ko" && int(e.i, 64) && TARGET_TYPES[e.ty] && nums(e.cv, 3) && fin(e.sp)) events.push({ t: e.t, type: "ko", i: e.i, ty: e.ty, cv: e.cv.slice(), sp: e.sp });
+      else if (e.type === "spawn" && int(e.i, 64) && TARGET_TYPES[e.ty] && nums(e.p, 3)) events.push({ t: e.t, type: "spawn", i: e.i, ty: e.ty, p: e.p.slice() });
+      else if (e.type === "hit" && Number.isInteger(e.i) && nums(e.o, 3) && nums(e.p, 3)) events.push({ t: e.t, type: "hit", i: e.i, o: e.o.slice(), p: e.p.slice(), knife: !!e.knife });
+      else return null;
+    }
+    const snap = [];
+    for (const s of c.snap) {
+      if (!Array.isArray(s) || s.length !== 5 || !TARGET_TYPES[s[0]] || !s.slice(1).every(fin)) return null;
+      snap.push(s.slice());
+    }
+    const m = c.meta || {};
+    if (!fin(c.hitT) || !fin(m.points) || !fin(m.mult)) return null;
+    return { v: 1, snap, hitT: c.hitT, frames, events,
+      meta: { points: Math.round(m.points), mult: m.mult, tags: strs(m.tags), pens: strs(m.pens), dist: fin(m.dist) ? m.dist : undefined } };
+  }
+  function downloadBlob(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  const clipName = (clip, ext) => "trickshot-" + new Date().toISOString().slice(0, 10) + "-" + clip.meta.points + "pts" + ext;
+  function saveReplayFile() {
+    const clip = replay.clip;
+    if (!clip) return;
+    downloadBlob(new Blob([JSON.stringify(Object.assign({ kind: "trickshot-sandbox-replay" }, clip))], { type: "application/json" }), clipName(clip, ".json"));
+    flashReplayNote("Saved as a replay file. Open it with \"Open replay file\" in the menu.");
+  }
+  // record the replay as a video: the 3D view plus the game's sound, played once from the start
+  let videoRec = null;
+  function saveReplayVideo() {
+    if (videoRec || !replay.clip) return;
+    const canvas = renderer.domElement;
+    if (!canvas.captureStream || typeof MediaRecorder === "undefined") { flashReplayNote("This browser can't record video."); return; }
+    const stream = canvas.captureStream(60);
+    let audioOut = null;
+    if (audioCtx && audioCtx.createMediaStreamDestination) {
+      audioOut = audioCtx.createMediaStreamDestination();
+      masterGain.connect(audioOut);
+      for (const tr of audioOut.stream.getAudioTracks()) stream.addTrack(tr);
+    }
+    const type = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+    const chunks = [];
+    const mr = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 6000000 } : undefined);
+    mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    mr.onstop = () => {
+      if (audioOut) { try { masterGain.disconnect(audioOut); } catch (e) { /* already gone */ } }
+      downloadBlob(new Blob(chunks, { type: "video/webm" }), clipName(replay.clip, ".webm"));
+      videoRec = null;
+      replayEl.classList.remove("recording");
+      flashReplayNote("Saved as a video (.webm).");
+    };
+    videoRec = mr;
+    replayEl.classList.add("recording");
+    restartReplay();
+    replay.paused = false;
+    mr.start(250);
+  }
+  let videoEndAt = 0;   // when playback reached the end; the video keeps half a second after that
+  function stopVideoIfDone() {
+    if (!videoRec || videoRec.state !== "recording") { videoEndAt = 0; return; }
+    const atEnd = replay.phase !== "bullet" && replay.time >= replay.clip.frames[replay.clip.frames.length - 1].t;
+    if (!atEnd) { videoEndAt = 0; return; }
+    if (!videoEndAt) videoEndAt = performance.now();
+    else if (performance.now() - videoEndAt > 500) { videoEndAt = 0; videoRec.stop(); }
+  }
+  let replayNoteTimer = 0;
+  function flashReplayNote(text) {
+    const el = document.getElementById("replay-note");
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(replayNoteTimer);
+    replayNoteTimer = setTimeout(() => { el.hidden = true; }, 4000);
+  }
+  document.getElementById("rp-save").addEventListener("click", (e) => { e.currentTarget.blur(); saveReplayFile(); });
+  document.getElementById("rp-video").addEventListener("click", (e) => { e.currentTarget.blur(); saveReplayVideo(); });
+  // opening a replay file someone sent
+  const replayFileEl = document.getElementById("replay-file");
+  document.getElementById("open-replay").addEventListener("click", (e) => { e.stopPropagation(); replayFileEl.value = ""; replayFileEl.click(); });
+  replayFileEl.addEventListener("click", (e) => e.stopPropagation());
+  replayFileEl.addEventListener("change", () => {
+    const file = replayFileEl.files && replayFileEl.files[0];
+    const note = document.getElementById("open-replay-note");
+    if (!file) return;
+    if (file.size > REPLAY_FILE_MAX) { note.textContent = "That file is too big to be a replay."; return; }
+    file.text().then((text) => {
+      let clip = null;
+      try { clip = cleanClip(JSON.parse(text)); } catch (e) { clip = null; }
+      if (!clip) { note.textContent = "That isn't a Trickshot Sandbox replay file (or it's damaged)."; return; }
+      note.textContent = "";
+      startReplay(clip, "Replay file · " + clip.meta.points + " points", "menu");
+    });
+  });
 
   // ======================================================================
   // MAIN LOOP

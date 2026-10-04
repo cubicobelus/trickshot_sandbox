@@ -19,7 +19,7 @@ unzip, and open `index.html`. No internet connection is needed.
 
 ## How to play
 
-**Controls:** WASD move, Space jump, Shift sprint, Ctrl slide, R reload, F inspect, left click attack,
+**Controls:** WASD move, Space jump, Shift sprint, Ctrl slide, R reload, F inspect, P replay last hit, left click attack,
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
 
@@ -33,7 +33,10 @@ or a 100x shot. Both are kept in your browser.
 
 **Replays:** every hit is recorded. The menu's **Watch best trickshot** and **Watch last hit** buttons (and
 **Watch best shot** on a Score Attack results screen) play it back from your view, slowing down around the
-hit, with a **bullet cam** that rides the shot to the target. Your best trickshot's replay is kept in your browser.
+hit, with a **bullet cam** that rides the shot to the target. Press **P** while playing to watch your last
+hit (P again to carry on). Your best trickshot's replay is kept in your browser. From the replay bar you can
+**Save file** (a small replay file a friend can watch with **Open replay file** in the menu) or **Save video**
+(a .webm you can post anywhere).
 
 **Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too.
 1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns

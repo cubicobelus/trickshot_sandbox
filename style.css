@@ -335,7 +335,6 @@
 
   /* ---------------- replays ---------------- */
   #watch-row { margin-top: 8px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-  #watch-row:not(:has(button:not([hidden]))) { display: none; }
   #hud.replaying > *:not(#scope) { display: none !important; }
   #replay { position: fixed; inset: 0; z-index: 65; pointer-events: none; color: #fff; }
   #replay[hidden] { display: none; }
@@ -355,6 +354,14 @@
     font: 12.5px 'Segoe UI', Arial, sans-serif; cursor: pointer; }
   .rp-buttons button:hover { border-color: #ffd24a; color: #fff; }
   #rp-exit { color: #ff9d3b; }
+  #replay-note { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); background: rgba(15,15,20,0.85);
+    border: 1px solid #7CFC00; color: #c8ffb0; padding: 6px 14px; border-radius: 6px; font-size: 13px; }
+  #replay-note[hidden] { display: none; }
+  .rp-rec { display: none; position: absolute; top: 16px; left: 50%; transform: translateX(-50%); color: #ff5a4f; font-weight: bold; font-size: 13px; }
+  #replay.recording .rp-rec { display: block; }
+  #replay.recording .rp-bar { display: none; }   /* the bar isn't in the video anyway; hide it while recording */
+  #open-replay-note { text-align: center; min-height: 0; }
+  #open-replay-note:empty { display: none; }
 
   /* ---------------- mode select + multiplayer ---------------- */
   [hidden] { display: none !important; }
