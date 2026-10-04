@@ -135,6 +135,13 @@ def test_game(browser, base):
         page.click(f".stab[data-tab={t}]")
         shown.append(page.evaluate(f"!document.querySelector('.spanel[data-panel={t}]').hidden"))
     check("every settings tab opens", all(shown), ", ".join(tabs))
+    page.click(".stab[data-tab=view]")
+    page.select_option("#quality", "low")
+    page.check("#show-fps")
+    low_ok = page.input_value("#quality") == "low"
+    page.select_option("#quality", "auto")
+    page.uncheck("#show-fps")
+    check("the graphics setting switches levels", low_ok)
     page.click(".stab[data-tab=sound]")
     page.fill("#vol-move", "0.4")
     page.dispatch_event("#vol-move", "input")

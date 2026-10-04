@@ -206,6 +206,16 @@
         <div class="check-row">
           <label><input type="checkbox" id="scope-sway" data-setting="scopeSway" checked>Scope sway</label>
           <label><input type="checkbox" id="speed-lines" data-setting="speedLines" checked>Speed lines</label>
+          <label><input type="checkbox" id="show-fps" data-setting="showFps">Show FPS</label>
+        </div>
+        <div class="slider-row">
+          <label for="quality">Graphics</label>
+          <select id="quality" data-setting="quality">
+            <option value="auto">Auto (steps down if it runs slow)</option>
+            <option value="high">High</option>
+            <option value="medium">Medium (75% resolution, cheaper shadows)</option>
+            <option value="low">Low (half resolution, no shadows)</option>
+          </select>
         </div>
       </div>
 
@@ -304,6 +314,7 @@
   <div id="ach-toast"><small>Achievement unlocked</small><b></b><span></span></div>
   <div id="mp-timer" hidden><span id="mp-timer-val">3:00</span><div id="mp-timer-mode"></div></div>
   <div id="killfeed"></div>
+  <div id="fps" hidden></div>
   <div id="dead-screen" hidden><div>ELIMINATED</div><small id="dead-by"></small></div>
   <div id="ammo">
     <div class="count" id="ammo-count">5<span class="max"> / 5</span></div>

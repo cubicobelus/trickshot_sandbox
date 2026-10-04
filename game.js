@@ -153,6 +153,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
+    quality: "auto", showFps: false,   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -193,6 +194,57 @@
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
+
+  // ---- graphics quality: how many pixels get drawn and how shadows are done ----
+  // High is the full look. Medium draws 75% of the pixels' width and height with cheaper shadows,
+  // Low draws half with no shadows. Auto starts on High and steps down while frames stay slow.
+  const GFX_LEVELS = {
+    high: { scale: 1, shadows: THREE.PCFSoftShadowMap },
+    medium: { scale: 0.75, shadows: THREE.PCFShadowMap },
+    low: { scale: 0.5, shadows: null },
+  };
+  const GFX_ORDER = ["high", "medium", "low"];
+  let gfxLevel = null;
+  function applyGraphics(level) {
+    if (level === gfxLevel) return;
+    const L = GFX_LEVELS[level];
+    const shadowsChanged = !gfxLevel || GFX_LEVELS[gfxLevel].shadows !== L.shadows;
+    gfxLevel = level;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * L.scale);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (shadowsChanged) {
+      renderer.shadowMap.enabled = !!L.shadows;
+      if (L.shadows) renderer.shadowMap.type = L.shadows;
+      scene.traverse((o) => {   // materials rebuild their shaders for the new shadow setting
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; });
+      });
+      renderer.shadowMap.needsUpdate = true;
+    }
+  }
+  // Auto: every 2 s of play, look at the average frame time; drop a level if it's slower than ~45 fps
+  let gfxWindow = 0, gfxFrames = 0, gfxCooldown = 0;
+  function updateAutoGraphics(realDt) {
+    if (SETTINGS.quality !== "auto") return;
+    gfxWindow += realDt; gfxFrames++;
+    if (gfxCooldown > 0) gfxCooldown -= realDt;
+    if (gfxWindow < 2) return;
+    const avg = gfxWindow / gfxFrames;
+    gfxWindow = 0; gfxFrames = 0;
+    const i = GFX_ORDER.indexOf(gfxLevel);
+    if (avg > 1 / 45 && i < GFX_ORDER.length - 1 && gfxCooldown <= 0) { applyGraphics(GFX_ORDER[i + 1]); gfxCooldown = 4; }
+  }
+  // the optional frame counter: frames per second, frame time, and the level in use
+  const fpsEl = document.getElementById("fps");
+  let fpsTime = 0, fpsFrames = 0;
+  function updateFps(realDt) {
+    fpsEl.hidden = !SETTINGS.showFps;
+    if (!SETTINGS.showFps) return;
+    fpsTime += realDt; fpsFrames++;
+    if (fpsTime < 0.5) return;
+    fpsEl.textContent = Math.round(fpsFrames / fpsTime) + " fps · " + (fpsTime / fpsFrames * 1000).toFixed(1) + " ms · " +
+      gfxLevel + (SETTINGS.quality === "auto" ? " (auto)" : "");
+    fpsTime = 0; fpsFrames = 0;
+  }
 
   // the environment map below already lights everything softly from the sky, so the
   // fill light is low and the sun does the shaping
@@ -801,7 +853,7 @@
   // ======================================================================
   const props = [];
   const propMeshes = [];
-  let propsWereMoving = false;
+  let propsWereMoving = false, propShadowTimer = 0;   // shadows re-bake ~10x a second while a crate moves
   function activeProps() { return net.active ? [] : propMeshes; }
   function setPropsEnabled(on) {
     for (const p of props) p.mesh.visible = on;
@@ -850,7 +902,8 @@
       if (p.velocity.lengthSq() > 0.01 || pos.y > floorY + 0.01) moving = true;
     }
     // shadows are baked for speed, so re-bake while any crate is still moving
-    if (moving || propsWereMoving) renderer.shadowMap.needsUpdate = true;
+    propShadowTimer -= dt;
+    if ((moving && propShadowTimer <= 0) || (!moving && propsWereMoving)) { renderer.shadowMap.needsUpdate = true; propShadowTimer = 0.1; }
     propsWereMoving = moving;
   }
 
@@ -1807,6 +1860,7 @@
   const SWING_ORDER = ["fore", "back", "fore", "back", "stab"];
   const _swing = [0, 0, 0, 0, 0, 0];
 
+  let lastXhOpacity = -1;
   function updateViewmodel(dt, moving, sprinting, onGround) {
     let holster = 0;
     if (vm.switchTimer > 0) {
@@ -2009,7 +2063,8 @@
     scopeEl.style.transform = "translate(-50%, -50%) scale(" + (1.2 - 0.2 * scopeAlpha).toFixed(3) + ")";
     scopeLinesEl.style.opacity = scopeAlpha;
     // the scope has its own reticle; iron sights are the aim, so the crosshair fades out while aiming
-    crosshairEl.style.opacity = w.scope ? (adsEased > 0.5 ? 0 : 1) : Math.max(0, 1 - adsEased * 2);
+    const xhOpacity = w.scope ? (adsEased > 0.5 ? 0 : 1) : Math.max(0, 1 - adsEased * 2);
+    if (xhOpacity !== lastXhOpacity) { crosshairEl.style.opacity = xhOpacity; lastXhOpacity = xhOpacity; }
     w.group.visible = scopeAlpha < 0.98;
   }
 
@@ -2509,6 +2564,8 @@
   const xhPreviewEl = document.getElementById("xh-preview");
   function applySettings() {
     if (targetsReady) syncTargetCounts();
+    if (SETTINGS.quality === "auto") { if (!gfxLevel) applyGraphics("high"); }
+    else applyGraphics(SETTINGS.quality);
     const svg = crosshairSVG(SETTINGS);
     crosshairEl.innerHTML = svg;
     crosshairEl.style.color = SETTINGS.xhColor;
@@ -5350,6 +5407,7 @@
 
     if (pointerLocked) {
       updateRun(realDt);   // real time, so hit-stop slow-mo doesn't stretch the clock
+      updateAutoGraphics(realDt);
       stats.time += realDt; statsDirty = true;
       statsSaveTimer -= realDt;
       if (statsSaveTimer <= 0) { statsSaveTimer = 5; saveStats(); }
@@ -5379,6 +5437,7 @@
       updateViewmodel(dt, speed > 0.5, keys["ShiftLeft"] || keys["ShiftRight"], player.onGround);
     }
 
+    updateFps(realDt);
     renderer.render(scene, camera);
     if (!shadowsBaked) { shadowsBaked = true; renderer.shadowMap.needsUpdate = true; }
   }

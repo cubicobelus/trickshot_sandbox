@@ -382,6 +382,7 @@
   }
   #mp-timer-val { font-size: 24px; font-weight: bold; color: #ffd24a; font-variant-numeric: tabular-nums; }
   #mp-timer-mode { font-size: 10px; letter-spacing: 1.5px; color: #999; text-transform: uppercase; }
+  #fps { position: absolute; top: 8px; left: 8px; font: 12px Consolas, monospace; color: #c8ffb0; background: rgba(0,0,0,0.45); padding: 2px 6px; border-radius: 4px; }
   #killfeed { position: absolute; top: 18px; left: 18px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
   #killfeed div { background: rgba(0,0,0,0.45); color: #fff; font-size: 13px; padding: 4px 10px; border-radius: 5px; }
   #killfeed b { color: #ffd24a; }
