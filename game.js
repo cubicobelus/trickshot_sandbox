@@ -46,6 +46,10 @@
     wallBouncePushOut: 3.0,
     wallBounceCooldown: 0.16,
     wallBounceMaxSpeed: 26,
+    wallBounceMinSpeed: 5,      // speed straight into the wall needed to bounce, so hugging one and jumping doesn't
+    wallImpactMemory: 0.25,     // a bounce still counts this long after hitting the wall
+    wallBounceSteerLock: 0.5,   // after a bounce, movement keys don't steer for this long...
+    wallBounceSteerFade: 0.15,  // ...then steering fades back in over this long
     wallRideScoreWindow: 1.4,
 
     baseFov: 78,
@@ -312,7 +316,8 @@
   // LEVEL
   // ======================================================================
   const groundMeshes = [];
-  const wallBoxes = [];
+  const wallBoxes = [];      // everything that blocks movement
+  const bounceBoxes = [];    // the subset you can wall-bounce off: actual walls and pillars
 
   // surfaces: "grass" for the floor, "deck" for platforms, "concrete" and "brick" for walls
   function addGround(x, y, z, w, d, surface, solid) {
@@ -331,7 +336,9 @@
     mesh.position.set(x, y, z);
     mesh.castShadow = true; mesh.receiveShadow = true;
     scene.add(mesh);
-    wallBoxes.push(new THREE.Box3().setFromObject(mesh));
+    const box = new THREE.Box3().setFromObject(mesh);
+    wallBoxes.push(box);
+    bounceBoxes.push(box);
   }
 
   // ---- kicker ramps: a sloped floor rising along x or z. Running off the high end turns
@@ -473,26 +480,57 @@
   // TARGETS (standard / moving / small)
   // ======================================================================
   const targets = [];
-  // a plate (cylinder turned to face +Z) painted with a bullseye in the target type's colour;
-  // the rim and back are bare steel. Colours: red standard, orange moving, cyan small.
-  const plateGeo = new THREE.CylinderGeometry(1, 1, 0.07, 40);
-  plateGeo.rotateX(Math.PI / 2);
+  // a plate painted with a bullseye in the target type's colour, built in two parts so the
+  // centre can punch out when it's hit: an outer ring (a disc with a hole) and a core that
+  // fills the hole. Rims and backs are bare steel. Red standard, orange moving, cyan small.
+  const CORE_R = 0.43;   // the core is the inner white ring and the centre spot
+  const plateGeo = (function () {
+    const sh = new THREE.Shape();
+    sh.absarc(0, 0, 1, 0, Math.PI * 2, false);
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, CORE_R, 0, Math.PI * 2, true);
+    sh.holes.push(hole);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.07, bevelEnabled: false, curveSegments: 40 });
+    g.translate(0, 0, -0.035);
+    return g;
+  })();
+  const coreGeo = new THREE.CylinderGeometry(CORE_R, CORE_R, 0.075, 32);
+  coreGeo.rotateX(Math.PI / 2);
   const plateRimGeo = new THREE.TorusGeometry(1, 0.06, 8, 40);
   const plateSteel = new THREE.MeshStandardMaterial({ color: 0x8e959d, roughness: 0.45, metalness: 0.7 });
-  function bullseyeMaterial(color) {
+  function bullseyeMaterial(color, core) {
     const tex = canvasTexture(256, (g, n) => {
+      if (core) {   // just the white ring and the spot, filling the whole core
+        g.fillStyle = "#f4f4f2"; g.beginPath(); g.arc(n / 2, n / 2, n / 2, 0, Math.PI * 2); g.fill();
+        g.fillStyle = color; g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (0.24 / CORE_R), 0, Math.PI * 2); g.fill();
+        g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
+        g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (0.24 / CORE_R) - 1, 0, Math.PI * 2); g.stroke();
+        return;
+      }
       const rings = [color, "#f4f4f2", color, "#f4f4f2", color];
       rings.forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (1 - i * 0.19), 0, Math.PI * 2); g.fill(); });
       g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
       for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (1 - i * 0.19) - 1, 0, Math.PI * 2); g.stroke(); }
     });
+    // the ring's faces take their texture coordinates from the shape (-1..1), so map that onto the texture
+    if (!core) { tex.repeat.set(0.5, 0.5); tex.offset.set(0.5, 0.5); }
     // a touch of glow so a plate in shadow still reads against the sky
     return new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.38, roughness: 0.55, metalness: 0.1 });
   }
-  // materials for the plate's [rim, front, back] faces
-  const ringMat = [plateSteel, bullseyeMaterial("#e5352f"), plateSteel];
-  const ringMovingMat = [plateSteel, bullseyeMaterial("#ff8a1c"), plateSteel];
-  const ringSmallMat = [plateSteel, bullseyeMaterial("#19c6e0"), plateSteel];
+  // ring materials are [faces, edges]; core materials are [edge, front, back]
+  const TARGET_LOOKS = {};
+  for (const [kind, color] of [["normal", "#e5352f"], ["moving", "#ff8a1c"], ["small", "#19c6e0"]]) {
+    TARGET_LOOKS[kind] = {
+      ring: [bullseyeMaterial(color), plateSteel],
+      core: [plateSteel, bullseyeMaterial(color, true), plateSteel],
+    };
+  }
+  function setTargetLook(t) {
+    const ud = t.userData;
+    const look = TARGET_LOOKS[ud.small ? "small" : (ud.moving ? "moving" : "normal")];
+    t.children[0].material = look.ring;
+    t.children[2].material = look.core;
+  }
 
   const PLAYER_SPAWN = new THREE.Vector3(0, 1.7, 8);
 
@@ -535,8 +573,7 @@
     t.scale.setScalar(ud.scale);
     ud.hitRadius = 1.1 * ud.scale;
 
-    const ring = t.children[0];
-    ring.material = ud.small ? ringSmallMat : (ud.moving ? ringMovingMat : ringMat);
+    setTargetLook(t);
 
     if (!ud.moving) { ud.vertical = false; return; }
     ud.vertical = Math.random() < 0.5;
@@ -560,10 +597,10 @@
 
   function makeTarget() {
     const group = new THREE.Group();
-    const plate = new THREE.Mesh(plateGeo, ringMat);
+    const plate = new THREE.Mesh(plateGeo, TARGET_LOOKS.normal.ring);
     const rim = new THREE.Mesh(plateRimGeo, plateSteel);
-    plate.castShadow = rim.castShadow = false;
-    group.add(plate, rim);
+    const core = new THREE.Mesh(coreGeo, TARGET_LOOKS.normal.core);
+    group.add(plate, rim, core);   // children[0] ring, [1] rim, [2] core
     group.userData = { idx: targets.length, alive: true, hitRadius: 1.1, base: new THREE.Vector3(), moving: false, vertical: false, small: false, scale: 1 };
     scene.add(group);
     targets.push(group);
@@ -574,7 +611,37 @@
   }
   for (let i = 0; i < CFG.targetCount; i++) makeTarget();
 
+  // hit: the core punches out backwards and tumbles down; the ring hangs a moment, then shrinks away
+  const TARGET_RING_HOLD = 0.5, TARGET_RING_SHRINK = 0.15;
+  function knockOutTarget(t) {
+    const ud = t.userData;
+    ud.knockT = 0;
+    ud.coreVel = ud.coreVel || new THREE.Vector3();
+    ud.coreVel.set((Math.random() - 0.5) * 1.5, 1.5 + Math.random(), -(3.5 + Math.random() * 1.5));   // local: back, up a little
+    ud.coreSpin = (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 6);
+  }
+  function animateKnockout(t, dt) {
+    const ud = t.userData;
+    if (ud.knockT === undefined || ud.knockT < 0) return;
+    ud.knockT += dt;
+    const core = t.children[2];
+    ud.coreVel.y -= CFG.gravity * 0.6 * dt;
+    core.position.addScaledVector(ud.coreVel, dt / ud.scale);   // local units are scaled with the target
+    core.rotation.x += ud.coreSpin * dt;
+    core.scale.setScalar(Math.max(0.01, 1 - Math.max(0, ud.knockT - 0.45) / 0.25));
+    const k = Math.max(0, ud.knockT - TARGET_RING_HOLD) / TARGET_RING_SHRINK;
+    const ringScale = Math.max(0.01, 1 - k);
+    t.children[0].scale.setScalar(ringScale);
+    t.children[1].scale.setScalar(ringScale);
+    if (k >= 1 && ud.knockT >= 0.7) { t.visible = false; ud.knockT = -1; }
+  }
+  function resetTargetParts(t) {
+    for (const c of t.children) { c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.setScalar(1); }
+    t.userData.knockT = -1;
+  }
+
   function respawnTarget(t) {
+    resetTargetParts(t);
     t.userData.base.copy(randomSpawnPoint(occupiedPoints(t)));
     t.position.copy(t.userData.base);
     assignTargetType(t);
@@ -592,13 +659,14 @@
   }
   function applyTargetData(t, d) {
     const u = t.userData;
+    resetTargetParts(t);
     u.base.set(d.b[0], d.b[1], d.b[2]);
     u.small = d.s; u.moving = d.m; u.vertical = d.v;
     u.phase = d.ph; u.speedH = d.sh; u.ampH = d.ah; u.speedV = d.sv; u.ampV = d.av; u.axisX = d.ax; u.axisZ = d.az;
     u.scale = u.small ? 0.5 : 1;
     t.scale.setScalar(u.scale);
     u.hitRadius = 1.1 * u.scale;
-    t.children[0].material = u.small ? ringSmallMat : (u.moving ? ringMovingMat : ringMat);
+    setTargetLook(t);
     t.position.copy(u.base);
     u.alive = d.a;
     t.visible = d.a;
@@ -612,6 +680,7 @@
     for (const t of targets) {
       const ud = t.userData;
       if (!ud.alive) {
+        animateKnockout(t, dt);
         if (net.role === "client") continue;   // the host decides when targets come back
         ud.respawnTimer -= dt;
         if (ud.respawnTimer <= 0) { respawnTarget(t); if (net.role === "host") mpAnnounceSpawn(t); }
@@ -2684,6 +2753,7 @@
     lastWallBounceAt: -99, lastLandTime: -99,
     lastYaw: 0, airSpinAccum: 0, airSpinNet: 0, feetY: 0.25,
     groundRise: 0,   // how fast the ramp under you is lifting you (m/s); becomes a launch off the top
+    wallImpactSpeed: 0, wallImpactAt: -99,   // the last time a wall stopped us, and how fast we hit it
     viewRoll: 0,
   };
 
@@ -2742,7 +2812,7 @@
   const _wallNormal = new THREE.Vector3();
   function nearestWallNormal(pos, maxDist) {
     let bestD = Infinity, found = false;
-    for (const box of wallBoxes) {
+    for (const box of bounceBoxes) {
       if (pos.y < box.min.y - 0.2 || pos.y > box.max.y + 0.2) continue;
       const clx = Math.max(box.min.x, Math.min(pos.x, box.max.x));
       const clz = Math.max(box.min.z, Math.min(pos.z, box.max.z));
@@ -2798,15 +2868,23 @@
     const n = nearestWallNormal(yawObject.position, CFG.wallCheckDist);
     if (!n) return false;
 
+    // only a real hit counts: how fast you're heading into the wall now, or how hard you hit
+    // it in the last moment. Leaning on a wall and jumping isn't a bounce.
+    const vx = player.velocity.x, vz = player.velocity.z;
+    const dot = vx * n.x + vz * n.z;
+    const recentHit = elapsedTime - player.wallImpactAt <= CFG.wallImpactMemory ? player.wallImpactSpeed : 0;
+    const approach = Math.max(-dot, recentHit);
+    if (approach < CFG.wallBounceMinSpeed) return false;
+
     const perfect = player.wallContactTime >= 0 && player.wallContactTime <= CFG.wallPerfectWindow;
     const restitution = perfect ? CFG.wallBounceRestitutionPerfect : CFG.wallBounceRestitutionNormal;
 
-    const vx = player.velocity.x, vz = player.velocity.z;
-    const dot = vx * n.x + vz * n.z;
-    let rx = vx, rz = vz;
-    if (dot < 0) { rx = vx - 2 * dot * n.x; rz = vz - 2 * dot * n.z; }
-    rx = rx * restitution + n.x * CFG.wallBouncePushOut;
-    rz = rz * restitution + n.z * CFG.wallBouncePushOut;
+    // keep the speed you had along the wall and throw the into-the-wall part back out
+    const tx = vx - dot * n.x, tz = vz - dot * n.z;
+    const along = perfect ? 1.06 : 0.95;
+    const out = approach * restitution + CFG.wallBouncePushOut;
+    let rx = tx * along + n.x * out;
+    let rz = tz * along + n.z * out;
 
     const sp = Math.hypot(rx, rz);
     if (sp > CFG.wallBounceMaxSpeed) {
@@ -2820,6 +2898,7 @@
     player.wallBounceCooldown = CFG.wallBounceCooldown;
     player.wallContactTime = -1;
     player.lastWallBounceAt = elapsedTime;
+    player.wallImpactSpeed = 0;
 
     playWallBounce(perfect);
     if (perfect) burst(yawObject.position, 0x7CFC00, 5);
@@ -2948,7 +3027,11 @@
         }
       }
     } else {
-      accelerate(player.velocity, _wishDir, CFG.airWishSpeedCap, CFG.airAccel, dt);
+      // right after a wall bounce the bounce carries you: holding the key that ran you into the
+      // wall would otherwise cancel it in a tenth of a second. Steering fades back in after.
+      const sinceBounce = elapsedTime - player.lastWallBounceAt;
+      const steer = Math.min(Math.max((sinceBounce - CFG.wallBounceSteerLock) / CFG.wallBounceSteerFade, 0), 1);
+      if (steer > 0) accelerate(player.velocity, _wishDir, CFG.airWishSpeedCap, CFG.airAccel * steer, dt);
       const touching = nearestWallNormal(yawObject.position, CFG.wallCheckDist) !== null;
       if (touching) player.wallContactTime = player.wallContactTime < 0 ? 0 : player.wallContactTime + dt;
       else player.wallContactTime = -1;
@@ -2971,6 +3054,23 @@
       _nextPos.z += travelZ / steps;
       resolveWalls(_nextPos, prevFeet, _stepFrom);
       resolveWalls(_nextPos, prevFeet, _stepFrom);
+    }
+    // if a wall pushed us back, the push points along its normal: drop the part of our
+    // velocity going into it (so we slide along instead of sticking) and remember how hard
+    // we hit, which is what a wall bounce is judged on
+    const pushX = _nextPos.x - (yawObject.position.x + travelX), pushZ = _nextPos.z - (yawObject.position.z + travelZ);
+    const pushLen = Math.hypot(pushX, pushZ);
+    if (pushLen > 1e-5) {
+      const nx = pushX / pushLen, nz = pushZ / pushLen;
+      const vn = player.velocity.x * nx + player.velocity.z * nz;
+      if (vn < 0) {
+        player.velocity.x -= vn * nx;
+        player.velocity.z -= vn * nz;
+        if (-vn >= player.wallImpactSpeed || elapsedTime - player.wallImpactAt > CFG.wallImpactMemory) {
+          player.wallImpactSpeed = -vn;
+          player.wallImpactAt = elapsedTime;
+        }
+      }
     }
     const B = CFG.arenaHalfSize - 0.6;
     _nextPos.x = Math.max(-B, Math.min(B, _nextPos.x));
@@ -3167,8 +3267,8 @@
   function scoreHit(target, dist, isKnife, ammoBefore, snap, thrown, weapon) {
     const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon);
     target.userData.alive = false;
-    target.visible = false;
-    burst(target.position, target.userData.small ? 0x22d3ee : 0xffd24a, target.userData.small ? 16 : 12);
+    knockOutTarget(target);
+    burst(target.position, target.userData.small ? 0x22d3ee : 0xffd24a, target.userData.small ? 8 : 6);
     const pointsGained = awardPoints(res);
     target.userData.respawnTimer = 1.1;
     if (net.active) mpTargetHit(target, pointsGained);
