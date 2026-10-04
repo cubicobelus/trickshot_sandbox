@@ -1152,7 +1152,6 @@
 
   // ---- AK: wooden furniture, gas tube over the barrel, slant brake, curved mag ----
   const akGroup = new THREE.Group();
-  const akStockParts = [];
   addPart(akGroup, new THREE.BoxGeometry(0.048, 0.06, 0.27), metalDark, 0, 0, 0);                // receiver
   addPart(akGroup, new THREE.BoxGeometry(0.044, 0.018, 0.25), metalMid, 0, 0.038, 0.005);       // dust cover
   addPart(akGroup, new THREE.BoxGeometry(0.004, 0.012, 0.09), metalMid, 0.026, 0.008, 0.02);     // bolt carrier slot
@@ -1187,7 +1186,6 @@
     const stock = new THREE.Mesh(geo, woodStock);
     stock.position.set(0, -0.005, 0.135);
     akGroup.add(stock);
-    akStockParts.push(stock);
   })();
   // banana mag: three segments curving forward, moved as one
   const akMag = new THREE.Group();
@@ -1199,7 +1197,6 @@
 
   // ---- pump shotgun: a classic 870-style gun ----
   const shotgunGroup = new THREE.Group();
-  const shotgunStockParts = [];
   // receiver, with the ejection port on the right and the loading port underneath
   addPart(shotgunGroup, new THREE.BoxGeometry(0.062, 0.08, 0.25), metalDark, 0, 0, 0);
   addPart(shotgunGroup, new THREE.BoxGeometry(0.004, 0.032, 0.085), portMat, 0.0312, 0.012, -0.03);
@@ -1222,11 +1219,13 @@
   // stock: a side profile (comb, heel, toe, wrist) extruded to the stock's thickness
   (function buildShotgunStock() {
     const p = new THREE.Shape();
-    p.moveTo(0.00, 0.030);    // top of the wrist, against the receiver
-    p.lineTo(0.12, 0.012);
-    p.lineTo(0.31, 0.000);    // comb, where the cheek rests
-    p.lineTo(0.345, -0.006);  // heel
-    p.lineTo(0.37, -0.135);   // toe
+    // a real shotgun's stock drops away below the sight line, which also keeps it out of
+    // view when aiming down the barrel
+    p.moveTo(0.00, 0.012);    // top of the wrist, against the receiver
+    p.lineTo(0.12, -0.012);
+    p.lineTo(0.31, -0.03);    // comb, where the cheek rests
+    p.lineTo(0.345, -0.036);  // heel
+    p.lineTo(0.37, -0.15);    // toe
     p.lineTo(0.20, -0.085);
     p.lineTo(0.09, -0.060);   // under the wrist
     p.lineTo(0.00, -0.040);
@@ -1237,8 +1236,7 @@
     const stock = new THREE.Mesh(geo, woodStock);
     stock.position.set(0, 0, 0.125);
     shotgunGroup.add(stock);
-    const pad = addPart(shotgunGroup, new THREE.BoxGeometry(0.058, 0.135, 0.014), gripMat, 0, -0.07, 0.125 + 0.362, -0.19, 0, 0);   // butt pad
-    shotgunStockParts.push(stock, pad);
+    addPart(shotgunGroup, new THREE.BoxGeometry(0.058, 0.12, 0.014), gripMat, 0, -0.093, 0.125 + 0.362, -0.19, 0, 0);   // butt pad
   })();
   // pump: rounded and ribbed, riding on the magazine tube
   const shotgunPump = new THREE.Group();
@@ -1344,6 +1342,9 @@
   //   action: what cycles after a shot (bolt, pump, slide or nothing)
   //   reload.keys: [time, x, y, rx, ry, rz] offsets from rest; mag* are seconds
   //   sound: how the recorded report is played back (until each gun gets its own)
+  //   recoilKick: aim climb per shot in radians (up), extra per shot of a burst (grow), random
+  //     sideways drift (side, widening through a burst), the most it can climb (max), and how
+  //     fast it settles back (recover, per second) once you've stopped firing for `hold` s
   const WEAPONS = {
     rifle: {
       name: "SNIPER", group: rifleGroup,
@@ -1355,6 +1356,7 @@
       action: "bolt", ejectOnShot: false, casing: "rifle",
       muzzle: new THREE.Vector3(0, 0.005, -1.20), eject: new THREE.Vector3(0.06, 0.035, 0.12),
       sound: { rate: 1, lowcut: 60, length: 1.8, gain: 1 },
+      recoilKick: { up: 0.035, grow: 0, side: 0.004, max: 0.05, recover: 6, hold: 0.08 },
       mag: magMesh, magRestY: magMesh.position.y,
       reload: {
         time: CFG.reloadTime, magOut: 0.18, magDrop: 0.32, magUp: 0.70, magSeat: 1.15, travel: 0.17, rise: 0.33,
@@ -1380,6 +1382,7 @@
       action: "none", ejectOnShot: true, casing: "small",
       muzzle: new THREE.Vector3(0, 0.015, -0.68), eject: new THREE.Vector3(0.03, 0.025, -0.01),
       sound: { recording: "ar", rate: 1, lowcut: 80, length: 0.6, gain: 0.8 },
+      recoilKick: { up: 0.006, grow: 0.0007, side: 0.0035, max: 0.11, recover: 7, hold: 0.12 },
       mag: arMag, magRestY: arMag.position.y,
       reload: {
         time: 2.0, magOut: 0.2, magDrop: 0.36, magUp: 0.75, magSeat: 1.2, travel: 0.15, rise: 0.3, charge: 1.5,
@@ -1398,8 +1401,8 @@
     ak: {
       name: "AK", group: akGroup,
       restPos: new THREE.Vector3(0.22, -0.25, -0.52), restRot: new THREE.Euler(0.03, -0.08, 0.01),
-      adsPos: new THREE.Vector3(0.0, -0.06, -0.38), adsRot: new THREE.Euler(0, 0, 0),   // post tip level with the notch
-      adsHide: akStockParts,
+      // close in, like a cheek on the stock: the stock sits behind the camera, out of view
+      adsPos: new THREE.Vector3(0.0, -0.06, -0.2), adsRot: new THREE.Euler(0, 0, 0),   // post tip level with the notch
       canADS: true, scope: false, adsZoom: 0.74, fireRate: 0.1, auto: true, isMelee: false, usesAmmo: true,
       // heavier than the rifle: kicks harder and blooms faster, but each hit is worth more
       magSize: 30, ammoLabel: "ROUNDS", pellets: 1, spread: 0.009, spreadAds: 0.0035, bloom: 0.005, bloomMax: 0.04, bloomRecover: 0.08,
@@ -1407,6 +1410,7 @@
       action: "none", ejectOnShot: true, casing: "small",
       muzzle: new THREE.Vector3(0, 0, -0.6), eject: new THREE.Vector3(0.03, 0.02, 0.0),
       sound: { recording: "ak", rate: 1, lowcut: 80, length: 0.6, gain: 0.85 },
+      recoilKick: { up: 0.011, grow: 0.0018, side: 0.016, max: 0.26, recover: 5, hold: 0.15 },   // terrible on purpose
       mag: akMag, magRestY: akMag.position.y, dropGeo: new THREE.BoxGeometry(0.028, 0.17, 0.07),
       reload: {
         time: 2.2, magOut: 0.22, magDrop: 0.4, magUp: 0.8, magSeat: 1.3, travel: 0.13, rise: 0.3, charge: 1.62,
@@ -1425,14 +1429,14 @@
     shotgun: {
       name: "SHOTGUN", group: shotgunGroup,
       restPos: new THREE.Vector3(0.26, -0.27, -0.55), restRot: new THREE.Euler(0.03, -0.07, 0.01),
-      adsPos: new THREE.Vector3(0.0, -0.049, -0.5), adsRot: new THREE.Euler(0, 0, 0),
-      adsHide: shotgunStockParts,
+      adsPos: new THREE.Vector3(0.0, -0.049, -0.2), adsRot: new THREE.Euler(0, 0, 0),   // the stock drops away below the view
       canADS: true, scope: false, adsZoom: 0.85, fireRate: 0.85, auto: false, isMelee: false, usesAmmo: true,
       magSize: 6, ammoLabel: "SHELLS", pellets: 9, spread: 0.065, spreadAds: 0.05, bloom: 0, bloomMax: 0, bloomRecover: 0,
       range: 70, scoreScale: 0.6, recoil: 1.15, kick: 0.9, flashScale: 1.25, brake: false, smoke: 1.1,
       action: "pump", ejectOnShot: false, casing: "shell",
       muzzle: new THREE.Vector3(0, 0.022, -0.77), eject: new THREE.Vector3(0.04, 0.02, 0.02),
       sound: { rate: 0.82, lowcut: 45, length: 1.5, gain: 1.05 },
+      recoilKick: { up: 0.045, grow: 0, side: 0.008, max: 0.06, recover: 6, hold: 0.08 },
       reload: { style: "shells", start: 0.35, perShell: 0.42, end: 0.3 },
       inspectDuration: 1.9, inspects: GUN_INSPECTS,
     },
@@ -1446,6 +1450,7 @@
       action: "slide", ejectOnShot: true, casing: "magnum",
       muzzle: new THREE.Vector3(0, 0.034, -0.2), eject: new THREE.Vector3(0.024, 0.04, 0.03),
       sound: { recording: "pistol", rate: 1, lowcut: 60, length: 1.8, gain: 0.9 },
+      recoilKick: { up: 0.03, grow: 0, side: 0.006, max: 0.05, recover: 8, hold: 0.05 },
       mag: pistolMag, magRestY: pistolMag.position.y,
       reload: {
         time: 1.6, magOut: 0.12, magDrop: 0.26, magUp: 0.55, magSeat: 0.95, travel: 0.08, rise: 0.2, slideRelease: 1.2,
@@ -1488,6 +1493,7 @@
     boltTime: -1, boltCues: [], spentCasing: false,
     throwTimer: 0,
     pumpTime: -1, pumpCues: [], slideTime: -1,
+    recoilPitch: 0, recoilYaw: 0, burstShots: 0, lastShotAt: -99,   // real recoil: moves the aim
     camKick: 0, camKickYaw: 0,
   };
 
@@ -1504,6 +1510,8 @@
     cancelReload();
     cancelBoltCycle();
     cancelPump();
+    vm.recoilPitch = vm.recoilYaw = 0;
+    vm.burstShots = 0;
     vm.throwTimer = 0;
     vm.slashTimer = 0;
     vm.meleePending = false;
@@ -1703,8 +1711,6 @@
     if (vm.adsProgress < adsTarget) vm.adsProgress = Math.min(vm.adsProgress + adsStep, 1);
     else if (vm.adsProgress > adsTarget) vm.adsProgress = Math.max(vm.adsProgress - adsStep, 0);
     const adsEased = easeInOut(vm.adsProgress);
-    // the stock sits right under your eye when aiming; like most shooters, don't draw it then
-    if (w.adsHide) for (const m of w.adsHide) m.visible = adsEased < 0.55;
 
     const px = w.restPos.x + (w.adsPos.x - w.restPos.x) * adsEased;
     const py = w.restPos.y + (w.adsPos.y - w.restPos.y) * adsEased;
@@ -1727,8 +1733,13 @@
     vm.camKick *= Math.max(0, 1 - dt * 10);
     const sway = SETTINGS.scopeSway && w.scope ? CFG.scopeSway * adsEased : 0;
     const kick = vm.camKick * SETTINGS.shake;
-    camera.rotation.x = kick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway;
-    camera.rotation.y = kick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3;
+    if (w.recoilKick && elapsedTime - vm.lastShotAt > w.recoilKick.hold) {
+      const settle = Math.exp(-w.recoilKick.recover * dt);
+      vm.recoilPitch *= settle;
+      vm.recoilYaw *= settle;
+    }
+    camera.rotation.x = kick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway + vm.recoilPitch;
+    camera.rotation.y = kick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3 + vm.recoilYaw;
 
     // bolt: roll the rifle toward you while it works, with a jolt on each slam
     let boltTilt = 0, boltJolt = 0;
@@ -2269,6 +2280,7 @@
     if (vm.current !== "knife" && vm.current !== id) {
       cancelReload(); cancelBoltCycle(); cancelPump();
       vm.inspectTimer = 0; vm.wantADS = false; vm.adsProgress = 0;
+      vm.recoilPitch = vm.recoilYaw = 0; vm.burstShots = 0;
       currentWeapon().group.visible = false;
       vm.current = id;
       currentWeapon().group.visible = true;
@@ -3317,12 +3329,27 @@
 
   const _aimDir = new THREE.Vector3(), _pelletDir = new THREE.Vector3();
 
+  // Recoil climbs the aim with every shot, more with each shot of a burst, and wanders sideways;
+  // it settles back once you stop. Shots count as one burst while they come at the gun's rate.
+  function addRecoil(w) {
+    const R = w.recoilKick;
+    if (!R) return;
+    const inBurst = elapsedTime - vm.lastShotAt < Math.max(w.fireRate * 1.8, 0.25);
+    vm.burstShots = inBurst ? vm.burstShots + 1 : 0;
+    vm.lastShotAt = elapsedTime;
+    const steady = 1 - 0.2 * easeInOut(vm.adsProgress);   // aiming down sights steadies it a little
+    vm.recoilPitch = Math.min(vm.recoilPitch + (R.up + R.grow * vm.burstShots) * steady, R.max);
+    const side = R.side * (1 + vm.burstShots * 0.15) * steady;
+    vm.recoilYaw = Math.max(-R.max * 0.5, Math.min(R.max * 0.5, vm.recoilYaw + (Math.random() * 2 - 1) * side));
+  }
+
   function fireGun(w) {
     const ammoBefore = w.ammo;
     if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); }
     playShotSound(w.sound);
     vm.recoil = w.recoil;
     vm.camKick = w.kick;
+    addRecoil(w);
     vm.camKickYaw = Math.random() * 2 - 1;
     vm.flashTimer = FLASH_TIME;
     muzzleFlash.rotation.z = Math.random() * Math.PI;
