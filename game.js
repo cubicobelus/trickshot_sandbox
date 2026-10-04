@@ -88,11 +88,11 @@
     // ---- trickscore ----
     basePoints: 100,
     airMult: 1.4,               // every trick multiplies the shot: x1.4 for being off the ground...
-    spinMultPer360: 1.4,        // each full 360 multiplies again (720 = x1.96)
+    spinMultPer360: 1.4,        // each full 360 multiplies again (720 = x1.96)...
+    spinMaxCount: 3,            // ...counting up to 3 turns (x2.74), so turning sensitivity up can't run away with it
     spin180Mult: 1.2,
     knifeMult: 1.8,             // a knife swing
-    thrownKnifeMult: 1.3,       // a thrown knife gets this instead...
-    thrownKnifeScoreScale: 0.5, // ...and half the points per hit, since throws are unlimited
+    thrownKnifeMult: 0.65,      // throws are unlimited, so a thrown knife scales the shot down (shown in red)
     knifeThrowCooldown: 0.6,    // unlimited knives, one per this many seconds
     knifeThrowSpeed: 32,
     knifeThrowGravity: 9,       // lighter than the world's, so throws carry
@@ -119,16 +119,17 @@
     streakMultPer: 0.08,        // x1.08 per hit in the streak...
     streakMultMax: 1.8,
     // distance and speed multipliers grow smoothly; the speed tag shows your speed
-    distanceFrom: 15,           // metres; closer than this the CLOSE penalty applies instead
+    distanceFrom: 15,           // meters; closer than this the CLOSE penalty applies instead
     distanceMultPerM: 0.022,    // x1.33 at 30 m, x1.66 at 45 m, x2.43 at 80 m: no cap, further is always better
     speedFrom: 9.5,             // u/s, about a sprint
     speedMultPer: 0.07,         // x1.39 at 15 u/s, x1.88 at 22...
-    speedMultMax: 1.9,
+    speedMultMax: 1.875,        // what the 22 u/s speed cap gives
     flickAngle: 60,             // degrees turned in the last flickWindow seconds before the shot
     flickWindow: 0.15,
     flickMult: 1.4,
     quickSwitchWindow: 0.35,    // a hit this soon after a weapon swap finishes
     quickSwitchMult: 1.4,
+    quickSwitchFreshGun: 1.5,   // ...only if that gun hadn't fired this recently (swapping during your own bolt doesn't count)
     comboMultPer: 0.4,          // DOUBLE x1.4, TRIPLE x1.8, QUAD x2.2...
     comboMultMax: 2.6,
     hangTimeFrom: 1.0,          // seconds in the air before hang time starts paying
@@ -2860,7 +2861,8 @@
     groundRise: 0,   // how fast the ramp under you is lifting you (m/s); becomes a launch off the top
     stepDist: 0,     // ground covered since the last footstep
     groundedAt: 0,   // last moment on the ground; also tells one jump from the next for air combos
-    launch: null,    // "pad", "mega" or "ramp" while airborne from a launch, cleared on landing
+    launch: null,    // "pad", "mega" or "ramp" while airborne from a launch, cleared on landing or a wall bounce
+    launchRun: 0,    // horizontal speed when that launch fired
     wallImpactSpeed: 0, wallImpactAt: -99,   // the last time a wall stopped us, and how fast we hit it
     viewRoll: 0,
   };
@@ -2969,7 +2971,7 @@
   const _wishDir = new THREE.Vector3();
   const _nextPos = new THREE.Vector3();
   const _stepFrom = new THREE.Vector3();
-  const MOVE_STEP = 0.15;   // metres; well under the thinnest wall (0.2 m)
+  const MOVE_STEP = 0.15;   // meters; well under the thinnest wall (0.2 m)
 
   function tryWallBounce() {
     if (player.wallBounceCooldown > 0) return false;
@@ -3015,6 +3017,7 @@
     player.wallContactTime = -1;
     player.lastWallBounceAt = elapsedTime;
     player.wallImpactSpeed = 0;
+    player.launch = null;   // rising off the bounce isn't a pad launch (WALL RIDE pays for it)
 
     playWallBounce(perfect);
     if (perfect) burst(yawObject.position, 0x7CFC00, 5);
@@ -3151,7 +3154,7 @@
           }
         }
         player.velocity.y = CFG.jumpSpeed + player.groundRise;   // jumping off a ramp adds its lift
-        if (player.groundRise > 2) player.launch = "ramp";
+        if (player.groundRise > 2) { player.launch = "ramp"; player.launchRun = Math.hypot(player.velocity.x, player.velocity.z); }
         player.onGround = false;
         player.sliding = false;
         jumpQueued = false;
@@ -3164,6 +3167,7 @@
             player.velocity.y = pad.power;
             player.launch = pad.power > CFG.jumpPadPower + 1 ? "mega" : "pad";
             const run = Math.hypot(player.velocity.x, player.velocity.z);
+            player.launchRun = run;   // bouncing in place on a pad still counts as standing still
             if (run > 1) {
               const s = Math.min(run + pad.boost, Math.max(run, CFG.maxSpeed)) / run;
               player.velocity.x *= s; player.velocity.z *= s;
@@ -3274,7 +3278,7 @@
       // running off the top of a ramp: the lift it was giving you becomes a launch
       if (player.onGround && player.groundRise > 0 && player.velocity.y <= 0) {
         player.velocity.y = player.groundRise;
-        if (player.groundRise > 2) player.launch = "ramp";
+        if (player.groundRise > 2) { player.launch = "ramp"; player.launchRun = Math.hypot(player.velocity.x, player.velocity.z); }
       }
       player.groundRise = 0;
       player.onGround = false;
@@ -3372,8 +3376,10 @@
 
   // what the player is doing right now, for scoring. A thrown knife takes this
   // snapshot when it leaves the hand, so the trick you threw it during is what counts.
-  // moving fast away from where you're aiming: shooting back over your shoulder
+  // flying fast away from where you're aiming, having turned round since takeoff: shooting back
+  // over your shoulder. Just backpedalling doesn't count.
   function reversing() {
+    if (player.onGround || player.airSpinAccum < Math.PI / 2) return false;
     const vx = player.velocity.x, vz = player.velocity.z, sp = Math.hypot(vx, vz);
     if (sp < CFG.reverseSpeed) return false;
     const y = yawObject.rotation.y;   // the camera looks down -z, turned by yaw
@@ -3405,9 +3411,11 @@
       airTime: player.onGround ? 0 : elapsedTime - player.groundedAt,
       airId: player.groundedAt,   // the same for every shot in one jump
       launch: !player.onGround && player.velocity.y > 0 ? player.launch : null,
-      launched: !player.onGround && !!player.launch,   // anywhere in a pad or ramp flight
+      // anywhere in a pad or ramp flight you ran onto, so it isn't "standing still"
+      launched: !player.onGround && !!player.launch && player.launchRun >= CFG.standingStillSpeed,
       flick: recentTurn(CFG.flickWindow),
-      quickSwitch: elapsedTime - vm.switchDoneAt <= CFG.quickSwitchWindow,
+      quickSwitch: elapsedTime - vm.switchDoneAt <= CFG.quickSwitchWindow &&
+        elapsedTime - (currentWeapon().lastFiredAt === undefined ? -99 : currentWeapon().lastFiredAt) > CFG.quickSwitchFreshGun,
       reverse: reversing(),
     };
   }
@@ -3419,13 +3427,16 @@
     let mult = 1;
     const add = (name, f) => { mult *= f; (f < 1 ? pens : tags).push(name + " x" + f.toFixed(2)); };
     const st = snap || trickState();
+    // standing still means not going anywhere: hopping in place counts, a pad or ramp flight you ran onto doesn't
+    const still = !st.sliding && !st.launched && st.speed < CFG.standingStillSpeed;
 
-    if (!st.onGround) add("AIR", CFG.airMult);
+    if (!st.onGround && !still) add("AIR", CFG.airMult);
 
-    // spins: each full 360 multiplies again, a lone 180 gets a smaller one
+    // spins: each full 360 multiplies again (up to spinMaxCount), a lone 180 gets a smaller one
     const fullSpins = Math.floor(st.spin / (Math.PI * 2));
-    if (fullSpins >= 1) add(fullSpins * 360 + "° SPIN", Math.pow(CFG.spinMultPer360, fullSpins));
+    if (fullSpins >= 1) add(fullSpins * 360 + "° SPIN", Math.pow(CFG.spinMultPer360, Math.min(fullSpins, CFG.spinMaxCount)));
     else if (st.spin >= Math.PI) add("180°", CFG.spin180Mult);
+    const spun = st.spin >= Math.PI;
 
     // distance: a knife swing is meant to be close, so it skips this
     if (!(isKnife && !thrown)) { const df = distanceFactor(dist); if (Math.abs(df[1] - 1) > 0.005) add(df[0], df[1]); }
@@ -3437,16 +3448,16 @@
       else if (weapon && weapon.scope && vm.adsProgress >= 0.5 && (elapsedTime - vm.adsStartTime) <= CFG.quickscopeWindow) {
         add("QUICKSCOPE", CFG.quickscopeMult);   // scoped in and fired almost immediately
       }
-      if (ammoBefore === 1 && !SETTINGS.unlimitedAmmo) add("LAST ROUND", CFG.lastRoundMult);
+      // the last round of a full magazine, once (a shotgun firing its one reloaded shell doesn't count)
+      if (ammoBefore === 1 && weapon && weapon.lastRoundReady && !SETTINGS.unlimitedAmmo) add("LAST ROUND", CFG.lastRoundMult);
     }
 
     const spd = speedFactor(st.speed);
     if (spd) add(spd[0], spd[1]);
-    if (st.airTime > CFG.hangTimeFrom) {
-      add("HANG TIME " + st.airTime.toFixed(1) + "s", Math.min(1 + (st.airTime - CFG.hangTimeFrom) * CFG.hangTimeMultPerSec, CFG.hangTimeMultMax));
-    }
+    const hang = Math.min(1 + (st.airTime - CFG.hangTimeFrom) * CFG.hangTimeMultPerSec, CFG.hangTimeMultMax);
+    if (hang > 1.005) add("HANG TIME " + st.airTime.toFixed(1) + "s", hang);
     if (st.launch) add(st.launch === "mega" ? "MEGA LAUNCH" : st.launch === "ramp" ? "RAMP LAUNCH" : "LAUNCHED", st.launch === "mega" ? CFG.megaLaunchMult : CFG.launchMult);
-    if (st.flick >= CFG.flickAngle) add("FLICK " + Math.round(st.flick) + "°", CFG.flickMult);
+    if (st.flick >= CFG.flickAngle && !spun) add("FLICK " + Math.round(st.flick) + "°", CFG.flickMult);   // a spin isn't paid twice
     if (st.quickSwitch) add("QUICK SWITCH", CFG.quickSwitchMult);
     if (st.reverse) add("REVERSE", CFG.reverseMult);
 
@@ -3461,17 +3472,21 @@
     if (st.sliding) add("SLIDING", CFG.slideMult);
     if (st.wallRide) add("WALL RIDE", CFG.wallRideMult);
 
+    // target size: precision a knife swing at arm's length doesn't need
     const kind = target.userData.type;
-    if (kind === "tiny") add("MICRO TARGET", CFG.tinyTargetMult);
-    else if (kind === "small") add("PINPOINT", CFG.smallTargetMult);
+    if (!(isKnife && !thrown)) {
+      if (kind === "tiny") add("MICRO TARGET", CFG.tinyTargetMult);
+      else if (kind === "small") add("PINPOINT", CFG.smallTargetMult);
+    }
     if (target.userData.moving) add(kind === "tiny" ? "DARTING TARGET" : "MOVING TARGET", CFG.movingTargetMult);
 
     if (streak > 0) add("STREAK " + (streak + 1), Math.min(1 + streak * CFG.streakMultPer, CFG.streakMultMax));
 
-    // standing still means not going anywhere: hopping in place counts, a pad launch doesn't
-    if (!st.sliding && !st.launched && st.speed < CFG.standingStillSpeed) add("STANDING STILL", CFG.standingStillMult);
+    if (still) add("STANDING STILL", CFG.standingStillMult);
+    // the gun's share of a sniper's points is a multiplier too, so the total always equals points / 100
+    if (weapon && weapon.scoreScale !== undefined && weapon.scoreScale < 1) add(weapon.name, weapon.scoreScale);
 
-    return { mult, tags, pens, dist, scale: weapon && weapon.scoreScale !== undefined ? weapon.scoreScale : 1 };
+    return { mult, tags, pens, dist, scale: 1 };
   }
 
   // ---- the trickshot list: a popup from the menu, built from the values above so it never goes stale ----
@@ -3480,28 +3495,28 @@
     const C = CFG;
     const groups = [
       ["Movement", [
-        ["AIR", x(C.airMult), "Any hit while you're off the ground."],
+        ["AIR", x(C.airMult), "Any hit while you're off the ground and moving (a hop in place doesn't count)."],
         ["HANG TIME", "up to " + x(C.hangTimeMultMax), "After " + C.hangTimeFrom + " s in the air, +" + C.hangTimeMultPerSec + "x per extra second."],
-        ["180° / 360° SPIN", x(C.spin180Mult) + " / " + x(C.spinMultPer360) + " each", "Turn around in the air before the shot; every full 360° multiplies again."],
+        ["180° / 360° SPIN", x(C.spin180Mult) + " / " + x(C.spinMultPer360) + " each", "Turn around in the air before the shot; every full 360° multiplies again, up to " +
+          C.spinMaxCount * 360 + "° (x" + Math.pow(C.spinMultPer360, C.spinMaxCount).toFixed(2) + "). A spin shot doesn't also count as a FLICK."],
         ["SLIDING", x(C.slideMult), "Hit while sliding."],
         ["WALL RIDE", x(C.wallRideMult), "Hit within " + C.wallRideScoreWindow + " s of a wall bounce."],
-        ["LAUNCHED / RAMP LAUNCH", x(C.launchMult), "Hit while still rising off a jump pad or a kicker ramp."],
+        ["LAUNCHED / RAMP LAUNCH", x(C.launchMult), "Hit while still rising off a jump pad or a kicker ramp (not after a wall bounce)."],
         ["MEGA LAUNCH", x(C.megaLaunchMult), "Hit while still rising off a mega (purple) pad."],
-        ["FAST / BLAZING / SONIC", "up to " + x(C.speedMultMax), "+" + C.speedMultPer + "x per u/s over " + C.speedFrom + " u/s; the tag shows your speed."],
-        ["REVERSE", x(C.reverseMult), "Moving at " + C.reverseSpeed + "+ u/s away from where you're aiming."],
+        ["FAST / BLAZING / SONIC", "up to " + x(Math.min(1 + (C.maxSpeed - C.speedFrom) * C.speedMultPer, C.speedMultMax)), "+" + C.speedMultPer + "x per u/s over " + C.speedFrom + " u/s; the tag shows your speed."],
+        ["REVERSE", x(C.reverseMult), "In the air, having turned 90°+ since takeoff, flying at " + C.reverseSpeed + "+ u/s away from where you aim. Backpedalling doesn't count."],
       ]],
       ["Aim", [
-        ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per metre past " + C.distanceFrom + " m: " +
+        ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per meter past " + C.distanceFrom + " m: " +
           x(1 + 15 * C.distanceMultPerM) + " at 30 m, " + x(1 + 35 * C.distanceMultPerM) + " at 50 m, " + x(1 + 65 * C.distanceMultPerM) + " at 80 m."],
         ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more."],
         ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of scoping in."],
         ["FLICK", x(C.flickMult), "Snap your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
-        ["QUICK SWITCH", x(C.quickSwitchMult), "Hit within " + C.quickSwitchWindow + " s of finishing a weapon swap."],
-        ["LAST ROUND", x(C.lastRoundMult), "The final round in the magazine (not with unlimited ammo)."],
+        ["QUICK SWITCH", x(C.quickSwitchMult), "Hit within " + C.quickSwitchWindow + " s of finishing a weapon swap, with a gun that hadn't just fired."],
+        ["LAST ROUND", x(C.lastRoundMult), "The final round of a full magazine (not with unlimited ammo)."],
       ]],
       ["Knife", [
-        ["KNIFE", x(C.knifeMult), "A knife swing. Swings skip the distance multiplier."],
-        ["THROWN KNIFE", x(C.thrownKnifeMult), "A thrown knife; distance counts. Throws score " + C.thrownKnifeScoreScale * 100 + "% of the points."],
+        ["KNIFE", x(C.knifeMult), "A knife swing. Swings skip the distance and target-size multipliers."],
       ]],
       ["Targets", [
         ["MOVING TARGET", x(C.movingTargetMult), "Orange targets (and purple ones, as DARTING TARGET)."],
@@ -3510,13 +3525,18 @@
       ]],
       ["Combos", [
         ["DOUBLE / TRIPLE / QUAD", x(1 + C.comboMultPer) + " / " + x(1 + 2 * C.comboMultPer) + " / " + x(1 + 3 * C.comboMultPer), "Extra hits in the same jump, before you land (up to " + x(C.comboMultMax) + ")."],
-        ["STREAK", "up to " + x(C.streakMultMax), "+" + C.streakMultPer + "x for each hit in a row without a miss."],
+        ["STREAK", "up to " + x(C.streakMultMax), "+" + C.streakMultPer + "x for each hit in a row. A gun shot or thrown knife that misses ends it."],
       ]],
       ["Penalties", [
         ["CLOSE", x(C.pointBlankMult) + " to x1", "Closer than " + C.distanceFrom + " m, harshest at " + C.pointBlankMin + " m. Knife swings are exempt."],
-        ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. Pad and ramp flights don't count."],
+        ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. A pad or ramp flight you ran onto doesn't count."],
+        ["THROWN KNIFE", x(C.thrownKnifeMult), "Throws are unlimited, so a thrown knife scales the shot down. Distance and tricks still count."],
       ], true],
+      ["Your gun's share (the sniper scores in full)", GUNS.filter((id) => WEAPONS[id].scoreScale < 1).map((id) =>
+        [WEAPONS[id].name, x(WEAPONS[id].scoreScale), "Multiplies every hit with this gun."]), true],
     ];
+    document.getElementById("glossary-note").textContent = "Every trick multiplies the shot: AIR " + x(C.airMult) + " and FLICK " +
+      x(C.flickMult) + " together make " + x(C.airMult * C.flickMult) + ". Penalties, in red, multiply it down. Points = 100 x the total.";
     const list = document.getElementById("glossary-list");
     for (const [title, rows, pen] of groups) {
       const h = document.createElement("h3");
@@ -3554,7 +3574,7 @@
     flashCrosshair();
     hitStopTimer = CFG.hitStopTime;
     playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
-    showFeed("+" + pointsGained + "  " + res.mult.toFixed(1) + "x");
+    showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x");
     if (pointsGained > bestShot.points) {
       bestShot = { points: pointsGained, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice(), dist: res.dist };
       saveBestShot();
@@ -3563,7 +3583,6 @@
     return pointsGained;
   }
 
-  const THROWN_KNIFE = { scoreScale: CFG.thrownKnifeScoreScale };   // scores like a weapon of its own
   function scoreHit(target, dist, isKnife, ammoBefore, snap, thrown, weapon) {
     const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon);
     target.userData.alive = false;
@@ -3659,8 +3678,15 @@
     vm.recoilYaw = Math.max(-R.max * 0.5, Math.min(R.max * 0.5, vm.recoilYaw + (Math.random() * 2 - 1) * side));
   }
 
+  // a miss ends the streak (in deathmatch only dying does)
+  function breakStreak() {
+    if (net.active && net.sub === "dm") return;
+    streak = 0; streakEl.textContent = streak;
+  }
+
   function fireGun(w) {
     const ammoBefore = w.ammo;
+    if (ammoBefore >= w.magSize) w.lastRoundReady = true;   // LAST ROUND needs a full magazine emptied
     if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); }
     playShotSound(w.sound);
     vm.recoil = w.recoil;
@@ -3737,10 +3763,9 @@
     if (pvp) mpPvpKill(pvp, false, ammoBefore, w);
     for (const [target, dist] of targetHits) scoreHit(target, dist, false, ammoBefore, undefined, false, w);
     if (anyHit && !targetHits.size && !pvp) flashCrosshair();
-    if (!anyHit) {
-      // in deathmatch a streak is broken by dying, not by missing
-      if (!(net.active && net.sub === "dm")) { streak = 0; streakEl.textContent = streak; }
-    }
+    if (!targetHits.size && !pvp) breakStreak();   // hitting only a crate or a wall is a miss
+    if (ammoBefore === 1) w.lastRoundReady = false;
+    w.lastFiredAt = elapsedTime;
 
     addRecoil(w);   // after the shot: the next one is what gets kicked
     if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
@@ -3841,7 +3866,7 @@
         continue;
       }
 
-      if (k.age > 4) { retireKnife(k); continue; }
+      if (k.age > 4) { retireKnife(k); breakStreak(); continue; }   // flew off without hitting anything
       k.vel.y -= CFG.knifeThrowGravity * dt;
       _kStep.copy(k.vel).multiplyScalar(dt);
       const len = _kStep.length();
@@ -3887,7 +3912,7 @@
       if (kind === "target") {
         o.addScaledVector(d, hitDist);
         playKnifeHit();
-        scoreHit(hitTarget, k.from.distanceTo(o), true, 0, k.snap, true, THROWN_KNIFE);
+        scoreHit(hitTarget, k.from.distanceTo(o), true, 0, k.snap, true);
         retireKnife(k);
         continue;
       }
@@ -3901,6 +3926,7 @@
         k.spin.rotation.set(0, 0, 0);
         k.state = "stuck";
         k.age = 0;
+        breakStreak();   // a throw that misses ends the streak, like a missed shot
         playKnifeStick(o.distanceTo(yawObject.position));
         if (kind === "prop") {
           const prop = props.find((pr) => pr.mesh === hitProp);

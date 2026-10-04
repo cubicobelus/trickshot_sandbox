@@ -33,7 +33,8 @@ bounces, up to 22 u/s. Score multipliers stack: being airborne, hang time, spins
 off pads and ramps, shooting backwards at speed, several hits in one jump, last-round shots, sliding,
 wall rides, moving and small targets, knife kills and streaks (every trick multiplies the shot; the full list,
 with values, is under Trickshot list in the menu). Two things
-scale a shot down: firing from close in (under 15 m, except knife swings) and standing still on the ground.
+scale a shot down: firing from close in (under 15 m, down to x0.4 at 3 m; knife swings are exempt) and
+standing still (moving under 2 u/s when you fire, even if you hop in place).
 
 Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
 purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
