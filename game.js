@@ -87,24 +87,23 @@
 
     // ---- trickscore ----
     basePoints: 100,
-    airBonus: 1,
-    spinBonusPer360: 1,
-    spin180Bonus: 0.5,
-    knifeBonus: 2,
-    knifeThrowBonus: 1,         // a thrown knife gets this instead of knifeBonus...
+    airMult: 1.4,               // every trick multiplies the shot: x1.4 for being off the ground...
+    spinMultPer360: 1.4,        // each full 360 multiplies again (720 = x1.96)
+    spin180Mult: 1.2,
+    knifeMult: 1.8,             // a knife swing
+    thrownKnifeMult: 1.3,       // a thrown knife gets this instead...
     thrownKnifeScoreScale: 0.5, // ...and half the points per hit, since throws are unlimited
     knifeThrowCooldown: 0.6,    // unlimited knives, one per this many seconds
     knifeThrowSpeed: 32,
     knifeThrowGravity: 9,       // lighter than the world's, so throws carry
     knifeStickTime: 6,          // how long a stuck knife stays in a wall
-    slideBonus: 0.75,
-    wallRideBonus: 1,
-    movingTargetBonus: 0.75,
-    smallTargetBonus: 2,
-    tinyTargetBonus: 3.5,       // purple: tiny and fast, so it also gets the moving bonus
+    slideMult: 1.3,
+    wallRideMult: 1.4,
+    movingTargetMult: 1.3,
+    smallTargetMult: 1.8,
+    tinyTargetMult: 2.5,        // purple: tiny and fast, so it also gets the moving one
     // penalties scale the whole multiplier down, after the bonuses add up
-    pointBlankRange: 15,        // closer than this costs you (where MID RANGE starts), sliding down to...
-    pointBlankMin: 3,           // ...the full penalty at this distance and under
+    pointBlankMin: 3,           // CLOSE (under distanceFrom) slides down to the full penalty at this distance...
     pointBlankMult: 0.4,
     standingStillSpeed: 2,      // moving slower than this when you fire, even mid-hop...
     standingStillMult: 0.75,    // ...scales the shot by this
@@ -112,33 +111,33 @@
     snitchRange: 12,            // starts running when you're this close
     snitchFlee: 7,              // how far it can pull away from its path
     snitchSpeedUp: 1.5,         // and its path speeds up by up to this much more
-    noScopeBonus: 1.5,
+    noScopeMult: 1.6,
     noScopeMinDist: 20,
-    quickscopeBonus: 1.5,
+    quickscopeMult: 1.6,
     quickscopeWindow: 0.55,     // scope-in to shot must be under this
-    lastRoundBonus: 1,
-    streakBonusPer: 0.25,
-    streakBonusCap: 2,
-    // distance and speed bonuses grow smoothly; the tag shows the actual number
-    distanceBonusFrom: 15,      // metres; under this the close-shot penalty applies instead
-    distanceBonusPerM: 0.055,   // +0.83 at 30 m, +1.93 at 50 m, +3.58 at 80 m: no cap, further is always better
-    speedBonusFrom: 9.5,        // u/s, about a sprint
-    speedBonusPer: 0.17,        // +0.94 at 15 u/s, +2.1 at 22...
-    speedBonusMax: 2.2,
+    lastRoundMult: 1.4,
+    streakMultPer: 0.08,        // x1.08 per hit in the streak...
+    streakMultMax: 1.8,
+    // distance and speed multipliers grow smoothly; the speed tag shows your speed
+    distanceFrom: 15,           // metres; closer than this the CLOSE penalty applies instead
+    distanceMultPerM: 0.022,    // x1.33 at 30 m, x1.66 at 45 m, x2.43 at 80 m: no cap, further is always better
+    speedFrom: 9.5,             // u/s, about a sprint
+    speedMultPer: 0.07,         // x1.39 at 15 u/s, x1.88 at 22...
+    speedMultMax: 1.9,
     flickAngle: 60,             // degrees turned in the last flickWindow seconds before the shot
     flickWindow: 0.15,
-    flickBonus: 1,
+    flickMult: 1.4,
     quickSwitchWindow: 0.35,    // a hit this soon after a weapon swap finishes
-    quickSwitchBonus: 1,
-    comboBonusPer: 1,           // each extra hit in the same jump adds this...
-    comboBonusMax: 4,
+    quickSwitchMult: 1.4,
+    comboMultPer: 0.4,          // DOUBLE x1.4, TRIPLE x1.8, QUAD x2.2...
+    comboMultMax: 2.6,
     hangTimeFrom: 1.0,          // seconds in the air before hang time starts paying
-    hangTimePerSec: 1.2,
-    hangTimeMax: 2.5,
-    launchBonus: 0.75,          // a hit while still rising from a jump pad or ramp launch
-    megaLaunchBonus: 1,
+    hangTimeMultPerSec: 0.4,
+    hangTimeMultMax: 1.8,
+    launchMult: 1.3,            // a hit while still rising from a jump pad or ramp launch
+    megaLaunchMult: 1.4,
     reverseSpeed: 8,            // moving at least this fast...
-    reverseBonus: 1,            // ...away from where you're aiming
+    reverseMult: 1.4,           // ...away from where you're aiming
 
   };
 
@@ -3304,7 +3303,7 @@
     const b = JSON.parse(localStorage.getItem(BEST_KEY));
     if (b && Number.isFinite(b.points) && Number.isFinite(b.mult) && Array.isArray(b.tags)) {
       const strs = (a) => (Array.isArray(a) ? a.filter((t) => typeof t === "string").slice(0, 12) : []);
-      bestShot = { points: b.points, mult: b.mult, tags: strs(b.tags), pens: strs(b.pens) };
+      bestShot = { points: b.points, mult: b.mult, tags: strs(b.tags), pens: strs(b.pens), dist: Number.isFinite(b.dist) ? b.dist : undefined };
     }
   } catch (e) { /* storage blocked or empty */ }
   function saveBestShot() {
@@ -3313,7 +3312,7 @@
   function showBestShot(isNew) {
     bestEl.hidden = bestShot.points <= 0;
     document.getElementById("best-val").textContent = bestShot.points;
-    fillTagList(document.getElementById("best-tags"), bestShot.mult, bestShot.tags, bestShot.pens);
+    fillTagList(document.getElementById("best-tags"), bestShot.mult, bestShot.tags, bestShot.pens, bestShot.dist);
     if (isNew) { bestEl.classList.remove("new"); void bestEl.offsetWidth; bestEl.classList.add("new"); }
   }
   showBestShot(false);
@@ -3324,15 +3323,15 @@
   });
 
   // the multiplier on top, then each bonus, then any penalties in red
-  function fillTagList(el, mult, tags, pens) {
+  function fillTagList(el, mult, tags, pens, dist) {
     el.textContent = "";
     const line = (text, cls) => { const d = document.createElement("div"); d.textContent = text; if (cls) d.className = cls; el.appendChild(d); };
-    line("x" + mult.toFixed(2), "mult" + (mult < 1 ? " low" : ""));
+    line(mult.toFixed(2) + "x" + (Number.isFinite(dist) ? " - " + Math.round(dist) + "m" : ""), "mult" + (mult < 1 ? " low" : ""));
     for (const t of tags) line(t);
     for (const t of pens) line(t, "pen");
   }
-  function showBonusTags(mult, tags, pens) {
-    fillTagList(bonusTagsEl, mult, tags, pens);
+  function showBonusTags(mult, tags, pens, dist) {
+    fillTagList(bonusTagsEl, mult, tags, pens, dist);
     bonusTagsEl.classList.add("show");
     clearTimeout(bonusTagsTimer);
     bonusTagsTimer = setTimeout(() => bonusTagsEl.classList.remove("show"), 4000);
@@ -3380,18 +3379,19 @@
     const y = yawObject.rotation.y;   // the camera looks down -z, turned by yaw
     return (-Math.sin(y) * vx - Math.cos(y) * vz) / sp < -0.5;
   }
-  // every hit says how far it was; past distanceBonusFrom it also says what that distance earned
-  function distanceTag(d) {
-    const m = Math.round(d) + " m";
-    if (d < CFG.distanceBonusFrom) return [0, "CLOSE " + m];
-    const bonus = (d - CFG.distanceBonusFrom) * CFG.distanceBonusPerM;
-    const name = d >= 50 ? "MEGA SNIPE" : d >= 30 ? "LONG SHOT" : "MID RANGE";
-    return [bonus, name + " " + m + " +" + bonus.toFixed(2)];
+  // distance: CLOSE scales the shot down, past distanceFrom it multiplies up with no cap
+  function distanceFactor(d) {
+    if (d >= CFG.distanceFrom) {
+      const name = d >= 50 ? "MEGA SNIPE" : d >= 30 ? "LONG SHOT" : "MID RANGE";
+      return [name, 1 + (d - CFG.distanceFrom) * CFG.distanceMultPerM];
+    }
+    const k = Math.min(Math.max((d - CFG.pointBlankMin) / (CFG.distanceFrom - CFG.pointBlankMin), 0), 1);
+    return ["CLOSE", CFG.pointBlankMult + (1 - CFG.pointBlankMult) * k];
   }
-  function speedTag(sp) {
-    if (sp < CFG.speedBonusFrom + 0.5) return null;
+  function speedFactor(sp) {
+    if (sp < CFG.speedFrom + 0.5) return null;
     const name = sp >= 19 ? "SONIC" : sp >= 15 ? "BLAZING" : "FAST";
-    return [Math.min((sp - CFG.speedBonusFrom) * CFG.speedBonusPer, CFG.speedBonusMax), name + " " + Math.round(sp) + " u/s"];
+    return [name + " " + Math.round(sp) + " u/s", Math.min(1 + (sp - CFG.speedFrom) * CFG.speedMultPer, CFG.speedMultMax)];
   }
   let comboAirId = -1, comboCount = 0;
 
@@ -3412,105 +3412,135 @@
     };
   }
 
+  // Every trick multiplies the shot. Tags read "NAME x1.40"; penalties (under 1) are kept apart
+  // so the HUD can show them in red.
   function computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon) {
-    const tags = [];
+    const tags = [], pens = [];
     let mult = 1;
+    const add = (name, f) => { mult *= f; (f < 1 ? pens : tags).push(name + " x" + f.toFixed(2)); };
     const st = snap || trickState();
 
-    if (!st.onGround) { mult += CFG.airBonus; tags.push("AIR"); }
+    if (!st.onGround) add("AIR", CFG.airMult);
 
-    // spins: full 360s stack, a lone 180 gets a smaller bonus
+    // spins: each full 360 multiplies again, a lone 180 gets a smaller one
     const fullSpins = Math.floor(st.spin / (Math.PI * 2));
-    if (fullSpins >= 1) {
-      mult += fullSpins * CFG.spinBonusPer360;
-      tags.push(fullSpins * 360 + "\u00B0 SPIN");
-    } else if (st.spin >= Math.PI) {
-      mult += CFG.spin180Bonus;
-      tags.push("180\u00B0");
+    if (fullSpins >= 1) add(fullSpins * 360 + "° SPIN", Math.pow(CFG.spinMultPer360, fullSpins));
+    else if (st.spin >= Math.PI) add("180°", CFG.spin180Mult);
+
+    // distance: a knife swing is meant to be close, so it skips this
+    if (!(isKnife && !thrown)) { const df = distanceFactor(dist); if (Math.abs(df[1] - 1) > 0.005) add(df[0], df[1]); }
+
+    if (isKnife && !thrown) add("KNIFE", CFG.knifeMult);
+    else if (isKnife) add("THROWN KNIFE", CFG.thrownKnifeMult);
+    else {
+      if (weapon && weapon.scope && vm.adsProgress < 0.35 && dist >= CFG.noScopeMinDist) add("NO-SCOPE", CFG.noScopeMult);
+      else if (weapon && weapon.scope && vm.adsProgress >= 0.5 && (elapsedTime - vm.adsStartTime) <= CFG.quickscopeWindow) {
+        add("QUICKSCOPE", CFG.quickscopeMult);   // scoped in and fired almost immediately
+      }
+      if (ammoBefore === 1 && !SETTINGS.unlimitedAmmo) add("LAST ROUND", CFG.lastRoundMult);
     }
 
-    if (isKnife && !thrown) {
-      mult += CFG.knifeBonus;
-      tags.push("KNIFE");
-    } else if (isKnife) {
-      mult += CFG.knifeThrowBonus;
-      tags.push("THROWN KNIFE");
-      const dt = distanceTag(dist);
-      mult += dt[0]; tags.push(dt[1]);
-    } else {
-      const dt = distanceTag(dist);
-      mult += dt[0]; tags.push(dt[1]);
-      if (weapon && weapon.scope && vm.adsProgress < 0.35 && dist >= CFG.noScopeMinDist) {
-        mult += CFG.noScopeBonus;
-        tags.push("NO-SCOPE");
-      } else if (weapon && weapon.scope && vm.adsProgress >= 0.5 && (elapsedTime - vm.adsStartTime) <= CFG.quickscopeWindow) {
-        // scoped in and fired almost immediately
-        mult += CFG.quickscopeBonus;
-        tags.push("QUICKSCOPE");
-      }
-      if (ammoBefore === 1 && !SETTINGS.unlimitedAmmo) {
-        mult += CFG.lastRoundBonus;
-        tags.push("LAST ROUND");
-      }
-    }
-
-    const spd = speedTag(st.speed);
-    if (spd) { mult += spd[0]; tags.push(spd[1]); }
-
+    const spd = speedFactor(st.speed);
+    if (spd) add(spd[0], spd[1]);
     if (st.airTime > CFG.hangTimeFrom) {
-      mult += Math.min((st.airTime - CFG.hangTimeFrom) * CFG.hangTimePerSec, CFG.hangTimeMax);
-      tags.push("HANG TIME " + st.airTime.toFixed(1) + "s");
+      add("HANG TIME " + st.airTime.toFixed(1) + "s", Math.min(1 + (st.airTime - CFG.hangTimeFrom) * CFG.hangTimeMultPerSec, CFG.hangTimeMultMax));
     }
-    if (st.launch) {
-      mult += st.launch === "mega" ? CFG.megaLaunchBonus : CFG.launchBonus;
-      tags.push(st.launch === "mega" ? "MEGA LAUNCH" : st.launch === "ramp" ? "RAMP LAUNCH" : "LAUNCHED");
-    }
-    if (st.flick >= CFG.flickAngle) { mult += CFG.flickBonus; tags.push("FLICK " + Math.round(st.flick) + "°"); }
-    if (st.quickSwitch) { mult += CFG.quickSwitchBonus; tags.push("QUICK SWITCH"); }
-    if (st.reverse) { mult += CFG.reverseBonus; tags.push("REVERSE"); }
+    if (st.launch) add(st.launch === "mega" ? "MEGA LAUNCH" : st.launch === "ramp" ? "RAMP LAUNCH" : "LAUNCHED", st.launch === "mega" ? CFG.megaLaunchMult : CFG.launchMult);
+    if (st.flick >= CFG.flickAngle) add("FLICK " + Math.round(st.flick) + "°", CFG.flickMult);
+    if (st.quickSwitch) add("QUICK SWITCH", CFG.quickSwitchMult);
+    if (st.reverse) add("REVERSE", CFG.reverseMult);
+
     // air combo: every hit from the same jump counts up
     if (!st.onGround && st.airId !== undefined) {
       if (st.airId === comboAirId) comboCount++; else { comboAirId = st.airId; comboCount = 1; }
       if (comboCount >= 2) {
-        mult += Math.min((comboCount - 1) * CFG.comboBonusPer, CFG.comboBonusMax);
-        tags.push(["DOUBLE", "TRIPLE", "QUAD"][comboCount - 2] || comboCount + "x COMBO");
+        add(["DOUBLE", "TRIPLE", "QUAD"][comboCount - 2] || comboCount + "-HIT COMBO", Math.min(1 + (comboCount - 1) * CFG.comboMultPer, CFG.comboMultMax));
       }
     }
 
-    if (st.sliding) { mult += CFG.slideBonus; tags.push("SLIDING"); }
-
-    if (st.wallRide) {
-      mult += CFG.wallRideBonus;
-      tags.push("WALL RIDE");
-    }
+    if (st.sliding) add("SLIDING", CFG.slideMult);
+    if (st.wallRide) add("WALL RIDE", CFG.wallRideMult);
 
     const kind = target.userData.type;
-    if (kind === "tiny") { mult += CFG.tinyTargetBonus; tags.push("MICRO TARGET"); }
-    else if (kind === "small") { mult += CFG.smallTargetBonus; tags.push("PINPOINT"); }
-    if (target.userData.moving) {
-      mult += CFG.movingTargetBonus;
-      tags.push(kind === "tiny" ? "DARTING TARGET" : "MOVING TARGET");
-    }
+    if (kind === "tiny") add("MICRO TARGET", CFG.tinyTargetMult);
+    else if (kind === "small") add("PINPOINT", CFG.smallTargetMult);
+    if (target.userData.moving) add(kind === "tiny" ? "DARTING TARGET" : "MOVING TARGET", CFG.movingTargetMult);
 
-    const streakBonus = Math.min(streak * CFG.streakBonusPer, CFG.streakBonusCap);
-    if (streakBonus > 0) { mult += streakBonus; tags.push("STREAK x" + (streak + 1)); }
+    if (streak > 0) add("STREAK " + (streak + 1), Math.min(1 + streak * CFG.streakMultPer, CFG.streakMultMax));
 
-    // penalties: walking up to a target, or standing still to shoot, isn't a trickshot.
-    // A knife swing is meant to be close, so only ranged hits pay the point-blank cost.
-    const pens = [];
-    if (!(isKnife && !thrown) && dist < CFG.pointBlankRange) {
-      const k = Math.min(Math.max((dist - CFG.pointBlankMin) / (CFG.pointBlankRange - CFG.pointBlankMin), 0), 1);
-      const f = CFG.pointBlankMult + (1 - CFG.pointBlankMult) * k;
-      if (f < 0.995) { mult *= f; pens.push("POINT BLANK x" + f.toFixed(2)); }
-    }
     // standing still means not going anywhere: hopping in place counts, a pad launch doesn't
-    if (!st.sliding && !st.launched && st.speed < CFG.standingStillSpeed) {
-      mult *= CFG.standingStillMult;
-      pens.push("STANDING STILL x" + CFG.standingStillMult.toFixed(2));
-    }
+    if (!st.sliding && !st.launched && st.speed < CFG.standingStillSpeed) add("STANDING STILL", CFG.standingStillMult);
 
-    return { mult, tags, pens, scale: weapon && weapon.scoreScale !== undefined ? weapon.scoreScale : 1 };
+    return { mult, tags, pens, dist, scale: weapon && weapon.scoreScale !== undefined ? weapon.scoreScale : 1 };
   }
+
+  // ---- the trickshot list: a popup from the menu, built from the values above so it never goes stale ----
+  function buildGlossary() {
+    const x = (n) => "x" + String(+n.toFixed(3));
+    const C = CFG;
+    const groups = [
+      ["Movement", [
+        ["AIR", x(C.airMult), "Any hit while you're off the ground."],
+        ["HANG TIME", "up to " + x(C.hangTimeMultMax), "After " + C.hangTimeFrom + " s in the air, +" + C.hangTimeMultPerSec + "x per extra second."],
+        ["180° / 360° SPIN", x(C.spin180Mult) + " / " + x(C.spinMultPer360) + " each", "Turn around in the air before the shot; every full 360° multiplies again."],
+        ["SLIDING", x(C.slideMult), "Hit while sliding."],
+        ["WALL RIDE", x(C.wallRideMult), "Hit within " + C.wallRideScoreWindow + " s of a wall bounce."],
+        ["LAUNCHED / RAMP LAUNCH", x(C.launchMult), "Hit while still rising off a jump pad or a kicker ramp."],
+        ["MEGA LAUNCH", x(C.megaLaunchMult), "Hit while still rising off a mega (purple) pad."],
+        ["FAST / BLAZING / SONIC", "up to " + x(C.speedMultMax), "+" + C.speedMultPer + "x per u/s over " + C.speedFrom + " u/s; the tag shows your speed."],
+        ["REVERSE", x(C.reverseMult), "Moving at " + C.reverseSpeed + "+ u/s away from where you're aiming."],
+      ]],
+      ["Aim", [
+        ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per metre past " + C.distanceFrom + " m: " +
+          x(1 + 15 * C.distanceMultPerM) + " at 30 m, " + x(1 + 35 * C.distanceMultPerM) + " at 50 m, " + x(1 + 65 * C.distanceMultPerM) + " at 80 m."],
+        ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more."],
+        ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of scoping in."],
+        ["FLICK", x(C.flickMult), "Snap your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
+        ["QUICK SWITCH", x(C.quickSwitchMult), "Hit within " + C.quickSwitchWindow + " s of finishing a weapon swap."],
+        ["LAST ROUND", x(C.lastRoundMult), "The final round in the magazine (not with unlimited ammo)."],
+      ]],
+      ["Knife", [
+        ["KNIFE", x(C.knifeMult), "A knife swing. Swings skip the distance multiplier."],
+        ["THROWN KNIFE", x(C.thrownKnifeMult), "A thrown knife; distance counts. Throws score " + C.thrownKnifeScoreScale * 100 + "% of the points."],
+      ]],
+      ["Targets", [
+        ["MOVING TARGET", x(C.movingTargetMult), "Orange targets (and purple ones, as DARTING TARGET)."],
+        ["PINPOINT", x(C.smallTargetMult), "Small blue targets."],
+        ["MICRO TARGET", x(C.tinyTargetMult), "Tiny purple targets, which also dart away when you get close."],
+      ]],
+      ["Combos", [
+        ["DOUBLE / TRIPLE / QUAD", x(1 + C.comboMultPer) + " / " + x(1 + 2 * C.comboMultPer) + " / " + x(1 + 3 * C.comboMultPer), "Extra hits in the same jump, before you land (up to " + x(C.comboMultMax) + ")."],
+        ["STREAK", "up to " + x(C.streakMultMax), "+" + C.streakMultPer + "x for each hit in a row without a miss."],
+      ]],
+      ["Penalties", [
+        ["CLOSE", x(C.pointBlankMult) + " to x1", "Closer than " + C.distanceFrom + " m, harshest at " + C.pointBlankMin + " m. Knife swings are exempt."],
+        ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. Pad and ramp flights don't count."],
+      ], true],
+    ];
+    const list = document.getElementById("glossary-list");
+    for (const [title, rows, pen] of groups) {
+      const h = document.createElement("h3");
+      h.textContent = title;
+      list.appendChild(h);
+      for (const [name, val, how] of rows) {
+        const row = document.createElement("div");
+        row.className = "g-row" + (pen ? " pen" : "");
+        for (const [cls, text] of [["g-name", name], ["g-val", val], ["g-how", how]]) {
+          const c = document.createElement("div");
+          c.className = cls; c.textContent = text;
+          row.appendChild(c);
+        }
+        list.appendChild(row);
+      }
+    }
+  }
+  buildGlossary();
+  const glossaryEl = document.getElementById("glossary");
+  function setGlossary(open) { glossaryEl.hidden = !open; }
+  document.getElementById("glossary-open").addEventListener("click", (e) => { e.stopPropagation(); setGlossary(true); });
+  document.getElementById("glossary-close").addEventListener("click", () => setGlossary(false));
+  glossaryEl.addEventListener("click", (e) => { if (e.target === glossaryEl) setGlossary(false); });   // the backdrop
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !glossaryEl.hidden) setGlossary(false); });
 
   // score, streak, HUD popups and feedback for any scoring hit (target or player)
   function awardPoints(res) {
@@ -3520,13 +3550,13 @@
     streak++;
     streakEl.textContent = streak;
 
-    if (res.tags.length || (res.pens && res.pens.length)) showBonusTags(res.mult, res.tags, res.pens || []);
+    showBonusTags(res.mult, res.tags, res.pens || [], res.dist);
     flashCrosshair();
     hitStopTimer = CFG.hitStopTime;
     playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
-    showFeed("+" + pointsGained + (res.tags.length ? "  x" + res.mult.toFixed(1) : ""));
+    showFeed("+" + pointsGained + "  " + res.mult.toFixed(1) + "x");
     if (pointsGained > bestShot.points) {
-      bestShot = { points: pointsGained, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice() };
+      bestShot = { points: pointsGained, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice(), dist: res.dist };
       saveBestShot();
       showBestShot(true);
     }
@@ -4342,7 +4372,7 @@
   const _pseudoTarget = { userData: { small: false, moving: false } };
   function mpPvpKill(pres, isKnife, ammoBefore, weapon) {
     const res = computeMultipliers(_pseudoTarget, pres.dist, isKnife, ammoBefore, undefined, false, weapon);
-    if (pres.head && !isKnife) { res.mult += 1; res.tags.push("HEADSHOT"); }
+    if (pres.head && !isKnife) { res.mult *= 1.5; res.tags.push("HEADSHOT x1.50"); }
     const pts = awardPoints(res);
     burst(pres.point, 0xff5555, 14);
     sendToHost({ t: "pvp", v: pres.p.id, pts, tags: res.tags, head: !!pres.head, knife: !!isKnife });

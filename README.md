@@ -31,7 +31,8 @@ Base run speed is slow. You *build* speed by chaining slides, bunnyhops (hold ju
 bounces, up to 22 u/s. Score multipliers stack: being airborne, hang time, spins, speed and distance
 (both growing smoothly, with the number shown), no-scopes, quickscopes, flicks, quick switches, launches
 off pads and ramps, shooting backwards at speed, several hits in one jump, last-round shots, sliding,
-wall rides, moving and small targets, knife kills and streaks. Two things
+wall rides, moving and small targets, knife kills and streaks (every trick multiplies the shot; the full list,
+with values, is under Trickshot list in the menu). Two things
 scale a shot down: firing from close in (under 15 m, except knife swings) and standing still on the ground.
 
 Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and

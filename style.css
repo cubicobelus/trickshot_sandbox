@@ -22,6 +22,37 @@
   }
   #instructions .start:hover { background: rgba(124,252,0,0.12); }
 
+  /* the trickshot list: a popup over everything */
+  #glossary-open { margin-top: 10px; }
+  #glossary {
+    position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  #glossary[hidden] { display: none; }
+  .g-panel {
+    width: min(760px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; color: #fff;
+    background: rgba(20,20,25,0.97); border: 1px solid #444; border-radius: 10px; padding: 16px 22px 20px;
+  }
+  .g-head { display: flex; align-items: center; justify-content: space-between; }
+  .g-head h2 { margin: 0; font-size: 18px; color: #ffd24a; text-transform: uppercase; letter-spacing: 1px; }
+  .g-close { background: none; border: 0; color: #aaa; font-size: 28px; line-height: 1; cursor: pointer; padding: 0 4px; }
+  .g-close:hover { color: #fff; }
+  .g-panel .g-note { font-size: 12.5px; color: #9a9aa3; margin: 6px 0 4px; text-align: left; }
+  .g-panel h3 { font-size: 11px; color: #8d8d96; text-transform: uppercase; letter-spacing: 1px; margin: 12px 0 4px; text-align: left; }
+  .g-row { display: grid; grid-template-columns: 170px 128px 1fr; gap: 10px; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid #2a2a31; text-align: left; }
+  .g-row .g-name { color: #ff9d3b; font-weight: bold; }
+  .g-row .g-val { color: #ffd24a; font-variant-numeric: tabular-nums; }
+  .g-row .g-how { color: #c8c8ce; }
+  .g-row.pen .g-name, .g-row.pen .g-val { color: #ff5a4f; }
+  @media (max-width: 560px) { .g-row { grid-template-columns: 1fr auto; } .g-row .g-how { grid-column: 1 / -1; } }
+  /* wide screens: two columns, so the whole list fits without scrolling */
+  @media (min-width: 1000px) {
+    .g-panel { width: min(1240px, 100%); }
+    #glossary-list { columns: 2; column-gap: 30px; }
+    #glossary-list h3 { break-after: avoid; }
+    .g-row { grid-template-columns: 140px 96px 1fr; break-inside: avoid; font-size: 12px; }
+  }
+
   #settings { margin-top: 12px; padding-top: 12px; border-top: 1px solid #3a3a42; text-align: left; }
   #settings h2 { font-size: 12px; color: #ffd24a; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 1px; }
   .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12.5px; color: #ccc; }

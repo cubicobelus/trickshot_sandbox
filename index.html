@@ -23,7 +23,7 @@
     <p>
       Base run speed is slow — you <em>build</em> speed by chaining slides, bunnyhops (hold jump on landing)
       and wall bounces, up to 22 u/s.<br>
-      Smaller and faster targets are worth more, and trickshots stack.
+      Smaller and faster targets are worth more, and every trick multiplies your score.
     </p>
 
 
@@ -37,6 +37,7 @@
     <div id="panel-solo">
       <div id="loadout"><span class="lo-label">Loadout</span></div>   <!-- gun buttons are built in game.js -->
       <div class="start" id="start-btn">Click to play</div>
+      <button type="button" class="btn" id="glossary-open">Trickshot list</button>
     </div>
 
     <div id="panel-mp" hidden>
@@ -294,6 +295,16 @@
 </div>
 
 <!-- integrity: the browser refuses the file if the CDN ever serves anything else -->
+<!-- the trickshot list, a popup over everything; filled in game.js from the scoring values -->
+<div id="glossary" hidden>
+  <div class="g-panel" role="dialog" aria-label="Trickshots">
+    <div class="g-head"><h2>Trickshots</h2><button type="button" class="g-close" id="glossary-close" aria-label="Close">&times;</button></div>
+    <p class="g-note">Every trick multiplies the shot: AIR x1.4 and FLICK x1.4 together make x1.96. Penalties (in red)
+      multiply it down. The rifle, AK, shotgun, Deagle and thrown knives score a share of the sniper's points per hit.</p>
+    <div id="glossary-list"></div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
   integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ=="
   crossorigin="anonymous" referrerpolicy="no-referrer"></script>
