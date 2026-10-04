@@ -480,61 +480,31 @@
   // TARGETS (standard / moving / small)
   // ======================================================================
   const targets = [];
-  // a plate painted with a bullseye in the target type's colour, built in two parts so the
-  // centre can punch out when it's hit: an outer ring (a disc with a hole) and a core that
-  // fills the hole. Rims and backs are bare steel. Red standard, orange moving, cyan small.
-  const CORE_R = 0.81;   // the core is everything inside the outer coloured ring
-  const plateGeo = (function () {
-    const sh = new THREE.Shape();
-    sh.absarc(0, 0, 1, 0, Math.PI * 2, false);
-    const hole = new THREE.Path();
-    hole.absarc(0, 0, CORE_R, 0, Math.PI * 2, true);
-    sh.holes.push(hole);
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.07, bevelEnabled: false, curveSegments: 40 });
-    g.translate(0, 0, -0.035);
-    return g;
-  })();
-  const coreGeo = new THREE.CylinderGeometry(CORE_R, CORE_R, 0.075, 32);
-  coreGeo.rotateX(Math.PI / 2);
+  // A steel plate painted with a bullseye in the target type's colour, held in a steel rim.
+  // When it's hit the whole plate punches out and falls, leaving the empty rim hanging for a
+  // moment. Red standard, orange moving, cyan small.
+  const plateGeo = new THREE.CylinderGeometry(0.97, 0.97, 0.07, 40);
+  plateGeo.rotateX(Math.PI / 2);   // faces +Z
   const plateRimGeo = new THREE.TorusGeometry(1, 0.06, 8, 40);
   const plateSteel = new THREE.MeshStandardMaterial({ color: 0x8e959d, roughness: 0.45, metalness: 0.7 });
-  // the bullseye's rings from the outside in: [radius as a fraction of the plate, painted in the type colour?]
-  const BULLSEYE = [[1, true], [0.81, false], [0.62, true], [0.43, false], [0.24, true]];
-  function bullseyeMaterial(color, core) {
+  function bullseyeMaterial(color) {
     const tex = canvasTexture(256, (g, n) => {
-      if (core) {   // the bullseye's inner rings, scaled up to fill the whole core
-        BULLSEYE.forEach(([r, isColor]) => {
-          if (r > CORE_R + 1e-6) return;
-          g.fillStyle = isColor ? color : "#f4f4f2";
-          g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (r / CORE_R), 0, Math.PI * 2); g.fill();
-          g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
-          g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (r / CORE_R) - 1, 0, Math.PI * 2); g.stroke();
-        });
-        return;
-      }
       const rings = [color, "#f4f4f2", color, "#f4f4f2", color];
       rings.forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (1 - i * 0.19), 0, Math.PI * 2); g.fill(); });
       g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
       for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (1 - i * 0.19) - 1, 0, Math.PI * 2); g.stroke(); }
     });
-    // the ring's faces take their texture coordinates from the shape (-1..1), so map that onto the texture
-    if (!core) { tex.repeat.set(0.5, 0.5); tex.offset.set(0.5, 0.5); }
     // a touch of glow so a plate in shadow still reads against the sky
     return new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.38, roughness: 0.55, metalness: 0.1 });
   }
-  // ring materials are [faces, edges]; core materials are [edge, front, back]
+  // plate materials for its [edge, front, back]
   const TARGET_LOOKS = {};
   for (const [kind, color] of [["normal", "#e5352f"], ["moving", "#ff8a1c"], ["small", "#19c6e0"]]) {
-    TARGET_LOOKS[kind] = {
-      ring: [bullseyeMaterial(color), plateSteel],
-      core: [plateSteel, bullseyeMaterial(color, true), plateSteel],
-    };
+    TARGET_LOOKS[kind] = [plateSteel, bullseyeMaterial(color), plateSteel];
   }
   function setTargetLook(t) {
     const ud = t.userData;
-    const look = TARGET_LOOKS[ud.small ? "small" : (ud.moving ? "moving" : "normal")];
-    t.children[0].material = look.ring;
-    t.children[2].material = look.core;
+    t.children[0].material = TARGET_LOOKS[ud.small ? "small" : (ud.moving ? "moving" : "normal")];
   }
 
   const PLAYER_SPAWN = new THREE.Vector3(0, 1.7, 8);
@@ -602,10 +572,9 @@
 
   function makeTarget() {
     const group = new THREE.Group();
-    const plate = new THREE.Mesh(plateGeo, TARGET_LOOKS.normal.ring);
+    const plate = new THREE.Mesh(plateGeo, TARGET_LOOKS.normal);
     const rim = new THREE.Mesh(plateRimGeo, plateSteel);
-    const core = new THREE.Mesh(coreGeo, TARGET_LOOKS.normal.core);
-    group.add(plate, rim, core);   // children[0] ring, [1] rim, [2] core
+    group.add(plate, rim);   // children[0] plate, [1] rim
     group.userData = { idx: targets.length, alive: true, hitRadius: 1.1, base: new THREE.Vector3(), moving: false, vertical: false, small: false, scale: 1 };
     scene.add(group);
     targets.push(group);
@@ -616,7 +585,7 @@
   }
   for (let i = 0; i < CFG.targetCount; i++) makeTarget();
 
-  // hit: the core punches out backwards and tumbles down; the ring hangs a moment, then shrinks away
+  // hit: the plate punches out backwards and tumbles down; the empty rim hangs a moment, then shrinks away
   const TARGET_RING_HOLD = 0.5, TARGET_RING_SHRINK = 0.15;
   function knockOutTarget(t) {
     const ud = t.userData;
@@ -629,15 +598,13 @@
     const ud = t.userData;
     if (ud.knockT === undefined || ud.knockT < 0) return;
     ud.knockT += dt;
-    const core = t.children[2];
+    const plate = t.children[0];
     ud.coreVel.y -= CFG.gravity * 0.6 * dt;
-    core.position.addScaledVector(ud.coreVel, dt / ud.scale);   // local units are scaled with the target
-    core.rotation.x += ud.coreSpin * dt;
-    core.scale.setScalar(Math.max(0.01, 1 - Math.max(0, ud.knockT - 0.45) / 0.25));
+    plate.position.addScaledVector(ud.coreVel, dt / ud.scale);   // local units are scaled with the target
+    plate.rotation.x += ud.coreSpin * dt;
+    plate.scale.setScalar(Math.max(0.01, 1 - Math.max(0, ud.knockT - 0.45) / 0.25));
     const k = Math.max(0, ud.knockT - TARGET_RING_HOLD) / TARGET_RING_SHRINK;
-    const ringScale = Math.max(0.01, 1 - k);
-    t.children[0].scale.setScalar(ringScale);
-    t.children[1].scale.setScalar(ringScale);
+    t.children[1].scale.setScalar(Math.max(0.01, 1 - k));
     if (k >= 1 && ud.knockT >= 0.7) { t.visible = false; ud.knockT = -1; }
   }
   function resetTargetParts(t) {
