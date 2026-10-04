@@ -1,0 +1,27 @@
+# Files git should never pick up. The game itself has no secrets; this is a safety net.
+
+# secrets and local config
+.env
+.env.*
+*.pem
+*.key
+
+# editor settings stay on my machine
+.vscode/
+.idea/
+
+# Python (the tests) and Node leftovers
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+
+# test output and logs
+tests/output/
+*.log
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini

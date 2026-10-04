@@ -21,7 +21,7 @@
       <span class="key">1 / 2 / Q / wheel</span> gun / knife
     </p>
     <p>
-      Base run speed is slow — you <em>build</em> speed by chaining slides, bunnyhops (hold jump on landing)
+      Base run speed is slow — you <em>build</em> speed by chaining slides, bunnyhops (jump just as you land)
       and wall bounces, up to 22 u/s.<br>
       Smaller and faster targets are worth more, and every trick multiplies your score.
     </p>
@@ -296,7 +296,6 @@
   <p id="sb-foot"></p>
 </div>
 
-<!-- integrity: the browser refuses the file if the CDN ever serves anything else -->
 <!-- the trickshot list, a popup over everything; filled in game.js from the scoring values -->
 <div id="glossary" hidden>
   <div class="g-panel" role="dialog" aria-label="Trickshots">
@@ -306,9 +305,9 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
-  integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ=="
-  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- three.js r128 (MIT), kept in lib/ so the game needs no outside server; it's the official cdnjs file,
+     unchanged (SHA-512 dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==) -->
+<script src="lib/three.min.js"></script>
 <!-- PeerJS (multiplayer) is only loaded when MULTIPLAYER_ENABLED is true in game.js -->
 <script src="sounds.js"></script>
 <script src="game.js"></script>
