@@ -2702,7 +2702,10 @@
     return best;
   }
 
-  function resolveWalls(pos, feetY) {
+  // push the player's circle out of every wall box it overlaps. `from` is where the centre
+  // was a moment ago, so a centre that has ended up inside a wall goes back out the side
+  // it came in through, never the far side.
+  function resolveWalls(pos, feetY, from) {
     const r = CFG.playerRadius;
     const headY = feetY + CFG.playerHeight;
     for (const box of wallBoxes) {
@@ -2712,6 +2715,21 @@
       const clz = Math.max(box.min.z, Math.min(pos.z, box.max.z));
       const dx = pos.x - clx, dz = pos.z - clz;
       const distSq = dx * dx + dz * dz;
+      if (distSq < 1e-10) {
+        // centre inside the box: there's no nearest point to push away from
+        const f = from || pos;
+        if (f.x <= box.min.x) pos.x = box.min.x - r;
+        else if (f.x >= box.max.x) pos.x = box.max.x + r;
+        else if (f.z <= box.min.z) pos.z = box.min.z - r;
+        else if (f.z >= box.max.z) pos.z = box.max.z + r;
+        else {
+          // came from inside too (shouldn't happen): leave by the shallowest side
+          const out = [[pos.x - box.min.x, "x", box.min.x - r], [box.max.x - pos.x, "x", box.max.x + r],
+            [pos.z - box.min.z, "z", box.min.z - r], [box.max.z - pos.z, "z", box.max.z + r]].sort((a, b) => a[0] - b[0])[0];
+          pos[out[1]] = out[2];
+        }
+        continue;
+      }
       if (distSq < r * r) {
         const dist = Math.sqrt(distSq) || 0.0001;
         const push = r - dist;
@@ -2772,6 +2790,8 @@
   const _right = new THREE.Vector3();
   const _wishDir = new THREE.Vector3();
   const _nextPos = new THREE.Vector3();
+  const _stepFrom = new THREE.Vector3();
+  const MOVE_STEP = 0.15;   // metres; well under the thinnest wall (0.2 m)
 
   function tryWallBounce() {
     if (player.wallBounceCooldown > 0) return false;
@@ -2940,11 +2960,18 @@
 
     // ---------------- INTEGRATE ----------------
     const prevFeet = player.feetY;
+    // move in short steps, checking walls after each, so no speed or frame rate can carry
+    // the player clean over a wall in one jump
     _nextPos.copy(yawObject.position);
-    _nextPos.x += player.velocity.x * dt;
-    _nextPos.z += player.velocity.z * dt;
-    resolveWalls(_nextPos, prevFeet);
-    resolveWalls(_nextPos, prevFeet);
+    const travelX = player.velocity.x * dt, travelZ = player.velocity.z * dt;
+    const steps = Math.max(1, Math.ceil(Math.hypot(travelX, travelZ) / MOVE_STEP));
+    for (let i = 0; i < steps; i++) {
+      _stepFrom.copy(_nextPos);
+      _nextPos.x += travelX / steps;
+      _nextPos.z += travelZ / steps;
+      resolveWalls(_nextPos, prevFeet, _stepFrom);
+      resolveWalls(_nextPos, prevFeet, _stepFrom);
+    }
     const B = CFG.arenaHalfSize - 0.6;
     _nextPos.x = Math.max(-B, Math.min(B, _nextPos.x));
     _nextPos.z = Math.max(-B, Math.min(B, _nextPos.z));
