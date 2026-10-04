@@ -23,12 +23,32 @@
   #instructions .start:hover { background: rgba(124,252,0,0.12); }
 
   /* the trickshot list: a popup over everything */
-  #glossary-open, #stats-open { margin-top: 10px; }
-  #glossary, #stats {
+  #glossary-open, #stats-open, #ach-open { margin-top: 10px; }
+  #ach-count { color: #ffd24a; }
+  #glossary, #stats, #achievements {
     position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.7);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
-  #glossary[hidden], #stats[hidden] { display: none; }
+  #glossary[hidden], #stats[hidden], #achievements[hidden] { display: none; }
+  .ach-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start; padding: 4px 0; border-bottom: 1px solid #2a2a31; text-align: left; break-inside: avoid; }
+  .ach-mark { width: 20px; height: 20px; border-radius: 50%; border: 1px solid #44444c; color: #15161a; font-weight: bold; text-align: center; line-height: 19px; font-size: 12px; }
+  .ach-row.done .ach-mark { background: #7CFC00; border-color: #7CFC00; }
+  .ach-row b { display: block; font-size: 13px; color: #8d8d96; }
+  .ach-row.done b { color: #ffd24a; }
+  .ach-row span { display: block; font-size: 12px; color: #9a9aa3; }
+  .ach-row small { font-size: 11px; color: #8d8d96; }
+  .ach-bar { display: block; height: 4px; background: #2a2a31; border-radius: 2px; margin: 3px 0 1px; overflow: hidden; }
+  @media (min-width: 1200px) { #achievements .g-panel { width: min(1320px, 100%); } #ach-list { columns: 3 !important; } }
+  .ach-bar i { display: block; height: 100%; background: #ffd24a; }
+  #ach-toast {
+    position: absolute; top: 78px; left: 50%; transform: translate(-50%, -20px); opacity: 0; pointer-events: none;
+    background: rgba(20,20,25,0.92); border: 1px solid #ffd24a; border-radius: 8px; padding: 8px 18px; text-align: center;
+    transition: opacity 0.3s, transform 0.3s; min-width: 240px;
+  }
+  #ach-toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #ach-toast small { display: block; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #7CFC00; }
+  #ach-toast b { display: block; font-size: 17px; color: #ffd24a; }
+  #ach-toast span { display: block; font-size: 12px; color: #c8c8ce; }
   .st-foot { text-align: right; margin-top: 12px; }
   .g-panel {
     width: min(760px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; color: #fff;
@@ -49,8 +69,8 @@
   /* wide screens: two columns, so the whole list fits without scrolling */
   @media (min-width: 1000px) {
     .g-panel { width: min(1240px, 100%); }
-    #glossary-list, #stats-list { columns: 2; column-gap: 30px; }
-    #glossary-list h3, #stats-list h3 { break-after: avoid; }
+    #glossary-list, #stats-list, #ach-list { columns: 2; column-gap: 30px; }
+    #glossary-list h3, #stats-list h3, #ach-list h3 { break-after: avoid; }
     .g-row { grid-template-columns: 140px 96px 1fr; break-inside: avoid; font-size: 12px; }
   }
 

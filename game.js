@@ -3078,7 +3078,7 @@
     player.launch = null;   // rising off the bounce isn't a pad launch (WALL BOUNCE pays for it)
 
     playWallBounce(perfect);
-    stat("wallBounces"); if (perfect) stat("perfectBounces");
+    stat("wallBounces"); if (perfect) { stat("perfectBounces"); achProgress(); }
     if (perfect) burst(yawObject.position, 0x7CFC00, 5);
     return true;
   }
@@ -3664,6 +3664,7 @@
     stats.kinds[target.userData.type] = (stats.kinds[target.userData.type] || 0) + 1;
     if (isKnife && !thrown) stat("knifeSwingHits");
     else { statMax("longestShot", dist); if (thrown) stat("knifeThrowHits"); else gunStat(vm.current).points += pointsGained; }
+    achHit(res, target.userData.type, isKnife, thrown, dist);
     target.userData.respawnTimer = 1.1;
     if (net.active) mpTargetHit(target, pointsGained);
   }
@@ -5029,6 +5030,116 @@
   });
 
   // ======================================================================
+  // ACHIEVEMENTS: goals that teach the tricks. Checked on every scoring hit, on wall bounces and at the end
+  // of a Score Attack run; unlocks pop up as a toast and are kept in this browser.
+  // ======================================================================
+  const ACH_KEY = "tsb-achievements";
+  // hit(h): h = { res, tags (names without values), kind, isKnife, thrown, dist, mult }
+  const has = (h, name) => h.tags.includes(name);
+  const ACHIEVEMENTS = [
+    { id: "first", group: "Getting started", name: "First Blood", desc: "Hit a target.", hit: () => true },
+    { id: "air", group: "Getting started", name: "Airborne", desc: "Hit a target while you're in the air.", hit: (h) => has(h, "AIR") },
+    { id: "mega", group: "Getting started", name: "Liftoff", desc: "Hit a target while still rising off a mega pad.", hit: (h) => has(h, "MEGA LAUNCH") },
+    { id: "noscope", group: "Tricks", name: "No Scope Needed", desc: "Land a no-scope from 40 m or more.", hit: (h) => has(h, "NO-SCOPE") && h.dist >= 40 },
+    { id: "quickscope", group: "Tricks", name: "Quickdraw", desc: "Land a quickscope.", hit: (h) => has(h, "QUICKSCOPE") },
+    { id: "spin", group: "Tricks", name: "Spin Doctor", desc: "Hit a target with a 360° spin.", hit: (h) => h.tags.some((t) => /SPIN$/.test(t)) },
+    { id: "flick", group: "Tricks", name: "Flick of the Wrist", desc: "Land a FLICK.", hit: (h) => has(h, "FLICK") },
+    { id: "reverse", group: "Tricks", name: "Over the Shoulder", desc: "Land a REVERSE shot.", hit: (h) => has(h, "REVERSE") },
+    { id: "double", group: "Tricks", name: "Double Trouble", desc: "Hit two targets in one jump.", hit: (h) => has(h, "DOUBLE") || has(h, "TRIPLE") || has(h, "QUAD") },
+    { id: "triple", group: "Tricks", name: "Hat Trick", desc: "Hit three targets in one jump.", hit: (h) => has(h, "TRIPLE") || has(h, "QUAD") || has(h, "5+ HIT COMBO") },
+    { id: "snitch", group: "Tricks", name: "Snitch Catcher", desc: "Hit a purple target.", hit: (h) => h.kind === "tiny" },
+    { id: "far", group: "Tricks", name: "Long Distance", desc: "Hit a target from 80 m or more.", hit: (h) => (!h.isKnife || h.thrown) && h.dist >= 80 },
+    { id: "sonic", group: "Tricks", name: "Speed Demon", desc: "Hit a target while moving at 19+ u/s.", hit: (h) => has(h, "SONIC") },
+    { id: "ninja", group: "Tricks", name: "Ninja", desc: "Hit a target with a thrown knife from 30 m or more.", hit: (h) => h.thrown && h.dist >= 30 },
+    { id: "airknife", group: "Tricks", name: "Death From Above", desc: "Hit a target with a knife swing while in the air.", hit: (h) => h.isKnife && !h.thrown && has(h, "AIR") },
+    { id: "x10", group: "Big shots", name: "Trickshot", desc: "Land a 10x shot.", hit: (h) => h.mult >= 10 },
+    { id: "x50", group: "Big shots", name: "Insane", desc: "Land a 50x shot.", hit: (h) => h.mult >= 50 },
+    { id: "x100", group: "Big shots", name: "Legendary", desc: "Land a 100x shot.", hit: (h) => h.mult >= 100 },
+    { id: "720", group: "Big shots", name: "720 No-Scope", desc: "The classic: a 720° spin and a no-scope in one shot.", hit: (h) => has(h, "NO-SCOPE") && h.tags.some((t) => /^(\d+)° SPIN$/.test(t) && parseInt(t, 10) >= 720) },
+    { id: "streak20", group: "Big shots", name: "On Fire", desc: "Hit 20 targets in a row without a miss.", hit: () => streak >= 20 },
+    { id: "run", group: "Score Attack", name: "On the Clock", desc: "Finish a Score Attack run.", run: () => true },
+    { id: "run5k", group: "Score Attack", name: "High Roller", desc: "Score 5,000 or more in a 1:00 Score Attack.", run: (r) => r.mode === "sa60" && r.score >= 5000 },
+    { id: "bounce10", group: "Grind", name: "Bounce House", desc: "10 perfect wall bounces.", goal: 10, progress: () => stats.perfectBounces },
+    { id: "bounce100", group: "Grind", name: "Off the Walls", desc: "100 perfect wall bounces.", goal: 100, progress: () => stats.perfectBounces },
+    { id: "marathon", group: "Grind", name: "Marathon", desc: "Travel 10 km.", goal: 10000, progress: () => stats.distance, unit: "m" },
+  ];
+  let achDone = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(ACH_KEY));
+    if (saved && typeof saved === "object") for (const a of ACHIEVEMENTS) if (typeof saved[a.id] === "string") achDone[a.id] = saved[a.id].slice(0, 10);
+  } catch (e) { /* storage blocked or empty */ }
+  const achToastEl = document.getElementById("ach-toast"), achCountEl = document.getElementById("ach-count");
+  const achQueue = [];
+  let achToastTimer = 0;
+  function unlock(a) {
+    if (achDone[a.id]) return;
+    achDone[a.id] = new Date().toISOString().slice(0, 10);
+    try { localStorage.setItem(ACH_KEY, JSON.stringify(achDone)); } catch (e) { /* ignore */ }
+    achQueue.push(a);
+    if (!achToastTimer) nextAchToast();
+    updateAchCount();
+  }
+  function nextAchToast() {
+    const a = achQueue.shift();
+    if (!a) { achToastTimer = 0; achToastEl.classList.remove("show"); return; }
+    achToastEl.querySelector("b").textContent = a.name;
+    achToastEl.querySelector("span").textContent = a.desc;
+    achToastEl.classList.remove("show"); void achToastEl.offsetWidth; achToastEl.classList.add("show");
+    if (SETTINGS.volHits > 0) { tone("triangle", 660, 990, 0.12 * SETTINGS.volHits, 0.14, 0, 0.2); tone("triangle", 990, 1320, 0.12 * SETTINGS.volHits, 0.2, 0.12, 0.25); }
+    achToastTimer = setTimeout(() => { achToastEl.classList.remove("show"); achToastTimer = setTimeout(nextAchToast, 350); }, 3200);
+  }
+  function achHit(res, kind, isKnife, thrown, dist) {
+    const h = { res, kind, isKnife, thrown, dist, mult: res.mult, tags: res.tags.concat(res.pens || []).map((t) => trickKey(t) || t.replace(/ x[\d.]+$/, "")) };
+    for (const a of ACHIEVEMENTS) if (a.hit && !achDone[a.id] && a.hit(h)) unlock(a);
+    achProgress();
+  }
+  function achRun(r) { for (const a of ACHIEVEMENTS) if (a.run && !achDone[a.id] && a.run(r)) unlock(a); }
+  function achProgress() { for (const a of ACHIEVEMENTS) if (a.goal && !achDone[a.id] && a.progress() >= a.goal) unlock(a); }
+  function updateAchCount() { achCountEl.textContent = Object.keys(achDone).length + "/" + ACHIEVEMENTS.length; }
+
+  const achEl = document.getElementById("achievements");
+  function buildAchievements() {
+    const list = document.getElementById("ach-list");
+    list.textContent = "";
+    let group = null;
+    for (const a of ACHIEVEMENTS) {
+      if (a.group !== group) {
+        group = a.group;
+        const h = document.createElement("h3");
+        h.textContent = group;
+        list.appendChild(h);
+      }
+      const done = achDone[a.id];
+      const row = document.createElement("div");
+      row.className = "ach-row" + (done ? " done" : "");
+      const mark = document.createElement("div"); mark.className = "ach-mark"; mark.textContent = done ? "✓" : "";
+      const body = document.createElement("div");
+      const name = document.createElement("b"); name.textContent = a.name;
+      const desc = document.createElement("span"); desc.textContent = a.desc;
+      body.append(name, desc);
+      if (a.goal && !done) {
+        const p = Math.min(a.progress() / a.goal, 1);
+        const bar = document.createElement("i"); bar.className = "ach-bar";
+        const fill = document.createElement("i"); fill.style.width = (p * 100).toFixed(1) + "%";
+        bar.appendChild(fill);
+        const txt = document.createElement("small");
+        txt.textContent = Math.floor(a.progress()).toLocaleString() + " / " + a.goal.toLocaleString() + (a.unit ? " " + a.unit : "");
+        body.append(bar, txt);
+      }
+      const when = document.createElement("small"); when.className = "ach-when"; when.textContent = done || "";
+      row.append(mark, body, when);
+      list.appendChild(row);
+    }
+  }
+  function setAchievements(open) { if (open) buildAchievements(); achEl.hidden = !open; }
+  document.getElementById("ach-open").addEventListener("click", (e) => { e.stopPropagation(); setAchievements(true); });
+  document.getElementById("ach-close").addEventListener("click", () => setAchievements(false));
+  achEl.addEventListener("click", (e) => { if (e.target === achEl) setAchievements(false); });   // the backdrop
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !achEl.hidden) setAchievements(false); });
+  achProgress();   // grind goals already met by the saved stats
+  updateAchCount();
+
+  // ======================================================================
   // SCORE ATTACK: a timed run. A 3-2-1 countdown (you can look around but not move or shoot), then the
   // clock runs; it pauses while the menu is open. At zero the results come up and the score goes on
   // your top-5 list for that length, kept in this browser.
@@ -5111,6 +5222,7 @@
     tops[run.mode] = list.slice(0, 5);
     try { localStorage.setItem(RUN_KEY, JSON.stringify(tops)); } catch (e) { /* storage blocked */ }
     showResults(entry, rank, tops[run.mode]);
+    achRun({ mode: run.mode, score: entry.score });
     runTimerEl.hidden = true;
     if (document.pointerLockElement) document.exitPointerLock();
   }

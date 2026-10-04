@@ -165,6 +165,14 @@ def test_game(browser, base):
     check("stats count the shots fired and show them after a reload", "of 0 shots" not in acc and "shots and throws" in acc, acc)
     page.keyboard.press("Escape")
 
+    # achievements: the popup lists every goal and the menu button shows the count
+    page.click("#ach-open")
+    page.wait_for_timeout(150)
+    goals = page.evaluate("document.querySelectorAll('.ach-row').length")
+    count = page.inner_text("#ach-count")
+    check("achievements popup lists the goals and the menu shows the count", goals >= 20 and count.endswith("/" + str(goals)), f"{goals} goals, {count}")
+    page.keyboard.press("Escape")
+
     check("no errors in the game page", not errors, "; ".join(errors[:3]))
     if not all(ok for _, ok, _ in results):
         page.screenshot(path=os.path.join(OUT, "game.png"))

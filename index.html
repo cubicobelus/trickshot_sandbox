@@ -46,6 +46,7 @@
       <div class="start" id="start-btn">Click to play</div>
       <button type="button" class="btn" id="glossary-open">Trickshot list</button>
       <button type="button" class="btn" id="stats-open">Stats</button>
+      <button type="button" class="btn" id="ach-open">Achievements <span id="ach-count"></span></button>
       <button type="button" class="btn" id="run-quit" hidden>Quit run</button>
     </div>
 
@@ -300,6 +301,7 @@
   </div>
   <div id="feed"></div>
   <div id="run-count"></div>   <!-- Score Attack countdown: 3, 2, 1, GO -->
+  <div id="ach-toast"><small>Achievement unlocked</small><b></b><span></span></div>
   <div id="mp-timer" hidden><span id="mp-timer-val">3:00</span><div id="mp-timer-mode"></div></div>
   <div id="killfeed"></div>
   <div id="dead-screen" hidden><div>ELIMINATED</div><small id="dead-by"></small></div>
@@ -331,6 +333,15 @@
       <button type="button" class="r-again" id="r-again">Play again (Enter)</button>
       <button type="button" class="btn" id="r-menu">Menu (Esc)</button>
     </div>
+  </div>
+</div>
+
+<!-- achievements, a popup over everything; filled in game.js -->
+<div id="achievements" hidden>
+  <div class="g-panel" role="dialog" aria-label="Achievements">
+    <div class="g-head"><h2>Achievements</h2><button type="button" class="g-close" id="ach-close" aria-label="Close">&times;</button></div>
+    <p class="g-note">Goals to chase, kept in this browser.</p>
+    <div id="ach-list"></div>
   </div>
 </div>
 
