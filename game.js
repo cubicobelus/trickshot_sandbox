@@ -483,7 +483,7 @@
   // a plate painted with a bullseye in the target type's colour, built in two parts so the
   // centre can punch out when it's hit: an outer ring (a disc with a hole) and a core that
   // fills the hole. Rims and backs are bare steel. Red standard, orange moving, cyan small.
-  const CORE_R = 0.43;   // the core is the inner white ring and the centre spot
+  const CORE_R = 0.81;   // the core is everything inside the outer coloured ring
   const plateGeo = (function () {
     const sh = new THREE.Shape();
     sh.absarc(0, 0, 1, 0, Math.PI * 2, false);
@@ -498,13 +498,18 @@
   coreGeo.rotateX(Math.PI / 2);
   const plateRimGeo = new THREE.TorusGeometry(1, 0.06, 8, 40);
   const plateSteel = new THREE.MeshStandardMaterial({ color: 0x8e959d, roughness: 0.45, metalness: 0.7 });
+  // the bullseye's rings from the outside in: [radius as a fraction of the plate, painted in the type colour?]
+  const BULLSEYE = [[1, true], [0.81, false], [0.62, true], [0.43, false], [0.24, true]];
   function bullseyeMaterial(color, core) {
     const tex = canvasTexture(256, (g, n) => {
-      if (core) {   // just the white ring and the spot, filling the whole core
-        g.fillStyle = "#f4f4f2"; g.beginPath(); g.arc(n / 2, n / 2, n / 2, 0, Math.PI * 2); g.fill();
-        g.fillStyle = color; g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (0.24 / CORE_R), 0, Math.PI * 2); g.fill();
-        g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
-        g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (0.24 / CORE_R) - 1, 0, Math.PI * 2); g.stroke();
+      if (core) {   // the bullseye's inner rings, scaled up to fill the whole core
+        BULLSEYE.forEach(([r, isColor]) => {
+          if (r > CORE_R + 1e-6) return;
+          g.fillStyle = isColor ? color : "#f4f4f2";
+          g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (r / CORE_R), 0, Math.PI * 2); g.fill();
+          g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
+          g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (r / CORE_R) - 1, 0, Math.PI * 2); g.stroke();
+        });
         return;
       }
       const rings = [color, "#f4f4f2", color, "#f4f4f2", color];
