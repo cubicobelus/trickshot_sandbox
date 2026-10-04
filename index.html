@@ -48,6 +48,10 @@
       <button type="button" class="btn" id="stats-open">Stats</button>
       <button type="button" class="btn" id="ach-open">Achievements <span id="ach-count"></span></button>
       <button type="button" class="btn" id="run-quit" hidden>Quit run</button>
+      <div id="watch-row">
+        <button type="button" class="btn" id="watch-best" hidden>&#9654; Watch best trickshot</button>
+        <button type="button" class="btn" id="watch-last" hidden>&#9654; Watch last hit</button>
+      </div>
     </div>
 
     <div id="panel-mp" hidden>
@@ -329,6 +333,23 @@
   <p id="sb-foot"></p>
 </div>
 
+<!-- replay controls, over the picture while a replay plays -->
+<div id="replay" hidden>
+  <div class="rp-top"><span class="rp-badge">Replay</span> <span id="replay-label"></span></div>
+  <div id="replay-tags"></div>
+  <div class="rp-bar">
+    <div class="rp-track"><div id="replay-progress"></div></div>
+    <div class="rp-buttons">
+      <button type="button" id="rp-pause">Pause (Space)</button>
+      <button type="button" id="rp-restart">Restart (R)</button>
+      <button type="button" id="rp-speed">Speed 1x (S)</button>
+      <button type="button" id="rp-slow">Slow-mo: on (M)</button>
+      <button type="button" id="rp-bullet">Bullet cam: on (B)</button>
+      <button type="button" id="rp-exit">Exit (Esc)</button>
+    </div>
+  </div>
+</div>
+
 <!-- Score Attack results, shown when the clock runs out -->
 <div id="results" hidden>
   <div class="r-panel" role="dialog" aria-label="Score Attack results">
@@ -342,6 +363,7 @@
     </div>
     <div class="r-buttons">
       <button type="button" class="r-again" id="r-again">Play again (Enter)</button>
+      <button type="button" class="btn" id="r-watch" hidden>&#9654; Watch best shot</button>
       <button type="button" class="btn" id="r-menu">Menu (Esc)</button>
     </div>
   </div>

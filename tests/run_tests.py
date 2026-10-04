@@ -126,6 +126,8 @@ def test_game(browser, base):
     page.keyboard.press("Escape")
     page.wait_for_timeout(100)
     closed = page.evaluate("document.getElementById('glossary').hidden")
+    check("replay buttons stay hidden until there's something to watch",
+          not page.is_visible("#watch-best") and not page.is_visible("#watch-last"))
     check("trickshot list opens, lists the tricks, closes with Esc", opened and rows > 20 and closed and not started, f"{rows} rows")
 
     # settings: every tab opens, a change survives a reload, reset restores it

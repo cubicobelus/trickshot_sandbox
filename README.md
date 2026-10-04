@@ -31,6 +31,10 @@ shot, highest multiplier, top speed...), each gun, targets by colour, movement, 
 each trick. **Achievements** (also in the menu) are goals to chase, from your first hit to a 720 no-scope
 or a 100x shot. Both are kept in your browser.
 
+**Replays:** every hit is recorded. The menu's **Watch best trickshot** and **Watch last hit** buttons (and
+**Watch best shot** on a Score Attack results screen) play it back from your view, slowing down around the
+hit, with a **bullet cam** that rides the shot to the target. Your best trickshot's replay is kept in your browser.
+
 **Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too.
 1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns
 score less per hit so trickshots stay king.

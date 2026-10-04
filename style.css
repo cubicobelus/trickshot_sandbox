@@ -333,6 +333,29 @@
   .r-again:hover { background: rgba(124,252,0,0.12); }
   @media (max-width: 560px) { .r-cols { grid-template-columns: 1fr; } }
 
+  /* ---------------- replays ---------------- */
+  #watch-row { margin-top: 8px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  #watch-row:not(:has(button:not([hidden]))) { display: none; }
+  #hud.replaying > *:not(#scope) { display: none !important; }
+  #replay { position: fixed; inset: 0; z-index: 65; pointer-events: none; color: #fff; }
+  #replay[hidden] { display: none; }
+  .rp-top { position: absolute; top: 16px; left: 18px; font-size: 14px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+  .rp-badge { background: #e02424; color: #fff; font-weight: bold; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; margin-right: 6px; }
+  #replay-tags { position: absolute; top: 16px; right: 18px; text-align: right; font-weight: bold; color: #ff9d3b; font-size: 14px;
+    background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 6px; line-height: 1.5; opacity: 0; transition: opacity 0.3s; }
+  #replay-tags.show { opacity: 1; }
+  #replay-tags .mult { color: #ffd24a; font-size: 20px; }
+  #replay-tags .pen, #replay-tags .mult.low { color: #ff5a4f; }
+  .rp-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(760px, calc(100% - 32px));
+    background: rgba(15,15,20,0.82); border: 1px solid #44444c; border-radius: 10px; padding: 10px 12px; pointer-events: auto; }
+  .rp-track { height: 4px; background: #2f2f37; border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+  #replay-progress { height: 100%; width: 0; background: #ffd24a; }
+  .rp-buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .rp-buttons button { background: rgba(255,255,255,0.05); color: #ddd; border: 1px solid #44444c; border-radius: 6px; padding: 5px 10px;
+    font: 12.5px 'Segoe UI', Arial, sans-serif; cursor: pointer; }
+  .rp-buttons button:hover { border-color: #ffd24a; color: #fff; }
+  #rp-exit { color: #ff9d3b; }
+
   /* ---------------- mode select + multiplayer ---------------- */
   [hidden] { display: none !important; }
   #mode-tabs { display: flex; gap: 8px; margin-top: 14px; justify-content: center; }

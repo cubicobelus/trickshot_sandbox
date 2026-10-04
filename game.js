@@ -758,6 +758,7 @@
     ud.coreVel = ud.coreVel || new THREE.Vector3();
     ud.coreVel.set((Math.random() - 0.5) * 1.5, 1.5 + Math.random(), -(3.5 + Math.random() * 1.5));   // local: back, up a little
     ud.coreSpin = (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 6);
+    recEvent({ type: "ko", i: targets.indexOf(t), ty: ud.type, cv: [r3(ud.coreVel.x), r3(ud.coreVel.y), r3(ud.coreVel.z)], sp: r2(ud.coreSpin) });
   }
   function animateKnockout(t, dt) {
     const ud = t.userData;
@@ -781,6 +782,7 @@
     resetTargetParts(t);
     t.userData.tclock = undefined;
     placeTarget(t);
+    if (typeof recEvent === "function") recEvent({ type: "spawn", i: targets.indexOf(t), ty: t.userData.type, p: [r3(t.position.x), r3(t.position.y), r3(t.position.z)] });
     t.userData.alive = true;
     t.visible = true;
   }
@@ -2058,6 +2060,7 @@
     speedlinesEl.style.opacity = SETTINGS.speedLines ? Math.max(0, (speedT - 0.35) / 0.65) * 0.85 * (1 - adsEased) : 0;
 
     const scopeAlpha = w.scope ? Math.max(0, (adsEased - 0.55) / 0.45) : 0;
+    lastScopeAlpha = scopeAlpha;
     scopeEl.style.opacity = scopeAlpha;
     // the lens closes in from slightly too big as your eye settles behind it
     scopeEl.style.transform = "translate(-50%, -50%) scale(" + (1.2 - 0.2 * scopeAlpha).toFixed(3) + ")";
@@ -3445,6 +3448,9 @@
     bestShot = { points: 0, mult: 1, tags: [], pens: [] };
     saveBestShot();
     showBestShot(false);
+    bestClip = null;
+    try { localStorage.removeItem(REPLAY_KEY); } catch (e) { /* ignore */ }
+    refreshReplayButtons();
   });
 
   // the multiplier on top, then each bonus, then any penalties in red
@@ -3697,9 +3703,11 @@
     playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
     showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x");
     statHit(res, pointsGained);
+    lastAward = { best: pointsGained > bestShot.points, runBest: false };
     if (run.state === "live") {
       run.hits++;
       if (!run.best || pointsGained > run.best.points) {
+        lastAward.runBest = true;
         run.best = { points: pointsGained, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice(), dist: res.dist };
       }
     }
@@ -3722,6 +3730,7 @@
     if (isKnife && !thrown) stat("knifeSwingHits");
     else { statMax("longestShot", dist); if (thrown) stat("knifeThrowHits"); else gunStat(vm.current).points += pointsGained; }
     achHit(res, target.userData.type, isKnife, thrown, dist);
+    recHit(target, dist, isKnife, thrown, res, pointsGained);
     target.userData.respawnTimer = 1.1;
     if (net.active) mpTargetHit(target, pointsGained);
   }
@@ -3875,7 +3884,11 @@
       else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) impactDist = res.dist;
       else if (propHits.length) impactDist = propHits[0].distance;
       // tracers from the muzzle to wherever the shot lands (a few per shotgun blast)
-      if (i < 3) spawnTracer(_muzzleWorld, _pelletDir, impactDist);
+      if (i < 3) {
+        spawnTracer(_muzzleWorld, _pelletDir, impactDist);
+        recEvent({ type: "shot", w: vm.current, snd: i === 0, o: v3(_muzzleWorld), d: [r4(_pelletDir.x), r4(_pelletDir.y), r4(_pelletDir.z)], l: r2(impactDist) });
+      }
+      if (i === 0) lastShotOrigin.copy(_muzzleWorld);
       if (i === 0 && net.active) mpSendShot(_muzzleWorld, _pelletDir, impactDist);
 
       if (playerHit) {
@@ -3967,6 +3980,7 @@
     k.age = 0;
     k.state = "flying";
     k.root.visible = true;
+    recEvent({ type: "throw" });
     k.root.scale.setScalar(1);
     k.spin.rotation.set(0, 0, 0);
     faceAlongVelocity(k);
@@ -4061,6 +4075,7 @@
         playKnifeHit();
         if (run.state === "live") run.shotsHit++;
         stat("shotsHit");
+        lastShotOrigin.copy(k.from);
         scoreHit(hitTarget, k.from.distanceTo(o), true, 0, k.snap, true);
         retireKnife(k);
         continue;
@@ -5221,7 +5236,7 @@
 
   function startRun() {
     Object.assign(run, { state: "countdown", mode: SETTINGS.playMode, left: RUN_LENGTHS[SETTINGS.playMode], count: 3,
-      shots: 0, shotsHit: 0, hits: 0, best: null });
+      shots: 0, shotsHit: 0, hits: 0, best: null, bestClip: null });
     score = 0; scoreEl.textContent = 0;
     streak = 0; streakEl.textContent = 0;
     teleportLocal(PLAYER_SPAWN.x, PLAYER_SPAWN.z);
@@ -5266,6 +5281,7 @@
 
   function endRun() {
     run.state = "done";
+    finishAllClips();
     stat("runs");
     mouseHeld = false; attackPressed = false;
     const entry = { score, hits: run.hits, acc: run.shots ? run.shotsHit / run.shots : 0,
@@ -5319,6 +5335,7 @@
       ol.appendChild(li);
     }
     resultsEl.hidden = false;
+    refreshReplayButtons();
   }
   function closeResults(again) {
     resultsEl.hidden = true;
@@ -5328,7 +5345,7 @@
   document.getElementById("r-again").addEventListener("click", () => closeResults(true));
   document.getElementById("r-menu").addEventListener("click", () => closeResults(false));
   window.addEventListener("keydown", (e) => {
-    if (resultsEl.hidden) return;
+    if (resultsEl.hidden || replay.active) return;
     if (e.code === "Enter" || e.code === "NumpadEnter") { e.preventDefault(); closeResults(true); }
     if (e.code === "Escape") closeResults(false);
   });
@@ -5371,6 +5388,345 @@
   refreshModeUI();
 
   // ======================================================================
+  // REPLAYS: the game keeps a rolling recording of the last few seconds (your view every frame, where the
+  // moving targets are, thrown knives, and shots, hits, knockouts and respawns as events). Every scoring
+  // hit cuts a clip from it a moment after it lands: the last hit's clip, a Score Attack run's best shot,
+  // and your best trickshot (also saved in this browser). Playback shows it from your eyes, slowing
+  // down around the hit, with an optional bullet cam that rides the shot to the target.
+  // ======================================================================
+  const REPLAY_KEY = "tsb-best-replay";
+  const REC_SECONDS = 7, CLIP_BEFORE = 5, CLIP_AFTER = 1.2;
+  const rec = { t: 0, frames: [], events: [], pending: [], snapTimer: 0 };
+  let lastClip = null, bestClip = null, lastScopeAlpha = 0, lastShotOrigin = new THREE.Vector3(), lastAward = { best: false, runBest: false };
+  try {
+    const c = JSON.parse(localStorage.getItem(REPLAY_KEY));
+    if (c && c.v === 1 && Array.isArray(c.frames) && c.frames.length > 1 && Array.isArray(c.events)) bestClip = c;
+  } catch (e) { /* none saved */ }
+  const r3 = (n) => Math.round(n * 1000) / 1000, r4 = (n) => Math.round(n * 10000) / 10000;   // (r2, two decimals, is shared with the multiplayer code)
+  const v3 = (v) => [r3(v.x), r3(v.y), r3(v.z)];
+  const _rp = new THREE.Vector3(), _rq = new THREE.Quaternion();
+
+  function recEvent(e) { if (net.active || replay.active) return; e.t = r3(rec.t); rec.events.push(e); }
+  function recSnapshot() {
+    recEvent({ type: "snap", s: targets.map((t) => [t.userData.type, r3(t.position.x), r3(t.position.y), r3(t.position.z), t.userData.alive ? 1 : 0]) });
+  }
+  // once per rendered frame of live play
+  function recordFrame(realDt) {
+    if (net.active) return;
+    rec.t += realDt;
+    rec.snapTimer -= realDt;
+    if (rec.snapTimer <= 0 || !rec.events.some((e) => e.type === "snap")) { rec.snapTimer = 1; recSnapshot(); }
+    camera.getWorldPosition(_rp); camera.getWorldQuaternion(_rq);
+    const f = { t: r3(rec.t), c: [r3(_rp.x), r3(_rp.y), r3(_rp.z), r4(_rq.x), r4(_rq.y), r4(_rq.z), r4(_rq.w), r2(camera.fov), r2(lastScopeAlpha)] };
+    const tg = [];
+    targets.forEach((t, i) => { if (t.userData.motion && t.userData.alive) tg.push([i, r3(t.position.x), r3(t.position.y), r3(t.position.z)]); });
+    if (tg.length) f.tg = tg;
+    const kn = [];
+    for (const k of thrownPool) {
+      if (k.state !== "flying") continue;
+      k.root.getWorldQuaternion(_rq);
+      kn.push([r3(k.root.position.x), r3(k.root.position.y), r3(k.root.position.z), r4(_rq.x), r4(_rq.y), r4(_rq.z), r4(_rq.w), r2(k.spin.rotation.x)]);
+    }
+    if (kn.length) f.kn = kn;
+    rec.frames.push(f);
+    // forget what's older than the buffer, but keep the last snapshot from before it so a clip can start anywhere
+    const cut = rec.t - REC_SECONDS;
+    while (rec.frames.length && rec.frames[0].t < cut) rec.frames.shift();
+    let lastOldSnap = -1;
+    for (let i = 0; i < rec.events.length && rec.events[i].t < cut; i++) if (rec.events[i].type === "snap") lastOldSnap = i;
+    rec.events = rec.events.filter((e, i) => e.t >= cut || i === lastOldSnap);
+    // cut any clips whose "after" time has passed
+    for (const p of rec.pending.slice()) if (rec.t >= p.until) finishClip(p);
+  }
+  function finishClip(p) {
+    rec.pending.splice(rec.pending.indexOf(p), 1);
+    const start = p.hitT - CLIP_BEFORE, end = Math.min(rec.t, p.until);
+    const frames = rec.frames.filter((f) => f.t >= start && f.t <= end);
+    if (frames.length < 2) return;
+    const t0 = frames[0].t;
+    const snaps = rec.events.filter((e) => e.type === "snap" && e.t <= t0);
+    const snap = snaps.length ? snaps[snaps.length - 1] : rec.events.find((e) => e.type === "snap");
+    if (!snap) return;
+    const shift = (o) => Object.assign({}, o, { t: r3(o.t - t0) });
+    const clip = { v: 1, snap: snap.s, hitT: r3(p.hitT - t0), meta: p.meta,
+      frames: frames.map(shift), events: rec.events.filter((e) => e.type !== "snap" && e.t > t0 && e.t <= end).map(shift) };
+    lastClip = clip;
+    if (p.runBest) run.bestClip = clip;
+    if (p.best) {
+      bestClip = clip;
+      try { localStorage.setItem(REPLAY_KEY, JSON.stringify(clip)); } catch (e) { /* too big or blocked: it still plays this session */ }
+    }
+    refreshReplayButtons();
+  }
+  function finishAllClips() { for (const p of rec.pending.slice()) finishClip(p); }
+  // from scoreHit, after the points are in
+  function recHit(target, dist, isKnife, thrown, res, points) {
+    if (net.active) return;
+    const from = isKnife && !thrown ? camera.getWorldPosition(_rp) : lastShotOrigin;
+    recEvent({ type: "hit", i: targets.indexOf(target), o: v3(from), p: v3(target.position), knife: !!isKnife });
+    rec.pending.push({ hitT: rec.t, until: rec.t + CLIP_AFTER, best: lastAward.best, runBest: lastAward.runBest,
+      meta: { points, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice(), dist: res.dist } });
+  }
+
+  // ---------------- playback ----------------
+  const replay = { active: false, clip: null, time: 0, speed: 1, paused: false, bulletCam: true, slowMo: true,
+    frameIdx: 0, evIdx: 0, phase: "play", flightT: 0, flightDur: 1, hit: null, saved: null, from: null, label: "" };
+  const replayCam = new THREE.PerspectiveCamera(CFG.baseFov, window.innerWidth / window.innerHeight, 0.02, 500);
+  const replayEl = document.getElementById("replay"), replayTagsEl = document.getElementById("replay-tags");
+  let replayKnives = null, bulletMesh = null;
+  function replayProps() {
+    if (!replayKnives) {
+      replayKnives = [0, 1, 2].map(() => { const k = thrownPool[0].root.clone(true); k.visible = false; scene.add(k); return k; });
+      bulletMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 6), new THREE.MeshBasicMaterial({ color: 0xffe9a8 }));
+      bulletMesh.geometry.rotateX(Math.PI / 2);   // long axis along z, so lookAt points it down the shot
+      bulletMesh.visible = false;
+      scene.add(bulletMesh);
+    }
+  }
+
+  function startReplay(clip, label, from) {
+    if (!clip) return;
+    replayProps();
+    // put the live world aside
+    replay.saved = {
+      targets: targets.map((t) => ({ pos: t.position.clone(), visible: t.visible })),
+      knives: thrownPool.map((k) => k.root.visible),
+      hudDisplay: hud.style.display,
+      viewmodel: viewmodelRoot.visible,
+    };
+    viewmodelRoot.visible = false;   // the gun hangs off the live camera; a replay is shown without it
+    for (const k of thrownPool) k.root.visible = false;
+    Object.assign(replay, { active: true, clip, label, from, time: 0, paused: false, speed: 1, phase: "play", frameIdx: 0, evIdx: 0, hit: null });
+    replay.hit = clip.events.find((e) => e.type === "hit" && Math.abs(e.t - clip.hitT) < 0.05) || null;
+    applySnapshot(clip.snap);
+    blocker.style.display = "none";
+    resultsEl.hidden = true;
+    hud.style.display = "block";
+    hud.classList.add("replaying");
+    replayEl.hidden = false;
+    replayTagsEl.textContent = "";
+    replayTagsEl.classList.remove("show");
+    document.getElementById("replay-label").textContent = label;
+    updateReplayBar();
+  }
+  function applySnapshot(snap) {
+    snap.forEach((s, i) => {
+      const t = targets[i];
+      if (!t || !TARGET_TYPES[s[0]]) return;
+      resetTargetParts(t);
+      t.children[0].material = TARGET_LOOKS[s[0]];
+      t.scale.setScalar(TARGET_TYPES[s[0]].scale);
+      t.userData.replayScale = TARGET_TYPES[s[0]].scale;
+      t.position.set(s[1], s[2], s[3]);
+      t.visible = !!s[4];
+    });
+    for (let i = snap.length; i < targets.length; i++) targets[i].visible = false;
+  }
+  function stopReplay() {
+    if (!replay.active) return;
+    replay.active = false;
+    // the live world, as it was
+    targets.forEach((t, i) => {
+      const s = replay.saved.targets[i];
+      resetTargetParts(t);
+      t.children[0].material = TARGET_LOOKS[t.userData.type];
+      t.scale.setScalar(t.userData.scale);
+      if (s) { t.position.copy(s.pos); t.visible = s.visible; }
+      if (!t.userData.alive) t.visible = false;
+    });
+    thrownPool.forEach((k, i) => { k.root.visible = replay.saved.knives[i]; });
+    viewmodelRoot.visible = replay.saved.viewmodel;
+    for (const k of replayKnives) k.visible = false;
+    bulletMesh.visible = false;
+    for (const p of particlePool) { p.active = false; p.mesh.visible = false; }
+    for (const t of tracerPool) { t.active = false; t.mesh.visible = false; }
+    hud.classList.remove("replaying");
+    hud.style.display = replay.saved.hudDisplay;
+    scopeEl.style.opacity = 0; scopeLinesEl.style.opacity = 0;
+    replayEl.hidden = true;
+    if (replay.from === "results") resultsEl.hidden = false;
+    else blocker.style.display = "flex";
+  }
+
+  // run the clip's events up to the current time
+  // (untilImpact: stop before the hit itself, so the shot fires and then the bullet cam flies)
+  function replayEvents(dt, untilImpact) {
+    const ev = replay.clip.events;
+    while (replay.evIdx < ev.length && ev[replay.evIdx].t <= replay.time) {
+      if (untilImpact && (ev[replay.evIdx].type === "ko" || ev[replay.evIdx].type === "hit")) break;
+      const e = ev[replay.evIdx++];
+      const t = targets[e.i];
+      if (e.type === "shot") {
+        _tmpV1.fromArray(e.o); _tmpV2.fromArray(e.d);
+        spawnTracer(_tmpV1, _tmpV2, e.l);
+        if (e.snd && WEAPONS[e.w]) playShotSound(WEAPONS[e.w].sound);
+      } else if (e.type === "throw") {
+        playKnifeSwing();
+      } else if (e.type === "ko" && t) {
+        const ud = t.userData;
+        ud.knockT = 0;
+        ud.coreVel = ud.coreVel || new THREE.Vector3();
+        ud.coreVel.fromArray(e.cv);
+        ud.coreSpin = e.sp;
+        burst(t.position, new THREE.Color(TARGET_TYPES[e.ty] ? TARGET_TYPES[e.ty].color : "#ffffff").getHex(), 6);
+      } else if (e.type === "spawn" && t && TARGET_TYPES[e.ty]) {
+        resetTargetParts(t);
+        t.children[0].material = TARGET_LOOKS[e.ty];
+        t.scale.setScalar(TARGET_TYPES[e.ty].scale);
+        t.position.fromArray(e.p);
+        t.visible = true;
+      } else if (e.type === "hit") {
+        playHitSound(Math.min(1 + ((e === replay.hit ? replay.clip.meta.mult : 1.5) - 1) * 0.16, 2.4));
+        if (e === replay.hit) {
+          fillTagList(replayTagsEl, replay.clip.meta.mult, replay.clip.meta.tags, replay.clip.meta.pens, replay.clip.meta.dist);
+          replayTagsEl.classList.add("show");
+        }
+      }
+    }
+    // knockouts play out at replay speed
+    for (const t of targets) if (t.userData.knockT >= 0 && t.userData.knockT !== undefined) {
+      const sc = t.userData.scale; t.userData.scale = t.scale.x;   // animateKnockout reads the plate's scale
+      animateKnockout(t, dt);
+      t.userData.scale = sc;
+    }
+  }
+
+  function updateReplay(realDt) {
+    const clip = replay.clip, frames = clip.frames, end = frames[frames.length - 1].t;
+    let dt = 0;
+    if (replay.phase === "bullet") {
+      // ride the shot: the world holds still while the camera flies from the muzzle to the target
+      if (!replay.paused) replay.flightT += realDt;
+      const h = replay.hit, k = Math.min(replay.flightT / replay.flightDur, 1), e = k * k * (3 - 2 * k);
+      _tmpV1.fromArray(h.o); _tmpV2.fromArray(h.p);
+      bulletMesh.position.lerpVectors(_tmpV1, _tmpV2, Math.min(e * 1.02, 0.985));
+      bulletMesh.lookAt(_tmpV2);
+      bulletMesh.visible = k < 1;
+      const dir = _tmpV2.clone().sub(_tmpV1).normalize();
+      replayCam.position.copy(bulletMesh.position).addScaledVector(dir, -0.9).add(_rp.set(0, 0.18, 0));
+      replayCam.lookAt(_tmpV2);
+      replayCam.fov = 62; replayCam.updateProjectionMatrix();
+      scopeEl.style.opacity = 0; scopeLinesEl.style.opacity = 0;
+      if (k >= 1) { replay.phase = "impact"; bulletMesh.visible = false; }
+    } else {
+      if (!replay.paused) {
+        let s = replay.speed;
+        if (replay.slowMo && replay.hit && replay.time > clip.hitT - 0.45 && replay.time < clip.hitT + 0.9) s *= 0.3;
+        dt = realDt * s;
+        const next = Math.min(replay.time + dt, end);
+        // reaching the hit with the bullet cam on: stop just short of it and fly
+        if (replay.phase === "play" && replay.bulletCam && replay.hit && !replay.hit.knife && replay.time < clip.hitT && next >= clip.hitT) {
+          replay.time = clip.hitT;
+          replayEvents(0, true);   // the shot itself: tracer and bang
+          replay.phase = "bullet"; replay.flightT = 0;
+          replay.flightDur = Math.min(Math.max(_tmpV1.fromArray(replay.hit.o).distanceTo(_tmpV2.fromArray(replay.hit.p)) / 40, 0.7), 1.6);
+        } else {
+          replay.time = next;
+        }
+      }
+      if (replay.phase !== "bullet") {
+        replayEvents(dt);
+        // targets that move: their recorded spot, interpolated
+        while (replay.frameIdx < frames.length - 2 && frames[replay.frameIdx + 1].t <= replay.time) replay.frameIdx++;
+        const a = frames[replay.frameIdx], b = frames[Math.min(replay.frameIdx + 1, frames.length - 1)];
+        const u = b.t > a.t ? Math.min(Math.max((replay.time - a.t) / (b.t - a.t), 0), 1) : 0;
+        if (a.tg) for (const [i, x, y, z] of a.tg) {
+          const t = targets[i]; if (!t) continue;
+          const nb = b.tg && b.tg.find((q) => q[0] === i);
+          t.position.set(x, y, z);
+          if (nb) t.position.lerp(_tmpV1.set(nb[1], nb[2], nb[3]), u);
+        }
+        replayKnives.forEach((m, j) => {
+          const ka = a.kn && a.kn[j];
+          m.visible = !!ka;
+          if (ka) { m.position.set(ka[0], ka[1], ka[2]); m.quaternion.set(ka[3], ka[4], ka[5], ka[6]); if (m.children[0]) m.children[0].rotation.x = ka[7]; }
+        });
+        if (replay.phase === "impact" && replay.hit) {
+          // after the bullet cam: watch the plate go, from just in front of it
+          _tmpV1.fromArray(replay.hit.o); _tmpV2.fromArray(replay.hit.p);
+          const dir = _tmpV2.clone().sub(_tmpV1).normalize();
+          replayCam.position.copy(_tmpV2).addScaledVector(dir, -3.2).add(_rp.set(0, 0.5, 0));
+          replayCam.lookAt(_tmpV2);
+        } else {
+          // your eyes: position, rotation, zoom and scope, interpolated between recorded frames
+          replayCam.position.set(a.c[0], a.c[1], a.c[2]).lerp(_tmpV1.set(b.c[0], b.c[1], b.c[2]), u);
+          replayCam.quaternion.set(a.c[3], a.c[4], a.c[5], a.c[6]).slerp(_rq.set(b.c[3], b.c[4], b.c[5], b.c[6]), u);
+          replayCam.fov = a.c[7] + (b.c[7] - a.c[7]) * u;
+          replayCam.updateProjectionMatrix();
+          const sa = a.c[8] + (b.c[8] - a.c[8]) * u;
+          scopeEl.style.opacity = sa; scopeLinesEl.style.opacity = sa;
+          scopeEl.style.transform = "translate(-50%, -50%) scale(" + (1.2 - 0.2 * sa).toFixed(3) + ")";
+        }
+      }
+    }
+    updateParticles(dt || realDt * 0.3);
+    updateTracers(dt || realDt * 0.3);
+    replayCam.aspect = window.innerWidth / window.innerHeight;
+    replayCam.updateProjectionMatrix();
+    renderer.render(scene, replayCam);
+    updateReplayBar();
+  }
+
+  function restartReplay() {
+    const r = replay;
+    Object.assign(r, { time: 0, frameIdx: 0, evIdx: 0, phase: "play", paused: false });
+    for (const t of targets) resetTargetParts(t);
+    for (const p of particlePool) { p.active = false; p.mesh.visible = false; }
+    for (const t of tracerPool) { t.active = false; t.mesh.visible = false; }
+    bulletMesh.visible = false;
+    replayTagsEl.classList.remove("show");
+    applySnapshot(r.clip.snap);
+  }
+  function updateReplayBar() {
+    const frames = replay.clip.frames, end = frames[frames.length - 1].t;
+    document.getElementById("replay-progress").style.width = (Math.min(replay.time / end, 1) * 100).toFixed(1) + "%";
+    document.getElementById("rp-pause").textContent = replay.time >= end ? "Play again (R)" : replay.paused ? "Play (Space)" : "Pause (Space)";
+    document.getElementById("rp-speed").textContent = "Speed " + replay.speed + "x (S)";
+    document.getElementById("rp-bullet").textContent = "Bullet cam: " + (replay.bulletCam ? "on" : "off") + " (B)";
+    document.getElementById("rp-slow").textContent = "Slow-mo: " + (replay.slowMo ? "on" : "off") + " (M)";
+  }
+  function replayPauseOrRestart() {
+    const end = replay.clip.frames[replay.clip.frames.length - 1].t;
+    if (replay.time >= end) restartReplay(); else replay.paused = !replay.paused;
+  }
+  const SPEEDS = [1, 0.5, 0.25];
+  function cycleReplaySpeed() { replay.speed = SPEEDS[(SPEEDS.indexOf(replay.speed) + 1) % SPEEDS.length]; }
+  document.getElementById("rp-pause").addEventListener("click", (e) => { e.currentTarget.blur(); replayPauseOrRestart(); });
+  document.getElementById("rp-restart").addEventListener("click", (e) => { e.currentTarget.blur(); restartReplay(); });
+  document.getElementById("rp-speed").addEventListener("click", (e) => { e.currentTarget.blur(); cycleReplaySpeed(); });
+  document.getElementById("rp-bullet").addEventListener("click", (e) => { e.currentTarget.blur(); replay.bulletCam = !replay.bulletCam; restartReplay(); });
+  document.getElementById("rp-slow").addEventListener("click", (e) => { e.currentTarget.blur(); replay.slowMo = !replay.slowMo; });
+  document.getElementById("rp-exit").addEventListener("click", (e) => { e.currentTarget.blur(); stopReplay(); });
+  window.addEventListener("keydown", (e) => {
+    if (!replay.active) return;
+    if (e.code === "Space") { e.preventDefault(); replayPauseOrRestart(); }
+    else if (e.code === "KeyR") restartReplay();
+    else if (e.code === "KeyS") cycleReplaySpeed();
+    else if (e.code === "KeyB") { replay.bulletCam = !replay.bulletCam; restartReplay(); }
+    else if (e.code === "KeyM") replay.slowMo = !replay.slowMo;
+    else if (e.code === "Escape") stopReplay();
+  });
+
+  // ---- the buttons that start one ----
+  function refreshReplayButtons() {
+    const best = document.getElementById("watch-best"), last = document.getElementById("watch-last");
+    best.hidden = !bestClip; last.hidden = !lastClip;
+    document.getElementById("r-watch").hidden = !run.bestClip;
+  }
+  document.getElementById("watch-best").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (bestClip) startReplay(bestClip, "Best trickshot · " + bestClip.meta.points + " points", "menu");
+  });
+  document.getElementById("watch-last").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (lastClip) startReplay(lastClip, "Last hit · " + lastClip.meta.points + " points", "menu");
+  });
+  document.getElementById("r-watch").addEventListener("click", () => {
+    if (run.bestClip) startReplay(run.bestClip, "Best shot of the run · " + run.bestClip.meta.points + " points", "results");
+  });
+  refreshReplayButtons();
+
+  // ======================================================================
   // MAIN LOOP
   // ======================================================================
   const clock = new THREE.Clock();
@@ -5380,6 +5736,7 @@
     requestAnimationFrame(animate);
     const realDt = Math.min(clock.getDelta(), 0.05);
     let dt = realDt;
+    if (replay.active) { updateReplay(realDt); return; }
 
     if (hitStopTimer > 0) {
       hitStopTimer -= realDt;
@@ -5438,6 +5795,7 @@
     }
 
     updateFps(realDt);
+    if (pointerLocked) recordFrame(realDt);
     renderer.render(scene, camera);
     if (!shadowsBaked) { shadowsBaked = true; renderer.shadowMap.needsUpdate = true; }
   }
