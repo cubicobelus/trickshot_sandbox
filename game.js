@@ -1356,7 +1356,7 @@
       action: "bolt", ejectOnShot: false, casing: "rifle",
       muzzle: new THREE.Vector3(0, 0.005, -1.20), eject: new THREE.Vector3(0.06, 0.035, 0.12),
       sound: { rate: 1, lowcut: 60, length: 1.8, gain: 1 },
-      recoilKick: { up: 0.035, grow: 0, side: 0.004, max: 0.05, recover: 6, hold: 0.08 },
+      recoilKick: { up: 0.035, grow: 0, side: 0.004, max: 0.05, recover: 3, hold: 0.22 },
       mag: magMesh, magRestY: magMesh.position.y,
       reload: {
         time: CFG.reloadTime, magOut: 0.18, magDrop: 0.32, magUp: 0.70, magSeat: 1.15, travel: 0.17, rise: 0.33,
@@ -1493,7 +1493,8 @@
     boltTime: -1, boltCues: [], spentCasing: false,
     throwTimer: 0,
     pumpTime: -1, pumpCues: [], slideTime: -1,
-    recoilPitch: 0, recoilYaw: 0, burstShots: 0, lastShotAt: -99,   // real recoil: moves the aim
+    recoilPitch: 0, recoilYaw: 0, burstShots: 0, lastShotAt: -99,   // recoil on the aim (where bullets go)
+    viewRecoilPitch: 0, viewRecoilYaw: 0,                            // how much of it the view (crosshair) shows
     camKick: 0, camKickYaw: 0,
   };
 
@@ -1510,7 +1511,7 @@
     cancelReload();
     cancelBoltCycle();
     cancelPump();
-    vm.recoilPitch = vm.recoilYaw = 0;
+    vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0;
     vm.burstShots = 0;
     vm.throwTimer = 0;
     vm.slashTimer = 0;
@@ -1608,7 +1609,7 @@
   const SLIDE_BACK = 0.028, SLIDE_HOLD = 0.045, SLIDE_RETURN = 0.075, SLIDE_TRAVEL = 0.05;
 
   // shot spread: a random direction inside a cone around the aim
-  const _sprRight = new THREE.Vector3(), _sprUp = new THREE.Vector3();
+  const _sprRight = new THREE.Vector3(), _sprUp = new THREE.Vector3(), _worldUp = new THREE.Vector3(0, 1, 0);
   function spreadDirection(base, halfAngle, out) {
     out.copy(base);
     if (halfAngle <= 0) return out;
@@ -1738,8 +1739,14 @@
       vm.recoilPitch *= settle;
       vm.recoilYaw *= settle;
     }
-    camera.rotation.x = kick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway + vm.recoilPitch;
-    camera.rotation.y = kick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3 + vm.recoilYaw;
+    // The crosshair shows all of the first few kicks, then only half: in a long spray the bullets
+    // climb past it and you pull down to compensate. It glides there rather than snapping.
+    const viewShare = vm.burstShots <= 2 ? 1 : Math.max(0.5, 1 - (vm.burstShots - 2) * 0.1);
+    const glide = Math.min(1, dt * 24);
+    vm.viewRecoilPitch += (vm.recoilPitch * viewShare - vm.viewRecoilPitch) * glide;
+    vm.viewRecoilYaw += (vm.recoilYaw * viewShare - vm.viewRecoilYaw) * glide;
+    camera.rotation.x = kick * 0.032 * (1 + 0.6 * adsEased) + Math.sin(elapsedTime * 1.6) * sway + vm.viewRecoilPitch;
+    camera.rotation.y = kick * vm.camKickYaw * 0.008 + Math.sin(elapsedTime * 0.8) * sway * 1.3 + vm.viewRecoilYaw;
 
     // bolt: roll the rifle toward you while it works, with a jolt on each slam
     let boltTilt = 0, boltJolt = 0;
@@ -2280,7 +2287,7 @@
     if (vm.current !== "knife" && vm.current !== id) {
       cancelReload(); cancelBoltCycle(); cancelPump();
       vm.inspectTimer = 0; vm.wantADS = false; vm.adsProgress = 0;
-      vm.recoilPitch = vm.recoilYaw = 0; vm.burstShots = 0;
+      vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0; vm.burstShots = 0;
       currentWeapon().group.visible = false;
       vm.current = id;
       currentWeapon().group.visible = true;
@@ -3349,7 +3356,6 @@
     playShotSound(w.sound);
     vm.recoil = w.recoil;
     vm.camKick = w.kick;
-    addRecoil(w);
     vm.camKickYaw = Math.random() * 2 - 1;
     vm.flashTimer = FLASH_TIME;
     muzzleFlash.rotation.z = Math.random() * Math.PI;
@@ -3370,6 +3376,12 @@
     if (w.bloom) w.bloomNow = Math.min((w.bloomNow || 0) + w.bloom, w.bloomMax);
     const maxD = w.range || CFG.maxShootDistance;
     camera.getWorldDirection(_aimDir);
+    // the view shows only part of the recoil, so bullets go the rest of the way past the crosshair
+    const extraPitch = vm.recoilPitch - vm.viewRecoilPitch, extraYaw = vm.recoilYaw - vm.viewRecoilYaw;
+    if (extraPitch || extraYaw) {
+      _sprRight.set(1, 0, 0).applyQuaternion(camera.getWorldQuaternion(_camQuat));
+      _aimDir.applyAxisAngle(_sprRight, extraPitch).applyAxisAngle(_worldUp, extraYaw);
+    }
     muzzleFlash.getWorldPosition(_muzzleWorld);
     muzzleSmoke(_muzzleWorld, _aimDir, w.smoke);
 
@@ -3422,6 +3434,7 @@
       playMissSound();
     }
 
+    addRecoil(w);   // after the shot: the next one is what gets kicked
     if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
   }
 
