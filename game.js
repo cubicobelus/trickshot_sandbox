@@ -3022,7 +3022,7 @@
     player.wallContactTime = -1;
     player.lastWallBounceAt = elapsedTime;
     player.wallImpactSpeed = 0;
-    player.launch = null;   // rising off the bounce isn't a pad launch (WALL RIDE pays for it)
+    player.launch = null;   // rising off the bounce isn't a pad launch (WALL BOUNCE pays for it)
 
     playWallBounce(perfect);
     if (perfect) burst(yawObject.position, 0x7CFC00, 5);
@@ -3475,7 +3475,7 @@
     }
 
     if (st.sliding) add("SLIDING", CFG.slideMult);
-    if (st.wallRide) add("WALL RIDE", CFG.wallRideMult);
+    if (st.wallRide) add("WALL BOUNCE", CFG.wallRideMult);
 
     // target size: precision a knife swing at arm's length doesn't need
     const kind = target.userData.type;
@@ -3505,7 +3505,7 @@
         ["180° / 360° SPIN", x(C.spin180Mult) + " / " + x(C.spinMultPer360) + " each", "Turn around in the air before the shot; every full 360° multiplies again, up to " +
           C.spinMaxCount * 360 + "° (x" + Math.pow(C.spinMultPer360, C.spinMaxCount).toFixed(2) + "). A spin shot doesn't also count as a FLICK."],
         ["SLIDING", x(C.slideMult), "Hit while sliding."],
-        ["WALL RIDE", x(C.wallRideMult), "Hit within " + C.wallRideScoreWindow + " s of a wall bounce."],
+        ["WALL BOUNCE", x(C.wallRideMult), "Hit within " + C.wallRideScoreWindow + " s of a wall bounce."],
         ["LAUNCHED / RAMP LAUNCH", x(C.launchMult), "Hit while still rising off a jump pad or a kicker ramp (not after a wall bounce)."],
         ["MEGA LAUNCH", x(C.megaLaunchMult), "Hit while still rising off a mega (purple) pad."],
         ["FAST / BLAZING / SONIC", "up to " + x(Math.min(1 + (C.maxSpeed - C.speedFrom) * C.speedMultPer, C.speedMultMax)), "+" + C.speedMultPer + "x per u/s over " + C.speedFrom + " u/s; the tag shows your speed."],
