@@ -28,7 +28,9 @@
     airWishSpeedCap: 1.7,
     airAccel: 46,
     jumpSpeed: 8.6,
-    bhopWindow: 0.12,           // land-and-jump inside this window keeps all speed
+    bhopWindow: 0.12,           // land-and-jump inside this window skips ground friction...
+    bhopKeep: 0.86,             // ...but each hop keeps only this share of the speed above a sprint,
+    bhopKeepHeld: 0.62,         // and less when space is just held down instead of pressed on landing
 
     slideBoost: 5.5,
     slideMaxSpeed: 20,
@@ -39,13 +41,17 @@
 
     wallCheckDist: 0.85,
     wallPerfectWindow: 0.18,
-    wallBounceRestitutionPerfect: 1.10,
-    wallBounceRestitutionNormal: 0.74,
+    wallBounceRestitutionPerfect: 0.80,   // share of your into-the-wall speed thrown back out
+    wallBounceRestitutionNormal: 0.55,
     wallBounceUpPerfect: 9.0,
     wallBounceUpNormal: 7.4,
-    wallBouncePushOut: 3.0,
+    wallBouncePushOut: 1.5,
     wallBounceCooldown: 0.16,
-    wallBounceMaxSpeed: 26,
+    wallBounceMaxSpeed: 22,     // no bounce takes you past this
+    wallBounceBonusPerfect: 5,  // a perfect bounce adds this when you hit the wall slowly, less as you speed up...
+    wallBounceBonusMin: 2,      // ...but never under this, until the cap
+    wallBounceBonusLate: 0.08,  // a late bounce adds up to this share of your speed, less the later it is...
+    wallBounceLateWindow: 0.15, // ...down to nothing this long after the perfect window
     wallBounceMinSpeed: 5,      // speed straight into the wall needed to bounce, so hugging one and jumping doesn't
     wallImpactMemory: 0.25,     // a bounce still counts this long after hitting the wall
     wallBounceSteerLock: 0.5,   // after a bounce, movement keys don't steer for this long...
@@ -74,6 +80,8 @@
     // so 13 gives about 1 s (3.3 m up) and 19.5 about 1.5 s (7.3 m up)
     jumpPadPower: 13,
     megaPadPower: 19.5,
+    jumpPadBoost: 1.5,          // speed (u/s) a pad adds to your run, when you're moving
+    megaPadBoost: 2.5,
     hitStopScale: 0.55,
     hitStopTime: 0.07,
 
@@ -390,11 +398,11 @@
     return null;
   }
 
-  // ---- jump pads: stand on one and it fires you straight up, keeping your speed ----
+  // ---- jump pads: stand on one and it fires you straight up, with a little extra speed ----
   // Two tiers, told apart by colour, size and the height of their light column.
   const PAD_TIERS = {
-    normal: { power: () => CFG.jumpPadPower, color: 0x1bd6c8, beamColor: 0x5ff0e4, radius: 1.3, beam: 2.6 },
-    mega: { power: () => CFG.megaPadPower, color: 0xd23cff, beamColor: 0xe58bff, radius: 1.6, beam: 5.2 },
+    normal: { power: () => CFG.jumpPadPower, boost: () => CFG.jumpPadBoost, color: 0x1bd6c8, beamColor: 0x5ff0e4, radius: 1.3, beam: 2.6 },
+    mega: { power: () => CFG.megaPadPower, boost: () => CFG.megaPadBoost, color: 0xd23cff, beamColor: 0xe58bff, radius: 1.6, beam: 5.2 },
   };
   const padBaseMat = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
   // the light column fades out toward the top: an alpha map running from opaque at the base to clear
@@ -427,7 +435,7 @@
     beam.position.y = 0.16 + T.beam / 2;
     g.add(base, glow, ring, beam);
     scene.add(g);
-    jumpPads.push({ x, y: y + 0.16, z, r: T.radius, power: T.power(), glowMat, beam, flash: 0 });
+    jumpPads.push({ x, y: y + 0.16, z, r: T.radius, power: T.power(), boost: T.boost(), glowMat, beam, flash: 0 });
   }
   function updateJumpPads(dt) {
     for (const p of jumpPads) {
@@ -444,16 +452,11 @@
   addWall(-H, 6, 0, 1, 12, H * 2, "concrete");
   addWall(H, 6, 0, 1, 12, H * 2, "concrete");
 
-  // parkour line of floating decks over the middle
-  addGround(-10, 1.5, -6, 4, 4, "deck", true);
-  addGround(-4, 2.5, -10, 4, 4, "deck", true);
-  addGround(2, 3.5, -14, 4, 4, "deck", true);
-  addGround(9, 2.0, -8, 6, 4, "deck", true);
-
-  // bounce corridors: parallel walls to chain wall bounces down
+  // bounce corridors: parallel walls to chain wall bounces down. The wall nearer the middle is
+  // low enough that three bounces (outer, inner, outer) carry you over it, out into the open.
   addWall(-31, 4, -8, 1, 8, 22, "concrete");
-  addWall(-25, 4, -8, 1, 8, 22, "concrete");
-  addWall(18, 4, 6, 1, 8, 12, "brick");
+  addWall(-25, 2.25, -8, 1, 4.5, 22, "concrete");
+  addWall(18, 2.25, 6, 1, 4.5, 12, "brick");
   addWall(24, 4, 6, 1, 8, 12, "brick");
 
   // pillars to bounce off and duck behind
@@ -2864,16 +2867,24 @@
 
     // keep the speed you had along the wall and throw the into-the-wall part back out
     const tx = vx - dot * n.x, tz = vz - dot * n.z;
-    const along = perfect ? 1.06 : 0.95;
+    const along = perfect ? 0.95 : 0.85;
     const out = approach * restitution + CFG.wallBouncePushOut;
     let rx = tx * along + n.x * out;
     let rz = tz * along + n.z * out;
 
-    const sp = Math.hypot(rx, rz);
-    if (sp > CFG.wallBounceMaxSpeed) {
-      const s = CFG.wallBounceMaxSpeed / sp;
-      rx *= s; rz *= s;
+    // that sets the direction. The speed never drops: a perfect bounce adds +5 from a jog, fading
+    // to +2 at speed, up to the cap; a late one adds a few percent, less the later it is
+    const inSpeed = Math.max(Math.hypot(vx, vz), approach);
+    let target;
+    if (perfect) {
+      target = inSpeed + Math.max(CFG.wallBounceBonusMin, CFG.wallBounceBonusPerfect * (1 - inSpeed / CFG.wallBounceMaxSpeed));
+    } else {
+      const late = Math.max(0, player.wallContactTime - CFG.wallPerfectWindow);
+      target = inSpeed * (1 + CFG.wallBounceBonusLate * Math.max(0, 1 - late / CFG.wallBounceLateWindow));
     }
+    target = Math.max(inSpeed, Math.min(target, CFG.wallBounceMaxSpeed));
+    const sp = Math.hypot(rx, rz) || 1;
+    rx *= target / sp; rz *= target / sp;
 
     player.velocity.x = rx;
     player.velocity.z = rz;
@@ -2968,8 +2979,8 @@
 
     // ---------------- GROUND / AIR ----------------
     if (player.onGround) {
-      // bunnyhop: jumping on the same frame you land skips friction entirely,
-      // which is what lets a chained hop carry speed instead of bleeding it
+      // bunnyhop: jumping on the same frame you land skips friction, so a chained hop carries
+      // speed; each hop still bleeds some of what's above a sprint (see CFG.bhopKeep)
       const bhopping = keys["Space"] && (elapsedTime - player.lastLandTime) <= CFG.bhopWindow;
 
       if (!bhopping) {
@@ -2988,17 +2999,31 @@
       }
 
       if (keys["Space"]) {
+        if (bhopping) {
+          const base = CFG.groundMaxSpeed * CFG.sprintMultiplier;
+          const sp = Math.hypot(player.velocity.x, player.velocity.z);
+          if (sp > base) {
+            const keep = jumpQueued ? CFG.bhopKeep : CFG.bhopKeepHeld;   // jumpQueued: a fresh press, timed
+            const s = (base + (sp - base) * keep) / sp;
+            player.velocity.x *= s; player.velocity.z *= s;
+          }
+        }
         player.velocity.y = CFG.jumpSpeed + player.groundRise;   // jumping off a ramp adds its lift
         player.onGround = false;
         player.sliding = false;
         jumpQueued = false;
         player.wallContactTime = -1;
       }
-      // jump pads fire you straight up and leave your horizontal speed alone
+      // jump pads fire you straight up and add a little to the speed you ran onto them with
       if (player.onGround) {
         for (const pad of jumpPads) {
           if (Math.hypot(yawObject.position.x - pad.x, yawObject.position.z - pad.z) < pad.r && Math.abs(player.feetY - pad.y) < 0.35) {
             player.velocity.y = pad.power;
+            const run = Math.hypot(player.velocity.x, player.velocity.z);
+            if (run > 1) {
+              const s = Math.min(run + pad.boost, Math.max(run, CFG.maxSpeed)) / run;
+              player.velocity.x *= s; player.velocity.z *= s;
+            }
             player.onGround = false;
             player.sliding = false;
             player.wallContactTime = -1;
