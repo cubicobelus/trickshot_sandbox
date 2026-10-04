@@ -66,7 +66,10 @@
     reloadTime: 2.3,
 
     arenaHalfSize: 40,
-    jumpPadPower: 17,           // upward speed a jump pad gives: about 5.5 m of air
+    // jump pads: launch speed for each tier. Airtime from the ground and back is 2v/gravity,
+    // so 13 gives about 1 s (3.3 m up) and 19.5 about 1.5 s (7.3 m up)
+    jumpPadPower: 13,
+    megaPadPower: 19.5,
     hitStopScale: 0.55,
     hitStopTime: 0.07,
 
@@ -379,33 +382,49 @@
   }
 
   // ---- jump pads: stand on one and it fires you straight up, keeping your speed ----
-  const jumpPads = [];
+  // Two tiers, told apart by colour, size and the height of their light column.
+  const PAD_TIERS = {
+    normal: { power: () => CFG.jumpPadPower, color: 0x1bd6c8, beamColor: 0x5ff0e4, radius: 1.3, beam: 2.6 },
+    mega: { power: () => CFG.megaPadPower, color: 0xd23cff, beamColor: 0xe58bff, radius: 1.6, beam: 5.2 },
+  };
   const padBaseMat = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
-  function addJumpPad(x, y, z, power) {
+  // the light column fades out toward the top: an alpha map running from opaque at the base to clear
+  const beamFade = canvasTexture(64, (g, n) => {
+    const grad = g.createLinearGradient(0, n, 0, 0);   // canvas bottom is the cylinder's base (v = 0)
+    grad.addColorStop(0, "#fff");
+    grad.addColorStop(0.35, "#888");
+    grad.addColorStop(1, "#000");
+    g.fillStyle = grad; g.fillRect(0, 0, n, n);
+  });
+  beamFade.wrapS = beamFade.wrapT = THREE.ClampToEdgeWrapping;
+  const jumpPads = [];
+  function addJumpPad(x, y, z, tier) {
+    const T = PAD_TIERS[tier];
     const g = new THREE.Group();
     g.position.set(x, y, z);
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.6, 0.14, 32), padBaseMat);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(T.radius + 0.15, T.radius + 0.3, 0.14, 32), padBaseMat);
     base.position.y = 0.07;
     base.receiveShadow = true;
-    const glowMat = new THREE.MeshStandardMaterial({ color: 0x1bd6c8, emissive: 0x1bd6c8, emissiveIntensity: 0.8, roughness: 0.4 });
-    const glow = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.16, 32), glowMat);
+    const glowMat = new THREE.MeshStandardMaterial({ color: T.color, emissive: T.color, emissiveIntensity: 0.8, roughness: 0.4 });
+    const glow = new THREE.Mesh(new THREE.CylinderGeometry(T.radius - 0.15, T.radius - 0.15, 0.16, 32), glowMat);
     glow.position.y = 0.08;
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.05, 6, 40), glowMat);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(T.radius, 0.05, 6, 40), glowMat);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.16;
-    // a faint column of light so pads read from across the map
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.15, 3.2, 24, 1, true), new THREE.MeshBasicMaterial({
-      color: 0x5ff0e4, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-    beam.position.y = 1.7;
+    // a column of light so pads read from across the map; taller for the mega pads
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(T.radius - 0.4, T.radius - 0.15, T.beam, 24, 1, true), new THREE.MeshBasicMaterial({
+      color: T.beamColor, alphaMap: beamFade, transparent: true, opacity: 0.3,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = 0.16 + T.beam / 2;
     g.add(base, glow, ring, beam);
     scene.add(g);
-    jumpPads.push({ x, y: y + 0.16, z, r: 1.3, power, glowMat, beam, flash: 0 });
+    jumpPads.push({ x, y: y + 0.16, z, r: T.radius, power: T.power(), glowMat, beam, flash: 0 });
   }
   function updateJumpPads(dt) {
     for (const p of jumpPads) {
       p.flash = Math.max(0, p.flash - dt * 3);
       p.glowMat.emissiveIntensity = 0.7 + 0.25 * Math.sin(elapsedTime * 4 + p.x) + p.flash * 1.5;
-      p.beam.material.opacity = 0.1 + 0.04 * Math.sin(elapsedTime * 4 + p.x) + p.flash * 0.25;
+      p.beam.material.opacity = 0.26 + 0.08 * Math.sin(elapsedTime * 4 + p.x) + p.flash * 0.5;
     }
   }
 
@@ -435,20 +454,20 @@
   addWall(-6, 3, 30, 3, 6, 3, "brick");
 
   // sniper tower in the north-east corner, reached by its own jump pad
-  addGround(30, 7.5, -30, 7, 7, "deck", true);
-  for (const [lx, lz] of [[27, -33], [33, -33], [27, -27], [33, -27]]) addWall(lx, 3.75, lz, 0.8, 7.5, 0.8, "concrete");
+  addGround(30, 6.3, -30, 7, 7, "deck", true);   // top at 6.55 m: a mega pad clears it
+  for (const [lx, lz] of [[27, -33], [33, -33], [27, -27], [33, -27]]) addWall(lx, 3.15, lz, 0.8, 6.3, 0.8, "concrete");
 
   // kicker ramps, aimed out into open ground
   addRamp(-8, 18, "x", 4, 7, 2.4, 1);
   addRamp(12, 22, "z", 4, 7, 2.4, -1);
   addRamp(-4, -30, "x", 4, 7, 2.4, -1);
 
-  // jump pads
-  addJumpPad(0, FLOOR_Y, -2, CFG.jumpPadPower);
-  addJumpPad(-28, FLOOR_Y, 12, CFG.jumpPadPower);
-  addJumpPad(30, FLOOR_Y, 18, CFG.jumpPadPower);
-  addJumpPad(-28, FLOOR_Y, -27, CFG.jumpPadPower);
-  addJumpPad(24, FLOOR_Y, -24, 21);   // the tower pad: high enough to land on its deck
+  // jump pads: teal ones for about 1 s of air, magenta mega pads for about 1.5 s
+  addJumpPad(0, FLOOR_Y, -2, "normal");
+  addJumpPad(-28, FLOOR_Y, 12, "normal");
+  addJumpPad(30, FLOOR_Y, 18, "mega");
+  addJumpPad(-28, FLOOR_Y, -27, "mega");
+  addJumpPad(24, FLOOR_Y, -24, "mega");   // the tower pad
 
   // ======================================================================
   // TARGETS (standard / moving / small)
