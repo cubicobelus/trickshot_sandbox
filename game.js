@@ -37,7 +37,8 @@
     slideDuration: 0.9,
     slideCooldown: 0.4,
     slideFriction: 0.9,
-    slideMinSpeed: 3.2,
+    slideMinSpeed: 6.5,         // Ctrl slides only above walking speed (6.2); slower, it's a crouch-walk
+    crouchWalkMult: 0.5,        // crouch-walking moves at this share of walking speed
 
     wallCheckDist: 0.85,
     wallPerfectWindow: 0.18,
@@ -125,9 +126,12 @@
     speedFrom: 9.5,             // u/s, about a sprint
     speedMultPer: 0.07,         // x1.39 at 15 u/s, x1.88 at 22...
     speedMultMax: 1.875,        // what the 22 u/s speed cap gives
-    flickAngle: 60,             // degrees turned in the last flickWindow seconds before the shot
-    flickWindow: 0.15,
-    flickMult: 1.4,
+    flickAngle: 40,             // FLICK: at least this many degrees turned in the last flickWindow s before the shot...
+    flickWindow: 0.25,
+    flickMult: 1.3,
+    snapFlickAngle: 80,         // ...SNAP FLICK: a bigger turn in less time
+    snapFlickWindow: 0.15,
+    snapFlickMult: 1.6,
     quickSwitchWindow: 0.35,    // a hit this soon after a weapon swap finishes
     quickSwitchMult: 1.4,
     quickSwitchFreshGun: 1.5,   // ...only if that gun hadn't fired this recently (swapping during your own bolt doesn't count)
@@ -149,7 +153,8 @@
   const SETTINGS = {
     sensX: 1.0, sensY: 1.0, scopedSensMult: 0.35, volume: 0.55,
     unlimitedAmmo: false, mouseAccel: false, accelStrength: 0.7,
-    realisticAccuracy: false,   // shots spread mid-jump, and the unscoped sniper isn't laser-accurate
+    realisticAccuracy: false,
+    autoSprint: false,          // sprint whenever you move; Shift walks instead   // shots spread mid-jump, and the unscoped sniper isn't laser-accurate
     // crosshair
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
     // view
@@ -3209,7 +3214,8 @@
     if (player.wallBounceCooldown > 0) player.wallBounceCooldown -= dt;
     if (jumpQueueTimer > 0) { jumpQueueTimer -= dt; if (jumpQueueTimer <= 0) jumpQueued = false; }
 
-    const sprinting = keys["ShiftLeft"] || keys["ShiftRight"];
+    const shiftHeld = keys["ShiftLeft"] || keys["ShiftRight"];
+    const sprinting = SETTINGS.autoSprint ? !shiftHeld : shiftHeld;
     const wantsCrouch = keys["ControlLeft"] || keys["ControlRight"];
 
     _forward.set(-Math.sin(yawObject.rotation.y), 0, -Math.cos(yawObject.rotation.y));
@@ -3289,7 +3295,9 @@
       }
 
       if (!player.sliding) {
-        accelerate(player.velocity, _wishDir, CFG.groundMaxSpeed * (sprinting ? CFG.sprintMultiplier : 1), CFG.groundAccel, dt);
+        // crouched without a slide: a slow, quiet crouch-walk (no sprinting)
+        const walkMult = wantsCrouch ? CFG.crouchWalkMult : sprinting ? CFG.sprintMultiplier : 1;
+        accelerate(player.velocity, _wishDir, CFG.groundMaxSpeed * walkMult, CFG.groundAccel, dt);
       } else {
         accelerate(player.velocity, _wishDir, 2.0, 6, dt);
       }
@@ -3572,6 +3580,7 @@
       // anywhere in a pad or ramp flight you ran onto, so it isn't "standing still"
       launched: !player.onGround && !!player.launch && player.launchRun >= CFG.standingStillSpeed,
       flick: recentTurn(CFG.flickWindow),
+      snapFlick: recentTurn(CFG.snapFlickWindow),
       quickSwitch: elapsedTime - vm.switchDoneAt <= CFG.quickSwitchWindow &&
         elapsedTime - (currentWeapon().lastFiredAt === undefined ? -99 : currentWeapon().lastFiredAt) > CFG.quickSwitchFreshGun,
       reverse: reversing(),
@@ -3615,7 +3624,10 @@
     const hang = Math.min(1 + (st.airTime - CFG.hangTimeFrom) * CFG.hangTimeMultPerSec, CFG.hangTimeMultMax);
     if (hang > 1.005) add("HANG TIME " + st.airTime.toFixed(1) + "s", hang);
     if (st.launch) add(st.launch === "mega" ? "MEGA LAUNCH" : st.launch === "ramp" ? "RAMP LAUNCH" : "LAUNCHED", st.launch === "mega" ? CFG.megaLaunchMult : CFG.launchMult);
-    if (st.flick >= CFG.flickAngle && !spun) add("FLICK " + Math.round(st.flick) + "°", CFG.flickMult);   // a spin isn't paid twice
+    if (!spun) {   // a spin isn't paid twice
+      if (st.snapFlick >= CFG.snapFlickAngle) add("SNAP FLICK " + Math.round(st.snapFlick) + "°", CFG.snapFlickMult);
+      else if (st.flick >= CFG.flickAngle) add("FLICK " + Math.round(st.flick) + "°", CFG.flickMult);
+    }
     if (st.quickSwitch) add("QUICK SWITCH", CFG.quickSwitchMult);
     if (st.reverse) add("REVERSE", CFG.reverseMult);
 
@@ -3676,7 +3688,8 @@
           x(1 + 15 * C.distanceMultPerM) + " at 30 m, " + x(1 + 35 * C.distanceMultPerM) + " at 50 m, " + x(1 + 65 * C.distanceMultPerM) + " at 80 m."],
         ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more. With Realistic accuracy on, unscoped shots spread a little."],
         ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of scoping in."],
-        ["FLICK", x(C.flickMult), "Snap your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
+        ["FLICK", x(C.flickMult), "Turn your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
+        ["SNAP FLICK", x(C.snapFlickMult), C.snapFlickAngle + "° or more in the last " + C.snapFlickWindow + " s: a faster, bigger flick (instead of FLICK)."],
         ["QUICK SWITCH", x(C.quickSwitchMult), "Hit within " + C.quickSwitchWindow + " s of finishing a weapon swap, with a gun that hadn't just fired."],
         ["LAST ROUND", x(C.lastRoundMult), "The final round of a full magazine (not with unlimited ammo)."],
       ]],
@@ -5154,7 +5167,7 @@
     { id: "noscope", group: "Tricks", name: "No Scope Needed", desc: "Land a no-scope from 40 m or more.", hit: (h) => has(h, "NO-SCOPE") && h.dist >= 40 },
     { id: "quickscope", group: "Tricks", name: "Quickdraw", desc: "Land a quickscope.", hit: (h) => has(h, "QUICKSCOPE") },
     { id: "spin", group: "Tricks", name: "Spin Doctor", desc: "Hit a target with a 360° spin.", hit: (h) => h.tags.some((t) => /SPIN$/.test(t)) },
-    { id: "flick", group: "Tricks", name: "Flick of the Wrist", desc: "Land a FLICK.", hit: (h) => has(h, "FLICK") },
+    { id: "flick", group: "Tricks", name: "Flick of the Wrist", desc: "Land a FLICK.", hit: (h) => has(h, "FLICK") || has(h, "SNAP FLICK") },
     { id: "reverse", group: "Tricks", name: "Over the Shoulder", desc: "Land a REVERSE shot.", hit: (h) => has(h, "REVERSE") },
     { id: "double", group: "Tricks", name: "Double Trouble", desc: "Hit two targets in one jump.", hit: (h) => has(h, "DOUBLE") || has(h, "TRIPLE") || has(h, "QUAD") },
     { id: "triple", group: "Tricks", name: "Hat Trick", desc: "Hit three targets in one jump.", hit: (h) => has(h, "TRIPLE") || has(h, "QUAD") || has(h, "5+ HIT COMBO") },

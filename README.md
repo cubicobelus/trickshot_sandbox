@@ -19,7 +19,8 @@ unzip, and open `index.html`. No internet connection is needed.
 
 ## How to play
 
-**Controls:** WASD move, Space jump, Shift sprint, Ctrl slide, R reload, F inspect, P replay last hit, left click attack,
+**Controls:** WASD move, Space jump, Shift sprint (or walk, with Auto sprint on in Settings > Other), Ctrl slide
+(when moving faster than a walk; slower, Ctrl crouch-walks), R reload, F inspect, P replay last hit, left click attack,
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
 
