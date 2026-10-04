@@ -334,7 +334,7 @@
   @media (max-width: 560px) { .r-cols { grid-template-columns: 1fr; } }
 
   /* ---------------- replays ---------------- */
-  #resume { position: fixed; inset: 0; z-index: 64; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.25); }
+  #resume { position: fixed; inset: 0; z-index: 64; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   #resume[hidden] { display: none; }
   #resume div { background: rgba(15,15,20,0.88); border: 1px solid #7CFC00; color: #7CFC00; font: bold 18px 'Segoe UI', Arial, sans-serif;
     padding: 14px 26px; border-radius: 10px; text-align: center; }
@@ -365,8 +365,7 @@
   .rp-rec { display: none; position: absolute; top: 16px; left: 50%; transform: translateX(-50%); color: #ff5a4f; font-weight: bold; font-size: 13px; }
   #replay.recording .rp-rec { display: block; }
   #replay.recording .rp-bar { display: none; }   /* the bar isn't in the video anyway; hide it while recording */
-  #open-replay-note { text-align: center; min-height: 0; }
-  #open-replay-note:empty { display: none; }
+
 
   /* ---------------- mode select + multiplayer ---------------- */
   [hidden] { display: none !important; }

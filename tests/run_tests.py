@@ -83,6 +83,9 @@ def step(page, n):
 
 def test_game(browser, base):
     page, errors = open_page(browser, base + "/index.html")
+    # before any shooting: nothing to watch yet
+    check("replay buttons stay hidden until there's something to watch",
+          not page.is_visible("#watch-best") and not page.is_visible("#watch-last"))
     check("three.js loads from lib/", page.evaluate("typeof THREE !== 'undefined' && THREE.REVISION === '128'"))
     guns = page.eval_on_selector_all("#loadout button", "els => els.map(e => e.dataset.gun)")
     check("loadout menu lists five guns", len(guns) == 5, ", ".join(guns))
@@ -126,15 +129,6 @@ def test_game(browser, base):
     page.keyboard.press("Escape")
     page.wait_for_timeout(100)
     closed = page.evaluate("document.getElementById('glossary').hidden")
-    check("replay buttons stay hidden until there's something to watch",
-          not page.is_visible("#watch-best") and not page.is_visible("#watch-last"))
-    bad = os.path.join(OUT, "not-a-replay.json")
-    with open(bad, "w") as f:
-        f.write('{"v": 1, "frames": [{"t": "<b>x</b>"}], "events": [], "snap": []}')
-    page.set_input_files("#replay-file", bad)
-    page.wait_for_timeout(300)
-    check("a bad replay file is refused without playing", "isn't a Trickshot Sandbox replay" in page.inner_text("#open-replay-note")
-          and page.is_visible("#blocker"))
     check("trickshot list opens, lists the tricks, closes with Esc", opened and rows > 20 and closed and not started, f"{rows} rows")
 
     # settings: every tab opens, a change survives a reload, reset restores it

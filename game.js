@@ -92,7 +92,8 @@
     spinMaxCount: 3,            // ...counting up to 3 turns (x2.74), so turning sensitivity up can't run away with it
     spin180Mult: 1.2,
     knifeMult: 1,               // a knife swing has no multiplier of its own: it scores on its tricks
-    thrownKnifeMult: 0.65,      // throws are unlimited, so a thrown knife scales the shot down (shown in red)
+    thrownKnifeMult: 1,         // a thrown knife scores on its tricks and distance, nothing of its own
+    sprayMults: [1, 0.5, 0.25], // full-auto: the 2nd shot of a spray x0.5, the 3rd on x0.25 (tapping isn't a spray)
     knifeThrowCooldown: 0.6,    // unlimited knives, one per this many seconds
     knifeThrowSpeed: 32,
     knifeThrowGravity: 9,       // lighter than the world's, so throws carry
@@ -101,7 +102,7 @@
     wallRideMult: 1.4,
     movingTargetMult: 1.3,
     smallTargetMult: 1.8,
-    tinyTargetMult: 2.5,        // purple: tiny and fast, so it also gets the moving one
+    tinyTargetMult: 2.5,        // purple: tiny and fast (no separate moving bonus)
     // penalties scale the whole multiplier down, after the bonuses add up
     pointBlankMin: 3,           // CLOSE (under distanceFrom) slides down to the full penalty at this distance...
     pointBlankMult: 0.4,
@@ -1560,7 +1561,7 @@
       adsPos: new THREE.Vector3(0.0, -0.077, -0.30), adsRot: new THREE.Euler(0, 0, 0),
       canADS: true, scope: false, adsZoom: 0.72, fireRate: 0.1, auto: true, isMelee: false, usesAmmo: true,
       magSize: 30, ammoLabel: "ROUNDS", pellets: 1, spread: 0.007, spreadAds: 0.0025, bloom: 0.0035, bloomMax: 0.03, bloomRecover: 0.09,
-      scoreScale: 0.35, recoil: 0.35, kick: 0.22, flashScale: 0.55, brake: false, smoke: 0.3,
+      scoreScale: 1, recoil: 0.35, kick: 0.22, flashScale: 0.55, brake: false, smoke: 0.3,
       action: "none", ejectOnShot: true, casing: "small",
       muzzle: new THREE.Vector3(0, 0.015, -0.68), eject: new THREE.Vector3(0.03, 0.025, -0.01),
       sound: { recording: "ar", rate: 1, lowcut: 80, length: 0.6, gain: 0.8 },
@@ -1588,7 +1589,7 @@
       canADS: true, scope: false, adsZoom: 0.74, fireRate: 0.1, auto: true, isMelee: false, usesAmmo: true,
       // heavier than the rifle: kicks harder and blooms faster, but each hit is worth more
       magSize: 30, ammoLabel: "ROUNDS", pellets: 1, spread: 0.009, spreadAds: 0.0035, bloom: 0.005, bloomMax: 0.04, bloomRecover: 0.08,
-      scoreScale: 0.45, recoil: 0.5, kick: 0.4, flashScale: 0.7, brake: false, smoke: 0.35,
+      scoreScale: 1, recoil: 0.5, kick: 0.4, flashScale: 0.7, brake: false, smoke: 0.35,
       action: "none", ejectOnShot: true, casing: "small",
       muzzle: new THREE.Vector3(0, 0, -0.6), eject: new THREE.Vector3(0.03, 0.02, 0.0),
       sound: { recording: "ak", rate: 1, lowcut: 80, length: 0.6, gain: 0.85 },
@@ -1924,7 +1925,9 @@
     }
     // The crosshair shows all of the first few kicks, then only half: in a long spray the bullets
     // climb past it and you pull down to compensate. It glides there rather than snapping.
-    const viewShare = vm.burstShots <= 2 ? 1 : Math.max(0.5, 1 - (vm.burstShots - 2) * 0.1);
+    // Aiming down sights, the sights stay roughly on the shots instead (the view takes almost all of it).
+    const hipShare = vm.burstShots <= 2 ? 1 : Math.max(0.5, 1 - (vm.burstShots - 2) * 0.1);
+    const viewShare = hipShare + (0.95 - hipShare) * adsEased;
     const glide = Math.min(1, dt * 24);
     vm.viewRecoilPitch += (vm.recoilPitch * viewShare - vm.viewRecoilPitch) * glide;
     vm.viewRecoilYaw += (vm.recoilYaw * viewShare - vm.viewRecoilYaw) * glide;
@@ -2459,8 +2462,9 @@
     if (!GUNS.includes(id)) return;
     const prev = SETTINGS.loadout;
     SETTINGS.loadout = id;
-    if (vm.current !== "knife" && vm.current !== id) {
+    if (vm.current !== id) {   // even from the knife: picking a gun puts it in your hand
       cancelReload(); cancelBoltCycle(); cancelPump();
+      vm.switchTimer = 0; vm.pending = null; vm.swapped = true; vm.throwTimer = 0; vm.slashTimer = 0;
       vm.inspectTimer = 0; vm.wantADS = false; vm.adsProgress = 0;
       vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0; vm.burstShots = 0;
       currentWeapon().group.visible = false;
@@ -2729,7 +2733,11 @@
   // back): one click carries on, Esc again goes to the menu
   const resumeEl = document.getElementById("resume");
   resumeEl.addEventListener("click", (e) => { e.stopPropagation(); requestPlay(); });
-  window.addEventListener("keydown", (e) => { if (!resumeEl.hidden && e.code === "Escape") showScreen("menu"); });
+  window.addEventListener("keydown", (e) => {
+    if (resumeEl.hidden) return;
+    if (e.code === "Escape") showScreen("menu");
+    else requestPlay();   // move, jump, anything: straight back in
+  });
 
   function requestPlay() {
     if (uiMode === "mp" && !net.active) return;   // nothing to play until you're in a room
@@ -3592,7 +3600,7 @@
     if (!(isKnife && !thrown)) { const df = distanceFactor(dist); if (Math.abs(df[1] - 1) > 0.005) add(df[0], df[1]); }
 
     if (isKnife && !thrown && CFG.knifeMult !== 1) add("KNIFE", CFG.knifeMult);
-    else if (isKnife) add("THROWN KNIFE", CFG.thrownKnifeMult);
+    else if (isKnife) { if (CFG.thrownKnifeMult !== 1) add("THROWN KNIFE", CFG.thrownKnifeMult); }
     else {
       if (weapon && weapon.scope && vm.adsProgress < 0.35 && dist >= CFG.noScopeMinDist) add("NO-SCOPE", CFG.noScopeMult);
       else if (weapon && weapon.scope && vm.adsProgress >= 0.5 && (elapsedTime - vm.adsStartTime) <= CFG.quickscopeWindow) {
@@ -3628,11 +3636,18 @@
       if (kind === "tiny") add("MICRO TARGET", CFG.tinyTargetMult);
       else if (kind === "small") add("PINPOINT", CFG.smallTargetMult);
     }
-    if (target.userData.moving) add(kind === "tiny" ? "DARTING TARGET" : "MOVING TARGET", CFG.movingTargetMult);
+    if (target.userData.moving && kind !== "tiny") add("MOVING TARGET", CFG.movingTargetMult);   // purple's MICRO covers its speed
 
     if (streak > 0) add("STREAK " + (streak + 1), Math.min(1 + streak * CFG.streakMultPer, CFG.streakMultMax));
 
     if (still) add("STANDING STILL", CFG.standingStillMult);
+    // spraying: a shot that follows the last one at the gun's full-auto rate (before this shot's recoil is added)
+    if (weapon && weapon.auto && !isKnife) {
+      const inSpray = elapsedTime - vm.lastShotAt < Math.max(weapon.fireRate * 1.8, 0.25);
+      const n = inSpray ? vm.burstShots + 1 : 0;
+      const f = CFG.sprayMults[Math.min(n, CFG.sprayMults.length - 1)];
+      if (f < 1) add("SPRAY", f);
+    }
     // the gun's share of a sniper's points is a multiplier too, so the total always equals points / 100
     if (weapon && weapon.scoreScale !== undefined && weapon.scoreScale < 1) add(weapon.name, weapon.scoreScale);
 
@@ -3667,9 +3682,10 @@
       ]],
       ["Knife", [
         ["KNIFE SWING", x(C.knifeMult), "No multiplier of its own: a swing scores on its tricks (air, spins, speed, flicks, combos...). Swings skip the distance and target-size multipliers."],
+        ["THROWN KNIFE", x(C.thrownKnifeMult), "No multiplier of its own either: a throw scores on its tricks and its distance."],
       ]],
       ["Targets", [
-        ["MOVING TARGET", x(C.movingTargetMult), "Orange targets (and purple ones, as DARTING TARGET)."],
+        ["MOVING TARGET", x(C.movingTargetMult), "Orange targets."],
         ["PINPOINT", x(C.smallTargetMult), "Small blue targets."],
         ["MICRO TARGET", x(C.tinyTargetMult), "Tiny purple targets, which also dart away when you get close."],
       ]],
@@ -3680,7 +3696,7 @@
       ["Penalties", [
         ["CLOSE", x(C.pointBlankMult) + " to x1", "Closer than " + C.distanceFrom + " m, harshest at " + C.pointBlankMin + " m. Knife swings are exempt."],
         ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. A pad or ramp flight you ran onto doesn't count."],
-        ["THROWN KNIFE", x(C.thrownKnifeMult), "Throws are unlimited, so a thrown knife scales the shot down. Distance and tricks still count."],
+        ["SPRAY", x(C.sprayMults[1]) + " / " + x(C.sprayMults[2]), "Rifle and AK: the 2nd shot of a full-auto spray, then every shot after. Tap-firing doesn't count."],
       ], true],
       ["Your gun's share (the sniper scores in full)", GUNS.filter((id) => WEAPONS[id].scoreScale < 1).map((id) =>
         [WEAPONS[id].name, x(WEAPONS[id].scoreScale), "Multiplies every hit with this gun."]), true],
@@ -5441,6 +5457,13 @@
     if (rec.snapTimer <= 0 || !rec.events.some((e) => e.type === "snap")) { rec.snapTimer = 1; recSnapshot(); }
     camera.getWorldPosition(_rp); camera.getWorldQuaternion(_rq);
     const f = { t: r3(rec.t), c: [r3(_rp.x), r3(_rp.y), r3(_rp.z), r4(_rq.x), r4(_rq.y), r4(_rq.z), r4(_rq.w), r2(camera.fov), r2(lastScopeAlpha)], w: vm.current };
+    // the weapon in your hand, posed as you saw it (bob, recoil, switch dip, knife swing...)
+    const g = currentWeapon().group;
+    f.vm = [r3(g.position.x), r3(g.position.y), r3(g.position.z), r3(g.rotation.x), r3(g.rotation.y), r3(g.rotation.z), g.visible ? 1 : 0];
+    // and its moving parts: bolt (slide, twist), pump, slide, and the magazine (height, in or out)
+    const mag = currentWeapon().mag;
+    f.pt = [r3(boltMesh.position.z), r3(boltMesh.rotation.z), r3(shotgunPump.position.z), r3(pistolSlide.position.z),
+      mag ? r3(mag.position.y) : 0, mag && !mag.visible ? 0 : 1];
     const tg = [];
     targets.forEach((t, i) => { if (t.userData.motion && t.userData.alive) tg.push([i, r3(t.position.x), r3(t.position.y), r3(t.position.z)]); });
     if (tg.length) f.tg = tg;
@@ -5517,12 +5540,17 @@
       knives: thrownPool.map((k) => k.root.visible),
       viewmodel: viewmodelRoot.visible,
       guns: WEAPON_ORDER.map((id) => WEAPONS[id].group.visible),
+      parts: [boltMesh.position.z, boltMesh.rotation.z, shotgunPump.position.z, pistolSlide.position.z],
+      mags: WEAPON_ORDER.map((id) => WEAPONS[id].mag ? [WEAPONS[id].mag.position.y, WEAPONS[id].mag.visible] : null),
     };
     // the gun moves from the live camera onto the replay camera, holding whatever was in your hand
     replayCam.add(viewmodelRoot);
     for (const k of thrownPool) k.root.visible = false;
     Object.assign(replay, { active: true, clip, label, from, time: 0, paused: false, speed: 1, phase: "play", frameIdx: 0, evIdx: 0, hit: null });
     replay.hit = clip.events.find((e) => e.type === "hit" && Math.abs(e.t - clip.hitT) < 0.05) || null;
+    // was the hit made through the scope? (the frame just before it)
+    const pre = clip.frames.filter((f) => f.t <= clip.hitT);
+    replay.scopedHit = !!(pre.length && pre[pre.length - 1].c[8] > 0.5);
     applySnapshot(clip.snap);
     resultsEl.hidden = true;
     showScreen("replay");
@@ -5560,7 +5588,13 @@
     thrownPool.forEach((k, i) => { k.root.visible = replay.saved.knives[i]; });
     camera.add(viewmodelRoot);
     viewmodelRoot.visible = replay.saved.viewmodel;
-    WEAPON_ORDER.forEach((id, i) => { WEAPONS[id].group.visible = replay.saved.guns[i]; });
+    WEAPON_ORDER.forEach((id, i) => {
+      WEAPONS[id].group.visible = replay.saved.guns[i];
+      const m = replay.saved.mags[i];
+      if (m) { WEAPONS[id].mag.position.y = m[0]; WEAPONS[id].mag.visible = m[1]; }
+    });
+    const sp = replay.saved.parts;
+    boltMesh.position.z = sp[0]; boltMesh.rotation.z = sp[1]; shotgunPump.position.z = sp[2]; pistolSlide.position.z = sp[3];
     for (const k of replayKnives) k.visible = false;
     bulletMesh.visible = false;
     for (const p of particlePool) { p.active = false; p.mesh.visible = false; }
@@ -5591,7 +5625,7 @@
       const t = targets[e.i];
       if (e.type === "shot") {
         _tmpV1.fromArray(e.o); _tmpV2.fromArray(e.d);
-        spawnTracer(_tmpV1, _tmpV2, e.l);
+        if (!untilImpact) spawnTracer(_tmpV1, _tmpV2, e.l);   // the trickshot's own bullet is the bullet cam's, not a tracer
         if (e.snd && WEAPONS[e.w]) playShotSound(WEAPONS[e.w].sound);
       } else if (e.type === "throw") {
         playKnifeSwing();
@@ -5643,16 +5677,20 @@
       scopeEl.style.opacity = 0; scopeLinesEl.style.opacity = 0;
       if (k >= 1) { replay.phase = "impact"; bulletMesh.visible = false; }
     } else {
-      if (!replay.paused) {
+      if (replay.phase === "aimhold" && !replay.paused) {
+        // a scoped shot: hold on the scope for a beat, then ride the bullet
+        replay.holdT += realDt;
+        if (replay.holdT >= 0.8) { replay.phase = "bullet"; replay.flightT = 0; }
+      } else if (!replay.paused) {
         let s = replay.speed;
-        if (replay.slowMo && replay.hit && replay.time > clip.hitT - 0.45 && replay.time < clip.hitT + 0.9) s *= 0.3;
+        if (replay.slowMo && replay.hit && replay.time > clip.hitT - (replay.scopedHit ? 1 : 0.45) && replay.time < clip.hitT + 0.9) s *= 0.3;
         dt = realDt * s;
         const next = Math.min(replay.time + dt, end);
         // reaching the hit with the bullet cam on: stop just short of it and fly
         if (replay.phase === "play" && replay.bulletCam && replay.hit && !replay.hit.knife && replay.time < clip.hitT && next >= clip.hitT) {
           replay.time = clip.hitT;
-          replayEvents(0, true);   // the shot itself: tracer and bang
-          replay.phase = "bullet"; replay.flightT = 0;
+          replayEvents(0, true);   // the shot itself: the bang (the bullet cam is its bullet)
+          replay.phase = replay.scopedHit ? "aimhold" : "bullet"; replay.flightT = 0; replay.holdT = 0;
           replay.flightDur = Math.min(Math.max(_tmpV1.fromArray(replay.hit.o).distanceTo(_tmpV2.fromArray(replay.hit.p)) / 40, 0.7), 1.6);
         } else {
           replay.time = next;
@@ -5669,6 +5707,14 @@
           const nb = b.tg && b.tg.find((q) => q[0] === i);
           t.position.set(x, y, z);
           if (nb) t.position.lerp(_tmpV1.set(nb[1], nb[2], nb[3]), u);
+        }
+        // targets turn to face where you were standing in the recording (as they did live), with their sway
+        const ex = a.c[0] + (b.c[0] - a.c[0]) * u, ez = a.c[2] + (b.c[2] - a.c[2]) * u;
+        for (const t of targets) {
+          if (!t.visible) continue;
+          const ud = t.userData;
+          t.rotation.y = Math.atan2(ex - t.position.x, ez - t.position.z) +
+            Math.sin(replay.time * (t.scale.x < 1 ? 2.1 : 1.3) + (ud.motion ? ud.motion.phase : ud.idx)) * 0.22;
         }
         replayKnives.forEach((m, j) => {
           const ka = a.kn && a.kn[j];
@@ -5692,7 +5738,21 @@
           scopeEl.style.opacity = sa; scopeLinesEl.style.opacity = sa;
           viewmodelRoot.visible = sa < 0.98;   // scoped in, the scope fills the view, as it did live
           const held = a.w && WEAPONS[a.w] ? a.w : null;
-          if (held) for (const id of WEAPON_ORDER) WEAPONS[id].group.visible = id === held;
+          if (held) {
+            for (const id of WEAPON_ORDER) WEAPONS[id].group.visible = id === held && (!a.vm || a.vm[6] === 1);
+            if (a.vm) {   // the recorded pose, blended between frames while it's the same weapon
+              const g = WEAPONS[held].group, bv = b.w === a.w && b.vm ? b.vm : a.vm;
+              g.position.set(a.vm[0] + (bv[0] - a.vm[0]) * u, a.vm[1] + (bv[1] - a.vm[1]) * u, a.vm[2] + (bv[2] - a.vm[2]) * u);
+              g.rotation.set(a.vm[3] + (bv[3] - a.vm[3]) * u, a.vm[4] + (bv[4] - a.vm[4]) * u, a.vm[5] + (bv[5] - a.vm[5]) * u);
+            }
+            if (a.pt) {
+              const bp = b.w === a.w && b.pt ? b.pt : a.pt, mix = (i) => a.pt[i] + (bp[i] - a.pt[i]) * u;
+              boltMesh.position.z = mix(0); boltMesh.rotation.z = mix(1);
+              shotgunPump.position.z = mix(2); pistolSlide.position.z = mix(3);
+              const mag = WEAPONS[held].mag;
+              if (mag) { mag.position.y = mix(4); mag.visible = a.pt[5] === 1; }
+            }
+          }
           scopeEl.style.transform = "translate(-50%, -50%) scale(" + (1.2 - 0.2 * sa).toFixed(3) + ")";
         }
       }
@@ -5766,52 +5826,7 @@
   });
   refreshReplayButtons();
 
-  // ---- saving and sharing: a replay file (opened in the game) or a video of the replay ----
-  // A replay file from someone else is untrusted: every value is checked and a clean copy rebuilt,
-  // and none of its text is ever put into the page as HTML.
-  const REPLAY_FILE_MAX = 3 * 1024 * 1024;
-  function cleanClip(c) {
-    const fin = (n) => typeof n === "number" && Number.isFinite(n);
-    const nums = (a, n) => Array.isArray(a) && a.length === n && a.every(fin);
-    const int = (n, max) => Number.isInteger(n) && n >= 0 && n < max;
-    const strs = (a) => (Array.isArray(a) ? a.filter((s) => typeof s === "string").slice(0, 30).map((s) => s.slice(0, 40)) : []);
-    if (!c || typeof c !== "object" || c.v !== 1 || !Array.isArray(c.frames) || !Array.isArray(c.events) || !Array.isArray(c.snap)) return null;
-    if (c.frames.length < 2 || c.frames.length > 4000 || c.events.length > 5000 || c.snap.length > 64) return null;
-    const frames = [];
-    for (const f of c.frames) {
-      if (!f || !fin(f.t) || !nums(f.c, 9)) return null;
-      const g = { t: f.t, c: f.c.slice() };
-      if (typeof f.w === "string" && WEAPONS[f.w]) g.w = f.w;
-      if (f.tg !== undefined) {
-        if (!Array.isArray(f.tg) || f.tg.length > 64 || !f.tg.every((q) => Array.isArray(q) && q.length === 4 && int(q[0], 64) && q.slice(1).every(fin))) return null;
-        g.tg = f.tg.map((q) => q.slice());
-      }
-      if (f.kn !== undefined) {
-        if (!Array.isArray(f.kn) || f.kn.length > 8 || !f.kn.every((q) => nums(q, 8))) return null;
-        g.kn = f.kn.map((q) => q.slice());
-      }
-      frames.push(g);
-    }
-    const events = [];
-    for (const e of c.events) {
-      if (!e || !fin(e.t)) return null;
-      if (e.type === "shot" && nums(e.o, 3) && nums(e.d, 3) && fin(e.l) && typeof e.w === "string" && WEAPONS[e.w]) events.push({ t: e.t, type: "shot", w: e.w, snd: !!e.snd, o: e.o.slice(), d: e.d.slice(), l: e.l });
-      else if (e.type === "throw") events.push({ t: e.t, type: "throw" });
-      else if (e.type === "ko" && int(e.i, 64) && TARGET_TYPES[e.ty] && nums(e.cv, 3) && fin(e.sp)) events.push({ t: e.t, type: "ko", i: e.i, ty: e.ty, cv: e.cv.slice(), sp: e.sp });
-      else if (e.type === "spawn" && int(e.i, 64) && TARGET_TYPES[e.ty] && nums(e.p, 3)) events.push({ t: e.t, type: "spawn", i: e.i, ty: e.ty, p: e.p.slice() });
-      else if (e.type === "hit" && Number.isInteger(e.i) && nums(e.o, 3) && nums(e.p, 3)) events.push({ t: e.t, type: "hit", i: e.i, o: e.o.slice(), p: e.p.slice(), knife: !!e.knife });
-      else return null;
-    }
-    const snap = [];
-    for (const s of c.snap) {
-      if (!Array.isArray(s) || s.length !== 5 || !TARGET_TYPES[s[0]] || !s.slice(1).every(fin)) return null;
-      snap.push(s.slice());
-    }
-    const m = c.meta || {};
-    if (!fin(c.hitT) || !fin(m.points) || !fin(m.mult)) return null;
-    return { v: 1, snap, hitT: c.hitT, frames, events,
-      meta: { points: Math.round(m.points), mult: m.mult, tags: strs(m.tags), pens: strs(m.pens), dist: fin(m.dist) ? m.dist : undefined } };
-  }
+  // ---- sharing: save the replay as a video, the 3D view plus the game's sound, played once from the start ----
   function downloadBlob(blob, name) {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -5820,13 +5835,6 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
   const clipName = (clip, ext) => "trickshot-" + new Date().toISOString().slice(0, 10) + "-" + clip.meta.points + "pts" + ext;
-  function saveReplayFile() {
-    const clip = replay.clip;
-    if (!clip) return;
-    downloadBlob(new Blob([JSON.stringify(Object.assign({ kind: "trickshot-sandbox-replay" }, clip))], { type: "application/json" }), clipName(clip, ".json"));
-    flashReplayNote("Saved as a replay file. Open it with \"Open replay file\" in the menu.");
-  }
-  // record the replay as a video: the 3D view plus the game's sound, played once from the start
   let videoRec = null;
   function saveReplayVideo() {
     if (videoRec || !replay.clip) return;
@@ -5872,26 +5880,7 @@
     clearTimeout(replayNoteTimer);
     replayNoteTimer = setTimeout(() => { el.hidden = true; }, 4000);
   }
-  document.getElementById("rp-save").addEventListener("click", (e) => { e.currentTarget.blur(); saveReplayFile(); });
   document.getElementById("rp-video").addEventListener("click", (e) => { e.currentTarget.blur(); saveReplayVideo(); });
-  // opening a replay file someone sent
-  const replayFileEl = document.getElementById("replay-file");
-  document.getElementById("open-replay").addEventListener("click", (e) => { e.stopPropagation(); replayFileEl.value = ""; replayFileEl.click(); });
-  replayFileEl.addEventListener("click", (e) => e.stopPropagation());
-  replayFileEl.addEventListener("change", () => {
-    const file = replayFileEl.files && replayFileEl.files[0];
-    const note = document.getElementById("open-replay-note");
-    if (!file) return;
-    if (file.size > REPLAY_FILE_MAX) { note.textContent = "That file is too big to be a replay."; return; }
-    file.text().then((text) => {
-      let clip = null;
-      try { clip = cleanClip(JSON.parse(text)); } catch (e) { clip = null; }
-      if (!clip) { note.textContent = "That isn't a Trickshot Sandbox replay file (or it's damaged)."; return; }
-      note.textContent = "";
-      startReplay(clip, "Replay file · " + clip.meta.points + " points", "menu");
-    });
-  });
-
   // ======================================================================
   // MAIN LOOP
   // ======================================================================
