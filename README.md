@@ -31,6 +31,9 @@ Base run speed is slow. You *build* speed by chaining slides, bunnyhops (hold ju
 bounces, up to 22 u/s. Score multipliers stack: air time, spins, speed, distance, no-scopes, quickscopes,
 last-round shots, sliding, wall rides, moving and small targets, knife kills and streaks.
 
+Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
+purple (tiny and fast). How many of each are up at once is set in Settings > Targets.
+
 Settings (sensitivity, volume, unlimited ammo and so on) are saved in your browser.
 
 ## Files

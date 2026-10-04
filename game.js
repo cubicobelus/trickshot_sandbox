@@ -100,6 +100,7 @@
     wallRideBonus: 1,
     movingTargetBonus: 0.75,
     smallTargetBonus: 2,
+    tinyTargetBonus: 3.5,       // purple: tiny and fast, so it also gets the moving bonus
     noScopeBonus: 1.5,
     noScopeMinDist: 20,
     quickscopeBonus: 1.5,
@@ -110,9 +111,6 @@
     distanceTiers: [[50, 2, "MEGA SNIPE"], [30, 1, "LONG SHOT"], [15, 0.5, "MID RANGE"]],
     speedTiers: [[19, 2, "SONIC"], [15, 1.25, "BLAZING"], [11, 0.6, "FAST"]],
 
-    targetCount: 15,
-    movingTargetFraction: 1 / 3,
-    smallTargetFraction: 0.25,
   };
 
   const SETTINGS = {
@@ -125,6 +123,8 @@
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
+    // how many of each target kind are up at once
+    tgtNormal: 6, tgtMoving: 4, tgtSmall: 3, tgtTiny: 2,
   };
   const DEFAULT_SETTINGS = Object.assign({}, SETTINGS);
   const handSign = () => (SETTINGS.hand === "left" ? -1 : 1);
@@ -485,12 +485,24 @@
   addJumpPad(-28, FLOOR_Y, 12, "normal");    // off the end of the west bounce corridor
 
   // ======================================================================
-  // TARGETS (standard / moving / small)
+  // TARGETS
   // ======================================================================
+  // Four kinds, each with one look and one behaviour, so you can read a target at a glance:
+  //   red: standard, stands still      orange: standard size, always moving
+  //   blue: small, stands still        purple: tiny, darts about fast
+  // How many of each are up at once is a setting; a hit target comes back as the same kind.
+  const TARGET_TYPES = {
+    normal: { color: "#e5352f", scale: 1, motion: "none", setting: "tgtNormal" },
+    moving: { color: "#ff8a1c", scale: 1, motion: "slide", setting: "tgtMoving" },
+    small: { color: "#19c6e0", scale: 0.5, motion: "none", setting: "tgtSmall" },
+    tiny: { color: "#7b2bf0", scale: 0.3, motion: "dart", setting: "tgtTiny" },
+  };
+  const TARGET_ORDER = ["normal", "moving", "small", "tiny"];
   const targets = [];
+  let targetsReady = false;   // set once startup is done; settings changes before then are just stored
   // A steel plate painted with a bullseye in the target type's colour, held in a steel rim.
   // When it's hit the whole plate punches out and falls, leaving the empty rim hanging for a
-  // moment. Red standard, orange moving, cyan small.
+  // moment.
   const plateGeo = new THREE.CylinderGeometry(0.97, 0.97, 0.07, 40);
   plateGeo.rotateX(Math.PI / 2);   // faces +Z
   const plateRimGeo = new THREE.TorusGeometry(1, 0.06, 8, 40);
@@ -507,32 +519,9 @@
   }
   // plate materials for its [edge, front, back]
   const TARGET_LOOKS = {};
-  for (const [kind, color] of [["normal", "#e5352f"], ["moving", "#ff8a1c"], ["small", "#19c6e0"]]) {
-    TARGET_LOOKS[kind] = [plateSteel, bullseyeMaterial(color), plateSteel];
-  }
-  function setTargetLook(t) {
-    const ud = t.userData;
-    t.children[0].material = TARGET_LOOKS[ud.small ? "small" : (ud.moving ? "moving" : "normal")];
-  }
+  for (const kind of TARGET_ORDER) TARGET_LOOKS[kind] = [plateSteel, bullseyeMaterial(TARGET_TYPES[kind].color), plateSteel];
 
   const PLAYER_SPAWN = new THREE.Vector3(0, 1.7, 8);
-
-  function randomSpawnPoint(occupied) {
-    const lim = CFG.arenaHalfSize - 6;
-    for (let a = 0; a < 80; a++) {
-      const x = (Math.random() * 2 - 1) * lim;
-      const z = (Math.random() * 2 - 1) * lim;
-      const y = 1.7 + Math.random() * 7.3;
-      if (Math.hypot(x - PLAYER_SPAWN.x, z - PLAYER_SPAWN.z) < 11) continue;
-      if (insideSolid(x, y, z, 1.6)) continue;
-      let ok = true;
-      for (const p of occupied) {
-        if (Math.hypot(x - p.x, z - p.z) < 7.5 && Math.abs(y - p.y) < 3.5) { ok = false; break; }
-      }
-      if (ok) return new THREE.Vector3(x, y, z);
-    }
-    return new THREE.Vector3((Math.random() * 2 - 1) * lim, 2 + Math.random() * 6, -(8 + Math.random() * 18));
-  }
 
   const _spawnProbe = new THREE.Vector3();
   function insideSolid(x, y, z, margin) {
@@ -542,56 +531,138 @@
     return false;
   }
 
-  function occupiedPoints(exclude) {
-    const pts = [];
-    for (const t of targets) if (t !== exclude) pts.push(t.userData.base);
-    return pts;
+  // Where a target of this kind should go: try a batch of random spots and keep the one furthest
+  // from the other targets, and further still from ones of the same kind, so the map fills evenly
+  // and no colour bunches up in one corner. Never right next to the player.
+  function pickTargetSpot(type, exclude) {
+    const lim = CFG.arenaHalfSize - 6;
+    const me = yawObject.position;
+    let best = null, bestScore = -Infinity;
+    for (let a = 0; a < 48; a++) {
+      const x = (Math.random() * 2 - 1) * lim;
+      const z = (Math.random() * 2 - 1) * lim;
+      const y = 1.7 + Math.random() * 7.3;
+      if (Math.hypot(x - PLAYER_SPAWN.x, z - PLAYER_SPAWN.z) < 11) continue;
+      if (Math.hypot(x - me.x, z - me.z) < 12) continue;
+      if (insideSolid(x, y, z, 1.6)) continue;
+      let nearAny = 30, nearSame = 40;
+      for (const t of targets) {
+        if (t === exclude || !t.userData.base) continue;
+        const b = t.userData.base;
+        const d = Math.hypot(x - b.x, z - b.z, (y - b.y) * 0.6);
+        nearAny = Math.min(nearAny, d);
+        if (t.userData.type === type) nearSame = Math.min(nearSame, d);
+      }
+      const score = nearAny + 0.6 * nearSame + Math.random() * 2;
+      if (score > bestScore) { bestScore = score; best = new THREE.Vector3(x, y, z); }
+    }
+    return best || new THREE.Vector3((Math.random() * 2 - 1) * lim, 2 + Math.random() * 6, -(8 + Math.random() * 18));
   }
 
-  function assignTargetType(t) {
-    const ud = t.userData;
-    ud.small = Math.random() < CFG.smallTargetFraction;
-    ud.moving = Math.random() < CFG.movingTargetFraction;
-    ud.scale = ud.small ? 0.5 : 1;
+  // where a moving target is at time `clock`, from its base and motion
+  const _tgtPos = new THREE.Vector3();
+  function targetPositionAt(ud, clock, out) {
+    const m = ud.motion;
+    out.copy(ud.base);
+    if (!m) return out;
+    if (m.kind === "slide") {
+      const off = Math.cos(clock * m.speed + m.phase) * m.amp;
+      out.x += off * m.ax; out.z += off * m.az;
+      if (m.ampV) out.y += Math.sin(clock * m.speedV + m.phase) * m.ampV;
+    } else {
+      // dart: three sine waves at unrelated rates trace a looping, hard-to-predict path
+      out.x += Math.sin(clock * m.fx + m.px) * m.amp;
+      out.z += Math.sin(clock * m.fz + m.pz) * m.amp;
+      out.y += Math.sin(clock * m.fy + m.py) * m.ampV;
+    }
+    return out;
+  }
+  // true if the whole path stays in the open: inside the arena, above the floor, clear of walls
+  function pathIsClear(ud) {
+    const bound = CFG.arenaHalfSize - 2;
+    for (let i = 0; i < 64; i++) {
+      targetPositionAt(ud, i * 0.37, _tgtPos);
+      if (Math.abs(_tgtPos.x) > bound || Math.abs(_tgtPos.z) > bound || _tgtPos.y < 1.3) return false;
+      if (insideSolid(_tgtPos.x, _tgtPos.y, _tgtPos.z, 1.2 * ud.scale + 0.3)) return false;
+    }
+    return true;
+  }
+  function makeMotion(kind) {
+    const phase = Math.random() * Math.PI * 2;
+    if (kind === "slide") {
+      // orange: a steady slide back and forth, about 3 to 6 u/s through the middle; some also bob
+      const ang = Math.random() * Math.PI * 2;
+      return { kind, phase, ax: Math.cos(ang), az: Math.sin(ang), amp: 3.5 + Math.random() * 3, speed: 0.75 + Math.random() * 0.3,
+        ampV: Math.random() < 0.35 ? 1 + Math.random() : 0, speedV: 1 + Math.random() * 0.6 };
+    }
+    // purple: fast, around 8 to 10 u/s on average, and never quite repeating the same line
+    return { kind, phase, amp: 3.5 + Math.random(), ampV: 1 + Math.random() * 0.5,
+      fx: 2.2 + Math.random() * 0.6, fz: 1.8 + Math.random() * 0.5, fy: 2.8 + Math.random() * 0.6,
+      px: Math.random() * 6.28, pz: Math.random() * 6.28, py: Math.random() * 6.28 };
+  }
+
+  // give a target its kind: size, look, and (for movers) a path. Returns false if no full-size
+  // path fits here without hitting a wall; with `squeeze` it settles for a smaller one instead.
+  function setTargetType(t, type, squeeze) {
+    const ud = t.userData, T = TARGET_TYPES[type];
+    ud.type = type;
+    ud.small = type === "small" || type === "tiny";   // scoring reads these
+    ud.moving = T.motion !== "none";
+    ud.scale = T.scale;
     t.scale.setScalar(ud.scale);
     ud.hitRadius = 1.1 * ud.scale;
-
-    setTargetLook(t);
-
-    if (!ud.moving) { ud.vertical = false; return; }
-    ud.vertical = Math.random() < 0.5;
-    ud.phase = Math.random() * Math.PI * 2;
-    ud.speedH = 0.5 + Math.random() * 0.75;
-    ud.ampH = 3 + Math.random() * 5;
-    ud.speedV = 0.7 + Math.random() * 0.9;
-    ud.ampV = 1 + Math.random() * 2.2;
-    const ang = Math.random() * Math.PI * 2;
-    ud.axisX = Math.cos(ang);
-    ud.axisZ = Math.sin(ang);
-    const bound = CFG.arenaHalfSize - 3;
-    const maxAmp = Math.min(
-      Math.abs(ud.axisX) < 0.01 ? 99 : (bound - Math.abs(ud.base.x)) / Math.abs(ud.axisX),
-      Math.abs(ud.axisZ) < 0.01 ? 99 : (bound - Math.abs(ud.base.z)) / Math.abs(ud.axisZ)
-    );
-    ud.ampH = Math.max(1.5, Math.min(ud.ampH, maxAmp));
-    ud.ampV = Math.min(ud.ampV, ud.base.y - 1.4);
-    if (ud.ampV < 0.4) ud.vertical = false;
+    t.children[0].material = TARGET_LOOKS[type];
+    ud.motion = null;
+    if (T.motion === "none") return true;
+    for (let tries = 0; tries < 6; tries++) {
+      ud.motion = makeMotion(T.motion);
+      if (pathIsClear(ud)) return true;
+    }
+    if (!squeeze) return false;
+    for (let tries = 0; tries < 6; tries++) {
+      ud.motion = makeMotion(T.motion);
+      ud.motion.amp *= 0.6; ud.motion.ampV *= 0.6;
+      if (pathIsClear(ud)) return true;
+    }
+    ud.motion.amp = 1.2; ud.motion.ampV = 0;   // boxed in: a short wiggle in place
+    return true;
   }
 
-  function makeTarget() {
+  function placeTarget(t) {
+    // movers get a few spots to try, so they end up somewhere with room to move
+    for (let attempt = 0; attempt < 6; attempt++) {
+      t.userData.base.copy(pickTargetSpot(t.userData.type, t));
+      if (setTargetType(t, t.userData.type, attempt === 5)) break;
+    }
+    t.position.copy(targetPositionAt(t.userData, elapsedTime, _tgtPos));
+  }
+
+  function makeTarget(type) {
     const group = new THREE.Group();
-    const plate = new THREE.Mesh(plateGeo, TARGET_LOOKS.normal);
+    const plate = new THREE.Mesh(plateGeo, TARGET_LOOKS[type]);
     const rim = new THREE.Mesh(plateRimGeo, plateSteel);
     group.add(plate, rim);   // children[0] plate, [1] rim
-    group.userData = { idx: targets.length, alive: true, hitRadius: 1.1, base: new THREE.Vector3(), moving: false, vertical: false, small: false, scale: 1 };
+    group.userData = { idx: targets.length, alive: true, hitRadius: 1.1, base: new THREE.Vector3(), type, moving: false, small: false, scale: 1, motion: null, knockT: -1 };
     scene.add(group);
     targets.push(group);
-    group.userData.base.copy(randomSpawnPoint(occupiedPoints(group)));
-    group.position.copy(group.userData.base);
-    assignTargetType(group);
+    placeTarget(group);
     return group;
   }
-  for (let i = 0; i < CFG.targetCount; i++) makeTarget();
+  function removeTarget(t) {
+    scene.remove(t);
+    targets.splice(targets.indexOf(t), 1);
+    targets.forEach((x, i) => { x.userData.idx = i; });
+  }
+  // bring the targets on the map in line with the per-kind counts in the settings
+  function syncTargetCounts() {
+    if (net.active) return;   // a match uses the host's targets
+    for (const type of TARGET_ORDER) {
+      const want = SETTINGS[TARGET_TYPES[type].setting];
+      const have = targets.filter((t) => t.userData.type === type);
+      for (let i = have.length; i < want; i++) makeTarget(type);
+      for (let i = have.length - 1; i >= want; i--) removeTarget(have[i]);
+    }
+  }
 
   // hit: the plate punches out backwards and tumbles down; the empty rim hangs a moment, then shrinks away
   const TARGET_RING_HOLD = 0.5, TARGET_RING_SHRINK = 0.15;
@@ -622,9 +693,7 @@
 
   function respawnTarget(t) {
     resetTargetParts(t);
-    t.userData.base.copy(randomSpawnPoint(occupiedPoints(t)));
-    t.position.copy(t.userData.base);
-    assignTargetType(t);
+    placeTarget(t);
     t.userData.alive = true;
     t.visible = true;
   }
@@ -632,22 +701,15 @@
   // Everything a remote peer needs to rebuild a target exactly as the host has it.
   function serializeTarget(t) {
     const u = t.userData;
-    return {
-      b: [u.base.x, u.base.y, u.base.z], s: u.small, m: u.moving, v: u.vertical, a: u.alive,
-      ph: u.phase, sh: u.speedH, ah: u.ampH, sv: u.speedV, av: u.ampV, ax: u.axisX, az: u.axisZ,
-    };
+    return { b: [u.base.x, u.base.y, u.base.z], ty: u.type, a: u.alive, mo: u.motion };
   }
   function applyTargetData(t, d) {
     const u = t.userData;
     resetTargetParts(t);
     u.base.set(d.b[0], d.b[1], d.b[2]);
-    u.small = d.s; u.moving = d.m; u.vertical = d.v;
-    u.phase = d.ph; u.speedH = d.sh; u.ampH = d.ah; u.speedV = d.sv; u.ampV = d.av; u.axisX = d.ax; u.axisZ = d.az;
-    u.scale = u.small ? 0.5 : 1;
-    t.scale.setScalar(u.scale);
-    u.hitRadius = 1.1 * u.scale;
-    setTargetLook(t);
-    t.position.copy(u.base);
+    setTargetType(t, TARGET_TYPES[d.ty] ? d.ty : "normal", true);
+    u.motion = d.mo || null;
+    t.position.copy(targetPositionAt(u, elapsedTime, _tgtPos));
     u.alive = d.a;
     t.visible = d.a;
   }
@@ -666,14 +728,10 @@
         if (ud.respawnTimer <= 0) { respawnTarget(t); if (net.role === "host") mpAnnounceSpawn(t); }
         continue;
       }
+      if (ud.motion) t.position.copy(targetPositionAt(ud, clock, _tgtPos));
       // face the player, with a gentle sway so they don't look pinned in place
       t.rotation.y = Math.atan2(yawObject.position.x - t.position.x, yawObject.position.z - t.position.z) +
-        Math.sin(clock * (ud.small ? 2.1 : 1.3) + (ud.phase || t.userData.idx)) * 0.22;
-      if (!ud.moving) continue;
-      const off = Math.cos(clock * ud.speedH + ud.phase) * ud.ampH;
-      t.position.x = ud.base.x + off * ud.axisX;
-      t.position.z = ud.base.z + off * ud.axisZ;
-      if (ud.vertical) t.position.y = ud.base.y + Math.sin(clock * ud.speedV + ud.phase) * ud.ampV;
+        Math.sin(clock * (ud.scale < 1 ? 2.1 : 1.3) + (ud.motion ? ud.motion.phase : ud.idx)) * 0.22;
     }
   }
 
@@ -2388,6 +2446,7 @@
 
   const xhPreviewEl = document.getElementById("xh-preview");
   function applySettings() {
+    if (targetsReady) syncTargetCounts();
     const svg = crosshairSVG(SETTINGS);
     crosshairEl.innerHTML = svg;
     crosshairEl.style.color = SETTINGS.xhColor;
@@ -3287,10 +3346,12 @@
       tags.push("WALL RIDE");
     }
 
-    if (target.userData.small) { mult += CFG.smallTargetBonus; tags.push("PINPOINT"); }
+    const kind = target.userData.type;
+    if (kind === "tiny") { mult += CFG.tinyTargetBonus; tags.push("MICRO TARGET"); }
+    else if (kind === "small") { mult += CFG.smallTargetBonus; tags.push("PINPOINT"); }
     if (target.userData.moving) {
       mult += CFG.movingTargetBonus;
-      tags.push(target.userData.vertical ? "ERRATIC TARGET" : "MOVING TARGET");
+      tags.push(kind === "tiny" ? "DARTING TARGET" : "MOVING TARGET");
     }
 
     const streakBonus = Math.min(streak * CFG.streakBonusPer, CFG.streakBonusCap);
@@ -3324,7 +3385,7 @@
     const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon);
     target.userData.alive = false;
     knockOutTarget(target);
-    burst(target.position, target.userData.small ? 0x22d3ee : 0xffd24a, target.userData.small ? 8 : 6);
+    burst(target.position, new THREE.Color(TARGET_TYPES[target.userData.type].color).getHex(), target.userData.small ? 8 : 6);
     const pointsGained = awardPoints(res);
     target.userData.respawnTimer = 1.1;
     if (net.active) mpTargetHit(target, pointsGained);
@@ -4596,6 +4657,8 @@
   player.lastYaw = yawObject.rotation.y;
   fitMuzzleFlash(currentWeapon());
   setLoadout(SETTINGS.loadout);   // last, once the reload and ammo state it touches exist
+  targetsReady = true;
+  syncTargetCounts();
   updateAmmoHud();
   animate();
 })();

@@ -84,6 +84,7 @@
           <button type="button" class="stab active" data-tab="mouse">Mouse</button>
           <button type="button" class="stab" data-tab="crosshair">Crosshair</button>
           <button type="button" class="stab" data-tab="view">View</button>
+          <button type="button" class="stab" data-tab="targets">Targets</button>
           <button type="button" class="stab" data-tab="sound">Sound</button>
           <button type="button" class="stab" data-tab="other">Other</button>
         </div>
@@ -184,6 +185,29 @@
         <div class="check-row">
           <label><input type="checkbox" id="scope-sway" data-setting="scopeSway" checked>Scope sway</label>
           <label><input type="checkbox" id="speed-lines" data-setting="speedLines" checked>Speed lines</label>
+        </div>
+      </div>
+
+      <div class="spanel" data-panel="targets" hidden>
+        <div class="slider-row">
+          <label for="tgt-normal"><i class="tdot" style="background:#e5352f"></i>Standard (still)</label>
+          <input type="range" id="tgt-normal" data-setting="tgtNormal" min="0" max="12" step="1" value="6">
+          <div class="val">6</div>
+        </div>
+        <div class="slider-row">
+          <label for="tgt-moving"><i class="tdot" style="background:#ff8a1c"></i>Moving</label>
+          <input type="range" id="tgt-moving" data-setting="tgtMoving" min="0" max="12" step="1" value="4">
+          <div class="val">4</div>
+        </div>
+        <div class="slider-row">
+          <label for="tgt-small"><i class="tdot" style="background:#19c6e0"></i>Small (still)</label>
+          <input type="range" id="tgt-small" data-setting="tgtSmall" min="0" max="12" step="1" value="3">
+          <div class="val">3</div>
+        </div>
+        <div class="slider-row">
+          <label for="tgt-tiny"><i class="tdot" style="background:#7b2bf0"></i>Tiny (fast)</label>
+          <input type="range" id="tgt-tiny" data-setting="tgtTiny" min="0" max="12" step="1" value="2">
+          <div class="val">2</div>
         </div>
       </div>
 
