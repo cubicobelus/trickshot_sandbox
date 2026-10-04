@@ -30,7 +30,7 @@ score less per hit so trickshots stay king.
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (hold jump on landing) and wall
 bounces, up to 22 u/s. Score multipliers stack: air time, spins, speed, distance, no-scopes, quickscopes,
 last-round shots, sliding, wall rides, moving and small targets, knife kills and streaks. Two things
-scale a shot down: firing from point blank (under 8 m, except knife swings) and standing still on the ground.
+scale a shot down: firing from close in (under 15 m, except knife swings) and standing still on the ground.
 
 Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
 purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.

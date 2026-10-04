@@ -102,9 +102,9 @@
     smallTargetBonus: 2,
     tinyTargetBonus: 3.5,       // purple: tiny and fast, so it also gets the moving bonus
     // penalties scale the whole multiplier down, after the bonuses add up
-    pointBlankRange: 8,         // closer than this costs you, sliding down to...
-    pointBlankMin: 2,           // ...the full penalty at this distance and under
-    pointBlankMult: 0.5,
+    pointBlankRange: 15,        // closer than this costs you (where MID RANGE starts), sliding down to...
+    pointBlankMin: 3,           // ...the full penalty at this distance and under
+    pointBlankMult: 0.4,
     standingStillSpeed: 2,      // on the ground and slower than this when you fire...
     standingStillMult: 0.75,    // ...scales the shot by this
     // the purple target keeps away from you, like a snitch
