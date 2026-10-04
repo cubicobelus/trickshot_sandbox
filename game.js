@@ -1435,7 +1435,7 @@
       range: 70, scoreScale: 0.6, recoil: 1.15, kick: 0.9, flashScale: 1.25, brake: false, smoke: 1.1,
       action: "pump", ejectOnShot: false, casing: "shell",
       muzzle: new THREE.Vector3(0, 0.022, -0.77), eject: new THREE.Vector3(0.04, 0.02, 0.02),
-      sound: { rate: 0.82, lowcut: 45, length: 1.5, gain: 1.05 },
+      sound: { recording: "shotgun", rate: 1, lowcut: 45, length: 1.4, gain: 1.05 },
       recoilKick: { up: 0.045, grow: 0, side: 0.008, max: 0.06, recover: 6, hold: 0.08 },
       reload: { style: "shells", start: 0.35, perShell: 0.42, end: 0.3 },
       inspectDuration: 1.9, inspects: GUN_INSPECTS,
@@ -1963,6 +1963,8 @@
     decodeEmbedded("pistolShot", (buf) => { shotBuffers.pistol = trimToFirstShot(buf); });
     decodeEmbedded("arShot", (buf) => { shotBuffers.ar = trimToFirstShot(buf); });
     decodeEmbedded("akShot", (buf) => { shotBuffers.ak = trimToFirstShot(buf); });
+    const sfx = (window.TSB_SOUNDS && window.TSB_SOUNDS.sfx) || {};
+    for (const name of Object.keys(sfx)) decodeClip(sfx[name], (buf) => { sfxBuffers[name] = trimLeadingSilence(buf); });
   }
 
   // Recorded sounds (CC0, from freesound) are embedded in sounds.js and decoded once:
@@ -1974,8 +1976,25 @@
   let rifleShotBuffer = null, boltCycleBuffer = null;
   const shotBuffers = {};   // the other guns' reports, by the name in each weapon's sound.recording
 
+  const sfxBuffers = {};   // the short clips in sounds.js (TSB_SOUNDS.sfx), by name
+
+  // MP3 encoding pads the start of a clip with a few dozen ms of silence; cut it so a click or
+  // an impact plays the moment it's triggered
+  function trimLeadingSilence(buf) {
+    const d = buf.getChannelData(0);
+    let i = 0;
+    while (i < d.length && Math.abs(d[i]) < 0.004) i++;
+    i = Math.max(0, i - Math.floor(buf.sampleRate * 0.001));
+    if (i < 8) return buf;
+    const out = audioCtx.createBuffer(buf.numberOfChannels, buf.length - i, buf.sampleRate);
+    for (let c = 0; c < buf.numberOfChannels; c++) out.getChannelData(c).set(buf.getChannelData(c).subarray(i));
+    return out;
+  }
+
   function decodeEmbedded(name, done) {
-    const b64 = window.TSB_SOUNDS && window.TSB_SOUNDS[name];
+    decodeClip(window.TSB_SOUNDS && window.TSB_SOUNDS[name], done);
+  }
+  function decodeClip(b64, done) {
     if (!b64) return;
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
@@ -2090,7 +2109,7 @@
   function playShotSound(profile) {
     if (!audioCtx) return;
     const pf = profile || WEAPONS.rifle.sound;
-    const buf = pf.recording ? shotBuffers[pf.recording] : rifleShotBuffer;
+    const buf = pf.recording ? (shotBuffers[pf.recording] || sfxBuffers[pf.recording + "Shot"]) : rifleShotBuffer;
     if (!buf) { noiseHit(1400, 0.5, 1.2, 0.12, "lowpass", 0, 0.3, true); return; }   // still decoding
     const now = audioCtx.currentTime;
     const src = audioCtx.createBufferSource();
@@ -2112,69 +2131,46 @@
     src.stop(now + pf.length + 0.05);
   }
 
-  function playDryFire() { noiseHit(3000, 6, 0.16, 0.04, "highpass", 0, 0.15); tone("square", 260, 150, 0.06, 0.05, 0, 0.1); }
-  function playHitSound(pitch) {
-    tone("square", 780 * pitch, 1480 * pitch, 0.16, 0.13, 0, 0.3);
-    tone("sine", 1200 * pitch, 2000 * pitch, 0.07, 0.09, 0.01, 0.3);
-  }
-  function playMissSound() { tone("sine", 300, 120, 0.08, 0.12, 0, 0.2); }
-  function playSwitchSound() {
-    noiseHit(2600, 3, 0.15, 0.05, "highpass", 0, 0.2);
-    noiseHit(1200, 2, 0.12, 0.07, "bandpass", 0.19, 0.25);
-  }
-  function playInspectSound() { noiseHit(1700, 2, 0.09, 0.09, "bandpass", 0, 0.25); }
-  // scoping in: cloth rustle and a zoom-ring slide, then the eye settles with a lens click.
-  // scoping out: a shorter slide back down.
-  function playScopeSound(inward) {
-    if (inward) {
-      noiseHit(650, 0.8, 0.05, 0.12, "lowpass", 0, 0.1);
-      noiseSweep(900, 2300, 2.2, 0.07, 0.17, "bandpass", 0, 0.12);
-      noiseHit(4200, 5, 0.07, 0.025, "highpass", 0.15, 0.12);
-      tone("square", 1650, 1450, 0.018, 0.025, 0.15, 0.08);
-    } else {
-      noiseSweep(2100, 800, 2.2, 0.06, 0.12, "bandpass", 0, 0.12);
-      noiseHit(520, 0.8, 0.04, 0.09, "lowpass", 0.02, 0.1);
-    }
-  }
-  function playKnifeSwing() {
-    noiseSweep(3400, 480, 1.1, 0.26, 0.22, "bandpass", 0, 0.35);
-    noiseSweep(1400, 280, 0.8, 0.12, 0.26, "lowpass", 0.02, 0.3);
-  }
-  function playKnifeHit() {
-    noiseHit(4400, 3.5, 0.28, 0.07, "highpass", 0, 0.4);
-    tone("triangle", 1500, 520, 0.12, 0.12, 0, 0.45);
-    tone("sine", 250, 85, 0.16, 0.14, 0, 0.3);
-  }
-  // jump pad launch: a rising rush of air
-  function playPadLaunch() {
-    noiseSweep(300, 2600, 0.9, 0.35, 0.45, "bandpass", 0, 0.35);
-    noiseHit(180, 0.8, 0.3, 0.18, "lowpass", 0, 0.2);
+  // play a recorded clip; a small random pitch change keeps repeats from sounding identical
+  function playSfx(name, vol, rate, wet) {
+    if (!audioCtx || !sfxBuffers[name] || vol <= 0.001) return;
+    const src = audioCtx.createBufferSource();
+    src.buffer = sfxBuffers[name];
+    src.playbackRate.value = (rate || 1) * rnd(0.97, 1.03);
+    const g = audioCtx.createGain();
+    g.gain.value = vol;
+    src.connect(g);
+    route(g, wet === undefined ? 0.1 : wet, false);
+    src.start();
   }
 
-  // thrown knife biting into a surface: a dull thunk with a short blade ring
-  function playKnifeStick() {
-    noiseHit(1800, 2.5, 0.22, 0.04, "bandpass", 0, 0.2);
-    noiseHit(380, 1, 0.30, 0.07, "lowpass", 0, 0.2, true);
-    tone("triangle", 2300, 2250, 0.03, 0.18, 0.005, 0.25);
-  }
+  function playDryFire() { playSfx("dryFire", 0.6); }
+  // steel plate ping; bigger multipliers ring a little higher, like the old beep did
+  function playHitSound(pitch) { playSfx("targetDing", 0.55, 0.92 + (pitch - 1) * 0.3, 0.2); }
+  function playSwitchSound() { playSfx("draw", 0.5); }
+  function playInspectSound() { playSfx("inspect", 0.45); }
+  // scope ring turning: as recorded going in, a little lower coming out
+  function playScopeSound(inward) { playSfx("scope", 0.45, inward ? 1 : 0.82); }
+  function playKnifeSwing() { playSfx("knifeSwing", 0.6, 1.15); }
+  function playKnifeHit() { playSfx("knifeHit", 0.6, 1, 0.2); }
+  // jump pad: an air rush, deeper for the mega pads
+  function playPadLaunch(power) { playSfx("jumpPad", 0.7, power > 15 ? 0.8 : 1.05, 0.25); }
+
+  // thrown knife biting into a surface
+  function playKnifeStick() { playSfx("knifeStick", 0.6, 1, 0.15); }
+  // the kick off the wall, plus the perfect-bounce cue on top of a perfect one
   function playWallBounce(perfect) {
+    playSfx("wallBounce", 0.6);
     if (perfect) { tone("triangle", 500, 1150, 0.18, 0.16, 0, 0.4); noiseHit(1300, 1.5, 0.16, 0.11, "bandpass", 0, 0.4); }
-    else tone("triangle", 320, 200, 0.10, 0.12, 0, 0.3);
   }
-  function playSlideStart() {
-    noiseSweep(1800, 420, 0.7, 0.30, 0.55, "lowpass", 0, 0.4);
-    tone("sine", 180, 90, 0.14, 0.4, 0, 0.35);
-  }
-  function playSlideScrape() { noiseHit(520, 0.9, 0.07, 0.16, "lowpass", 0, 0.35); }
-  function playMagOut() { noiseHit(1600, 3, 0.18, 0.09, "bandpass", 0, 0.3); tone("square", 340, 210, 0.06, 0.08, 0, 0.25); }
-  function playMagIn() { noiseHit(900, 2, 0.24, 0.12, "lowpass", 0, 0.35); tone("square", 200, 130, 0.09, 0.11, 0, 0.3); }
+  // footsteps and landings: kept quiet, so movement sounds like movement without getting in the way
+  function playFootstep(speed) { playSfx("step" + (1 + Math.floor(Math.random() * 4)), 0.09 + 0.06 * Math.min(speed / 9, 1), 1, 0.05); }
+  function playLanding(vol) { playSfx("land", vol, rnd(0.95, 1.05), 0.08); }
+  function playSlideStart() { playSfx("slide", 0.35); }
+  function playMagOut() { playSfx("magOut", 0.55); }
+  function playMagIn() { playSfx("magIn", 0.55); }
   // empty magazine hitting the floor: a dull metal clunk
-  function playMagLand(vol) {
-    if (vol < 0.05) return;
-    noiseHit(700, 1.2, 0.30 * vol, 0.09, "bandpass", 0, 0.25);
-    noiseHit(2400, 4, 0.08 * vol, 0.03, "highpass", 0, 0.2);
-    tone("triangle", 260, 190, 0.10 * vol, 0.07, 0, 0.2);
-  }
+  function playMagLand(vol) { playSfx("magLand", 0.5 * vol, 1, 0.15); }
   function playBolt() { noiseHit(2800, 3.5, 0.20, 0.07, "highpass", 0, 0.3); noiseHit(1100, 2, 0.16, 0.10, "bandpass", 0.06, 0.35); }
   // the recorded bolt action (see BOLT); stopped early if the cycle is interrupted
   let boltSrc = null;
@@ -2209,24 +2205,15 @@
     src.start(audioCtx.currentTime, at, len);
   }
   // a shotgun shell pushed into the tube
-  function playShellInsert() {
-    noiseHit(2600, 3, 0.14, 0.03, "highpass", 0, 0.12);
-    noiseHit(900, 2, 0.2, 0.06, "bandpass", 0.03, 0.15);
-  }
+  function playShellInsert() { playSfx("shellInsert", 0.55); }
 
   function stopBoltSound() {
     if (!boltSrc) return;
     try { boltSrc.stop(); } catch (e) { /* already finished */ }
     boltSrc = null;
   }
-  // brass landing: a short bright ring
-  function playCasingPing(vol) {
-    if (vol < 0.05) return;
-    const p = rnd(0.92, 1.1);
-    tone("sine", 3900 * p, 3850 * p, 0.05 * vol, 0.22, 0, 0.3);
-    tone("sine", 6100 * p, 6000 * p, 0.03 * vol, 0.15, 0, 0.3);
-    noiseHit(5200, 2, 0.06 * vol, 0.02, "highpass", 0, 0.2);
-  }
+  // brass hitting the floor: a tiny tink, pitched a little differently each bounce
+  function playCasingPing(vol) { if (vol >= 0.05) playSfx("casing", 0.35 * vol, rnd(0.9, 1.2), 0.15); }
 
   // ======================================================================
   // DOM
@@ -2744,6 +2731,7 @@
     lastWallBounceAt: -99, lastLandTime: -99,
     lastYaw: 0, airSpinAccum: 0, airSpinNet: 0, feetY: 0.25,
     groundRise: 0,   // how fast the ramp under you is lifting you (m/s); becomes a launch off the top
+    stepDist: 0,     // ground covered since the last footstep
     wallImpactSpeed: 0, wallImpactAt: -99,   // the last time a wall stopped us, and how fast we hit it
     viewRoll: 0,
   };
@@ -2971,7 +2959,6 @@
           -player.velocity.z * 0.18 + (Math.random() - 0.5) * 1.5,
           0.45 + Math.random() * 0.35, 0.7, 0.3
         );
-        if (Math.random() < 0.5) playSlideScrape();
       }
     }
 
@@ -3012,7 +2999,7 @@
             player.sliding = false;
             player.wallContactTime = -1;
             pad.flash = 1;
-            playPadLaunch();
+            playPadLaunch(pad.power);
             break;
           }
         }
@@ -3066,8 +3053,14 @@
     const B = CFG.arenaHalfSize - 0.6;
     _nextPos.x = Math.max(-B, Math.min(B, _nextPos.x));
     _nextPos.z = Math.max(-B, Math.min(B, _nextPos.z));
+    const movedXZ = Math.hypot(_nextPos.x - yawObject.position.x, _nextPos.z - yawObject.position.z);
     yawObject.position.x = _nextPos.x;
     yawObject.position.z = _nextPos.z;
+    if (player.onGround && !player.sliding) {
+      const speedXZ = Math.hypot(player.velocity.x, player.velocity.z);
+      player.stepDist += movedXZ;
+      if (speedXZ > 1.5 && player.stepDist >= 1.4 + speedXZ * 0.07) { player.stepDist = 0; playFootstep(speedXZ); }
+    }
     yawObject.position.y += player.velocity.y * dt;
     player.feetY = prevFeet + player.velocity.y * dt;
 
@@ -3087,6 +3080,11 @@
     const groundY = currentGroundY(yawObject.position.x, yawObject.position.z, prevFeet + CFG.stepHeight);
     const eyeTarget = groundY + player.viewHeight;
     if (player.velocity.y <= 0 && yawObject.position.y <= eyeTarget + CFG.groundSnapTolerance) {
+      if (!player.onGround) {
+        const fall = -player.velocity.y;
+        if (fall > 3.5) playLanding((0.06 + 0.3 * Math.min((fall - 3.5) / 14, 1)) * (keys["Space"] || player.sliding ? 0.6 : 1));
+        player.stepDist = 0.8;   // the next step comes a little after touching down
+      }
       yawObject.position.y = eyeTarget;
       player.feetY = groundY;
       player.velocity.y = 0;
@@ -3431,7 +3429,6 @@
     if (!anyHit) {
       // in deathmatch a streak is broken by dying, not by missing
       if (!(net.active && net.sub === "dm")) { streak = 0; streakEl.textContent = streak; }
-      playMissSound();
     }
 
     addRecoil(w);   // after the shot: the next one is what gets kicked

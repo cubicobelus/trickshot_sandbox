@@ -40,9 +40,9 @@ Settings (sensitivity, volume, unlimited ammo and so on) are saved in your brows
 - `game.js` — everything else (movement, scoring, weapons, audio). Tuning knobs live in the `CFG`
   object at the top.
 - `sounds.js` — recorded sounds, embedded so the game also works when opened from disk
-- `tools/shot-lab.html` — test bench for the sniper's sounds: the game's recordings with its processing
-  on sliders, plus the best synthesized versions
-  ([open it](https://cubicobelus.github.io/trickshot_sandbox/tools/shot-lab.html))
+- `tools/sound-lab.html` — test bench for every sound in the game, played the way the game plays it,
+  with sliders to try changes, plus the synthesized sniper shots kept for reference
+  ([open it](https://cubicobelus.github.io/trickshot_sandbox/tools/sound-lab.html))
 
 Multiplayer code is in `game.js` but switched off for now (`MULTIPLAYER_ENABLED`).
 
@@ -53,4 +53,5 @@ Deagle: ["Gunshot.wav"](https://freesound.org/people/Cloud-10/sounds/632821/) by
 Rifle: ["AssaultRifle1.wav"](https://freesound.org/people/SuperPhat/sounds/404562/) by SuperPhat (CC0).
 AK: ["AK47 Shot"](https://freesound.org/people/LeMudCrab/sounds/163457/) by LeMudCrab (CC0).
 Bolt action: from ["Sniper Rifle M24 SFX"](https://freesound.org/people/kennysvoice/sounds/351777/) by kennysvoice (CC0).
-All other sounds are generated in code.
+Footsteps, landings, reloads, knife, impacts and handling: short clips from CC0 recordings on
+freesound.org; each is credited in `sounds.js`. The rest of the sounds are generated in code.
