@@ -219,6 +219,59 @@ def test_score_attack(browser, base):
     page.close()
 
 
+def test_controls(browser, base):
+    page, errors = open_page(browser, base + "/index.html", 1280, 900)
+    slot = lambda a, i: page.locator(f'.bind-slot[data-action="{a}"][data-slot="{i}"]')
+    ammo = lambda: page.inner_text("#ammo-count").split("/")[0].strip()
+    page.click(".stab[data-tab=controls]")
+    check("the Controls tab lists every action with two boxes each",
+          page.locator(".bind-row").count() >= 14 and page.locator(".bind-slot").count() == 2 * page.locator(".bind-row").count()
+          and slot("jump", 0).inner_text() == "Space" and slot("fire", 0).inner_text() == "Left Mouse")
+
+    slot("reload", 0).click()
+    page.keyboard.press("KeyG")
+    check("clicking a box and pressing a key rebinds it", slot("reload", 0).inner_text() == "G", slot("reload", 0).inner_text())
+    slot("jump", 0).click()
+    page.keyboard.press("KeyG")
+    check("a key moves between actions instead of doing two things",
+          slot("jump", 0).inner_text() == "G" and slot("reload", 0).inner_text() == "–", slot("reload", 0).inner_text())
+    slot("reload", 0).click()
+    page.keyboard.press("Enter")
+    check("keys the menus need can't be bound", slot("reload", 0).inner_text() != "Enter" and "can't be used" in page.inner_text("#bind-note"))
+    page.keyboard.press("KeyT")
+    slot("fire", 1).click()
+    page.mouse.click(640, 780, button="right")
+    check("a mouse button can be bound too (taken from Aim)", slot("fire", 1).inner_text() == "Right Mouse" and slot("aim", 0).inner_text() == "–")
+    page.reload()
+    page.wait_for_timeout(900)
+    page.click(".stab[data-tab=controls]")
+    check("the bindings survive a reload", slot("reload", 0).inner_text() == "T" and slot("fire", 1).inner_text() == "Right Mouse")
+
+    page.click("#start-btn")
+    step(page, 45)
+    before = ammo()
+    page.dispatch_event("canvas", "mousedown", {"button": 2})
+    step(page, 2)
+    page.dispatch_event("canvas", "mouseup", {"button": 2})
+    step(page, 5)
+    fired = ammo() != before
+    after = ammo()
+    page.keyboard.press("KeyR")
+    step(page, 220)
+    r_idle = ammo() == after
+    page.keyboard.press("KeyT")
+    step(page, 250)
+    check("in the game the new bindings work (right mouse fires, T reloads, R doesn't)", fired and r_idle and ammo() == before, f"{before} -> {after} -> {ammo()}")
+    page.evaluate("__unlock()")
+    step(page, 5)
+    page.click(".stab[data-tab=controls]")
+    page.click("#bind-reset")
+    check("Reset controls restores the defaults", slot("reload", 0).inner_text() == "R" and slot("jump", 0).inner_text() == "Space"
+          and slot("aim", 0).inner_text() == "Right Mouse")
+    check("no errors in the controls test", not errors, "; ".join(errors[:3]))
+    page.close()
+
+
 def test_tutorial(browser, base):
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
@@ -269,7 +322,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:

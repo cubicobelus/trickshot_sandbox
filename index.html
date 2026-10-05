@@ -13,7 +13,7 @@
 <div id="blocker">
   <div id="instructions">
     <h1>Trickshot Sandbox</h1>
-    <p>
+    <p id="controls-hint">
       <span class="key">WASD</span> move &nbsp;•&nbsp; <span class="key">Space</span> jump &nbsp;•&nbsp;
       <span class="key">Shift</span> sprint &nbsp;•&nbsp; <span class="key">Ctrl</span> slide &nbsp;•&nbsp;
       <span class="key">R</span> reload &nbsp;•&nbsp; <span class="key">F</span> inspect &nbsp;•&nbsp; <span class="key">P</span> replay last hit<br>
@@ -98,6 +98,7 @@
         <h2>Settings</h2>
         <div class="stabs" role="tablist">
           <button type="button" class="stab active" data-tab="mouse">Mouse</button>
+          <button type="button" class="stab" data-tab="controls">Controls</button>
           <button type="button" class="stab" data-tab="crosshair">Crosshair</button>
           <button type="button" class="stab" data-tab="view">View</button>
           <button type="button" class="stab" data-tab="targets">Targets</button>
@@ -141,6 +142,13 @@
           </div>
           <p class="set-hint" id="si-result"></p>
         </div>
+      </div>
+
+      <div class="spanel" data-panel="controls" hidden>
+        <p class="set-hint">Click a box, then press the key or mouse button you want, or scroll the wheel. Two boxes per action. Backspace clears a box, Esc cancels.</p>
+        <div id="bind-list"></div>   <!-- rows are built in game.js -->
+        <p class="set-hint" id="bind-note"></p>
+        <button type="button" class="btn small" id="bind-reset">Reset controls to defaults</button>
       </div>
 
       <div class="spanel" data-panel="crosshair" hidden>
@@ -283,7 +291,7 @@
       <div class="spanel" data-panel="other" hidden>
         <div class="check-row">
           <label><input type="checkbox" id="unlimited-ammo">Unlimited ammo</label>
-          <label><input type="checkbox" id="auto-sprint" data-setting="autoSprint">Auto sprint (Shift walks)</label>
+          <label><input type="checkbox" id="auto-sprint" data-setting="autoSprint">Auto sprint (<span id="as-key">Shift</span> walks)</label>
           <label title="Shots spread while you're in the air, and the sniper has a little spread when it isn't scoped"><input type="checkbox" id="realistic-accuracy" data-setting="realisticAccuracy">Realistic accuracy</label>
         </div>
         <p class="set-hint">Realistic accuracy: shots spread while you're in the air, and the sniper isn't perfectly accurate unscoped.</p>

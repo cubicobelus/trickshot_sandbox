@@ -171,6 +171,67 @@
   const handSign = () => (SETTINGS.hand === "left" ? -1 : 1);
 
   // ======================================================================
+  // CONTROLS: every action has up to two inputs (a key, a mouse button or the wheel), set in Settings > Controls.
+  // Inputs are named by physical key ("KeyW", "Space"), "Mouse0".."Mouse4", "WheelUp" / "WheelDown", or "Wheel"
+  // (either direction). Left and right Shift / Ctrl / Alt count as one key.
+  // ======================================================================
+  const ACTIONS = [
+    ["forward", "Move forward", ["KeyW"]], ["back", "Move back", ["KeyS"]],
+    ["left", "Move left", ["KeyA"]], ["right", "Move right", ["KeyD"]],
+    ["jump", "Jump", ["Space"]], ["sprint", "Sprint", ["ShiftLeft"]],
+    ["slide", "Slide / crouch", ["ControlLeft"]], ["fire", "Attack", ["Mouse0"]],
+    ["aim", "Aim / throw knife", ["Mouse2"]], ["reload", "Reload", ["KeyR"]],
+    ["inspect", "Inspect weapon", ["KeyF"]], ["gun", "Switch to gun", ["Digit1"]],
+    ["knife", "Switch to knife", ["Digit2"]], ["swap", "Swap gun / knife", ["KeyQ", "Wheel"]],
+    ["replay", "Watch last hit", ["KeyP"]],
+  ];
+  const ACTION_IDS = ACTIONS.map((a) => a[0]);
+  const ACTION_NAMES = Object.fromEntries(ACTIONS.map((a) => [a[0], a[1]]));
+  const defaultBinds = () => Object.fromEntries(ACTIONS.map((a) => [a[0], [a[2][0] || null, a[2][1] || null]]));
+  const BINDS = defaultBinds();
+  const RESERVED_INPUTS = ["Escape", "Tab", "Enter", "NumpadEnter"];   // menus use these
+  const SIDE_KEYS = { ShiftRight: "ShiftLeft", ControlRight: "ControlLeft", AltRight: "AltLeft", MetaRight: "MetaLeft" };
+  const normalizeInput = (code) => SIDE_KEYS[code] || code;
+  const isMouseInput = (id) => /^(Mouse|Wheel)/.test(id);
+  const validInput = (v) => typeof v === "string" && !RESERVED_INPUTS.includes(v) &&
+    (/^(Mouse[0-4]|Wheel|WheelUp|WheelDown)$/.test(v) || (/^[A-Za-z][A-Za-z0-9]{1,23}$/.test(v) && !isMouseInput(v)));
+  const inputMatches = (bound, id) => bound === id || (bound === "Wheel" && (id === "WheelUp" || id === "WheelDown"));
+  const actionsFor = (id) => ACTION_IDS.filter((a) => BINDS[a].some((b) => b && inputMatches(b, id)));
+
+  // how an input is shown: the keyboard layout's own letter where the browser can tell us (AZERTY etc.)
+  let layoutMap = null;
+  const INPUT_NAMES = {
+    Space: "Space", ShiftLeft: "Shift", ControlLeft: "Ctrl", AltLeft: "Alt", MetaLeft: "Win", CapsLock: "Caps Lock",
+    Backspace: "Backspace", Delete: "Delete", Insert: "Insert", Home: "Home", End: "End", PageUp: "Page Up", PageDown: "Page Down",
+    ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", ContextMenu: "Menu",
+    Mouse0: "Left Mouse", Mouse1: "Middle Mouse", Mouse2: "Right Mouse", Mouse3: "Mouse 4", Mouse4: "Mouse 5",
+    Wheel: "Mouse Wheel", WheelUp: "Wheel Up", WheelDown: "Wheel Down",
+  };
+  const SHORT_NAMES = { Mouse0: "LMB", Mouse1: "MMB", Mouse2: "RMB", Mouse3: "M4", Mouse4: "M5", Wheel: "Wheel", WheelUp: "Wheel ↑", WheelDown: "Wheel ↓" };
+  function inputLabel(id, short) {
+    if (!id) return "–";
+    if (short && SHORT_NAMES[id]) return SHORT_NAMES[id];
+    if (INPUT_NAMES[id]) return INPUT_NAMES[id];
+    const mapped = layoutMap && layoutMap.get(id);
+    if (mapped) return mapped.length === 1 ? mapped.toUpperCase() : mapped;
+    let m = /^Key([A-Z])$/.exec(id) || /^Digit(\d)$/.exec(id);
+    if (m) return m[1];
+    m = /^Numpad(.+)$/.exec(id);
+    if (m) return "Num " + m[1].replace(/^Add$/, "+").replace(/^Subtract$/, "-").replace(/^Multiply$/, "*").replace(/^Divide$/, "/").replace(/^Decimal$/, ".");
+    return id.replace(/([a-z])([A-Z])/g, "$1 $2");
+  }
+  // all of an action's inputs, e.g. "Q / Mouse Wheel"; keyOnly leaves out mouse inputs
+  function bindLabel(action, short, keyOnly) {
+    const list = BINDS[action].filter((b) => b && !(keyOnly && isMouseInput(b)));
+    return list.length ? list.map((b) => inputLabel(b, short)).join(" / ") : "unbound";
+  }
+  try {
+    if (navigator.keyboard && navigator.keyboard.getLayoutMap) {
+      navigator.keyboard.getLayoutMap().then((m) => { layoutMap = m; refreshControlsUI(); }).catch(() => {});
+    }
+  } catch (e) { /* not available: key names come from the physical key */ }
+
+  // ======================================================================
   // SCENE
   // ======================================================================
   const scene = new THREE.Scene();
@@ -2449,6 +2510,7 @@
   const GUNS = WEAPON_ORDER.filter((id) => WEAPONS[id].usesAmmo);
   const loadoutWeapons = () => [SETTINGS.loadout, "knife"];
   let hotbarSlots = {};
+  const hotbarKey = (action) => (BINDS[action].find(Boolean) ? inputLabel(BINDS[action].find(Boolean), true) : "");
   function buildHotbar() {
     const bar = document.getElementById("hotbar");
     bar.innerHTML = "";
@@ -2456,7 +2518,7 @@
     loadoutWeapons().forEach((id, i) => {
       const slot = document.createElement("div");
       slot.className = "slot";
-      slot.innerHTML = '<div class="head"><span class="num">' + (i + 1) + '</span><span class="name">' + WEAPONS[id].name +
+      slot.innerHTML = '<div class="head"><span class="num">' + esc(i === 0 ? hotbarKey("gun") : hotbarKey("knife")) + '</span><span class="name">' + WEAPONS[id].name +
         '</span></div><div class="icon">' + iconSVG(id) + "</div>";
       bar.appendChild(slot);
       hotbarSlots[id] = slot;
@@ -2591,7 +2653,7 @@
   const SETTINGS_KEY = "tsb-settings";
   function saveSettings() {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(Object.assign({ linkY: sensLink.checked }, SETTINGS)));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(Object.assign({ linkY: sensLink.checked, binds: BINDS }, SETTINGS)));
     } catch (e) { /* ignore */ }
   }
   (function loadSettings() {
@@ -2610,6 +2672,12 @@
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
     if (["free", "sa60", "sa120"].includes(saved.playMode)) SETTINGS.playMode = saved.playMode;
+    if (saved.binds && typeof saved.binds === "object") {
+      for (const a of ACTION_IDS) {
+        const s = saved.binds[a];
+        if (Array.isArray(s)) BINDS[a] = [0, 1].map((i) => (validInput(s[i]) ? s[i] : null));
+      }
+    }
     for (const el of boundEls) {
       const key = el.dataset.setting;
       if (validBound(el, saved[key])) SETTINGS[key] = saved[key];
@@ -2700,6 +2768,8 @@
   settingsTabs.forEach((tab) => tab.addEventListener("click", () => {
     settingsTabs.forEach((t) => t.classList.toggle("active", t === tab));
     settingsPanel.querySelectorAll(".spanel").forEach((p) => { p.hidden = p.dataset.panel !== tab.dataset.tab; });
+    document.getElementById("settings-reset").hidden = tab.dataset.tab === "controls";   // that tab has its own reset
+    stopListening();
   }));
 
   document.getElementById("settings-reset").addEventListener("click", () => {
@@ -2801,51 +2871,219 @@
     pitchObject.rotation.x = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitchObject.rotation.x));
   });
 
-  window.addEventListener("keydown", (e) => {
-    // Ctrl is the slide key, so Ctrl+D (bookmark), Ctrl+S, Ctrl+A and friends would fire while
-    // strafing; keep them from reaching the browser while playing
-    if (pointerLocked && (e.ctrlKey || e.metaKey)) e.preventDefault();
-    if (keys[e.code]) return;
-    keys[e.code] = true;
-    if (e.code === "Tab" && pointerLocked) { e.preventDefault(); mpRefreshScoreboard(); }
-    if (!pointerLocked || replay.active) return;
-    // P: watch your last hit (out of the way of the movement keys, so it's never pressed by accident)
-    if (e.code === "KeyP" && (lastClip || rec.pending.length) && !net.active) {
-      finishAllClips();   // a hit from a moment ago may still be waiting for its "after" part
-      if (lastClip) { startReplay(lastClip, "Last hit \u00B7 " + lastClip.meta.points + " points  (P to keep playing)", "game"); e.stopImmediatePropagation(); }
-      return;
-    }
-    if (e.code === "Space") { jumpQueued = true; jumpQueueTimer = 0.12; }
-    if (e.code === "KeyF") startInspect();
-    if (e.code === "KeyR") startReload();
-    if (e.code === "Digit1") switchWeapon(SETTINGS.loadout);
-    if (e.code === "Digit2") switchWeapon("knife");
-    if (e.code === "KeyQ") switchWeapon(vm.current === "knife" ? SETTINGS.loadout : "knife");
-  });
-  window.addEventListener("keyup", (e) => { keys[e.code] = false; if (e.code === "Tab") mpRefreshScoreboard(); });
+  // what's held right now, by binding (a wheel notch counts as a tap held for a moment)
+  const inputHeld = (b) => (b === "Wheel" ? !!(keys.WheelUp || keys.WheelDown) : !!keys[b]);
+  const held = (action) => BINDS[action].some((b) => b && inputHeld(b));
+  // Ctrl+D (bookmark), Ctrl+S and friends would fire mid-game while Ctrl is a game key, so they're blocked then
+  const usesCtrl = () => ACTION_IDS.some((a) => BINDS[a].includes("ControlLeft"));
 
-  domEl.addEventListener("mousedown", (e) => {
-    if (!pointerLocked || replay.active) return;
-    if (e.button === 0) { mouseHeld = true; attackPressed = true; }
-    if (e.button === 2) {
+  // what each action does when its input goes down, and (for the ones that are held) comes up
+  const onPress = {
+    jump() { jumpQueued = true; jumpQueueTimer = 0.12; },
+    reload() { startReload(); },
+    inspect() { startInspect(); },
+    gun() { switchWeapon(SETTINGS.loadout); },
+    knife() { switchWeapon("knife"); },
+    swap(e, wheel) { switchWeapon((wheel ? vm.pending || vm.current : vm.current) === "knife" ? SETTINGS.loadout : "knife"); },
+    fire() { mouseHeld = true; attackPressed = true; },
+    aim() {
       if (currentWeapon().isMelee) { throwKnife(); return; }
       if (currentWeapon().canADS && !vm.wantADS) { playScopeSound(true); vm.adsStartTime = elapsedTime; }
       vm.wantADS = true;
-    }
-  });
-  window.addEventListener("mouseup", (e) => {
-    if (e.button === 0) mouseHeld = false;
-    if (e.button === 2) {
+    },
+    replay(e) {
+      if (!(lastClip || rec.pending.length) || net.active) return;
+      finishAllClips();   // a hit from a moment ago may still be waiting for its "after" part
+      if (lastClip) {
+        const back = bindLabel("replay", false, true);
+        startReplay(lastClip, "Last hit \u00B7 " + lastClip.meta.points + " points" + (back === "unbound" ? "" : "  (" + back + " to keep playing)"), "game");
+        if (e) e.stopImmediatePropagation();   // the replay bar's own key handler must not see this same press
+      }
+    },
+  };
+  const onRelease = {
+    fire() { mouseHeld = false; },
+    aim() {
       if (vm.wantADS && currentWeapon().canADS) playScopeSound(false);
       vm.wantADS = false;
-    }
+    },
+  };
+  function pressInput(id, e, wheel) { for (const a of actionsFor(id)) if (onPress[a]) onPress[a](e, wheel); }
+  function releaseInput(id) { for (const a of actionsFor(id)) if (onRelease[a]) onRelease[a](); }
+
+  window.addEventListener("keydown", (e) => {
+    const id = normalizeInput(e.code);
+    if (pointerLocked && (actionsFor(id).length || ((e.ctrlKey || e.metaKey) && usesCtrl()))) e.preventDefault();
+    if (keys[id]) return;
+    keys[id] = true;
+    if (id === "Tab" && pointerLocked) { e.preventDefault(); mpRefreshScoreboard(); }
+    if (!pointerLocked || replay.active) return;
+    pressInput(id, e);
+  });
+  window.addEventListener("keyup", (e) => {
+    const id = normalizeInput(e.code);
+    keys[id] = false;
+    if (id === "Tab") mpRefreshScoreboard();
+    releaseInput(id);
+  });
+  window.addEventListener("blur", () => {   // a key let go while the window wasn't looking would stay "held"
+    for (const k in keys) keys[k] = false;
+    mouseHeld = false;
+  });
+
+  const sideButton = (b) => b === 1 || b >= 3;   // middle / back / forward: keep the browser from scrolling or navigating
+  domEl.addEventListener("mousedown", (e) => {
+    if (!pointerLocked || replay.active) return;
+    const id = "Mouse" + e.button;
+    if (sideButton(e.button)) e.preventDefault();
+    keys[id] = true;
+    pressInput(id, e);
+  });
+  window.addEventListener("mouseup", (e) => {
+    const id = "Mouse" + e.button;
+    if (pointerLocked && sideButton(e.button)) e.preventDefault();
+    keys[id] = false;
+    releaseInput(id);
   });
   domEl.addEventListener("contextmenu", (e) => e.preventDefault());
+  const wheelTimers = {};
   domEl.addEventListener("wheel", (e) => {
     if (!pointerLocked) return;
     e.preventDefault();
-    switchWeapon((vm.pending || vm.current) === "knife" ? SETTINGS.loadout : "knife");
+    if (!e.deltaY) return;
+    const id = e.deltaY < 0 ? "WheelUp" : "WheelDown";
+    keys[id] = true;
+    clearTimeout(wheelTimers[id]);
+    wheelTimers[id] = setTimeout(() => { keys[id] = false; }, 110);
+    pressInput(id, null, true);
   }, { passive: false });
+
+  // ---- Settings > Controls: shows the bindings and changes them ----
+  const controlsListeners = [];   // other parts of the game that show key names refresh through this
+  const controlsHintEl = document.getElementById("controls-hint");
+  const bindListEl = document.getElementById("bind-list"), bindNoteEl = document.getElementById("bind-note");
+  const autoSprintKeyEl = document.getElementById("as-key");
+  let listening = null;      // { action, slot } while a box waits for an input
+  let bindGuardUntil = 0;    // just after a mouse button was bound (Date.now() time), the rest of that click is swallowed
+
+  for (const [id, name] of ACTIONS) {
+    const row = document.createElement("div");
+    row.className = "bind-row";
+    row.innerHTML = '<span class="bind-name">' + esc(name) + "</span>" +
+      [0, 1].map((i) => '<button type="button" class="bind-slot" data-action="' + id + '" data-slot="' + i + '"></button>').join("");
+    bindListEl.appendChild(row);
+  }
+  const bindSlots = Array.from(bindListEl.querySelectorAll(".bind-slot"));
+
+  function refreshControlsUI() {
+    for (const el of bindSlots) {
+      const a = el.dataset.action, i = +el.dataset.slot, b = BINDS[a][i];
+      const waiting = !!listening && listening.action === a && listening.slot === i;
+      el.textContent = waiting ? "Press a key…" : inputLabel(b);
+      el.classList.toggle("listening", waiting);
+      el.classList.toggle("empty", !b && !waiting);
+    }
+    // the menu's one-line summary of the controls
+    const k = (s) => '<span class="key">' + esc(s) + "</span>";
+    const L = (a) => bindLabel(a);
+    const move = ["forward", "left", "back", "right"].map((a) => inputLabel(BINDS[a][0]));
+    const gunKnife = Array.from(new Set([].concat(BINDS.gun, BINDS.knife, BINDS.swap).filter(Boolean))).map((b) => inputLabel(b)).join(" / ") || "unbound";
+    const dot = " &nbsp;•&nbsp; ";
+    controlsHintEl.innerHTML =
+      k(move.every((l) => l.length === 1) ? move.join("") : move.join(" ")) + " move" + dot + k(L("jump")) + " jump" + dot +
+      k(L("sprint")) + " sprint" + dot + k(L("slide")) + " slide" + dot + k(L("reload")) + " reload" + dot +
+      k(L("inspect")) + " inspect" + dot + k(L("replay")) + " replay last hit<br>" +
+      k(L("fire")) + " attack" + dot + k(L("aim")) + " scope / throw knife" + dot + k(gunKnife) + " gun / knife";
+    loadoutWeapons().forEach((w, i) => {
+      const el = hotbarSlots[w] && hotbarSlots[w].querySelector(".num");
+      if (el) el.textContent = hotbarKey(i === 0 ? "gun" : "knife");
+    });
+    autoSprintKeyEl.textContent = inputLabel(BINDS.sprint.find(Boolean) || null);
+    for (const fn of controlsListeners) fn();
+  }
+
+  function startListening(action, slot) {
+    listening = { action, slot };
+    bindNoteEl.textContent = "Press a key or a mouse button, or scroll the wheel. Esc cancels, Backspace clears the box.";
+    refreshControlsUI();
+  }
+  function stopListening(note) {
+    if (!listening) return;
+    listening = null;
+    bindNoteEl.textContent = note || "";
+    refreshControlsUI();
+  }
+  // give the waiting box an input (null clears it); an input lives on one action only, so it's taken from any other
+  function assignInput(id) {
+    const { action, slot } = listening;
+    let note = "", stolen = null;
+    if (id) {
+      for (const a of ACTION_IDS) {
+        BINDS[a] = BINDS[a].map((b, i) => {
+          if (a === action && i === slot) return b;
+          if (b === id) { if (a !== action) { stolen = a; note = inputLabel(id) + " moves here from " + ACTION_NAMES[a] + "."; } return null; }
+          if (b === "Wheel" && (id === "WheelUp" || id === "WheelDown")) return id === "WheelUp" ? "WheelDown" : "WheelUp";   // the wheel's other direction stays where it was
+          return b;
+        });
+      }
+      if (stolen && !BINDS[stolen].some(Boolean)) note += " " + ACTION_NAMES[stolen] + " has no input now.";
+    }
+    BINDS[action][slot] = id;
+    listening = null;
+    bindNoteEl.textContent = note;
+    refreshControlsUI();
+    saveSettings();
+  }
+
+  bindListEl.addEventListener("click", (e) => {
+    const el = e.target.closest(".bind-slot");
+    if (!el) return;
+    el.blur();
+    const a = el.dataset.action, i = +el.dataset.slot;
+    if (listening && listening.action === a && listening.slot === i) stopListening(); else startListening(a, i);
+  });
+  document.getElementById("bind-reset").addEventListener("click", () => {
+    listening = null;
+    Object.assign(BINDS, defaultBinds());
+    bindNoteEl.textContent = "Controls reset to the defaults.";
+    refreshControlsUI();
+    saveSettings();
+  });
+
+  // while a box is waiting, these run first and keep the input from reaching the game or the browser
+  window.addEventListener("keydown", (e) => {
+    if (!listening) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (e.repeat) return;
+    if (e.code === "Escape") { stopListening(); return; }
+    if (e.code === "Backspace" || e.code === "Delete") { assignInput(null); return; }
+    const id = normalizeInput(e.code);
+    if (!validInput(id)) { bindNoteEl.textContent = inputLabel(id) + " can't be used here. Try another."; return; }
+    assignInput(id);
+  }, true);
+  window.addEventListener("mousedown", (e) => {
+    if (!listening) return;
+    const inSettings = !!e.target.closest && !!e.target.closest("#settings");
+    const onControls = !!e.target.closest && !!e.target.closest(".bind-slot, #bind-reset");
+    if (e.button === 0 && (onControls || !inSettings)) { if (!inSettings) stopListening(); return; }   // using the boxes, or clicking away
+    e.preventDefault(); e.stopImmediatePropagation();
+    bindGuardUntil = Date.now() + 400;
+    assignInput("Mouse" + e.button);
+  }, true);
+  for (const type of ["click", "auxclick", "contextmenu", "mouseup"]) {
+    window.addEventListener(type, (e) => {
+      if (Date.now() >= bindGuardUntil) return;
+      if (type === "mouseup" && !sideButton(e.button)) return;
+      e.preventDefault();
+      if (type === "click") e.stopPropagation();
+    }, true);
+  }
+  window.addEventListener("wheel", (e) => {
+    if (!listening || !e.deltaY) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    assignInput(e.deltaY < 0 ? "WheelUp" : "WheelDown");
+  }, { capture: true, passive: false });
+  refreshControlsUI();
 
   // ======================================================================
   // AMMO / RELOAD
@@ -3215,18 +3453,18 @@
     if (player.wallBounceCooldown > 0) player.wallBounceCooldown -= dt;
     if (jumpQueueTimer > 0) { jumpQueueTimer -= dt; if (jumpQueueTimer <= 0) jumpQueued = false; }
 
-    const shiftHeld = keys["ShiftLeft"] || keys["ShiftRight"];
+    const shiftHeld = held("sprint");
     const sprinting = SETTINGS.autoSprint ? !shiftHeld : shiftHeld;
-    const wantsCrouch = keys["ControlLeft"] || keys["ControlRight"];
+    const wantsCrouch = held("slide");
 
     _forward.set(-Math.sin(yawObject.rotation.y), 0, -Math.cos(yawObject.rotation.y));
     _right.set(Math.cos(yawObject.rotation.y), 0, -Math.sin(yawObject.rotation.y));
 
     let moveX = 0, moveZ = 0;
-    if (keys["KeyW"]) moveZ += 1;
-    if (keys["KeyS"]) moveZ -= 1;
-    if (keys["KeyD"]) moveX += 1;
-    if (keys["KeyA"]) moveX -= 1;
+    if (held("forward")) moveZ += 1;
+    if (held("back")) moveZ -= 1;
+    if (held("right")) moveX += 1;
+    if (held("left")) moveX -= 1;
 
     _wishDir.set(0, 0, 0).addScaledVector(_forward, moveZ).addScaledVector(_right, moveX);
     if (_wishDir.lengthSq() > 0) _wishDir.normalize();
@@ -3284,7 +3522,8 @@
     if (player.onGround) {
       // bunnyhop: jumping on the same frame you land skips friction, so a chained hop carries
       // speed; each hop still bleeds some of what's above a sprint (see CFG.bhopKeep)
-      const bhopping = keys["Space"] && (elapsedTime - player.lastLandTime) <= CFG.bhopWindow;
+      const jumpHeld = held("jump");
+      const bhopping = jumpHeld && (elapsedTime - player.lastLandTime) <= CFG.bhopWindow;
 
       if (!bhopping) {
         const fric = player.sliding ? CFG.slideFriction : frictionAt(horizSpeed);
@@ -3303,7 +3542,7 @@
         accelerate(player.velocity, _wishDir, 2.0, 6, dt);
       }
 
-      if (keys["Space"]) {
+      if (jumpHeld) {
         if (bhopping) {
           const base = CFG.groundMaxSpeed * CFG.sprintMultiplier;
           const sp = Math.hypot(player.velocity.x, player.velocity.z);
@@ -3424,7 +3663,7 @@
     if (player.velocity.y <= 0 && yawObject.position.y <= eyeTarget + CFG.groundSnapTolerance) {
       if (!player.onGround) {
         const fall = -player.velocity.y;
-        if (fall > 3.5) playLanding((0.06 + 0.3 * Math.min((fall - 3.5) / 14, 1)) * (keys["Space"] || player.sliding ? 0.6 : 1));
+        if (fall > 3.5) playLanding((0.06 + 0.3 * Math.min((fall - 3.5) / 14, 1)) * (held("jump") || player.sliding ? 0.6 : 1));
         player.stepDist = 0.8;   // the next step comes a little after touching down
       }
       yawObject.position.y = eyeTarget;
@@ -5450,19 +5689,21 @@
   const TUT_KEY = "tsb-tutorial";
   const tut = { active: false, step: 0, base: null, look: 0, doneTimer: 0, lastHit: null };
   const tutDelta = (k) => stats[k] - tut.base[k];
+  const keyOf = (a) => bindLabel(a);
+  const either = (a, b) => [a, b].map(keyOf).filter((l) => l !== "unbound").join(" or ") || "unbound";
   const TUT_STEPS = [
     { title: "Look around", text: "Move the mouse to look around.", done: () => tut.look > Math.PI * 0.75 },
-    { title: "Move", text: "Walk with W A S D.", done: () => tutDelta("distance") > 6 },
-    { title: "Sprint", text: () => SETTINGS.autoSprint ? "Auto sprint is on, so just keep moving. Shift would slow you to a walk." : "Hold Shift while you move to run faster.", done: () => Math.hypot(player.velocity.x, player.velocity.z) > 8.5 },
-    { title: "Jump", text: "Press Space to jump.", done: () => tutDelta("jumps") >= 1 },
-    { title: "Slide", text: () => "Sprint, then hold Ctrl to slide: it keeps your speed. Under " + CFG.slideMinSpeed + " on the speed meter, Ctrl only crouch-walks.", done: () => tutDelta("slides") >= 1 },
-    { title: "Shoot", text: "Hit a target with left click. Smaller and faster targets are worth more.", done: () => tutDelta("hits") >= 1 },
-    { title: "Aim", text: "Hold right click to aim (the sniper scopes in), then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
+    { title: "Move", text: () => "Walk with " + ["forward", "left", "back", "right"].map((a) => inputLabel(BINDS[a][0])).join(" ") + ".", done: () => tutDelta("distance") > 6 },
+    { title: "Sprint", text: () => SETTINGS.autoSprint ? "Auto sprint is on, so just keep moving. " + keyOf("sprint") + " would slow you to a walk." : "Hold " + keyOf("sprint") + " while you move to run faster.", done: () => Math.hypot(player.velocity.x, player.velocity.z) > 8.5 },
+    { title: "Jump", text: () => "Press " + keyOf("jump") + " to jump.", done: () => tutDelta("jumps") >= 1 },
+    { title: "Slide", text: () => "Sprint, then hold " + keyOf("slide") + " to slide: it keeps your speed. Under " + CFG.slideMinSpeed + " on the speed meter, " + keyOf("slide") + " only crouch-walks.", done: () => tutDelta("slides") >= 1 },
+    { title: "Shoot", text: () => "Hit a target with " + keyOf("fire") + ". Smaller and faster targets are worth more.", done: () => tutDelta("hits") >= 1 },
+    { title: "Aim", text: () => "Hold " + keyOf("aim") + " to aim (the sniper scopes in), then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
     { title: "Shoot in the air", text: "Hit a target while you're in the air. Every trick multiplies the shot.", done: () => tut.lastHit && tut.lastHit.tags.includes("AIR") },
     { title: "Jump pad", text: "Run onto a glowing jump pad. The purple ones throw you higher.", done: () => tutDelta("padLaunches") >= 1 },
     { title: "Bunnyhop", text: "Jump again the moment you land to keep your speed. Do it twice.", done: () => tutDelta("bhops") >= 2 },
-    { title: "Wall bounce", text: "Run at a wall, jump, and press Space again as you reach it. Right on time is a perfect bounce.", done: () => tutDelta("wallBounces") >= 1 },
-    { title: "Knife", text: "Press 2 (or Q) for the knife, then right click to throw it. 1 or Q takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
+    { title: "Wall bounce", text: () => "Run at a wall, jump, and press " + keyOf("jump") + " again as you reach it. Right on time is a perfect bounce.", done: () => tutDelta("wallBounces") >= 1 },
+    { title: "Knife", text: () => "Press " + either("knife", "swap") + " for the knife, then " + keyOf("aim") + " to throw it. " + either("gun", "swap") + " takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
     { title: "Trickshot", text: "Put it together: land a 3x shot. Jump, spin, hit from far away...", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
   ];
   const tutEl = document.getElementById("tutorial");
@@ -5548,6 +5789,7 @@
     if (tut.active) { endTutorial(false); return; }
     startTutorial();
   });
+  controlsListeners.push(() => { if (tut.active && tut.doneTimer <= 0) renderTutorial(); });
   refreshTutorialUI();
 
   // ======================================================================
@@ -5929,7 +6171,7 @@
     else if (e.code === "KeyB") { replay.bulletCam = !replay.bulletCam; restartReplay(); }
     else if (e.code === "KeyM") replay.slowMo = !replay.slowMo;
     else if (e.code === "Escape") stopReplay();
-    else if (e.code === "KeyP" && replay.from === "game") stopReplay();
+    else if (replay.from === "game" && actionsFor(normalizeInput(e.code)).includes("replay")) stopReplay();
   });
 
   // ---- the buttons that start one ----
@@ -6014,7 +6256,7 @@
     g.textBaseline = "top";
     // title, top left
     g.font = "bold " + Math.round(15 * k) + "px Segoe UI, Arial, sans-serif";
-    const title = "TRICKSHOT SANDBOX  ·  " + replay.label.replace(/\s*\(P to keep playing\)/, "");
+    const title = "TRICKSHOT SANDBOX  ·  " + replay.label.replace(/\s*\([^)]*to keep playing\)/, "");
     g.fillStyle = "rgba(0,0,0,0.5)";
     g.fillRect(14 * k, 14 * k, g.measureText(title).width + 20 * k, 28 * k);
     g.fillStyle = "#fff";
@@ -6125,7 +6367,7 @@
         if (st !== lastStateText) { stateEl.textContent = st; lastStateText = st; }
       }
 
-      updateViewmodel(dt, speed > 0.5, keys["ShiftLeft"] || keys["ShiftRight"], player.onGround);
+      updateViewmodel(dt, speed > 0.5, held("sprint"), player.onGround);
     }
 
     updateFps(realDt);

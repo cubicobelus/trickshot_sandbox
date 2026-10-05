@@ -120,6 +120,21 @@
   .si-row .btn.small { margin-left: 0; }
   #best-clear { margin: 14px 0 0; }
 
+  /* controls tab: two columns of action + two input boxes */
+  #bind-list { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 22px; margin-top: 8px; }
+  .bind-row { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #ccc; }
+  .bind-name { flex: 1; min-width: 0; }
+  .bind-slot {
+    width: 86px; padding: 3px 4px; background: #26262c; color: #eee; border: 1px solid #44444c; border-radius: 4px;
+    font: 12px 'Segoe UI', Arial, sans-serif; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .bind-slot:hover { border-color: #888; }
+  .bind-slot.empty { color: #666; }
+  .bind-slot.listening { border-color: #ffd24a; color: #ffd24a; background: #33301f; }
+  #bind-note { min-height: 16px; margin-top: 6px; color: #ffd24a; }
+  #bind-reset { margin: 6px 0 0; }
+  @media (max-width: 640px) { #bind-list { grid-template-columns: 1fr; } }
+
   /* the crosshair is an SVG drawn from the settings; colour comes from `color` */
   #crosshair { color: #eee; }
   #crosshair.hit { color: #ff3b3b !important; }

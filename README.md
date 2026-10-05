@@ -23,6 +23,8 @@ unzip, and open `index.html`. No internet connection is needed.
 (when moving faster than a walk; slower, Ctrl crouch-walks), R reload, F inspect, P replay last hit, left click attack,
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
+Every one of these can be changed in **Settings > Controls**: each action has two boxes, and a box takes a key, a
+mouse button (left, right, middle, back, forward) or a wheel direction. Esc, Tab and Enter stay fixed for the menus.
 
 **Tutorial:** new here? The Tutorial button in the menu walks you through the basics one goal at a time, from
 looking around to landing a 3x trickshot. Each goal ticks off when you do it; Enter skips one.
