@@ -59,6 +59,19 @@
     wallBounceSteerFade: 0.15,  // ...then steering fades back in over this long
     wallRideScoreWindow: 1.4,
 
+    // grappling hook (Pathfinder style): tap the key and the hook zips you to the spot you're aiming at
+    grappleRange: 33,
+    grappleDrawTime: 0.12,      // gun away, grapple out: the spear fires once it is out
+    grappleFlightSpeed: 220,    // how fast the spear flies
+    grappleReel: 30,            // speed along the rope you're pulled at
+    grappleAccel: 140,          // how hard the rope snaps you up to that
+    grappleMaxTime: 1.4,        // the hook lets go after this long, in case you can't reach it
+    grappleMinLen: 2.5,         // pulled this close, the hook lets go
+    grappleCooldown: 2.0,       // after it lets go (a miss uses the short one)
+    grappleMissCooldown: 0.3,
+    grappleMult: 1.3,
+    grappleScoreWindow: 1.2,    // a shot counts as a GRAPPLE this long after letting go
+
     baseFov: 78,
     scopedFov: 26,
     scopeSway: 0.0016,          // breathing drift while scoped, radians (0 turns it off)
@@ -183,7 +196,7 @@
     ["aim", "Aim / throw knife", ["Mouse2"]], ["reload", "Reload", ["KeyR"]],
     ["inspect", "Inspect weapon", ["KeyF"]], ["gun", "Switch to gun", ["Digit1"]],
     ["knife", "Switch to knife", ["Digit2"]], ["swap", "Swap gun / knife", ["KeyQ", "Wheel"]],
-    ["replay", "Watch last hit", ["KeyP"]],
+    ["replay", "Watch last hit", ["KeyP"]], ["grapple", "Grappling hook", ["KeyE"]],
   ];
   const ACTION_IDS = ACTIONS.map((a) => a[0]);
   const ACTION_NAMES = Object.fromEntries(ACTIONS.map((a) => [a[0], a[1]]));
@@ -1532,6 +1545,19 @@
   for (const g of HELD) { viewmodelRoot.add(g); g.visible = g === rifleGroup; }
   camera.add(muzzleLight);
 
+  // the grapple: a slim spy-gadget launcher, a black tube with silver bands and a small grip
+  const spearSteelHeld = new THREE.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.8, roughness: 0.3 });
+  const grappleGroup = new THREE.Group();
+  addPart(grappleGroup, new THREE.CylinderGeometry(0.024, 0.024, 0.3, 12), metalDark, 0, 0.01, -0.1, HALF_PI, 0, 0);   // tube
+  for (const z of [0.02, -0.1, -0.22]) addPart(grappleGroup, new THREE.CylinderGeometry(0.028, 0.028, 0.012, 12), spearSteelHeld, 0, 0.01, z, HALF_PI, 0, 0);   // bands
+  addPart(grappleGroup, new THREE.CylinderGeometry(0.014, 0.018, 0.1, 8), metalMid, 0, 0.01, -0.3, HALF_PI, 0, 0);       // muzzle
+  addPart(grappleGroup, new THREE.BoxGeometry(0.03, 0.085, 0.04), gripMat, 0, -0.05, 0.03, 0.15, 0, 0);
+  addPart(grappleGroup, new THREE.BoxGeometry(0.012, 0.012, 0.03), accentMat, 0, -0.012, -0.02);   // trigger
+  addPart(grappleGroup, new THREE.ConeGeometry(0.014, 0.1, 8), spearSteelHeld, 0, 0.01, -0.38, -HALF_PI, 0, 0);   // the spear tip, peeking out
+  grappleGroup.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
+  grappleGroup.visible = false;
+  viewmodelRoot.add(grappleGroup);
+
   // ---- inspect animation sets (3 per weapon, picked at random) ----
   function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
   function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
@@ -1741,6 +1767,7 @@
     bobTimer: 0, adsProgress: 0, wantADS: false, adsStartTime: -99, flashTimer: 0,
     boltTime: -1, boltCues: [], spentCasing: false,
     throwTimer: 0,
+    grappleOut: 0,   // 0 gun in hand, 1 grapple in hand
     pumpTime: -1, pumpCues: [], slideTime: -1,
     recoilPitch: 0, recoilYaw: 0, burstShots: 0, lastShotAt: -99,   // recoil on the aim (where bullets go)
     viewRecoilPitch: 0, viewRecoilYaw: 0,                            // how much of it the view (crosshair) shows
@@ -1769,7 +1796,7 @@
   }
 
   function startInspect() {
-    if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.boltTime >= 0 || vm.pumpTime >= 0 || vm.throwTimer > 0) return;
+    if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.boltTime >= 0 || vm.pumpTime >= 0 || vm.throwTimer > 0 || vm.grappleOut > 0) return;
     const w = currentWeapon();
     vm.inspectIndex = Math.floor(Math.random() * w.inspects.length);
     vm.inspectTimer = w.inspectDuration;
@@ -1954,9 +1981,15 @@
       holster = easeInOut(Math.max(vm.drawTimer, 0) / vm.drawDuration);
     }
 
+    // the grapple: the gun lowers away first, then the grapple comes up; letting go runs it backwards
+    const gTarget = player.grappleWant ? 1 : 0;
+    vm.grappleOut += Math.max(-dt / CFG.grappleDrawTime, Math.min(dt / CFG.grappleDrawTime, gTarget - vm.grappleOut));
+    const gunAway = easeInOut(Math.min(vm.grappleOut * 2, 1)), grappleUp = easeInOut(Math.max(vm.grappleOut * 2 - 1, 0));
+    holster = Math.max(holster, gunAway);
+
     const w = currentWeapon();
 
-    const adsBlocked = vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active;
+    const adsBlocked = vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.grappleOut > 0;
     const adsTarget = (vm.wantADS && w.canADS && !adsBlocked) ? 1 : 0;
     const adsStep = dt / CFG.adsTime;
     if (vm.adsProgress < adsTarget) vm.adsProgress = Math.min(vm.adsProgress + adsStep, 1);
@@ -2087,6 +2120,10 @@
       if (vm.throwTimer <= 0) { vm.throwTimer = 0; knifeGroup.visible = vm.current === "knife"; }
     }
 
+    grappleGroup.visible = grappleUp > 0;
+    grappleGroup.position.set(0.22 + bobX, -0.25 + bobY - (1 - grappleUp) * 0.5, -0.5);
+    grappleGroup.rotation.set(0.04 + (1 - grappleUp) * 1.1, -0.08, 0.01);
+
     const holsterDrop = holster * 0.45;
     const holsterTilt = holster * 1.1;
 
@@ -2137,7 +2174,7 @@
     // the scope has its own reticle; iron sights are the aim, so the crosshair fades out while aiming
     const xhOpacity = w.scope ? (adsEased > 0.5 ? 0 : 1) : Math.max(0, 1 - adsEased * 2);
     if (xhOpacity !== lastXhOpacity) { crosshairEl.style.opacity = xhOpacity; lastXhOpacity = xhOpacity; }
-    w.group.visible = scopeAlpha < 0.98;
+    w.group.visible = scopeAlpha < 0.98 && vm.grappleOut <= 0.5;
   }
 
   function updateHotbar() {
@@ -2992,7 +3029,7 @@
     controlsHintEl.innerHTML =
       k(move.every((l) => l.length === 1) ? move.join("") : move.join(" ")) + " move" + dot + k(L("jump")) + " jump" + dot +
       k(L("sprint")) + " sprint" + dot + k(L("slide")) + " slide" + dot + k(L("reload")) + " reload" + dot +
-      k(L("inspect")) + " inspect" + dot + k(L("replay")) + " replay last hit<br>" +
+      k(L("inspect")) + " inspect" + dot + k(L("grapple")) + " grapple" + dot + k(L("replay")) + " replay last hit<br>" +
       k(L("fire")) + " attack" + dot + k(L("aim")) + " scope / throw knife" + dot + k(gunKnife) + " gun / knife";
     loadoutWeapons().forEach((w, i) => {
       const el = hotbarSlots[w] && hotbarSlots[w].querySelector(".num");
@@ -3174,7 +3211,7 @@
   function startReload() {
     const w = currentWeapon();
     if (!w.usesAmmo || SETTINGS.unlimitedAmmo) return;
-    if (reload.active || w.ammo >= w.magSize || vm.switchTimer > 0) return;
+    if (reload.active || w.ammo >= w.magSize || vm.switchTimer > 0 || vm.grappleOut > 0.25) return;
     reload.active = true;
     reload.weapon = w.id;
     reload.elapsed = 0;
@@ -3258,7 +3295,142 @@
     launchRun: 0,    // horizontal speed when that launch fired
     wallImpactSpeed: 0, wallImpactAt: -99,   // the last time a wall stopped us, and how fast we hit it
     viewRoll: 0,
+    hook: null,      // { anchor, len, flying, pos, dir } from the moment the hook is fired
+    grappleWant: false,   // the grapple is out (or coming out) in the hand
+    grappleCooldown: 0, lastGrappleAt: -99, grappleWasHeld: false,
   };
+
+  // ---- grappling hook: hold the key. The gun is put away and the grapple comes out; its hook flies to the
+  // surface you're aiming at, sticks in, and reels you in. Let go and the gun comes back ----
+  const grappleRay = new THREE.Ray();
+  const _gHit = new THREE.Vector3(), _gBest = new THREE.Vector3(), _gDir = new THREE.Vector3(), _gStart = new THREE.Vector3(), _gUp = new THREE.Vector3(0, 1, 0), _gTail = new THREE.Vector3();
+  const ropeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 6), new THREE.MeshBasicMaterial({ color: 0xffd24a }));
+  // the X-spear: a shaft with a pointed head and four fins in an X at the tail. The tip (+y) is what sticks in
+  const SPEAR_LEN = 0.62;
+  const spearSteel = new THREE.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.8, roughness: 0.3 });
+  const spearAccent = new THREE.MeshStandardMaterial({ color: 0xffd24a, metalness: 0.5, roughness: 0.4, emissive: 0x6a5200 });
+  const hookHead = new THREE.Group();
+  const spearShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, SPEAR_LEN - 0.12, 8), spearSteel);
+  spearShaft.position.y = -0.06;
+  const spearTip = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.16, 8), spearSteel);
+  spearTip.position.y = SPEAR_LEN / 2 - 0.08;
+  hookHead.add(spearShaft, spearTip);
+  for (const ang of [Math.PI / 4, -Math.PI / 4]) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.2, 0.008), spearAccent);
+    fin.position.y = -SPEAR_LEN / 2 + 0.1;
+    fin.rotation.y = ang;
+    hookHead.add(fin);
+  }
+  ropeMesh.visible = hookHead.visible = false;
+  ropeMesh.frustumCulled = false;
+  scene.add(ropeMesh, hookHead);
+
+  // where the rope leaves the grapple: just ahead of and below the camera, on the gun-hand side
+  function ropeStart(out) {
+    camera.getWorldPosition(out);
+    camera.getWorldDirection(_gDir);
+    out.addScaledVector(_gDir, 0.45).y -= 0.2;
+    out.x += Math.cos(yawObject.rotation.y) * 0.22 * handSign();
+    out.z += -Math.sin(yawObject.rotation.y) * 0.22 * handSign();
+    return out;
+  }
+
+  function releaseHook(cooldown) {
+    const had = !!player.hook;
+    player.grappleWant = false;   // the grapple goes back in and the gun comes out
+    player.hook = null;
+    ropeMesh.visible = hookHead.visible = false;
+    if (!had) return;
+    player.lastGrappleAt = elapsedTime;
+    player.grappleCooldown = cooldown === undefined ? CFG.grappleCooldown : cooldown;
+    playSfx("slide", 0.3, 1.8, 0.1, "volMove");
+  }
+
+  // the grapple is out: fire the hook along the view (a miss just puts it away again)
+  function fireGrapple() {
+    camera.getWorldPosition(grappleRay.origin);
+    camera.getWorldDirection(grappleRay.direction);
+    let best = CFG.grappleRange, found = false;
+    for (const box of wallBoxes) {
+      if (!grappleRay.intersectBox(box, _gHit)) continue;
+      const d = _gHit.distanceTo(grappleRay.origin);
+      if (d > 0.5 && d < best) { best = d; _gBest.copy(_gHit); found = true; }
+    }
+    // targets can be hooked too (the rope follows a moving one)
+    let hitTarget = null;
+    const ro = grappleRay.origin, rd = grappleRay.direction;
+    for (const t of targets) {
+      if (!t.userData.alive) continue;
+      const ox = t.position.x - ro.x, oy = t.position.y - ro.y, oz = t.position.z - ro.z;
+      const proj = ox * rd.x + oy * rd.y + oz * rd.z;
+      if (proj < 0.5 || proj >= best) continue;
+      const cx = ox - rd.x * proj, cy = oy - rd.y * proj, cz = oz - rd.z * proj;
+      if (Math.sqrt(cx * cx + cy * cy + cz * cz) < t.userData.hitRadius) { best = proj; hitTarget = t; found = true; }
+    }
+    if (hitTarget) _gBest.copy(hitTarget.position);
+    // nothing in range: the spear still flies its full length, then reels back in empty
+    if (!found) _gBest.copy(grappleRay.origin).addScaledVector(grappleRay.direction, CFG.grappleRange);
+    const pos = ropeStart(new THREE.Vector3());
+    const dir = _gBest.clone().sub(pos).normalize();
+    player.hook = { anchor: _gBest.clone(), len: best, flying: true, miss: !found, target: hitTarget, pos, dir };
+    playKnifeSwing();
+  }
+
+  // the hook flies out, then the rope pulls toward it and never gets longer
+  function applyGrapple(dt) {
+    const hk = player.hook;
+    if (hk.target) {   // hooked onto a target: the rope follows it
+      if (!hk.target.userData.alive) { releaseHook(); return; }
+      hk.anchor.copy(hk.target.position);
+      if (hk.flying) hk.dir.subVectors(hk.anchor, hk.pos).normalize();
+    }
+    if (hk.flying) {
+      const left = hk.pos.distanceTo(hk.anchor), step = CFG.grappleFlightSpeed * dt;
+      if (step < left) hk.pos.addScaledVector(hk.dir, step);
+      else if (hk.miss) { hk.pos.copy(hk.anchor); hk.flying = false; hk.returning = true; playSfx("dryFire", 0.35, 1.4, 0.1, "volMove"); }
+      else {
+        hk.pos.copy(hk.anchor); hk.flying = false;
+        hk.len = yawObject.position.distanceTo(hk.anchor);
+        stat("grapples");
+        playKnifeStick(hk.len); burst(hk.anchor, 0xffd24a, 4);
+      }
+      return;
+    }
+    if (hk.returning) {   // missed: the spear snaps back to the launcher
+      ropeStart(_gStart);
+      if (hk.pos.distanceTo(_gStart) < 0.8) { releaseHook(CFG.grappleMissCooldown); return; }
+      hk.pos.addScaledVector(hk.dir, -Math.min(CFG.grappleFlightSpeed * 1.3 * dt, hk.pos.distanceTo(_gStart)));
+      return;
+    }
+    _gDir.subVectors(hk.anchor, yawObject.position);
+    const dist = _gDir.length();
+    hk.pulled = (hk.pulled || 0) + dt;
+    if (dist < CFG.grappleMinLen || hk.pulled > CFG.grappleMaxTime) { releaseHook(); return; }
+    _gDir.divideScalar(dist);
+    hk.len = Math.min(hk.len, dist);
+    const along = player.velocity.dot(_gDir);
+    if (along < CFG.grappleReel) player.velocity.addScaledVector(_gDir, Math.min(CFG.grappleAccel * dt, CFG.grappleReel - along));
+    if (dist > hk.len + 0.05) {
+      const out = player.velocity.dot(_gDir);
+      if (out < 0) player.velocity.addScaledVector(_gDir, -out);   // taut: can't move further from the anchor
+    }
+    if (player.onGround && _gDir.y > 0.1) { player.onGround = false; player.sliding = false; }
+  }
+
+  function updateRopeVisual() {
+    const hk = player.hook;
+    if (!hk) return;
+    ropeStart(_gStart);
+    _gTail.copy(hk.pos).addScaledVector(hk.dir, -SPEAR_LEN);   // the rope ties on at the spear's tail
+    _gDir.subVectors(_gTail, _gStart);
+    const len = _gDir.length();
+    ropeMesh.position.copy(_gStart).addScaledVector(_gDir, 0.5);
+    ropeMesh.quaternion.setFromUnitVectors(_gUp, _gDir.divideScalar(len || 1));
+    ropeMesh.scale.set(1, len, 1);
+    hookHead.quaternion.setFromUnitVectors(_gUp, hk.dir);
+    hookHead.position.copy(hk.pos).addScaledVector(hk.dir, -SPEAR_LEN / 2);   // the tip is what sticks in
+    ropeMesh.visible = hookHead.visible = true;
+  }
 
   // maxTop lets callers ignore surfaces that are too far above the player's feet to step onto
   function currentGroundY(x, z, maxTop) {
@@ -3452,6 +3624,17 @@
     if (player.slideCooldown > 0) player.slideCooldown -= dt;
     if (player.wallBounceCooldown > 0) player.wallBounceCooldown -= dt;
     if (jumpQueueTimer > 0) { jumpQueueTimer -= dt; if (jumpQueueTimer <= 0) jumpQueued = false; }
+    if (player.grappleCooldown > 0) player.grappleCooldown -= dt;
+    const grappleHeld = held("grapple");
+    if (grappleHeld && !player.grappleWasHeld) {
+      if (player.grappleWant) releaseHook();   // tap again to let go
+      else if (player.grappleCooldown <= 0 && !reload.active) player.grappleWant = true;
+    }
+    player.grappleWasHeld = grappleHeld;
+    // jumping lets go too, keeping the speed
+    if (player.hook && !player.hook.flying && !player.hook.returning && jumpQueued) { jumpQueued = false; jumpQueueTimer = 0; releaseHook(); }
+    if (player.grappleWant && !player.hook && vm.grappleOut >= 1) fireGrapple();
+    if (player.hook) applyGrapple(dt);
 
     const shiftHeld = held("sprint");
     const sprinting = SETTINGS.autoSprint ? !shiftHeld : shiftHeld;
@@ -3525,7 +3708,7 @@
       const jumpHeld = held("jump");
       const bhopping = jumpHeld && (elapsedTime - player.lastLandTime) <= CFG.bhopWindow;
 
-      if (!bhopping) {
+      if (!bhopping && !player.hook) {
         const fric = player.sliding ? CFG.slideFriction : frictionAt(horizSpeed);
         if (horizSpeed > 0.0001) {
           const drop = horizSpeed * fric * dt;
@@ -3688,6 +3871,7 @@
       player.onGround = false;
       player.sliding = false;
     }
+    updateRopeVisual();
   }
 
   // ======================================================================
@@ -3815,6 +3999,7 @@
       speed: Math.hypot(player.velocity.x, player.velocity.z),
       sliding: player.sliding,
       wallRide: elapsedTime - player.lastWallBounceAt <= CFG.wallRideScoreWindow,
+      grapple: elapsedTime - player.lastGrappleAt <= CFG.grappleScoreWindow,
       airTime: player.onGround ? 0 : elapsedTime - player.groundedAt,
       airId: player.groundedAt,   // the same for every shot in one jump
       launch: !player.onGround && player.velocity.y > 0 ? player.launch : null,
@@ -3882,6 +4067,7 @@
 
     if (st.sliding) add("SLIDING", CFG.slideMult);
     if (st.wallRide) add("WALL BOUNCE", CFG.wallRideMult);
+    if (st.grapple) add("GRAPPLE", CFG.grappleMult);
 
     // target size: precision a knife swing at arm's length doesn't need
     const kind = target.userData.type;
@@ -3919,6 +4105,7 @@
           C.spinMaxCount * 360 + "° (x" + Math.pow(C.spinMultPer360, C.spinMaxCount).toFixed(2) + "). A spin shot doesn't also count as a FLICK."],
         ["SLIDING", x(C.slideMult), "Hit while sliding."],
         ["WALL BOUNCE", x(C.wallRideMult), "Hit within " + C.wallRideScoreWindow + " s of a wall bounce."],
+        ["GRAPPLE", x(C.grappleMult), "Hit within " + C.grappleScoreWindow + " s of letting go of the grappling hook (the gun is away while you are hooked on)."],
         ["LAUNCHED / RAMP LAUNCH", x(C.launchMult), "Hit while still rising off a jump pad or a kicker ramp (not after a wall bounce)."],
         ["MEGA LAUNCH", x(C.megaLaunchMult), "Hit while still rising off a mega (purple) pad."],
         ["FAST / BLAZING / SONIC", "up to " + x(Math.min(1 + (C.maxSpeed - C.speedFrom) * C.speedMultPer, C.speedMultMax)), "+" + C.speedMultPer + "x per u/s over " + C.speedFrom + " u/s; the tag shows your speed."],
@@ -4069,7 +4256,7 @@
   function attack() {
     if (run.state === "countdown" || run.state === "done") return;
     const w = currentWeapon();
-    if (fireCooldown > 0 || vm.switchTimer > 0) return;
+    if (fireCooldown > 0 || vm.switchTimer > 0 || vm.grappleOut > 0.25) return;
     if (net.active && (localDead || net.phase !== "play")) return;
 
     if (w.usesAmmo && !SETTINGS.unlimitedAmmo) {
@@ -4245,7 +4432,7 @@
   const _thFwd = new THREE.Vector3(), _thRight = new THREE.Vector3(), _thLook = new THREE.Vector3();
 
   function throwKnife() {
-    if (vm.throwTimer > 0 || vm.switchTimer > 0) return;
+    if (vm.throwTimer > 0 || vm.switchTimer > 0 || vm.grappleOut > 0.25) return;
     if (run.state === "countdown" || run.state === "done") return;
     if (run.state === "live") run.shots++;
     stat("knifeThrows"); stat("shots");
@@ -4758,6 +4945,7 @@
     player.feetY = 0.25;
     player.velocity.set(0, 0, 0);
     player.onGround = false; player.sliding = false;
+    releaseHook(0);
     player.airSpinAccum = 0; player.airSpinNet = 0;
   }
 
@@ -5329,7 +5517,7 @@
   const STATS_KEY = "tsb-stats";
   const STAT_NUMBERS = ["time", "points", "hits", "shots", "shotsHit", "knifeSwingHits", "knifeThrows", "knifeThrowHits",
     "longestShot", "bestMult", "longestStreak", "bestCombo", "topSpeed", "distance", "jumps", "wallBounces",
-    "perfectBounces", "slides", "padLaunches", "runs", "bhops"];
+    "perfectBounces", "slides", "padLaunches", "runs", "bhops", "grapples"];
   function freshStats() {
     const s = { since: new Date().toISOString().slice(0, 10), kinds: {}, guns: {}, tricks: {} };
     for (const k of STAT_NUMBERS) s[k] = 0;
@@ -5422,6 +5610,7 @@
         ["Slides", num(S.slides), ""],
         ["Pad launches", num(S.padLaunches), ""],
         ["Bunnyhops", num(S.bhops), "jumps the moment you land"],
+        ["Grapples", num(S.grapples), "hooks that caught"],
       ]],
       ["Tricks landed", Object.entries(S.tricks).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, num(v), ""])],
     ];
@@ -6391,6 +6580,7 @@
 
     // in a room the world keeps running while the menu is up, so everyone else's view stays correct
     if (pointerLocked || net.active) {
+      if ((player.hook || player.grappleWant) && (!pointerLocked || localDead || run.state === "countdown")) releaseHook(0);
       if (pointerLocked && !localDead && run.state !== "countdown") updatePlayer(dt);
       updateProps(dt);
       updateParticles(dt);

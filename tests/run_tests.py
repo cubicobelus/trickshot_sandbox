@@ -272,6 +272,23 @@ def test_controls(browser, base):
     page.close()
 
 
+def test_grapple(browser, base):
+    page, errors = open_page(browser, base + "/index.html")
+    page.click("#start-btn")
+    step(page, 60)
+    speed = lambda: float(page.inner_text("#speed-val"))
+    page.keyboard.down("KeyW"); page.keyboard.down("ShiftLeft"); step(page, 90); page.keyboard.up("KeyW"); page.keyboard.up("ShiftLeft")   # close enough to the north wall to reach it
+    before = speed()
+    page.keyboard.down("KeyE"); step(page, 3); page.keyboard.up("KeyE"); step(page, 40)
+    check("tapping E hooks the wall ahead and reels you in (leaves the ground, speeds up)",
+          speed() > before + 6 and "AIR" in page.inner_text("#state-val"), f"{before} -> {speed()}")
+    step(page, 10)
+    page.evaluate("__unlock()")
+    step(page, 5)
+    check("no errors in the grapple test", not errors, "; ".join(errors[:3]))
+    page.close()
+
+
 def test_tutorial(browser, base):
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
@@ -322,7 +339,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:
