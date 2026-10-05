@@ -4271,10 +4271,12 @@
     k.from.copy(k.root.position);
     k.vel.copy(_thFwd).multiplyScalar(CFG.knifeThrowSpeed).add(player.velocity);
     k.snap = trickState();
+    k.remote = false;
     k.age = 0;
     k.state = "flying";
     k.root.visible = true;
     recEvent({ type: "throw" });
+    if (net.active) mpSendThrow(k.root.position, k.vel);
     k.root.scale.setScalar(1);
     k.spin.rotation.set(0, 0, 0);
     faceAlongVelocity(k);
@@ -4321,7 +4323,7 @@
         continue;
       }
 
-      if (k.age > 4) { retireKnife(k); breakStreak(); continue; }   // flew off without hitting anything
+      if (k.age > 4) { retireKnife(k); if (!k.remote) breakStreak(); continue; }   // flew off without hitting anything
       k.vel.y -= CFG.knifeThrowGravity * dt;
       _kStep.copy(k.vel).multiplyScalar(dt);
       const len = _kStep.length();
@@ -4332,9 +4334,9 @@
       const d = _kRay.direction;
 
       // find the nearest thing along this frame's path
-      let hitDist = len, kind = null, hitTarget = null, hitProp = null;
+      let hitDist = len, kind = null, hitTarget = null, hitProp = null, hitPlayer = null;
       for (const t of targets) {
-        if (!t.userData.alive) continue;
+        if (k.remote || !t.userData.alive) continue;
         const ox = t.position.x - o.x, oy = t.position.y - o.y, oz = t.position.z - o.z;
         const proj = ox * d.x + oy * d.y + oz * d.z;
         if (proj < 0 || proj > hitDist + t.userData.hitRadius) continue;
@@ -4364,6 +4366,21 @@
         }
       }
 
+      if (net.active && !k.remote) {   // deathmatch: the knife can hit another player (raycastPlayers reads the shared ray)
+        raycaster.ray.origin.copy(o); raycaster.ray.direction.copy(d);
+        const pres = raycastPlayers(hitDist);
+        if (pres.p && pres.dist < hitDist) { hitDist = pres.dist; kind = "player"; hitPlayer = pres; }
+      }
+
+      if (kind === "player") {
+        o.addScaledVector(d, hitDist);
+        playKnifeHit();
+        lastShotOrigin.copy(k.from);
+        hitPlayer.dist = k.from.distanceTo(o);   // how far it was thrown, not just this frame's step
+        mpPvpKill(hitPlayer, true, 0, undefined, k.snap, true);
+        retireKnife(k);
+        continue;
+      }
       if (kind === "target") {
         o.addScaledVector(d, hitDist);
         playKnifeHit();
@@ -4384,7 +4401,7 @@
         k.spin.rotation.set(0, 0, 0);
         k.state = "stuck";
         k.age = 0;
-        breakStreak();   // a throw that misses ends the streak, like a missed shot
+        if (!k.remote) breakStreak();   // a throw that misses ends the streak, like a missed shot
         playKnifeStick(o.distanceTo(yawObject.position));
         if (kind === "prop") {
           const prop = props.find((pr) => pr.mesh === hitProp);
@@ -4591,8 +4608,14 @@
     gun.position.set(0.24, -0.25, -0.1);
     headPivot.add(gun);
     g.add(headPivot);
+    const knife = new THREE.Group();
+    addPart(knife, new THREE.BoxGeometry(0.035, 0.07, 0.3), metalMid, 0, 0, -0.2);
+    knife.position.set(0.24, -0.25, -0.1);
+    knife.visible = false;
+    headPivot.add(knife);
     g.userData.pivot = headPivot;
     g.userData.gun = gun;
+    g.userData.knife = knife;
     g.add(makeNameTag(p.name, p.color));
     scene.add(g);
     return g;
@@ -4624,6 +4647,7 @@
       const squash = p.sl ? 0.62 : 1;
       m.scale.y += (squash - m.scale.y) * k;
       m.userData.gun.visible = p.w === "rifle";
+      m.userData.knife.visible = p.w === "knife";
     }
   }
 
@@ -4793,6 +4817,10 @@
         }
         break;
 
+      case "throw":
+        if (m.id !== net.id) spawnRemoteKnife(m.o, m.v);
+        break;
+
       case "shot":
         if (m.id === net.id) break;
         _tmpV1.set(m.o[0], m.o[1], m.o[2]);
@@ -4859,11 +4887,27 @@
   function mpSendShot(origin, dir, dist) {
     sendToHost({ t: "shot", o: [r2(origin.x), r2(origin.y), r2(origin.z)], d: [r2(dir.x * 1000) / 1000, r2(dir.y * 1000) / 1000, r2(dir.z * 1000) / 1000], l: r2(dist) });
   }
+  function mpSendThrow(pos, vel) {
+    sendToHost({ t: "throw", o: [r2(pos.x), r2(pos.y), r2(pos.z)], v: [r2(vel.x), r2(vel.y), r2(vel.z)] });
+  }
+  // a thrown knife from another player: it flies and sticks on every screen, but only its owner scores with it
+  function spawnRemoteKnife(o, v) {
+    const k = thrownPool.find((q) => q.state === "idle") || thrownPool.reduce((a, b) => (a.age > b.age ? a : b));
+    if (k.root.parent !== scene) scene.add(k.root);
+    k.root.position.set(o[0], o[1], o[2]);
+    k.from.copy(k.root.position);
+    k.vel.set(v[0], v[1], v[2]);
+    k.snap = null; k.remote = true; k.age = 0; k.state = "flying";
+    k.root.visible = true;
+    k.root.scale.setScalar(1);
+    k.spin.rotation.set(0, 0, 0);
+    faceAlongVelocity(k);
+  }
   function mpTargetHit(target, pts) { sendToHost({ t: "hit", i: target.userData.idx, pts }); }
 
   const _pseudoTarget = { userData: { small: false, moving: false } };
-  function mpPvpKill(pres, isKnife, ammoBefore, weapon) {
-    const res = computeMultipliers(_pseudoTarget, pres.dist, isKnife, ammoBefore, undefined, false, weapon);
+  function mpPvpKill(pres, isKnife, ammoBefore, weapon, snap, thrown) {
+    const res = computeMultipliers(_pseudoTarget, pres.dist, isKnife, ammoBefore, snap, !!thrown, weapon);
     if (pres.head && !isKnife) { res.mult *= 1.5; res.tags.push("HEADSHOT x1.50"); }
     const pts = awardPoints(res);
     burst(pres.point, 0xff5555, 14);
@@ -4949,6 +4993,13 @@
     hostBroadcastBoard();
   }
 
+  // three finite numbers, each within +-limit, or null (network data is never trusted to be well formed)
+  function vec3(a, limit) {
+    if (!Array.isArray(a) || a.length !== 3) return null;
+    for (const n of a) if (typeof n !== "number" || !Number.isFinite(n) || Math.abs(n) > limit) return null;
+    return [a[0], a[1], a[2]];
+  }
+
   function hostHandle(fromId, m) {
     const p = net.players.get(fromId);
     if (!p || !m || typeof m !== "object") return;
@@ -4959,9 +5010,17 @@
         }
         break;
 
-      case "shot":
-        if (p.alive) hostBroadcast({ t: "shot", id: fromId, o: m.o, d: m.d, l: m.l });
+      case "shot": {
+        const o = vec3(m.o, 1000), d = vec3(m.d, 2), l = Number(m.l);
+        if (p.alive && o && d && Number.isFinite(l)) hostBroadcast({ t: "shot", id: fromId, o, d, l: Math.max(0, Math.min(l, 2000)) });
         break;
+      }
+
+      case "throw": {
+        const o = vec3(m.o, 1000), v = vec3(m.v, 200);
+        if (p.alive && o && v) hostBroadcast({ t: "throw", id: fromId, o, v });
+        break;
+      }
 
       case "hit": {
         if (net.sub !== "race" || net.phase !== "play") break;
