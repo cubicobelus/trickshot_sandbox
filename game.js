@@ -2748,7 +2748,7 @@
     if (uiMode === "mp" && !net.active) return;   // nothing to play until you're in a room
     if (!resultsEl.hidden) return;                  // the results screen has its own buttons
     initAudio();
-    if (uiMode === "solo" && isRunMode() && !runInProgress()) startRun();
+    if (uiMode === "solo" && isRunMode() && !runInProgress() && !tut.active) startRun();
     lockPointer();
   }
   startBtn.addEventListener("click", requestPlay);
@@ -2767,7 +2767,7 @@
   }
   document.addEventListener("pointerlockchange", () => {
     pointerLocked = document.pointerLockElement === domEl;
-    if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; saveStats(); }
+    if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; saveStats(); refreshTutorialUI(); }
     if (replay.active) return;   // a replay frees the mouse on purpose and runs its own screens
     showScreen(pointerLocked ? "play" : resultsEl.hidden ? "menu" : "results");
     mpRefreshScoreboard();
@@ -2796,6 +2796,7 @@
     const scopeMult = 1 + (adsSens - 1) * easeInOut(vm.adsProgress);
     const s = CFG.baseSensitivity * scopeMult * accelMult;
     yawObject.rotation.y -= dx * s * SETTINGS.sensX;
+    if (tut.active) tut.look += Math.abs(dx * s * SETTINGS.sensX);
     pitchObject.rotation.x -= dy * s * SETTINGS.sensY;
     pitchObject.rotation.x = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitchObject.rotation.x));
   });
@@ -3314,6 +3315,7 @@
         }
         player.velocity.y = CFG.jumpSpeed + player.groundRise;   // jumping off a ramp adds its lift
         stat("jumps");
+        if (bhopping) stat("bhops");
         if (player.groundRise > 2) { player.launch = "ramp"; player.launchRun = Math.hypot(player.velocity.x, player.velocity.z); }
         player.onGround = false;
         player.sliding = false;
@@ -3755,6 +3757,7 @@
     playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
     showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x");
     statHit(res, pointsGained);
+    tutHit(res);
     lastAward = { best: pointsGained > bestShot.points, runBest: false };
     if (run.state === "live") {
       run.hits++;
@@ -5020,7 +5023,7 @@
   const STATS_KEY = "tsb-stats";
   const STAT_NUMBERS = ["time", "points", "hits", "shots", "shotsHit", "knifeSwingHits", "knifeThrows", "knifeThrowHits",
     "longestShot", "bestMult", "longestStreak", "bestCombo", "topSpeed", "distance", "jumps", "wallBounces",
-    "perfectBounces", "slides", "padLaunches", "runs"];
+    "perfectBounces", "slides", "padLaunches", "runs", "bhops"];
   function freshStats() {
     const s = { since: new Date().toISOString().slice(0, 10), kinds: {}, guns: {}, tricks: {} };
     for (const k of STAT_NUMBERS) s[k] = 0;
@@ -5112,6 +5115,7 @@
         ["Wall bounces", num(S.wallBounces), num(S.perfectBounces) + " perfect"],
         ["Slides", num(S.slides), ""],
         ["Pad launches", num(S.padLaunches), ""],
+        ["Bunnyhops", num(S.bhops), "jumps the moment you land"],
       ]],
       ["Tricks landed", Object.entries(S.tricks).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, num(v), ""])],
     ];
@@ -5438,6 +5442,114 @@
   document.getElementById("run-quit").addEventListener("click", (e) => { e.stopPropagation(); quitRun(); refreshModeUI(); });
   document.getElementById("play-modes").addEventListener("click", (e) => e.stopPropagation());
   refreshModeUI();
+
+  // ======================================================================
+  // TUTORIAL: short goals one at a time, in free play, each ticked off the moment you do it.
+  // Most are read from the stats counters (so they notice the real thing, however it happened).
+  // ======================================================================
+  const TUT_KEY = "tsb-tutorial";
+  const tut = { active: false, step: 0, base: null, look: 0, doneTimer: 0, lastHit: null };
+  const tutDelta = (k) => stats[k] - tut.base[k];
+  const TUT_STEPS = [
+    { title: "Look around", text: "Move the mouse to look around.", done: () => tut.look > Math.PI * 0.75 },
+    { title: "Move", text: "Walk with W A S D.", done: () => tutDelta("distance") > 6 },
+    { title: "Sprint", text: () => SETTINGS.autoSprint ? "Auto sprint is on, so just keep moving. Shift would slow you to a walk." : "Hold Shift while you move to run faster.", done: () => Math.hypot(player.velocity.x, player.velocity.z) > 8.5 },
+    { title: "Jump", text: "Press Space to jump.", done: () => tutDelta("jumps") >= 1 },
+    { title: "Slide", text: () => "Sprint, then hold Ctrl to slide: it keeps your speed. Under " + CFG.slideMinSpeed + " on the speed meter, Ctrl only crouch-walks.", done: () => tutDelta("slides") >= 1 },
+    { title: "Shoot", text: "Hit a target with left click. Smaller and faster targets are worth more.", done: () => tutDelta("hits") >= 1 },
+    { title: "Aim", text: "Hold right click to aim (the sniper scopes in), then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
+    { title: "Shoot in the air", text: "Hit a target while you're in the air. Every trick multiplies the shot.", done: () => tut.lastHit && tut.lastHit.tags.includes("AIR") },
+    { title: "Flick", text: () => "Whip your aim " + CFG.flickAngle + "° or more onto a target and shoot right away. Bigger and faster (" + CFG.snapFlickAngle + "°) is a SNAP FLICK.", done: () => tut.lastHit && (tut.lastHit.tags.includes("FLICK") || tut.lastHit.tags.includes("SNAP FLICK")) },
+    { title: "Jump pad", text: "Run onto a glowing jump pad. The purple ones throw you higher.", done: () => tutDelta("padLaunches") >= 1 },
+    { title: "Bunnyhop", text: "Jump again the moment you land to keep your speed. Do it twice.", done: () => tutDelta("bhops") >= 2 },
+    { title: "Wall bounce", text: "Run at a wall, jump, and press Space again as you reach it. Right on time is a perfect bounce.", done: () => tutDelta("wallBounces") >= 1 },
+    { title: "Knife", text: "Press 2 (or Q) for the knife, then right click to throw it. 1 or Q takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
+    { title: "Trickshot", text: "Put it together: land a 3x shot. Jump, spin, hit from far away...", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
+  ];
+  const tutEl = document.getElementById("tutorial");
+  function startTutorial() {
+    if (runInProgress() || run.state === "done") quitRun();
+    tut.active = true; tut.step = 0; tut.doneTimer = 0;
+    tutBegin();
+    try { localStorage.setItem(TUT_KEY, "started"); } catch (e) { /* ignore */ }
+    refreshTutorialUI();
+    requestPlay();
+  }
+  function tutBegin() {
+    tut.base = Object.assign({}, stats);
+    tut.look = 0; tut.lastHit = null;
+    renderTutorial();
+  }
+  function endTutorial(finished) {
+    tut.active = false;
+    tutEl.hidden = true;
+    if (finished) try { localStorage.setItem(TUT_KEY, "done"); } catch (e) { /* ignore */ }
+    refreshTutorialUI();
+  }
+  function renderTutorial() {
+    const s = TUT_STEPS[tut.step];
+    tutEl.hidden = !tut.active;
+    if (!s) return;
+    document.getElementById("tut-count").textContent = "Tutorial " + (tut.step + 1) + "/" + TUT_STEPS.length;
+    document.getElementById("tut-title").textContent = s.title;
+    document.getElementById("tut-text").textContent = typeof s.text === "function" ? s.text() : s.text;
+    document.getElementById("tut-fill").style.width = (tut.step / TUT_STEPS.length * 100).toFixed(1) + "%";
+    tutEl.classList.remove("done");
+  }
+  function tutNext() {
+    tut.step++;
+    if (tut.step >= TUT_STEPS.length) {
+      document.getElementById("tut-count").textContent = "Tutorial complete";
+      document.getElementById("tut-title").textContent = "You're ready";
+      document.getElementById("tut-text").textContent = "The Trickshot list in the menu has every trick and its value. Try Score Attack next.";
+      document.getElementById("tut-fill").style.width = "100%";
+      tutEl.classList.add("done");
+      tut.active = false;
+      setTimeout(() => endTutorial(true), 6000);
+      try { localStorage.setItem(TUT_KEY, "done"); } catch (e) { /* ignore */ }
+      refreshTutorialUI();
+      return;
+    }
+    tutBegin();
+  }
+  // every frame of play
+  function updateTutorial(dt) {
+    if (!tut.active) return;
+    if (tut.doneTimer > 0) {   // a short tick-off moment before the next step
+      tut.doneTimer -= dt;
+      if (tut.doneTimer <= 0) tutNext();
+      return;
+    }
+    if (TUT_STEPS[tut.step].done()) {
+      tut.doneTimer = 1.1;
+      tutEl.classList.add("done");
+      if (SETTINGS.volHits > 0) tone("triangle", 880, 1320, 0.1 * SETTINGS.volHits, 0.16, 0, 0.15);
+    }
+  }
+  // from awardPoints: what the last hit was like
+  function tutHit(res) {
+    if (!tut.active) return;
+    tut.lastHit = { mult: res.mult, aimed: vm.adsProgress > 0.6, tags: res.tags.map((t) => trickKey(t) || "") };
+  }
+  window.addEventListener("keydown", (e) => {
+    if (!tut.active || !pointerLocked || replay.active) return;
+    if (e.code === "Enter" || e.code === "NumpadEnter") { e.preventDefault(); if (tut.doneTimer <= 0) { tut.doneTimer = 0.01; } }   // skip this step
+  });
+
+  // ---- the menu button ----
+  const tutBtn = document.getElementById("tutorial-btn");
+  function refreshTutorialUI() {
+    let seen = null;
+    try { seen = localStorage.getItem(TUT_KEY); } catch (e) { /* ignore */ }
+    tutBtn.textContent = tut.active ? "Quit tutorial" : seen === "done" ? "Tutorial" : seen ? "Restart tutorial" : "New here? Start the tutorial";
+    tutBtn.classList.toggle("glow", !seen && !tut.active);
+  }
+  tutBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (tut.active) { endTutorial(false); return; }
+    startTutorial();
+  });
+  refreshTutorialUI();
 
   // ======================================================================
   // REPLAYS: the game keeps a rolling recording of the last few seconds (your view every frame, where the
@@ -5987,6 +6099,7 @@
     if (pointerLocked) {
       updateRun(realDt);   // real time, so hit-stop slow-mo doesn't stretch the clock
       updateAutoGraphics(realDt);
+      updateTutorial(realDt);
       stats.time += realDt; statsDirty = true;
       statsSaveTimer -= realDt;
       if (statsSaveTimer <= 0) { statsSaveTimer = 5; saveStats(); }

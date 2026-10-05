@@ -24,6 +24,9 @@ unzip, and open `index.html`. No internet connection is needed.
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
 
+**Tutorial:** new here? The Tutorial button in the menu walks you through the basics one goal at a time, from
+looking around to landing a 3x trickshot. Each goal ticks off when you do it; Enter skips one.
+
 **Modes:** Free play is endless. **Score Attack** gives you 1 or 2 minutes (after a 3-2-1 countdown) to
 score as much as you can; Esc pauses the clock, and your top 5 runs for each length are kept in your browser.
 

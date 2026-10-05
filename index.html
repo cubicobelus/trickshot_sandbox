@@ -44,6 +44,7 @@
       <p id="mode-note"></p>
       <div id="loadout"><span class="lo-label">Loadout</span></div>   <!-- gun buttons are built in game.js -->
       <div class="start" id="start-btn">Click to play</div>
+      <button type="button" class="btn" id="tutorial-btn">Tutorial</button>
       <button type="button" class="btn" id="glossary-open">Trickshot list</button>
       <button type="button" class="btn" id="stats-open">Stats</button>
       <button type="button" class="btn" id="ach-open">Achievements <span id="ach-count"></span></button>
@@ -316,6 +317,12 @@
   </div>
   <div id="feed"></div>
   <div id="run-count"></div>   <!-- Score Attack countdown: 3, 2, 1, GO -->
+  <div id="tutorial" hidden>
+    <div class="tut-head"><span id="tut-count"></span><span class="tut-skip">Enter skips a step &middot; Esc for the menu</span></div>
+    <div class="tut-title" id="tut-title"></div>
+    <div class="tut-text" id="tut-text"></div>
+    <div class="tut-track"><div id="tut-fill"></div></div>
+  </div>
   <div id="ach-toast"><small>Achievement unlocked</small><b></b><span></span></div>
   <div id="mp-timer" hidden><span id="mp-timer-val">3:00</span><div id="mp-timer-mode"></div></div>
   <div id="killfeed"></div>

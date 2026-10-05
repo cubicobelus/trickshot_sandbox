@@ -219,6 +219,34 @@ def test_score_attack(browser, base):
     page.close()
 
 
+def test_tutorial(browser, base):
+    page, errors = open_page(browser, base + "/index.html")
+    glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
+    check("the tutorial button glows on a first visit and the panel is hidden in the menu",
+          glows and not page.is_visible("#tutorial"))
+    page.click("#tutorial-btn")
+    step(page, 30)
+    check("starting the tutorial shows step 1 over the game", page.is_visible("#tutorial") and "1/" in page.inner_text("#tut-count"),
+          page.inner_text("#tut-count"))
+    for _ in range(40):   # look around: a big sweep with the mouse
+        page.evaluate("document.dispatchEvent(new MouseEvent('mousemove', {movementX: 100, movementY: 0}))")
+        step(page, 1)
+    step(page, 90)
+    check("turning the view completes the look-around step", page.inner_text("#tut-title") == "Move", page.inner_text("#tut-title"))
+    for _ in range(40):   # Enter skips whatever is left
+        if "complete" in page.inner_text("#tut-count").lower():
+            break
+        page.keyboard.press("Enter")
+        step(page, 12)
+    check("Enter skips steps through to the end", "complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    page.evaluate("__unlock()")
+    step(page, 5)
+    done = page.evaluate("localStorage.getItem('tsb-tutorial')") == "done" and page.inner_text("#tutorial-btn") == "Tutorial"
+    check("finishing is remembered and the button goes plain", done, page.inner_text("#tutorial-btn"))
+    check("no errors in the tutorial", not errors, "; ".join(errors[:3]))
+    page.close()
+
+
 def test_sound_lab(browser, base):
     page, errors = open_page(browser, base + "/tools/sound-lab.html", 1366, 768)
     check("sound lab fits the window (no page scroll)", not page.evaluate("document.documentElement.scrollHeight > innerHeight + 1"))
@@ -241,7 +269,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_sound_lab):
+        for test in (test_game, test_score_attack, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:
