@@ -4505,7 +4505,7 @@
   // Multiplayer is switched off for now: the mode tabs are hidden, invite links are
   // ignored and PeerJS is never loaded, so the game makes no connections beyond the
   // three.js download. Set to true to bring it all back.
-  const MULTIPLAYER_ENABLED = false;
+  const MULTIPLAYER_ENABLED = true;
   const PEERJS_SRI = "sha512-iFU+yF1keEaLDC9HEwPfLMSRaS0unBHE14GEgx6pQKJXjp5v0tvX8xpfp2lgJ62XEjbYp/M5C3CAmej/PWXMyA==";
   if (MULTIPLAYER_ENABLED) {
     const s = document.createElement("script");
@@ -4687,7 +4687,15 @@
 
   function syncPlayers(list) {
     const seen = new Set();
-    for (const e of list) {
+    for (const raw of list) {
+      // everything here came over the network and ends up in the page: force plain types and ranges
+      if (!raw || typeof raw !== "object") continue;
+      const num = (v) => (Number.isFinite(v) ? v : 0);
+      const e = {
+        id: String(raw.id).slice(0, 64), name: String(raw.name).replace(/[^\w \-]/g, "").slice(0, 14) || "Player",
+        color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
+        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), alive: raw.alive === true,
+      };
       seen.add(e.id);
       let p = net.players.get(e.id);
       if (!p) { p = makePlayerRecord(e.id, e.name, e.color); net.players.set(e.id, p); }
@@ -4816,7 +4824,7 @@
         if (v) { v.alive = false; }
         const tags = (m.tags || []).slice(0, 3).join(" · ");
         feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + (m.knife ? "knifed" : (m.head ? "headshot" : "sniped")) +
-          " <b>" + esc(v ? v.name : "?") + "</b><i>+" + m.pts + (tags ? " " + esc(tags) : "") + "</i>");
+          " <b>" + esc(v ? v.name : "?") + "</b><i>+" + (Number(m.pts) || 0) + (tags ? " " + esc(tags) : "") + "</i>");
         if (m.v === net.id) setLocalDead(k ? k.name : "");
         else if (m.k !== net.id) { playHitSound(0.7); if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8); }
         break;
