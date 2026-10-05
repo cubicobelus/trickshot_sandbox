@@ -5459,7 +5459,6 @@
     { title: "Shoot", text: "Hit a target with left click. Smaller and faster targets are worth more.", done: () => tutDelta("hits") >= 1 },
     { title: "Aim", text: "Hold right click to aim (the sniper scopes in), then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
     { title: "Shoot in the air", text: "Hit a target while you're in the air. Every trick multiplies the shot.", done: () => tut.lastHit && tut.lastHit.tags.includes("AIR") },
-    { title: "Flick", text: () => "Whip your aim " + CFG.flickAngle + "° or more onto a target and shoot right away. Bigger and faster (" + CFG.snapFlickAngle + "°) is a SNAP FLICK.", done: () => tut.lastHit && (tut.lastHit.tags.includes("FLICK") || tut.lastHit.tags.includes("SNAP FLICK")) },
     { title: "Jump pad", text: "Run onto a glowing jump pad. The purple ones throw you higher.", done: () => tutDelta("padLaunches") >= 1 },
     { title: "Bunnyhop", text: "Jump again the moment you land to keep your speed. Do it twice.", done: () => tutDelta("bhops") >= 2 },
     { title: "Wall bounce", text: "Run at a wall, jump, and press Space again as you reach it. Right on time is a perfect bounce.", done: () => tutDelta("wallBounces") >= 1 },
