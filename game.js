@@ -68,7 +68,7 @@
     grappleMaxTime: 1.4,        // the hook lets go after this long, in case you can't reach it
     grappleMinLen: 2.5,         // pulled this close, the hook lets go
     grappleCooldown: 2.0,       // after it lets go (a miss uses the short one)
-    grappleMissCooldown: 0.3,
+    grappleMissCooldown: 1.0,
     grappleMult: 1.3,
     grappleScoreWindow: 1.2,    // a shot counts as a GRAPPLE this long after letting go
 
@@ -3303,6 +3303,7 @@
   // ---- grappling hook: hold the key. The gun is put away and the grapple comes out; its hook flies to the
   // surface you're aiming at, sticks in, and reels you in. Let go and the gun comes back ----
   const grappleRay = new THREE.Ray();
+  let grappleFloors = null;   // the floor and platform tops, built on first use
   const _gHit = new THREE.Vector3(), _gBest = new THREE.Vector3(), _gDir = new THREE.Vector3(), _gStart = new THREE.Vector3(), _gUp = new THREE.Vector3(0, 1, 0), _gTail = new THREE.Vector3();
   const ropeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 6), new THREE.MeshBasicMaterial({ color: 0xffd24a }));
   // the X-spear: a shaft with a pointed head and four fins in an X at the tail. The tip (+y) is what sticks in
@@ -3351,10 +3352,13 @@
     camera.getWorldPosition(grappleRay.origin);
     camera.getWorldDirection(grappleRay.direction);
     let best = CFG.grappleRange, found = false;
-    for (const box of wallBoxes) {
-      if (!grappleRay.intersectBox(box, _gHit)) continue;
-      const d = _gHit.distanceTo(grappleRay.origin);
-      if (d > 0.5 && d < best) { best = d; _gBest.copy(_gHit); found = true; }
+    if (!grappleFloors) grappleFloors = groundMeshes.map((m) => new THREE.Box3().setFromObject(m));
+    for (const list of [wallBoxes, grappleFloors]) {
+      for (const box of list) {
+        if (!grappleRay.intersectBox(box, _gHit)) continue;
+        const d = _gHit.distanceTo(grappleRay.origin);
+        if (d > 0.5 && d < best) { best = d; _gBest.copy(_gHit); found = true; }
+      }
     }
     // targets can be hooked too (the rope follows a moving one)
     let hitTarget = null;
@@ -3417,19 +3421,23 @@
     if (player.onGround && _gDir.y > 0.1) { player.onGround = false; player.sliding = false; }
   }
 
+  // lay the rope and spear out from `start` to a spear at `pos` pointing along `dir`
+  const _gRope = new THREE.Vector3(), _gRStart = new THREE.Vector3(), _gRPos = new THREE.Vector3(), _gRDir = new THREE.Vector3();
+  function poseRope(start, pos, dir) {
+    _gTail.copy(pos).addScaledVector(dir, -SPEAR_LEN);   // the rope ties on at the spear's tail
+    _gRope.subVectors(_gTail, start);
+    const len = _gRope.length();
+    ropeMesh.position.copy(start).addScaledVector(_gRope, 0.5);
+    ropeMesh.quaternion.setFromUnitVectors(_gUp, _gRope.divideScalar(len || 1));
+    ropeMesh.scale.set(1, len, 1);
+    hookHead.quaternion.setFromUnitVectors(_gUp, dir);
+    hookHead.position.copy(pos).addScaledVector(dir, -SPEAR_LEN / 2);   // the tip is what sticks in
+    ropeMesh.visible = hookHead.visible = true;
+  }
   function updateRopeVisual() {
     const hk = player.hook;
     if (!hk) return;
-    ropeStart(_gStart);
-    _gTail.copy(hk.pos).addScaledVector(hk.dir, -SPEAR_LEN);   // the rope ties on at the spear's tail
-    _gDir.subVectors(_gTail, _gStart);
-    const len = _gDir.length();
-    ropeMesh.position.copy(_gStart).addScaledVector(_gDir, 0.5);
-    ropeMesh.quaternion.setFromUnitVectors(_gUp, _gDir.divideScalar(len || 1));
-    ropeMesh.scale.set(1, len, 1);
-    hookHead.quaternion.setFromUnitVectors(_gUp, hk.dir);
-    hookHead.position.copy(hk.pos).addScaledVector(hk.dir, -SPEAR_LEN / 2);   // the tip is what sticks in
-    ropeMesh.visible = hookHead.visible = true;
+    poseRope(ropeStart(_gStart), hk.pos, hk.dir);
   }
 
   // maxTop lets callers ignore surfaces that are too far above the player's feet to step onto
@@ -6086,6 +6094,9 @@
     const mag = currentWeapon().mag;
     f.pt = [r3(boltMesh.position.z), r3(boltMesh.rotation.z), r3(shotgunPump.position.z), r3(pistolSlide.position.z),
       mag ? r3(mag.position.y) : 0, mag && !mag.visible ? 0 : 1];
+    // the grapple in hand, and the rope and spear when one is out
+    if (grappleGroup.visible) f.gl = [r3(grappleGroup.position.x), r3(grappleGroup.position.y), r3(grappleGroup.position.z), r3(grappleGroup.rotation.x), r3(grappleGroup.rotation.y), r3(grappleGroup.rotation.z)];
+    if (player.hook) { const hk = player.hook; f.gh = [].concat(v3(ropeStart(_rp)), v3(hk.pos), v3(hk.dir)); }
     const tg = [];
     targets.forEach((t, i) => { if (t.userData.motion && t.userData.alive) tg.push([i, r3(t.position.x), r3(t.position.y), r3(t.position.z)]); });
     if (tg.length) f.tg = tg;
@@ -6156,7 +6167,8 @@
   function startReplay(clip, label, from) {
     if (!clip || replay.active) return;
     replayProps();
-    // put the live world aside
+    // put the live world aside (a grapple in use just ends)
+    releaseHook(0); vm.grappleOut = 0;
     replay.saved = {
       targets: targets.map((t) => ({ pos: t.position.clone(), visible: t.visible })),
       knives: thrownPool.map((k) => k.root.visible),
@@ -6219,6 +6231,8 @@
     boltMesh.position.z = sp[0]; boltMesh.rotation.z = sp[1]; shotgunPump.position.z = sp[2]; pistolSlide.position.z = sp[3];
     for (const k of replayKnives) k.visible = false;
     bulletMesh.visible = false;
+    ropeMesh.visible = hookHead.visible = grappleGroup.visible = false;
+    vm.grappleOut = 0;
     for (const p of particlePool) { p.active = false; p.mesh.visible = false; }
     for (const t of tracerPool) { t.active = false; t.mesh.visible = false; }
     scopeEl.style.opacity = 0; scopeLinesEl.style.opacity = 0;
@@ -6296,6 +6310,7 @@
       replayCam.lookAt(_tmpV2);
       replayCam.fov = 62; replayCam.updateProjectionMatrix();
       viewmodelRoot.visible = false;   // the bullet cam is out ahead of you
+      ropeMesh.visible = hookHead.visible = false;
       scopeEl.style.opacity = 0; scopeLinesEl.style.opacity = 0;
       if (k >= 1) { replay.phase = "impact"; bulletMesh.visible = false; }
     } else {
@@ -6345,6 +6360,7 @@
         });
         if (replay.phase === "impact" && replay.hit) {
           viewmodelRoot.visible = false;
+          ropeMesh.visible = hookHead.visible = false;
           // after the bullet cam: watch the plate go, from just in front of it
           _tmpV1.fromArray(replay.hit.o); _tmpV2.fromArray(replay.hit.p);
           const dir = _tmpV2.clone().sub(_tmpV1).normalize();
@@ -6359,6 +6375,11 @@
           const sa = a.c[8] + (b.c[8] - a.c[8]) * u;
           scopeEl.style.opacity = sa; scopeLinesEl.style.opacity = sa;
           viewmodelRoot.visible = sa < 0.98;   // scoped in, the scope fills the view, as it did live
+          // the grapple, if it was out: the launcher in the hand, and the rope and spear as they were
+          grappleGroup.visible = !!a.gl;
+          if (a.gl) { grappleGroup.position.fromArray(a.gl, 0); grappleGroup.rotation.set(a.gl[3], a.gl[4], a.gl[5]); }
+          if (a.gh) poseRope(_gRStart.fromArray(a.gh, 0), _gRPos.fromArray(a.gh, 3), _gRDir.fromArray(a.gh, 6));
+          else ropeMesh.visible = hookHead.visible = false;
           const held = a.w && WEAPONS[a.w] ? a.w : null;
           if (held) {
             for (const id of WEAPON_ORDER) WEAPONS[id].group.visible = id === held && (!a.vm || a.vm[6] === 1);
