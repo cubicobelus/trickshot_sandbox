@@ -2527,6 +2527,7 @@
   const speedlinesEl = document.getElementById("speedlines");
   const speedEl = document.getElementById("speed-val");
   const speedbarEl = document.getElementById("speedbar-fill");
+  const grappleFillEl = document.getElementById("grapplebar-fill");
   const stateEl = document.getElementById("state-val");
   const streakEl = document.getElementById("streak-val");
   const scoreEl = document.getElementById("score-val");
@@ -2714,6 +2715,9 @@
         const s = saved.binds[a];
         if (Array.isArray(s)) BINDS[a] = [0, 1].map((i) => (validInput(s[i]) ? s[i] : null));
       }
+      // an action added since these were saved starts on its default, unless the player has put that input to other use
+      const taken = new Set(ACTION_IDS.filter((a) => Array.isArray(saved.binds[a])).flatMap((a) => BINDS[a]));
+      for (const a of ACTION_IDS) if (!Array.isArray(saved.binds[a])) BINDS[a] = BINDS[a].map((b) => (b && taken.has(b) ? null : b));
     }
     for (const el of boundEls) {
       const key = el.dataset.setting;
@@ -3297,7 +3301,7 @@
     viewRoll: 0,
     hook: null,      // { anchor, len, flying, pos, dir } from the moment the hook is fired
     grappleWant: false,   // the grapple is out (or coming out) in the hand
-    grappleCooldown: 0, lastGrappleAt: -99, grappleWasHeld: false,
+    grappleCooldown: 0, grappleCooldownMax: 1, lastGrappleAt: -99, grappleWasHeld: false,
   };
 
   // ---- grappling hook: hold the key. The gun is put away and the grapple comes out; its hook flies to the
@@ -3343,7 +3347,7 @@
     ropeMesh.visible = hookHead.visible = false;
     if (!had) return;
     player.lastGrappleAt = elapsedTime;
-    player.grappleCooldown = cooldown === undefined ? CFG.grappleCooldown : cooldown;
+    player.grappleCooldown = player.grappleCooldownMax = cooldown === undefined ? CFG.grappleCooldown : cooldown;
     playSfx("slide", 0.3, 1.8, 0.1, "volMove");
   }
 
@@ -6178,8 +6182,10 @@
       viewmodel: viewmodelRoot.visible,
       guns: WEAPON_ORDER.map((id) => WEAPONS[id].group.visible),
       parts: [boltMesh.position.z, boltMesh.rotation.z, shotgunPump.position.z, pistolSlide.position.z],
+      debris: casingPool.concat(magDropPool).map((d) => d.mesh.visible),
       mags: WEAPON_ORDER.map((id) => WEAPONS[id].mag ? [WEAPONS[id].mag.position.y, WEAPONS[id].mag.visible] : null),
     };
+    for (const d of casingPool.concat(magDropPool)) d.mesh.visible = false;   // live brass and magazines stay out of the replay
     // the gun moves from the live camera onto the replay camera, holding whatever was in your hand
     replayCam.add(viewmodelRoot);
     for (const k of thrownPool) k.root.visible = false;
@@ -6223,6 +6229,7 @@
       if (!t.userData.alive) t.visible = false;
     });
     thrownPool.forEach((k, i) => { k.root.visible = replay.saved.knives[i]; });
+    casingPool.concat(magDropPool).forEach((d, i) => { d.mesh.visible = replay.saved.debris[i]; });
     camera.add(viewmodelRoot);
     viewmodelRoot.visible = replay.saved.viewmodel;
     WEAPON_ORDER.forEach((id, i) => {
@@ -6642,6 +6649,9 @@
         hudTimer = 0.07;
         speedEl.textContent = speed.toFixed(1);
         speedbarEl.style.width = Math.min(speed / CFG.maxSpeed * 100, 100).toFixed(0) + "%";
+        const gReady = player.grappleCooldown <= 0, gUsed = !!player.hook || player.grappleWant;
+        grappleFillEl.style.width = (gUsed ? 0 : gReady ? 100 : (1 - player.grappleCooldown / player.grappleCooldownMax) * 100).toFixed(0) + "%";
+        grappleFillEl.classList.toggle("cooling", !gReady || gUsed);
         speedbarEl.style.background = speed > 18 ? "#22d3ee" : (speed > 12 ? "#7CFC00" : "#ffd24a");
         const st = player.sliding ? "SLIDING"
           : (!player.onGround ? (player.wallContactTime >= 0 ? "WALL" : "AIR") : "");
