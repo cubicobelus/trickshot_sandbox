@@ -3395,7 +3395,7 @@
       else {
         hk.pos.copy(hk.anchor); hk.flying = false;
         hk.len = yawObject.position.distanceTo(hk.anchor);
-        stat("grapples");
+        stat("grapples"); achProgress();
         playKnifeStick(hk.len); burst(hk.anchor, 0xffd24a, 4);
       }
       return;
@@ -5683,6 +5683,7 @@
     { id: "sonic", group: "Tricks", name: "Speed Demon", desc: "Hit a target while moving at 19+ u/s.", hit: (h) => has(h, "SONIC") },
     { id: "ninja", group: "Tricks", name: "Ninja", desc: "Hit a target with a thrown knife from 30 m or more.", hit: (h) => h.thrown && h.dist >= 30 },
     { id: "airknife", group: "Tricks", name: "Death From Above", desc: "Hit a target with a knife swing while in the air.", hit: (h) => h.isKnife && !h.thrown && has(h, "AIR") },
+    { id: "grapple", group: "Tricks", name: "Swinging In", desc: "Hit a target within a moment of letting go of the grapple.", hit: (h) => has(h, "GRAPPLE") },
     { id: "x10", group: "Big shots", name: "Trickshot", desc: "Land a 10x shot.", hit: (h) => h.mult >= 10 },
     { id: "x50", group: "Big shots", name: "Insane", desc: "Land a 50x shot.", hit: (h) => h.mult >= 50 },
     { id: "x100", group: "Big shots", name: "Legendary", desc: "Land a 100x shot.", hit: (h) => h.mult >= 100 },
@@ -5692,6 +5693,7 @@
     { id: "run5k", group: "Score Attack", name: "High Roller", desc: "Score 5,000 or more in a 1:00 Score Attack.", run: (r) => r.mode === "sa60" && r.score >= 5000 },
     { id: "bounce10", group: "Grind", name: "Bounce House", desc: "10 perfect wall bounces.", goal: 10, progress: () => stats.perfectBounces },
     { id: "bounce100", group: "Grind", name: "Off the Walls", desc: "100 perfect wall bounces.", goal: 100, progress: () => stats.perfectBounces },
+    { id: "grapple25", group: "Grind", name: "Spider-Man", desc: "Land 25 grapples.", goal: 25, progress: () => stats.grapples },
     { id: "marathon", group: "Grind", name: "Marathon", desc: "Travel 10 km.", goal: 10000, progress: () => stats.distance, unit: "m" },
   ];
   let achDone = {};
@@ -5967,6 +5969,7 @@
     { title: "Jump pad", text: "Run onto a glowing jump pad. The purple ones throw you higher.", done: () => tutDelta("padLaunches") >= 1 },
     { title: "Bunnyhop", text: "Jump again the moment you land to keep your speed. Do it twice.", done: () => tutDelta("bhops") >= 2 },
     { title: "Wall bounce", text: () => "Run at a wall, jump, and press " + keyOf("jump") + " again as you reach it. Right on time is a perfect bounce.", done: () => tutDelta("wallBounces") >= 1 },
+    { title: "Grapple", text: () => "Aim at a wall, the floor or a target and tap " + keyOf("grapple") + ". A hook flies out and zips you there. Tap " + keyOf("grapple") + " or " + keyOf("jump") + " to let go and keep your speed.", done: () => tutDelta("grapples") >= 1 },
     { title: "Knife", text: () => "Press " + either("knife", "swap") + " for the knife, then " + keyOf("aim") + " to throw it. " + either("gun", "swap") + " takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
     { title: "Trickshot", text: "Put it together: land a 3x shot. Jump, spin, hit from far away...", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
   ];

@@ -48,7 +48,8 @@ saves it as a .webm you can post anywhere.
 score less per hit so trickshots stay king.
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (press jump just as you land) and
-wall bounces, up to 22 u/s.
+wall bounces, up to 22 u/s. Tap **E** to fire the grappling hook at a wall, the floor or a target and
+zip there (the gun goes away while it's out).
 
 **Scoring:** every trick multiplies the shot. Being airborne, hang time, spins, speed, distance (no cap: the
 further, the more), no-scopes, quickscopes, flicks, quick switches, launches off pads and ramps, shooting
