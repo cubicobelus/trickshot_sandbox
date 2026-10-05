@@ -20,7 +20,8 @@ unzip, and open `index.html`. No internet connection is needed.
 ## How to play
 
 **Controls:** WASD move, Space jump, Shift sprint (or walk, with Auto sprint on in Settings > Other), Ctrl slide
-(when moving faster than a walk; slower, Ctrl crouch-walks), R reload, F inspect, P replay last hit, left click attack,
+(when moving faster than a walk; slower, Ctrl crouch-walks), E grappling hook (tap it at a wall, the floor or a target to zip
+there; tap again or jump to let go), R reload, F inspect, P replay last hit, left click attack,
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
 Every one of these can be changed in **Settings > Controls**: each action has two boxes, and a box takes a key, a
@@ -79,7 +80,8 @@ and gives the sniper a little spread when it isn't scoped.
   with sliders to try changes, plus the synthesized sniper shots kept for reference
   ([open it](https://cubicobelus.github.io/trickshot_sandbox/tools/sound-lab.html))
 
-Multiplayer code is in `game.js` but switched off for now (`MULTIPLAYER_ENABLED`).
+Multiplayer (race and deathmatch rooms over WebRTC) is on, but experimental and lightly tested; switch it off with
+`MULTIPLAYER_ENABLED` in `game.js`.
 
 ## Development
 

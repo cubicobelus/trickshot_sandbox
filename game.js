@@ -3640,7 +3640,10 @@
     const grappleHeld = held("grapple");
     if (grappleHeld && !player.grappleWasHeld) {
       if (player.grappleWant) releaseHook();   // tap again to let go
-      else if (player.grappleCooldown <= 0 && !reload.active) player.grappleWant = true;
+      else if (player.grappleCooldown <= 0) {
+        player.grappleWant = true;   // like a weapon switch, this ends a reload, a bolt cycle and an inspect
+        cancelReload(); cancelBoltCycle(); cancelPump(); vm.inspectTimer = 0;
+      }
     }
     player.grappleWasHeld = grappleHeld;
     // jumping lets go too, keeping the speed
