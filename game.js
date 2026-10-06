@@ -5652,10 +5652,8 @@
     medium: { react: 0.40, err: 3.0, turn: 4.8, head: 0.14, speed: 5.9, burst: [3, 6], pause: [0.4, 1.0] },
     hard:   { react: 0.22, err: 1.6, turn: 7.5, head: 0.24, speed: 6.6, burst: [4, 8], pause: [0.2, 0.55] },
   };
-  // hop: hops a second while strafing in a fight; grapple: how long it waits between grapples (null = never)
-  BOT_LEVELS.easy.hop = 0; BOT_LEVELS.easy.grapple = null;
-  BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.medium.grapple = [9, 15];
-  BOT_LEVELS.hard.hop = 0.3; BOT_LEVELS.hard.grapple = [5, 9];
+  // hop: hops a second while strafing in a fight
+  BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
   const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14 };   // the distance each gun likes to fight at
   const BOT_RELOAD = 2.3;
   const _botRay = new THREE.Ray(), _botHit = new THREE.Vector3(), _botPos = new THREE.Vector3(), _botFrom = new THREE.Vector3();
@@ -5666,7 +5664,7 @@
     const p = makePlayerRecord("bot" + i, "Bot " + BOT_NAMES[i % BOT_NAMES.length], PLAYER_COLORS[(i + 1) % PLAYER_COLORS.length]);
     p.bot = true;
     p.ai = { lvl: BOT_LEVELS[level] || BOT_LEVELS.medium, gun: "ar", ammo: 30, reloadT: 0, fireT: 1, burstLeft: 0, seeT: 0, strafe: 1, strafeT: 0,
-      stuckT: 0, aimYaw: 0, aimPitch: 0, tspd: 0, tx: 0, tz: 0, vy: 0, gr: null, grCd: 3 };
+      stuckT: 0, aimYaw: 0, aimPitch: 0, tspd: 0, tx: 0, tz: 0, vy: 0, path: [], pi: 0, repath: 0 };
     net.players.set(p.id, p);
     ensureAvatar(p);
     return p;
@@ -5678,7 +5676,7 @@
     p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
     ai.ammo = WEAPONS[ai.gun].magSize; ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
     ai.aimYaw = p.yaw = Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;
-    ai.vy = 0; ai.gr = null; ai.grCd = 3 + Math.random() * 3; p.gr = 0; p.gh = null;
+    ai.vy = 0; ai.path = []; ai.pi = 0; ai.repath = 0;
   }
 
   function botLineClear(ax, ay, az, bx, by, bz) {
@@ -5690,6 +5688,95 @@
       if (_botRay.intersectBox(box, _botHit) && _botHit.distanceTo(_botRay.origin) < dist - 0.3) return false;
     }
     return true;
+  }
+
+  // The arena as a grid of 2 m cells; a cell is blocked if a wall, pillar, tower leg or ramp is in the way of a player
+  // walking at floor level. Bots plan a route across it (A*) whenever the target is far or out of sight, so they go
+  // round walls and out of the bounce corridors instead of pushing into them.
+  const NAV_CELL = 2, NAV_N = 40;
+  let navBlocked = null;
+  function navBuild() {
+    navBlocked = new Uint8Array(NAV_N * NAV_N);
+    const pad = CFG.playerRadius + 0.15;
+    const boxes = wallBoxes.filter((b) => 0.25 < b.max.y - CFG.stepHeight && 0.25 + CFG.playerHeight > b.min.y);
+    const block = (x0, x1, z0, z1) => {
+      for (let j = 0; j < NAV_N; j++) for (let i = 0; i < NAV_N; i++) {
+        const cx0 = -40 + i * NAV_CELL - pad, cx1 = -40 + (i + 1) * NAV_CELL + pad, cz0 = -40 + j * NAV_CELL - pad, cz1 = -40 + (j + 1) * NAV_CELL + pad;
+        if (x1 > cx0 && x0 < cx1 && z1 > cz0 && z0 < cz1) navBlocked[j * NAV_N + i] = 1;
+      }
+    };
+    for (const b of boxes) block(b.min.x, b.max.x, b.min.z, b.max.z);
+    for (const r of ramps) block(r.cx - r.halfW, r.cx + r.halfW, r.cz - r.halfD, r.cz + r.halfD);
+  }
+  const navCell = (v) => Math.max(0, Math.min(NAV_N - 1, Math.floor((v + 40) / NAV_CELL)));
+  const navFree = (i, j) => i >= 0 && j >= 0 && i < NAV_N && j < NAV_N && !navBlocked[j * NAV_N + i];
+  // a straight line between two floor points that stays out of blocked cells
+  function navClear(ax, az, bx, bz) {
+    if (!navBlocked) navBuild();
+    const d = Math.hypot(bx - ax, bz - az), steps = Math.ceil(d / 0.5);
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps;
+      if (!navFree(navCell(ax + (bx - ax) * t), navCell(az + (bz - az) * t))) return false;
+    }
+    return true;
+  }
+  function navPath(sx, sz, gx, gz) {
+    if (!navBlocked) navBuild();
+    const N = NAV_N;
+    const nearest = (x, z) => {   // the cell, or the closest free one if that one is blocked
+      const ci = navCell(x), cj = navCell(z);
+      if (navFree(ci, cj)) return ci + cj * N;
+      for (let r = 1; r < 6; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) === r && navFree(ci + di, cj + dj)) return (ci + di) + (cj + dj) * N;
+      }
+      return -1;
+    };
+    const s0 = nearest(sx, sz), t0 = nearest(gx, gz);
+    if (s0 < 0 || t0 < 0) return null;
+    const tI = t0 % N, tJ = (t0 / N) | 0;
+    const g = new Float32Array(N * N).fill(Infinity), from = new Int32Array(N * N).fill(-1), done = new Uint8Array(N * N);
+    const heap = [];
+    const push = (f, idx) => {
+      heap.push([f, idx]);
+      let c = heap.length - 1;
+      while (c > 0) { const q = (c - 1) >> 1; if (heap[q][0] <= heap[c][0]) break; [heap[q], heap[c]] = [heap[c], heap[q]]; c = q; }
+    };
+    const pop = () => {
+      const top = heap[0], last = heap.pop();
+      if (heap.length) {
+        heap[0] = last;
+        let c = 0;
+        for (;;) {
+          const l = 2 * c + 1, r = l + 1;
+          let m = c;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === c) break;
+          [heap[m], heap[c]] = [heap[c], heap[m]]; c = m;
+        }
+      }
+      return top;
+    };
+    g[s0] = 0; push(0, s0);
+    while (heap.length) {
+      const cur = pop()[1];
+      if (done[cur]) continue;
+      done[cur] = 1;
+      if (cur === t0) break;
+      const ci = cur % N, cj = (cur / N) | 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        if (!di && !dj) continue;
+        const ni = ci + di, nj = cj + dj;
+        if (!navFree(ni, nj)) continue;
+        if (di && dj && (!navFree(ci + di, cj) || !navFree(ci, cj + dj))) continue;   // no cutting a corner
+        const n = ni + nj * N, cost = g[cur] + (di && dj ? 1.414 : 1);
+        if (cost < g[n]) { g[n] = cost; from[n] = cur; push(cost + Math.hypot(tI - ni, tJ - nj), n); }
+      }
+    }
+    if (from[t0] < 0 && t0 !== s0) return null;
+    const out = [];
+    for (let c = t0; c !== s0 && c >= 0; c = from[c]) out.push([-40 + ((c % N) + 0.5) * NAV_CELL, -40 + (((c / N) | 0) + 0.5) * NAV_CELL]);
+    return out.reverse();
   }
 
   function botsThink(dt, now) {
@@ -5714,50 +5801,35 @@
     const inst = Math.hypot(tgt.x - ai.tx, tgt.z - ai.tz) / dt;
     ai.tspd += (Math.min(inst, 30) - ai.tspd) * 0.15; ai.tx = tgt.x; ai.tz = tgt.z;
 
-    // turn toward the target, no faster than this level can
-    const wantYaw = Math.atan2(-dx, -dz), wantPitch = Math.atan2(aimY - eyeY, Math.max(dist, 0.1));
+    // far or out of sight: follow a route round the walls to the target (re-planned a bit more than once a second)
+    const prefer = BOT_PREFER[g] || 18;
+    const navigating = !los || dist > prefer + 4;
+    ai.repath -= dt;
+    if (navigating && ai.repath <= 0) { ai.path = navPath(p.x, p.z, tgt.x, tgt.z) || []; ai.pi = 0; ai.repath = rnd(0.6, 0.9); }
+    let wx = tgt.x, wz = tgt.z;   // where it is heading right now
+    if (navigating && ai.path.length) {
+      while (ai.pi < ai.path.length - 1 && Math.hypot(ai.path[ai.pi][0] - p.x, ai.path[ai.pi][1] - p.z) < 1.3) ai.pi++;
+      while (ai.pi < ai.path.length - 1 && navClear(p.x, p.z, ai.path[ai.pi + 1][0], ai.path[ai.pi + 1][1])) ai.pi++;   // cut the corners
+      wx = ai.path[ai.pi][0]; wz = ai.path[ai.pi][1];
+    }
+
+    // turn toward the target (or, with no line of sight, where it is heading), no faster than this level can
+    const lookDx = los ? dx : wx - p.x, lookDz = los ? dz : wz - p.z;
+    const wantYaw = Math.atan2(-lookDx, -lookDz), wantPitch = los ? Math.atan2(aimY - eyeY, Math.max(dist, 0.1)) : 0;
     const maxTurn = L.turn * dt;
     ai.aimYaw += Math.max(-maxTurn, Math.min(maxTurn, wrapAngle(wantYaw - ai.aimYaw)));
     ai.aimPitch += Math.max(-maxTurn, Math.min(maxTurn, wantPitch - ai.aimPitch));
     p.yaw = ai.aimYaw; p.pitch = ai.aimPitch;
     const fx = dx / (dist || 1), fz = dz / (dist || 1);
 
-    // a grapple in progress: zip toward the hooked wall (the gun is away, so no shooting meanwhile)
-    if (ai.gr) {
-      const gx = ai.gr.ax - p.x, gz = ai.gr.az - p.z, gd = Math.hypot(gx, gz);
-      ai.gr.left -= dt;
-      if (gd < 2.5 || ai.gr.left <= 0) { ai.gr = null; p.gr = 0; p.gh = null; ai.fireT = Math.max(ai.fireT, 0.3); }
-      else {
-        _botFrom.set(p.x, p.y, p.z);
-        _botPos.set(p.x + gx / gd * 22 * dt, p.y, p.z + gz / gd * 22 * dt);
-        resolveWalls(_botPos, p.y, _botFrom); resolveWalls(_botPos, p.y, _botFrom);
-        p.x = _botPos.x; p.z = _botPos.z;
-        return;
-      }
-    }
-    // ...and when to start one: the target is far or out of sight, so hook the first wall on the way
-    ai.grCd -= dt;
-    if (L.grapple && ai.grCd <= 0 && p.y <= 0.26 && (!los || dist > 30)) {
-      _botRay.origin.set(p.x, eyeY, p.z);
-      _botRay.direction.set(fx, 0, fz);
-      let bestD = 33, found = false;
-      for (const box of wallBoxes) {
-        if (!_botRay.intersectBox(box, _botHit)) continue;
-        const d = _botHit.distanceTo(_botRay.origin);
-        if (d > 6 && d < bestD) { bestD = d; found = true; ai.gr = { ax: _botHit.x, ay: _botHit.y, az: _botHit.z, left: 1.0 }; }
-      }
-      if (found) { p.gr = 2; p.gh = [r2(ai.gr.ax), r2(ai.gr.ay), r2(ai.gr.az)]; ai.grCd = rnd(L.grapple[0], L.grapple[1]); return; }
-      ai.grCd = 1.5;
-    }
-
     // move: close in or back off to the distance this gun likes, strafing around the target
-    const prefer = BOT_PREFER[g] || 18;
     ai.strafeT -= dt;
     if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? 1 : -1; ai.strafeT = rnd(0.6, 1.8); }
     let mx = 0, mz = 0;
-    const along = !los || dist > prefer + 4 ? 1 : dist < prefer - 4 ? -0.8 : 0;
-    mx += fx * along; mz += fz * along;
-    const side = los ? 0.9 : 0.35;
+    const along = navigating ? 1 : dist < prefer - 4 ? -0.8 : 0;
+    const hx = wx - p.x, hz = wz - p.z, hl = Math.hypot(hx, hz) || 1;   // toward the next point on the route
+    if (along > 0) { mx += hx / hl; mz += hz / hl; } else { mx += fx * along; mz += fz * along; }
+    const side = !navigating ? 0.9 : los ? 0.4 : 0;
     mx += fz * ai.strafe * side; mz += -fx * ai.strafe * side;
     const ml = Math.hypot(mx, mz) || 1;
     const speed = L.speed * (ai.burstLeft > 0 ? 0.75 : 1);

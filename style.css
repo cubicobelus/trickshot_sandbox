@@ -483,9 +483,10 @@
   #mp-timer-val { font-size: 24px; font-weight: bold; color: #ffd24a; font-variant-numeric: tabular-nums; }
   #mp-timer-mode { font-size: 10px; letter-spacing: 1.5px; color: #999; text-transform: uppercase; }
   #fps { position: absolute; top: 8px; left: 8px; font: 12px Consolas, monospace; color: #ffe9a8; background: rgba(0,0,0,0.45); padding: 2px 6px; border-radius: 4px; }
-  #esc-hint { position: absolute; top: 8px; left: 14px; font-size: 11px; color: rgba(255,255,255,0.55); letter-spacing: 0.5px; pointer-events: none; }
+  #esc-hint { position: absolute; top: 8px; left: 14px; font-size: 12px; color: #f2f2f4; letter-spacing: 0.5px; pointer-events: none;
+    background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.22); border-radius: 5px; padding: 3px 9px; }
   .replaying #esc-hint { display: none; }
-  #killfeed { position: absolute; top: 32px; left: 18px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  #killfeed { position: absolute; top: 40px; left: 18px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
   #killfeed div { background: rgba(0,0,0,0.45); color: #fff; font-size: 13px; padding: 4px 10px; border-radius: 5px; }
   #killfeed b { color: #ffd24a; }
   #killfeed i { color: #ff9d3b; font-style: normal; font-size: 11px; margin-left: 4px; }
