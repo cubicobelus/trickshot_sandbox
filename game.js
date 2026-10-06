@@ -170,6 +170,7 @@
     sensX: 1.0, sensY: 1.0, scopedSensMult: 0.35, volume: 0.55,
     unlimitedAmmo: false, mouseAccel: false, accelStrength: 0.7,
     realisticAccuracy: false,
+    realisticAccuracyPvp: true,   // the same, for deathmatch: on by default, and the player can turn it off
     autoSprint: false,          // sprint whenever you move; Shift walks instead   // shots spread mid-jump, and the unscoped sniper isn't laser-accurate
     // crosshair
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
@@ -3854,7 +3855,7 @@
     player.viewHeight += (targetHeight - player.viewHeight) * Math.min(dt * CFG.heightLerpSpeed, 1);
 
     // camera roll: lean into strafes, and tilt harder into a slide
-    let targetRoll = -moveX * 0.022;
+    let targetRoll = -moveX * 0.03;   // the lean into a strafe (was 0.022)
     if (player.sliding) targetRoll += 0.085 + Math.sin(elapsedTime * 22) * 0.006;
     player.viewRoll += (targetRoll - player.viewRoll) * Math.min(dt * 8, 1);
     camera.rotation.z = player.viewRoll;
@@ -4352,7 +4353,7 @@
     // aim, plus this gun's spread: tighter aiming down sights, wider while the AR blooms
     const ads = easeInOut(vm.adsProgress);
     let cone = (w.spread + (w.spreadAds - w.spread) * ads) + (w.bloomNow || 0);
-    if (SETTINGS.realisticAccuracy || (net.active && net.sub === "dm")) {   // always on in player-vs-player modes
+    if (net.active && net.sub === "dm" ? SETTINGS.realisticAccuracyPvp : SETTINGS.realisticAccuracy) {   // deathmatch has its own switch
       if (w.scope) cone += CFG.realisticHipSpread * (1 - ads);
       if (player.onGround) {
         const moveK = Math.min(Math.max((Math.hypot(player.velocity.x, player.velocity.z) - 0.5) / (CFG.realisticMoveFullSpeed - 0.5), 0), 1);
@@ -6011,7 +6012,7 @@
     mouseHeld = false; attackPressed = false;
     const entry = { score, hits: run.hits, acc: run.shots ? run.shotsHit / run.shots : 0,
       gun: WEAPONS[SETTINGS.loadout].name, date: new Date().toISOString().slice(0, 10),
-      notes: [SETTINGS.unlimitedAmmo ? "unlimited ammo" : "", SETTINGS.realisticAccuracy ? "realistic accuracy" : ""].filter(Boolean) };
+      notes: [SETTINGS.unlimitedAmmo ? "unlimited ammo" : "", (net.active && net.sub === "dm" ? SETTINGS.realisticAccuracyPvp : SETTINGS.realisticAccuracy) ? "realistic accuracy" : ""].filter(Boolean) };
     const list = runTopsFor(run.mode);
     list.push(entry);
     list.sort((a, b) => b.score - a.score);
