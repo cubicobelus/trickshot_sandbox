@@ -86,6 +86,9 @@ runs the room, so the host has to keep their tab open. It is experimental and ha
   12 seconds. It can't stop every kind of cheating, so play with people you know. Players can see each other's IP addresses
   (that's how WebRTC works).
 
+**Practice vs bots** (Multiplayer tab, no internet needed): a deathmatch against 1 to 5 AI players on Easy, Medium or Hard. They run
+and strafe, use every gun with its real fire rate, reload, and take and deal the same damage as real players. Esc pauses it.
+
 To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `game.js`.
 
 <details>

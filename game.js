@@ -4745,6 +4745,7 @@
     phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
     players: new Map(), ttOffset: 0, ttSynced: false,
     lastTick: 0, boardTimer: 0, lastHostMsg: 0,
+    practice: false,                      // a local room with bots in it: no network at all
   };
   let uiMode = "solo";
   let localDead = false;
@@ -4768,6 +4769,7 @@
     players: document.getElementById("mp-players"),
     playBtn: document.getElementById("mp-play-btn"),
     leaveBtn: document.getElementById("mp-leave-btn"),
+    botStart: document.getElementById("bot-start-btn"), botCount: document.getElementById("bot-count"), botLevel: document.getElementById("bot-level"),
     copyBtn: document.getElementById("mp-copy-btn"),
     timer: document.getElementById("mp-timer"),
     timerVal: document.getElementById("mp-timer-val"),
@@ -4846,6 +4848,7 @@
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
       hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
+      bot: false, ai: null,
       g: 0, rl: 0, gr: 0, gh: null, swingT: 0, lastSwingAt: -1e9, lastRecv: nowMs(), ropeSet: null,
       lastShot: null, lastShotAt: -1e9, lastThrowAt: -1e9, lastHitAt: -1e9, lastMeleeAt: -1e9, knivesUp: 0,   // for checking hit claims (host only)
     };
@@ -5363,6 +5366,7 @@
     const s = pickSpawn(p.id);
     p.alive = true; p.x = s[0]; p.y = 0.25; p.z = s[1];
     p.hp = 100; p.lastDamageAt = -1e9;
+    if (p.bot) botReset(p, s);
     p.protectUntil = net.sub === "dm" ? nowMs() + PROTECT_MS : 0;
     hostBroadcast({ t: "respawn", id: p.id, pos: s });
   }
@@ -5463,6 +5467,19 @@
     return true;
   }
 
+  // damage lands on a player: the hit marker, or the kill if it was the last of their health. `info` carries
+  // the points of the shot (paid only on a kill) and whether it was a headshot or a knife
+  function hostDealDamage(p, v, dmg, info) {
+    v.hp -= dmg; v.lastDamageAt = nowMs();
+    if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head }); return; }
+    v.hp = 0;
+    const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
+    v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
+    p.kills++; p.score += pts;
+    hostBroadcast({ t: "kill", k: p.id, v: v.id, pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
+    hostBroadcastBoard();
+  }
+
   function hostHandle(fromId, m) {
     const p = net.players.get(fromId);
     if (!p || !m || typeof m !== "object") return;
@@ -5527,14 +5544,7 @@
         if (!g) break;
         const dmg = hostDamage(p, v, m, g);
         if (dmg <= 0) break;
-        v.hp -= dmg; v.lastDamageAt = nowMs();
-        if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: fromId, head: !!m.head }); break; }
-        v.hp = 0;
-        const pts = Math.max(0, Math.min(Number(m.pts) || 0, 20000));   // only a kill scores
-        v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
-        p.kills++; p.score += pts;
-        hostBroadcast({ t: "kill", k: fromId, v: v.id, pts, tags: Array.isArray(m.tags) ? m.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!m.head, knife: !!m.knife });
-        hostBroadcastBoard();
+        hostDealDamage(p, v, dmg, m);
         break;
       }
     }
@@ -5553,6 +5563,7 @@
 
   function hostTick(dt) {
     const now = nowMs();
+    if (net.practice && (!pointerLocked || replay.active)) return;   // practice pauses with the menu
     if (net.phase === "play") {
       net.left -= dt;
       if (net.left <= 0) { net.left = 0; hostEndRound(); }
@@ -5561,6 +5572,7 @@
       if (net.resultsLeft <= 0) hostStartRound();
     }
     if (net.phase === "play" && net.sub === "dm") {
+      if (net.practice) for (let left = dt; left > 0; left -= 0.05) botsThink(Math.min(left, 0.05), now);
       for (const p of net.players.values()) if (!p.alive && now >= p.respawnAt) hostRespawn(p);
       for (const p of net.players.values()) {   // slow healing, only once they've stayed out of the fight
         if (p.alive && p.hp < 100 && now - p.lastDamageAt > REGEN_DELAY && now - p.lastFireAt > REGEN_DELAY) p.hp = Math.min(100, p.hp + REGEN_PER_SEC * dt);
@@ -5569,7 +5581,7 @@
 
     if (!localDead) hostHandle(net.id, localStateMsg());
     for (const p of [...net.players.values()]) {   // anyone who has gone silent has dropped, even if the browser hasn't noticed yet
-      if (p.id === net.id || now - p.lastRecv <= HEARTBEAT_MS) continue;
+      if (p.id === net.id || p.bot || now - p.lastRecv <= HEARTBEAT_MS) continue;
       const c = net.conns.get(p.id);
       try { if (c) c.close(); } catch (e) { /* ignore */ }
       hostRemovePlayer(p.id);
@@ -5598,6 +5610,180 @@
   // a timer rather than requestAnimationFrame so a backgrounded host keeps the room alive
   setInterval(mpTick, 50);
 
+  // ======================================================================
+  // PRACTICE BOTS: AI players for an offline deathmatch. It is an ordinary deathmatch room with no network, so the
+  // bots go through the same health, damage, regeneration, kill feed and scoreboard as real players do.
+  // Their positions are moved here; a shot is resolved by working out where its aim lands on the target.
+  // ======================================================================
+  const BOT_NAMES = ["Rex", "Nova", "Blitz", "Echo", "Vega"];
+  // react: seconds before a bot starts shooting at something it sees; err: aim error in degrees; turn: rad/s;
+  // head: how often it goes for the head; speed: u/s; burst: shots per burst for automatics; pause: seconds between bursts
+  const BOT_LEVELS = {
+    easy:   { react: 0.65, err: 5.0, turn: 3.0, head: 0.06, speed: 5.0, burst: [2, 4], pause: [0.8, 1.6] },
+    medium: { react: 0.40, err: 3.0, turn: 4.8, head: 0.14, speed: 5.9, burst: [3, 6], pause: [0.4, 1.0] },
+    hard:   { react: 0.22, err: 1.6, turn: 7.5, head: 0.24, speed: 6.6, burst: [4, 8], pause: [0.2, 0.55] },
+  };
+  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14 };   // the distance each gun likes to fight at
+  const BOT_RELOAD = 2.3;
+  const _botRay = new THREE.Ray(), _botHit = new THREE.Vector3(), _botPos = new THREE.Vector3(), _botFrom = new THREE.Vector3();
+  const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  function gauss() { return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random()); }
+
+  function addBot(i, level) {
+    const p = makePlayerRecord("bot" + i, "Bot " + BOT_NAMES[i % BOT_NAMES.length], PLAYER_COLORS[(i + 1) % PLAYER_COLORS.length]);
+    p.bot = true;
+    p.ai = { lvl: BOT_LEVELS[level] || BOT_LEVELS.medium, gun: "ar", ammo: 30, reloadT: 0, fireT: 1, burstLeft: 0, seeT: 0, strafe: 1, strafeT: 0,
+      stuckT: 0, aimYaw: 0, aimPitch: 0, tspd: 0, tx: 0, tz: 0 };
+    net.players.set(p.id, p);
+    ensureAvatar(p);
+    return p;
+  }
+  // a fresh life: a gun picked at random, a full magazine, looking at the middle of the arena
+  function botReset(p, spawn) {
+    const ai = p.ai;
+    ai.gun = GUNS[Math.floor(Math.random() * GUNS.length)];
+    p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
+    ai.ammo = WEAPONS[ai.gun].magSize; ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
+    ai.aimYaw = p.yaw = Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;
+  }
+
+  function botLineClear(ax, ay, az, bx, by, bz) {
+    _botRay.origin.set(ax, ay, az);
+    _botRay.direction.set(bx - ax, by - ay, bz - az);
+    const dist = _botRay.direction.length();
+    _botRay.direction.divideScalar(dist || 1);
+    for (const box of wallBoxes) {
+      if (_botRay.intersectBox(box, _botHit) && _botHit.distanceTo(_botRay.origin) < dist - 0.3) return false;
+    }
+    return true;
+  }
+
+  function botsThink(dt, now) {
+    for (const p of net.players.values()) if (p.bot && p.alive) botUpdate(p, dt, now);
+  }
+
+  function botUpdate(p, dt, now) {
+    const ai = p.ai, L = ai.lvl, g = ai.gun, w = WEAPONS[g];
+    // the nearest living player is who it goes after
+    let tgt = null, dist = Infinity;
+    for (const q of net.players.values()) {
+      if (q === p || !q.alive) continue;
+      const d = Math.hypot(q.x - p.x, q.z - p.z);
+      if (d < dist) { dist = d; tgt = q; }
+    }
+    if (!tgt) return;
+    const dx = tgt.x - p.x, dz = tgt.z - p.z, eyeY = p.y + 1.6, aimY = tgt.y + 1.15;
+    const los = botLineClear(p.x, eyeY, p.z, tgt.x, aimY, tgt.z);
+    const range = w.range || 140;
+    ai.seeT = los && dist < range ? ai.seeT + dt : 0;
+    // how fast the target is moving (what makes it hard to hit), smoothed
+    const inst = Math.hypot(tgt.x - ai.tx, tgt.z - ai.tz) / dt;
+    ai.tspd += (Math.min(inst, 30) - ai.tspd) * 0.15; ai.tx = tgt.x; ai.tz = tgt.z;
+
+    // turn toward the target, no faster than this level can
+    const wantYaw = Math.atan2(-dx, -dz), wantPitch = Math.atan2(aimY - eyeY, Math.max(dist, 0.1));
+    const maxTurn = L.turn * dt;
+    ai.aimYaw += Math.max(-maxTurn, Math.min(maxTurn, wrapAngle(wantYaw - ai.aimYaw)));
+    ai.aimPitch += Math.max(-maxTurn, Math.min(maxTurn, wantPitch - ai.aimPitch));
+    p.yaw = ai.aimYaw; p.pitch = ai.aimPitch;
+
+    // move: close in or back off to the distance this gun likes, strafing around the target
+    const prefer = BOT_PREFER[g] || 18;
+    ai.strafeT -= dt;
+    if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? 1 : -1; ai.strafeT = rnd(0.6, 1.8); }
+    const fx = dx / (dist || 1), fz = dz / (dist || 1);
+    let mx = 0, mz = 0;
+    const along = !los || dist > prefer + 4 ? 1 : dist < prefer - 4 ? -0.8 : 0;
+    mx += fx * along; mz += fz * along;
+    const side = los ? 0.9 : 0.35;
+    mx += fz * ai.strafe * side; mz += -fx * ai.strafe * side;
+    const ml = Math.hypot(mx, mz) || 1;
+    const speed = L.speed * (ai.burstLeft > 0 ? 0.75 : 1);
+    _botFrom.set(p.x, p.y, p.z);
+    _botPos.set(p.x + (mx / ml) * speed * dt, p.y, p.z + (mz / ml) * speed * dt);
+    resolveWalls(_botPos, p.y, _botFrom); resolveWalls(_botPos, p.y, _botFrom);
+    const B = CFG.arenaHalfSize - 0.8;
+    _botPos.x = Math.max(-B, Math.min(B, _botPos.x)); _botPos.z = Math.max(-B, Math.min(B, _botPos.z));
+    const moved = Math.hypot(_botPos.x - p.x, _botPos.z - p.z);
+    p.x = _botPos.x; p.z = _botPos.z; p.sl = false;
+    // wedged against something: go the other way for a bit
+    ai.stuckT = moved < speed * dt * 0.25 ? ai.stuckT + dt : 0;
+    if (ai.stuckT > 0.4) { ai.strafe = -ai.strafe; ai.strafeT = 1.2; ai.stuckT = 0; }
+
+    // reloading, then shooting
+    if (ai.reloadT > 0) {
+      ai.reloadT -= dt;
+      if (ai.reloadT <= 0) { ai.ammo = w.magSize; p.rl = 0; }
+      return;
+    }
+    ai.fireT -= dt;
+    const aimErr = Math.abs(wrapAngle(wantYaw - ai.aimYaw)) + Math.abs(wantPitch - ai.aimPitch);
+    if (ai.seeT > L.react && aimErr < 0.1 && ai.fireT <= 0 && nowMs() >= tgt.protectUntil) botFire(p, tgt, dist, now);
+  }
+
+  // where a shot aimed at `y` (height above the target's feet) really goes: an error angle in both directions,
+  // then does that land in the head, the body, or nowhere? Returns "head", "body" or null
+  function botShotLands(dist, errRad, aimHeight) {
+    const hx = gauss() * errRad * dist, vy = aimHeight + gauss() * errRad * dist;
+    if (Math.hypot(hx, vy - 1.62) < 0.27) return "head";
+    if (Math.abs(hx) < 0.42 && vy > 0.35 && vy < 1.38) return "body";
+    return null;
+  }
+
+  function botFire(p, tgt, dist, now) {
+    const ai = p.ai, L = ai.lvl, g = ai.gun, w = WEAPONS[g];
+    ai.ammo--; p.lastFireAt = now;
+    let gap = w.fireRate * 1.08;
+    if (w.auto) {
+      if (ai.burstLeft <= 0) ai.burstLeft = randInt(L.burst[0], L.burst[1]);
+      ai.burstLeft--;
+      if (ai.burstLeft <= 0) gap = rnd(L.pause[0], L.pause[1]);
+    } else gap += rnd(0.05, 0.3) * (L.react / 0.4);
+    ai.fireT = gap;
+    if (ai.ammo <= 0) { ai.reloadT = BOT_RELOAD; p.rl = 1; ai.fireT = 0.4; }
+
+    // everyone sees and hears the shot
+    const ox = p.x, oy = p.y + 1.6, oz = p.z;
+    const aimHeight = Math.random() < L.head ? 1.55 : 1.15;
+    const tx = tgt.x - ox, ty = tgt.y + aimHeight - oy, tz = tgt.z - oz, tl = Math.hypot(tx, ty, tz) || 1;
+    hostBroadcast({ t: "shot", id: p.id, o: [r2(ox), r2(oy), r2(oz)], d: [r2(tx / tl * 1000) / 1000, r2(ty / tl * 1000) / 1000, r2(tz / tl * 1000) / 1000], l: r2(tl) });
+
+    // aim error: worse against a moving target and the longer an automatic keeps firing
+    const burstK = w.auto ? 1 + 0.12 * Math.min(ai.burstLeft === 0 ? 0 : (L.burst[1] - ai.burstLeft), 8) : 1;
+    const errRad = L.err * Math.PI / 180 * (1 + ai.tspd / 8) * burstK * (g === "rifle" ? 0.55 : 1);
+    let n = 0, h = 0;
+    if (g === "shotgun") {
+      for (let i = 0; i < DAMAGE.shotgun.pellets; i++) {
+        const spread = 0.065 * Math.sqrt(Math.random());
+        const land = botShotLands(dist, Math.hypot(errRad, spread * 0.55), aimHeight);
+        if (land) { n++; if (land === "head") h++; }
+      }
+      if (!n) return;
+    } else {
+      const land = botShotLands(dist, errRad, aimHeight);
+      if (!land) return;
+      n = 1; h = land === "head" ? 1 : 0;
+    }
+    const m = { head: h > 0 && g !== "shotgun", n, h };
+    const dmg = hostDamage(p, tgt, m, g);
+    if (dmg <= 0) return;
+    const pts = Math.round(CFG.basePoints * (1 + Math.max(0, dist - CFG.distanceFrom) * CFG.distanceMultPerM) * (h > 0 ? 1.5 : 1));
+    hostDealDamage(p, tgt, dmg, { pts, tags: [], head: h > 0, knife: false });
+  }
+
+  function mpBots() {
+    const count = Math.max(1, Math.min(parseInt(mpEls.botCount.value, 10) || 3, MAX_PLAYERS - 1));
+    const level = mpEls.botLevel.value;
+    net.pendingSub = "dm"; net.id = "you"; net.practice = true;
+    mpEnter("host", "BOTS");
+    net.lastTick = nowMs();
+    for (let i = 0; i < count; i++) addBot(i, level);
+    mpEls.roomCode.textContent = "Practice";
+    mpEls.copyBtn.hidden = true; mpEls.hostMode.hidden = true;
+    hostStartRound();
+    mpRefreshRoomUI();
+  }
+
   // ---------------- connecting ----------------
   function randomCode() {
     let c = "";
@@ -5621,6 +5807,7 @@
     mpEls.timer.hidden = false;
     mpEls.roomCode.textContent = code;
     mpEls.hostMode.hidden = role !== "host";
+    mpEls.copyBtn.hidden = false;
     mpEls.nextSub.value = net.pendingSub;
     mpStatus("");
     mpRefreshRoomUI();
@@ -5634,7 +5821,7 @@
     net.conns.clear();
     try { if (net.hostConn) net.hostConn.close(); } catch (e) { /* ignore */ }
     try { if (net.peer) net.peer.destroy(); } catch (e) { /* ignore */ }
-    net.peer = null; net.hostConn = null; net.id = null; net.role = null; net.active = false;
+    net.peer = null; net.hostConn = null; net.id = null; net.role = null; net.active = false; net.practice = false;
   }
 
   function mpLeave(message) {
@@ -5764,6 +5951,7 @@
   function mpTeardownPending(peer) { try { peer.destroy(); } catch (e) { /* ignore */ } net.peer = null; net.hostConn = null; }
 
   mpEls.hostBtn.addEventListener("click", mpHost);
+  mpEls.botStart.addEventListener("click", mpBots);
   mpEls.joinBtn.addEventListener("click", mpJoin);
   mpEls.code.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") mpJoin(); });
   mpEls.name.addEventListener("keydown", (e) => e.stopPropagation());
@@ -5792,7 +5980,7 @@
       const li = document.createElement("li");
       const hex = "#" + p.color.toString(16).padStart(6, "0");
       li.innerHTML = '<span class="dot" style="background:' + hex + '"></span>' + esc(p.name) +
-        (p.id === net.id ? ' <span class="tag">YOU</span>' : "");
+        (p.id === net.id ? ' <span class="tag">YOU</span>' : "") + (p.bot ? ' <span class="tag">BOT</span>' : "");
       mpEls.players.appendChild(li);
     }
   }

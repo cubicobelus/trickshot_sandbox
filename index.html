@@ -78,6 +78,15 @@
             <input type="text" id="mp-code" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false">
             <button type="button" class="btn" id="mp-join-btn">Join</button>
           </div>
+          <div class="mp-box">
+            <h3>Practice vs bots</h3>
+            <div class="check-row">
+              <label>Bots <select id="bot-count"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
+              <label>Level <select id="bot-level"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></label>
+            </div>
+            <p class="mp-hint">Deathmatch against AI players, offline, with the same health and damage as online. Esc pauses it.</p>
+            <button type="button" class="btn" id="bot-start-btn">Start practice</button>
+          </div>
         </div>
         <p class="mp-status" id="mp-status"></p>
       </div>

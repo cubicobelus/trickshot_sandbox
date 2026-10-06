@@ -353,6 +353,29 @@ def test_erase(browser, base):
     page.close()
 
 
+def test_bots(browser, base):
+    """Practice vs bots: an offline deathmatch room with AI players."""
+    page, errors = open_page(browser, base + "/index.html")
+    page.click('#mode-tabs .tab[data-mode="mp"]')
+    check("the loadout picker shows on the Multiplayer tab too", page.is_visible("#loadout"))
+    page.select_option("#bot-count", "2")
+    page.select_option("#bot-level", "hard")
+    page.click("#bot-start-btn")
+    page.wait_for_timeout(300)
+    names = page.eval_on_selector_all("#mp-players li", "els => els.map(e => e.textContent)")
+    check("practice starts a room with you and the bots", len(names) == 3 and sum("BOT" in n for n in names) == 2 and any("YOU" in n for n in names), "; ".join(names))
+    page.click("#mp-play-btn")
+    step(page, 700)
+    check("in practice the health bar shows and the game runs without errors", page.is_visible("#hpbar") and not errors, "; ".join(errors[:3]))
+    page.evaluate("__unlock()")
+    step(page, 5)
+    page.click("#mp-leave-btn")
+    page.wait_for_timeout(200)
+    check("leaving practice returns to the multiplayer menu", page.is_visible("#mp-connect") and page.is_hidden("#mp-room"))
+    check("no errors in the bots test", not errors, "; ".join(errors[:3]))
+    page.close()
+
+
 def test_tutorial(browser, base):
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
@@ -403,7 +426,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:
