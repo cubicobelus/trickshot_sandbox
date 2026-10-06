@@ -13,6 +13,7 @@
 <div id="blocker">
   <div id="instructions">
     <h1>Trickshot Sandbox</h1>
+    <details id="howto"><summary>How to play</summary>
     <p id="controls-hint">
       <span class="key">WASD</span> move &nbsp;•&nbsp; <span class="key">Space</span> jump &nbsp;•&nbsp;
       <span class="key">Shift</span> sprint &nbsp;•&nbsp; <span class="key">Ctrl</span> slide &nbsp;•&nbsp;
@@ -24,6 +25,7 @@
       You <em>build</em> speed by chaining slides, bunnyhops and wall bounces (up to 22 u/s). Smaller, faster
       targets are worth more, and every trick multiplies your score.
     </p>
+    </details>
 
 
     <div id="mode-tabs">
@@ -47,6 +49,7 @@
       <button type="button" class="btn" id="glossary-open">Trickshot list</button>
       <button type="button" class="btn" id="stats-open">Stats</button>
       <button type="button" class="btn" id="ach-open">Achievements <span id="ach-count"></span></button>
+      <button type="button" class="btn" id="settings-open">Settings</button>
       <button type="button" class="btn" id="run-quit" hidden>Quit run</button>
       <div id="watch-row">
         <button type="button" class="btn" id="watch-best" hidden>&#9654; Watch best trickshot</button>
@@ -92,214 +95,6 @@
       </div>
     </div>
 
-    <div id="settings">
-      <div class="settings-head">
-        <h2>Settings</h2>
-        <div class="stabs" role="tablist">
-          <button type="button" class="stab active" data-tab="mouse">Mouse</button>
-          <button type="button" class="stab" data-tab="controls">Controls</button>
-          <button type="button" class="stab" data-tab="crosshair">Crosshair</button>
-          <button type="button" class="stab" data-tab="view">View</button>
-          <button type="button" class="stab" data-tab="targets">Targets</button>
-          <button type="button" class="stab" data-tab="sound">Sound</button>
-          <button type="button" class="stab" data-tab="other">Gameplay</button>
-        </div>
-      </div>
-
-      <div class="spanel" data-panel="mouse">
-        <div class="slider-row">
-          <label for="sens-x">Sens X</label>
-          <input type="range" id="sens-x" min="0.02" max="4" step="0.01" value="1">
-          <div class="val" id="sens-x-val">1.00</div>
-        </div>
-        <div class="slider-row">
-          <label for="sens-y">Sens Y</label>
-          <input type="range" id="sens-y" min="0.02" max="4" step="0.01" value="1">
-          <div class="val" id="sens-y-val">1.00</div>
-        </div>
-        <div class="slider-row">
-          <label for="sens-scope">Scoped mult</label>
-          <input type="range" id="sens-scope" min="0.05" max="1" step="0.05" value="0.35">
-          <div class="val" id="sens-scope-val">0.35</div>
-        </div>
-        <div class="slider-row">
-          <label for="accel-strength">Accel strength</label>
-          <input type="range" id="accel-strength" min="0" max="1.5" step="0.05" value="0.7" disabled>
-          <div class="val" id="accel-strength-val">0.70</div>
-        </div>
-        <div class="check-row">
-          <label><input type="checkbox" id="sens-link" checked>Link Y to X</label>
-          <label><input type="checkbox" id="mouse-accel">Mouse acceleration</label>
-        </div>
-        <div class="sens-import">
-          <div class="si-title">Import from another game</div>
-          <div class="si-row">
-            <select id="si-game" aria-label="Game"></select>
-            <input type="number" id="si-sens" placeholder="Your sens there" min="0" step="any" aria-label="Your sensitivity in that game">
-            <input type="number" id="si-dpi" placeholder="DPI (optional)" min="50" step="50" aria-label="Mouse DPI (optional)">
-            <button type="button" class="btn small" id="si-apply">Apply</button>
-          </div>
-          <p class="set-hint" id="si-result"></p>
-        </div>
-      </div>
-
-      <div class="spanel" data-panel="controls" hidden>
-        <p class="set-hint">Click a box, then press the key or mouse button you want, or scroll the wheel. Two boxes per action. Backspace clears a box, Esc cancels.</p>
-        <div id="bind-list"></div>   <!-- rows are built in game.js -->
-        <p class="set-hint" id="bind-note"></p>
-        <button type="button" class="btn small" id="bind-reset">Reset controls to defaults</button>
-      </div>
-
-      <div class="spanel" data-panel="crosshair" hidden>
-        <div class="xh-preview" id="xh-preview"></div>
-        <div class="slider-row">
-          <label for="xh-style">Style</label>
-          <select id="xh-style" data-setting="xhStyle">
-            <option value="cross">Cross</option>
-            <option value="cross-dot">Cross + dot</option>
-            <option value="t">T (no top)</option>
-            <option value="dot">Dot</option>
-            <option value="circle">Circle + dot</option>
-          </select>
-        </div>
-        <div class="slider-row">
-          <label for="xh-color">Colour</label>
-          <input type="color" id="xh-color" data-setting="xhColor" value="#eeeeee">
-          <div class="swatches" id="xh-swatches"></div>
-        </div>
-        <div class="slider-row">
-          <label for="xh-size">Length</label>
-          <input type="range" id="xh-size" data-setting="xhSize" min="2" max="30" step="1" value="9">
-          <div class="val">9</div>
-        </div>
-        <div class="slider-row">
-          <label for="xh-thick">Thickness</label>
-          <input type="range" id="xh-thick" data-setting="xhThick" min="1" max="6" step="0.5" value="2">
-          <div class="val">2</div>
-        </div>
-        <div class="slider-row">
-          <label for="xh-gap">Gap</label>
-          <input type="range" id="xh-gap" data-setting="xhGap" min="0" max="15" step="1" value="0">
-          <div class="val">0</div>
-        </div>
-        <div class="slider-row">
-          <label for="xh-alpha">Opacity</label>
-          <input type="range" id="xh-alpha" data-setting="xhAlpha" min="0.2" max="1" step="0.05" value="1">
-          <div class="val">1.00</div>
-        </div>
-        <div class="check-row">
-          <label><input type="checkbox" id="xh-outline" data-setting="xhOutline">Black outline</label>
-        </div>
-      </div>
-
-      <div class="spanel" data-panel="view" hidden>
-        <div class="slider-row">
-          <label for="hand">Weapon hand</label>
-          <select id="hand" data-setting="hand">
-            <option value="right">Right-handed</option>
-            <option value="left">Left-handed</option>
-          </select>
-        </div>
-        <div class="slider-row">
-          <label for="fov">Field of view</label>
-          <input type="range" id="fov" data-setting="fov" min="60" max="110" step="1" value="78">
-          <div class="val">78</div>
-        </div>
-        <div class="slider-row">
-          <label for="bob">Weapon bob</label>
-          <input type="range" id="bob" data-setting="bob" min="0" max="1.5" step="0.05" value="1">
-          <div class="val">1.00</div>
-        </div>
-        <div class="slider-row">
-          <label for="shake">Screen shake</label>
-          <input type="range" id="shake" data-setting="shake" min="0" max="1.5" step="0.05" value="1">
-          <div class="val">1.00</div>
-        </div>
-        <div class="check-row">
-          <label><input type="checkbox" id="scope-sway" data-setting="scopeSway" checked>Scope sway</label>
-          <label><input type="checkbox" id="speed-lines" data-setting="speedLines" checked>Speed lines</label>
-          <label><input type="checkbox" id="show-fps" data-setting="showFps">Show FPS</label>
-        </div>
-        <div class="slider-row">
-          <label for="quality">Graphics</label>
-          <select id="quality" data-setting="quality">
-            <option value="auto">Auto (steps down if it runs slow)</option>
-            <option value="high">High</option>
-            <option value="medium">Medium (75% resolution, cheaper shadows)</option>
-            <option value="low">Low (half resolution, no shadows)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="spanel" data-panel="targets" hidden>
-        <div class="slider-row">
-          <label for="tgt-normal"><i class="tdot" style="background:#e5352f"></i>Standard (still)</label>
-          <input type="range" id="tgt-normal" data-setting="tgtNormal" min="0" max="12" step="1" value="6">
-          <div class="val">6</div>
-        </div>
-        <div class="slider-row">
-          <label for="tgt-moving"><i class="tdot" style="background:#ff8a1c"></i>Moving</label>
-          <input type="range" id="tgt-moving" data-setting="tgtMoving" min="0" max="12" step="1" value="4">
-          <div class="val">4</div>
-        </div>
-        <div class="slider-row">
-          <label for="tgt-small"><i class="tdot" style="background:#19c6e0"></i>Small (still)</label>
-          <input type="range" id="tgt-small" data-setting="tgtSmall" min="0" max="12" step="1" value="3">
-          <div class="val">3</div>
-        </div>
-        <div class="slider-row">
-          <label for="tgt-tiny"><i class="tdot" style="background:#7b2bf0"></i>Tiny (fast)</label>
-          <input type="range" id="tgt-tiny" data-setting="tgtTiny" min="0" max="12" step="1" value="2">
-          <div class="val">2</div>
-        </div>
-      </div>
-
-      <div class="spanel" data-panel="sound" hidden>
-        <div class="slider-row">
-          <label for="volume">Master volume</label>
-          <input type="range" id="volume" min="0" max="1" step="0.05" value="0.55">
-          <div class="val" id="volume-val">0.55</div>
-        </div>
-        <div class="slider-row">
-          <label for="vol-guns">Guns</label>
-          <input type="range" id="vol-guns" data-setting="volGuns" min="0" max="1.5" step="0.05" value="1">
-          <div class="val">1.00</div>
-        </div>
-        <div class="slider-row">
-          <label for="vol-move">Movement</label>
-          <input type="range" id="vol-move" data-setting="volMove" min="0" max="1.5" step="0.05" value="1">
-          <div class="val">1.00</div>
-        </div>
-        <div class="slider-row">
-          <label for="vol-hits">Target hits</label>
-          <input type="range" id="vol-hits" data-setting="volHits" min="0" max="1.5" step="0.05" value="1">
-          <div class="val">1.00</div>
-        </div>
-        <div class="slider-row">
-          <label for="vol-knife">Knife</label>
-          <input type="range" id="vol-knife" data-setting="volKnife" min="0" max="1.5" step="0.05" value="1">
-          <div class="val">1.00</div>
-        </div>
-        <div class="slider-row">
-          <label for="vol-gear">Reloads</label>
-          <input type="range" id="vol-gear" data-setting="volGear" min="0" max="1.5" step="0.05" value="1">
-          <div class="val">1.00</div>
-        </div>
-      </div>
-
-      <div class="spanel" data-panel="other" hidden>
-        <div class="check-row">
-          <label><input type="checkbox" id="unlimited-ammo">Unlimited ammo</label>
-          <label><input type="checkbox" id="auto-sprint" data-setting="autoSprint">Auto sprint (<span id="as-key">Shift</span> walks)</label>
-          <label title="Shots spread while you move (worse in the air; none standing still), and the sniper has a little spread when it isn't scoped. "><input type="checkbox" id="realistic-accuracy" data-setting="realisticAccuracy">Realistic accuracy (solo and race)</label>
-          <label title="The same, but in multiplayer deathmatch. On by default."><input type="checkbox" id="realistic-accuracy-pvp" data-setting="realisticAccuracyPvp">Realistic accuracy (deathmatch)</label>
-        </div>
-        <p class="set-hint">Realistic accuracy: shots spread the faster you move (up to 10 u/s), more in the air, and the sniper isn't perfectly accurate unscoped. It has its own switch for multiplayer deathmatch, on by default.</p>
-        <button type="button" class="btn small" id="best-clear">Clear best trickshot</button>
-      </div>
-
-      <button type="button" class="btn small" id="settings-reset">Reset settings (not controls)</button>
-    </div>
 
   </div>
 </div>
@@ -420,6 +215,223 @@
     <div class="g-head"><h2>Trickshots</h2><button type="button" class="g-close" id="glossary-close" aria-label="Close">&times;</button></div>
     <p class="g-note" id="glossary-note"></p>   <!-- filled in game.js from the scoring values -->
     <div id="glossary-list"></div>
+  </div>
+</div>
+
+<!-- settings, a popup over the menu so the menu itself fits on one screen -->
+<div id="settings-popup" hidden>
+  <div class="g-panel" role="dialog" aria-label="Settings">
+    <div class="g-head"><h2>Settings</h2><button type="button" class="g-close" id="settings-close" aria-label="Close">&times;</button></div>
+    <div id="settings">
+      <div class="settings-head">
+        <div class="stabs" role="tablist">
+          <button type="button" class="stab active" data-tab="mouse">Mouse</button>
+          <button type="button" class="stab" data-tab="controls">Controls</button>
+          <button type="button" class="stab" data-tab="crosshair">Crosshair</button>
+          <button type="button" class="stab" data-tab="view">View</button>
+          <button type="button" class="stab" data-tab="targets">Targets</button>
+          <button type="button" class="stab" data-tab="sound">Sound</button>
+          <button type="button" class="stab" data-tab="other">Gameplay</button>
+        </div>
+      </div>
+
+      <div class="spanel" data-panel="mouse">
+        <div class="slider-row">
+          <label for="sens-x">Sens X</label>
+          <input type="range" id="sens-x" min="0.02" max="4" step="0.01" value="1">
+          <div class="val" id="sens-x-val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="sens-y">Sens Y</label>
+          <input type="range" id="sens-y" min="0.02" max="4" step="0.01" value="1">
+          <div class="val" id="sens-y-val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="sens-scope">Scoped mult</label>
+          <input type="range" id="sens-scope" min="0.05" max="1" step="0.05" value="0.35">
+          <div class="val" id="sens-scope-val">0.35</div>
+        </div>
+        <div class="slider-row">
+          <label for="accel-strength">Accel strength</label>
+          <input type="range" id="accel-strength" min="0" max="1.5" step="0.05" value="0.7" disabled>
+          <div class="val" id="accel-strength-val">0.70</div>
+        </div>
+        <div class="check-row">
+          <label><input type="checkbox" id="sens-link" checked>Link Y to X</label>
+          <label><input type="checkbox" id="mouse-accel">Mouse acceleration</label>
+        </div>
+        <div class="sens-import">
+          <div class="si-title">Import from another game</div>
+          <div class="si-row">
+            <select id="si-game" aria-label="Game"></select>
+            <input type="number" id="si-sens" placeholder="Your sens there" min="0" step="any" aria-label="Your sensitivity in that game">
+            <input type="number" id="si-dpi" placeholder="DPI (optional)" min="50" step="50" aria-label="Mouse DPI (optional)">
+            <button type="button" class="btn small" id="si-apply">Apply</button>
+          </div>
+          <p class="set-hint" id="si-result"></p>
+        </div>
+      </div>
+
+      <div class="spanel" data-panel="controls" hidden>
+        <p class="set-hint">Click a box, then press the key or mouse button you want, or scroll the wheel. Two boxes per action. Backspace clears a box, Esc cancels.</p>
+        <div class="check-row"><label><input type="checkbox" id="auto-sprint" data-setting="autoSprint">Auto sprint (<span id="as-key">Shift</span> walks)</label></div>
+        <div id="bind-list"></div>   <!-- rows are built in game.js -->
+        <p class="set-hint" id="bind-note"></p>
+        <button type="button" class="btn small" id="bind-reset">Reset controls to defaults</button>
+      </div>
+
+      <div class="spanel" data-panel="crosshair" hidden>
+        <div class="xh-preview" id="xh-preview"></div>
+        <div class="slider-row">
+          <label for="xh-style">Style</label>
+          <select id="xh-style" data-setting="xhStyle">
+            <option value="cross">Cross</option>
+            <option value="cross-dot">Cross + dot</option>
+            <option value="t">T (no top)</option>
+            <option value="dot">Dot</option>
+            <option value="circle">Circle + dot</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <label for="xh-color">Colour</label>
+          <input type="color" id="xh-color" data-setting="xhColor" value="#eeeeee">
+          <div class="swatches" id="xh-swatches"></div>
+        </div>
+        <div class="slider-row">
+          <label for="xh-size">Length</label>
+          <input type="range" id="xh-size" data-setting="xhSize" min="2" max="30" step="1" value="9">
+          <div class="val">9</div>
+        </div>
+        <div class="slider-row">
+          <label for="xh-thick">Thickness</label>
+          <input type="range" id="xh-thick" data-setting="xhThick" min="1" max="6" step="0.5" value="2">
+          <div class="val">2</div>
+        </div>
+        <div class="slider-row">
+          <label for="xh-gap">Gap</label>
+          <input type="range" id="xh-gap" data-setting="xhGap" min="0" max="15" step="1" value="0">
+          <div class="val">0</div>
+        </div>
+        <div class="slider-row">
+          <label for="xh-alpha">Opacity</label>
+          <input type="range" id="xh-alpha" data-setting="xhAlpha" min="0.2" max="1" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="check-row">
+          <label><input type="checkbox" id="xh-outline" data-setting="xhOutline">Black outline</label>
+        </div>
+      </div>
+
+      <div class="spanel" data-panel="view" hidden>
+        <div class="slider-row">
+          <label for="hand">Weapon hand</label>
+          <select id="hand" data-setting="hand">
+            <option value="right">Right-handed</option>
+            <option value="left">Left-handed</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <label for="fov">Field of view</label>
+          <input type="range" id="fov" data-setting="fov" min="60" max="110" step="1" value="78">
+          <div class="val">78</div>
+        </div>
+        <div class="slider-row">
+          <label for="bob">Weapon bob</label>
+          <input type="range" id="bob" data-setting="bob" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="shake">Screen shake</label>
+          <input type="range" id="shake" data-setting="shake" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="check-row">
+          <label><input type="checkbox" id="scope-sway" data-setting="scopeSway" checked>Scope sway</label>
+          <label><input type="checkbox" id="speed-lines" data-setting="speedLines" checked>Speed lines</label>
+          <label><input type="checkbox" id="show-fps" data-setting="showFps">Show FPS</label>
+          <label title="Recolors the targets so they never rely on red versus orange or green"><input type="checkbox" id="colorblind-targets" data-setting="colorblindTargets">Colorblind-friendly targets</label>
+        </div>
+        <div class="slider-row">
+          <label for="quality">Graphics</label>
+          <select id="quality" data-setting="quality">
+            <option value="auto">Auto (steps down if it runs slow)</option>
+            <option value="high">High</option>
+            <option value="medium">Medium (75% resolution, cheaper shadows)</option>
+            <option value="low">Low (half resolution, no shadows)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="spanel" data-panel="targets" hidden>
+        <div class="slider-row">
+          <label for="tgt-normal"><i class="tdot" style="background:#e5352f"></i>Standard (still)</label>
+          <input type="range" id="tgt-normal" data-setting="tgtNormal" min="0" max="12" step="1" value="6">
+          <div class="val">6</div>
+        </div>
+        <div class="slider-row">
+          <label for="tgt-moving"><i class="tdot" style="background:#ff8a1c"></i>Moving</label>
+          <input type="range" id="tgt-moving" data-setting="tgtMoving" min="0" max="12" step="1" value="4">
+          <div class="val">4</div>
+        </div>
+        <div class="slider-row">
+          <label for="tgt-small"><i class="tdot" style="background:#19c6e0"></i>Small (still)</label>
+          <input type="range" id="tgt-small" data-setting="tgtSmall" min="0" max="12" step="1" value="3">
+          <div class="val">3</div>
+        </div>
+        <div class="slider-row">
+          <label for="tgt-tiny"><i class="tdot" style="background:#7b2bf0"></i>Tiny (fast)</label>
+          <input type="range" id="tgt-tiny" data-setting="tgtTiny" min="0" max="12" step="1" value="2">
+          <div class="val">2</div>
+        </div>
+      </div>
+
+      <div class="spanel" data-panel="sound" hidden>
+        <div class="slider-row">
+          <label for="volume">Master volume</label>
+          <input type="range" id="volume" min="0" max="1" step="0.05" value="0.55">
+          <div class="val" id="volume-val">0.55</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-guns">Guns</label>
+          <input type="range" id="vol-guns" data-setting="volGuns" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-move">Movement</label>
+          <input type="range" id="vol-move" data-setting="volMove" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-hits">Target hits</label>
+          <input type="range" id="vol-hits" data-setting="volHits" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-knife">Knife</label>
+          <input type="range" id="vol-knife" data-setting="volKnife" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <div class="slider-row">
+          <label for="vol-gear">Reloads</label>
+          <input type="range" id="vol-gear" data-setting="volGear" min="0" max="1.5" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+      </div>
+
+      <div class="spanel" data-panel="other" hidden>
+        <div class="check-row">
+          <label><input type="checkbox" id="unlimited-ammo">Unlimited ammo</label>
+          <label title="Shots spread while you move (worse in the air; none standing still), and the sniper has a little spread when it isn't scoped. "><input type="checkbox" id="realistic-accuracy" data-setting="realisticAccuracy">Realistic accuracy (solo and race)</label>
+          <label title="The same, but in multiplayer deathmatch. On by default."><input type="checkbox" id="realistic-accuracy-pvp" data-setting="realisticAccuracyPvp">Realistic accuracy (deathmatch)</label>
+        </div>
+        <p class="set-hint">Realistic accuracy: shots spread the faster you move (up to 10 u/s), more in the air, and the sniper isn't perfectly accurate unscoped. It has its own switch for multiplayer deathmatch, on by default.</p>
+        <button type="button" class="btn small" id="best-clear">Clear best trickshot</button>
+        <p class="set-hint">Start over completely: deletes every setting, key binding, stat, achievement, best trickshot and replay, Score Attack score and tutorial progress in this browser, then restarts the game as if you had never played.</p>
+        <button type="button" class="btn small danger" id="erase-all">Erase all data&hellip;</button>
+      </div>
+
+      <button type="button" class="btn small" id="settings-reset">Reset settings (not controls)</button>
+    </div>
   </div>
 </div>
 

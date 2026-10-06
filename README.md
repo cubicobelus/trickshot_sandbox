@@ -36,7 +36,8 @@ score as much as you can; Esc pauses the clock, and your top 5 runs are kept in 
 **Stats:** the Stats button in the menu shows your lifetime numbers: play time, accuracy, records (longest
 shot, highest multiplier, top speed...), each gun, targets by colour, movement, and how often you've landed
 each trick. **Achievements** (also in the menu) are goals to chase, from your first hit to a 720 no-scope
-or a 100x shot. Both are kept in your browser.
+or a 100x shot. Both are kept in your browser. **Settings > Gameplay > Erase all data** wipes everything
+the game has saved and starts you over.
 
 **Replays:** every hit is recorded. The menu's **Watch best trickshot** and **Watch last hit** buttons (and
 **Watch best shot** on a Score Attack results screen) play it back from your view, slowing down around the
@@ -87,7 +88,10 @@ runs the room, so the host has to keep their tab open. It is experimental and ha
 
 To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `game.js`.
 
-## Files
+<details>
+<summary><b>For developers: files, tuning and tests</b></summary>
+
+**Files** (they must stay together):
 
 - `index.html` — page + menus
 - `style.css` — styles
@@ -99,12 +103,11 @@ To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `g
   with sliders to try changes, plus the synthesized sniper shots kept for reference
   ([open it](https://cubicobelus.github.io/trickshot_sandbox/tools/sound-lab.html))
 
+**Running it:** open `index.html` in a browser to play your local copy and refresh after editing. Tuning knobs (movement,
+scoring, accuracy, the grapple) are in the `CFG` object at the top of `game.js`.
 
-## Development
-
-Open `index.html` in a browser to play your local copy; refresh after editing. To run the tests (they drive the
-real page in a headless browser and check loadouts, weapon switching, the trickshot list, settings, a full Score
-Attack run and every sound in the sound lab):
+**Tests:** they drive the real page in a headless browser and check the loadouts, weapon switching, the trickshot
+list, settings, controls, the grapple, the tutorial, a full Score Attack run and every sound in the sound lab.
 
 ```
 pip install playwright
@@ -112,7 +115,10 @@ python -m playwright install chromium
 python tests/run_tests.py
 ```
 
-## Credits
+</details>
+
+<details>
+<summary><b>Sound credits</b></summary>
 
 Sniper shot: ["Rifle Gun Shot 01"](https://freesound.org/people/LilMati/sounds/433858/) by LilMati (CC0).
 Deagle: ["Gunshot.wav"](https://freesound.org/people/Cloud-10/sounds/632821/) by Cloud-10 (CC0).
@@ -123,3 +129,5 @@ Bolt action: from ["Sniper Rifle M24 SFX"](https://freesound.org/people/kennysvo
 Footsteps, landings, reloads, knife, impacts and handling: short clips from CC0 recordings on
 freesound.org; each is credited in `sounds.js`. A couple of small cues (the perfect-wall-bounce ping) are
 generated in code.
+
+</details>

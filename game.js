@@ -1,12 +1,22 @@
 (function () {
   "use strict";
 
+  // "Erase all data" sets this flag and reloads; the wipe happens here, before anything reads storage, so nothing
+  // that saves as the page unloads can bring the old data back.
+  try {
+    if (sessionStorage.getItem("tsb-wipe")) {
+      sessionStorage.removeItem("tsb-wipe");
+      for (const k of Object.keys(localStorage)) if (k.startsWith("tsb-")) localStorage.removeItem(k);
+    }
+  } catch (e) { /* storage blocked: nothing to wipe */ }
+
   // A first-time visitor (nothing saved yet) is walked through the tutorial on their first click to play.
   // Read before anything below saves a setting or a stat. (The tests turn this off with window.__noForceTutorial.)
   const FIRST_VISIT = !window.__noForceTutorial && (() => {
     try { return !localStorage.getItem("tsb-tutorial") && !localStorage.getItem("tsb-stats") && !localStorage.getItem("tsb-settings"); } catch (e) { return false; }
   })();
   let tutOffered = false, hasPlayed = false;
+  if (FIRST_VISIT) { const h = document.getElementById("howto"); if (h) h.open = true; }   // the how-to starts open for a new player
 
   // ======================================================================
   // CONFIG
@@ -183,7 +193,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false,   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, colorblindTargets: false,   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -697,6 +707,19 @@
   // plate materials for its [edge, front, back]
   const TARGET_LOOKS = {};
   for (const kind of TARGET_ORDER) TARGET_LOOKS[kind] = [plateSteel, bullseyeMaterial(TARGET_TYPES[kind].color), plateSteel];
+  // the colourblind-friendly set (Okabe-Ito): blue, yellow, pink and green never lean on red against orange
+  const TARGET_COLORS_DEFAULT = {}, TARGET_COLORS_SAFE = { normal: "#0072b2", moving: "#f0e442", small: "#cc79a7", tiny: "#009e73" };
+  for (const kind of TARGET_ORDER) TARGET_COLORS_DEFAULT[kind] = TARGET_TYPES[kind].color;
+  let targetPaletteSafe = false;
+  function applyTargetPalette() {
+    if (targetPaletteSafe === !!SETTINGS.colorblindTargets) return;
+    targetPaletteSafe = !!SETTINGS.colorblindTargets;
+    for (const kind of TARGET_ORDER) {
+      TARGET_TYPES[kind].color = (targetPaletteSafe ? TARGET_COLORS_SAFE : TARGET_COLORS_DEFAULT)[kind];
+      TARGET_LOOKS[kind] = [plateSteel, bullseyeMaterial(TARGET_TYPES[kind].color), plateSteel];
+    }
+    for (const t of targets) if (t.children[0] && t.userData.type) t.children[0].material = TARGET_LOOKS[t.userData.type];
+  }
 
   const PLAYER_SPAWN = new THREE.Vector3(0, 1.7, 8);
 
@@ -2687,6 +2710,7 @@
 
   const xhPreviewEl = document.getElementById("xh-preview");
   function applySettings() {
+    applyTargetPalette();
     if (targetsReady) syncTargetCounts();
     if (SETTINGS.quality === "auto") { if (!gfxLevel) applyGraphics("high"); }
     else applyGraphics(SETTINGS.quality);
@@ -2891,7 +2915,7 @@
   }
   document.addEventListener("pointerlockchange", () => {
     pointerLocked = document.pointerLockElement === domEl;
-    if (pointerLocked) hasPlayed = true;
+    if (pointerLocked) { hasPlayed = true; setSettingsPopup(false); }
     if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; saveStats(); refreshTutorialUI(); }
     if (replay.active) return;   // a replay frees the mouse on purpose and runs its own screens
     showScreen(pointerLocked ? "play" : resultsEl.hidden ? "menu" : "results");
@@ -4199,6 +4223,30 @@
   glossaryEl.addEventListener("click", (e) => { if (e.target === glossaryEl) setGlossary(false); });   // the backdrop
   window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !glossaryEl.hidden) setGlossary(false); });
 
+  // Settings: a popup over the menu
+  const settingsPopupEl = document.getElementById("settings-popup");
+  function setSettingsPopup(open) { settingsPopupEl.hidden = !open; if (!open) stopListening(); }
+  document.getElementById("settings-open").addEventListener("click", (e) => { e.stopPropagation(); setSettingsPopup(true); });
+  document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
+  // Erase all data: ask twice, then everything saved in this browser for the game goes
+  const eraseBtn = document.getElementById("erase-all");
+  let eraseTimer = 0;
+  function disarmErase() { clearTimeout(eraseTimer); eraseTimer = 0; eraseBtn.textContent = "Erase all data\u2026"; eraseBtn.classList.remove("armed"); }
+  eraseBtn.addEventListener("click", () => {
+    if (!eraseTimer) {
+      eraseBtn.textContent = "Click again to erase everything"; eraseBtn.classList.add("armed");
+      eraseTimer = setTimeout(disarmErase, 5000);
+      return;
+    }
+    disarmErase();
+    try { sessionStorage.setItem("tsb-wipe", "1"); }
+    catch (e) { try { for (const k of Object.keys(localStorage)) if (k.startsWith("tsb-")) localStorage.removeItem(k); } catch (e2) { /* ignore */ } }
+    location.reload();
+  });
+  settingsPopupEl.addEventListener("click", (e) => { if (e.target !== eraseBtn) disarmErase(); });
+  settingsPopupEl.addEventListener("click", (e) => { if (e.target === settingsPopupEl) setSettingsPopup(false); });   // the backdrop
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !settingsPopupEl.hidden && !listening) setSettingsPopup(false); });
+
   // score, streak, HUD popups and feedback for any scoring hit (target or player)
   function awardPoints(res) {
     const pointsGained = Math.round(CFG.basePoints * res.mult * (res.scale || 1));
@@ -4735,7 +4783,7 @@
 
   const SUB_HINTS = {
     race: "Everyone shoots the same targets and the best trickscore when the timer ends wins. Players can't hurt each other.",
-    dm: "Targets are off. Any hit eliminates a player, and kills pay out your full trick multipliers. Best score wins.",
+    dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   function selectedSub() { return document.querySelector('input[name="mp-sub"]:checked').value; }
   function refreshSubHint() { mpEls.subHint.textContent = SUB_HINTS[selectedSub()]; }
@@ -6381,7 +6429,7 @@
     if (tg.length) f.tg = tg;
     const kn = [];
     for (const k of thrownPool) {
-      if (k.state !== "flying") continue;
+      if (k.state !== "flying" && k.state !== "stuck") continue;   // the ones stuck in walls too
       k.root.getWorldQuaternion(_rq);
       kn.push([r3(k.root.position.x), r3(k.root.position.y), r3(k.root.position.z), r4(_rq.x), r4(_rq.y), r4(_rq.z), r4(_rq.w), r2(k.spin.rotation.x)]);
     }
@@ -6435,7 +6483,7 @@
   let replayKnives = null, bulletMesh = null;
   function replayProps() {
     if (!replayKnives) {
-      replayKnives = [0, 1, 2].map(() => { const k = thrownPool[0].root.clone(true); k.visible = false; scene.add(k); return k; });
+      replayKnives = thrownPool.map(() => { const k = thrownPool[0].root.clone(true); k.visible = false; scene.add(k); return k; });
       bulletMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 6), new THREE.MeshBasicMaterial({ color: 0xffe9a8 }));
       bulletMesh.geometry.rotateX(Math.PI / 2);   // long axis along z, so lookAt points it down the shot
       bulletMesh.visible = false;
@@ -6638,6 +6686,7 @@
         replayKnives.forEach((m, j) => {
           const ka = a.kn && a.kn[j];
           m.visible = !!ka;
+          m.scale.setScalar(1);
           if (ka) { m.position.set(ka[0], ka[1], ka[2]); m.quaternion.set(ka[3], ka[4], ka[5], ka[6]); if (m.children[0]) m.children[0].rotation.x = ka[7]; }
         });
         if (replay.phase === "impact" && replay.hit) {

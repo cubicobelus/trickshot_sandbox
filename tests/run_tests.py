@@ -78,6 +78,18 @@ def open_page(browser, url, w=1280, h=720):
     return page, errors
 
 
+def show_settings(page):
+    """Settings is a popup over the menu: open it if it isn't."""
+    if page.is_hidden("#settings-popup"):
+        page.click("#settings-open")
+        page.wait_for_timeout(100)
+
+
+def click_tab(page, tab):
+    show_settings(page)
+    page.click(f".stab[data-tab={tab}]")
+
+
 def step(page, n):
     page.evaluate(f"__step({n}, 16)")
 
@@ -136,34 +148,36 @@ def test_game(browser, base):
     tabs = page.eval_on_selector_all(".stab", "els => els.map(e => e.dataset.tab)")
     shown = []
     for t in tabs:
-        page.click(f".stab[data-tab={t}]")
+        click_tab(page, t)
         shown.append(page.evaluate(f"!document.querySelector('.spanel[data-panel={t}]').hidden"))
     check("every settings tab opens", all(shown), ", ".join(tabs))
-    page.click(".stab[data-tab=view]")
+    click_tab(page, "view")
     page.select_option("#quality", "low")
     page.check("#show-fps")
     low_ok = page.input_value("#quality") == "low"
     page.select_option("#quality", "auto")
     page.uncheck("#show-fps")
     check("the graphics setting switches levels", low_ok)
-    page.click(".stab[data-tab=sound]")
+    click_tab(page, "sound")
     page.fill("#vol-move", "0.4")
     page.dispatch_event("#vol-move", "input")
     page.reload()
     page.wait_for_timeout(900)
     kept = page.input_value("#vol-move")
+    show_settings(page)
     page.click("#settings-reset")
     reset = page.input_value("#vol-move")
     check("a setting survives a reload, and Reset restores it", kept == "0.4" and reset == "1", f"{kept} -> {reset}")
 
     # sensitivity import: CS2 sens 1.0 matches 0.53 here (0.022 / 0.0418 degrees per count)
-    page.click(".stab[data-tab=mouse]")
+    click_tab(page, "mouse")
     page.select_option("#si-game", "cs2")
     page.fill("#si-sens", "1")
     page.fill("#si-dpi", "800")
     page.click("#si-apply")
     check("sensitivity import converts CS2 1.0 to 0.53 (52.0 cm/360 at 800 DPI)",
           page.inner_text("#sens-x-val") == "0.53" and "52.0 cm" in page.inner_text("#si-result"), page.inner_text("#si-result"))
+    show_settings(page)
     page.click("#settings-reset")
 
     # stats: the shots fired above are counted, survive a reload, and show in the Stats popup
@@ -224,7 +238,7 @@ def test_controls(browser, base):
     page, errors = open_page(browser, base + "/index.html", 1280, 900)
     slot = lambda a, i: page.locator(f'.bind-slot[data-action="{a}"][data-slot="{i}"]')
     ammo = lambda: page.inner_text("#ammo-count").split("/")[0].strip()
-    page.click(".stab[data-tab=controls]")
+    click_tab(page, "controls")
     check("the Controls tab lists every action with two boxes each",
           page.locator(".bind-row").count() >= 14 and page.locator(".bind-slot").count() == 2 * page.locator(".bind-row").count()
           and slot("jump", 0).inner_text() == "Space" and slot("fire", 0).inner_text() == "Left Mouse")
@@ -245,8 +259,9 @@ def test_controls(browser, base):
     check("a mouse button can be bound too (taken from Aim)", slot("fire", 1).inner_text() == "Right Mouse" and slot("aim", 0).inner_text() == "–")
     page.reload()
     page.wait_for_timeout(900)
-    page.click(".stab[data-tab=controls]")
+    click_tab(page, "controls")
     check("the bindings survive a reload", slot("reload", 0).inner_text() == "T" and slot("fire", 1).inner_text() == "Right Mouse")
+    page.keyboard.press("Escape")   # close the settings popup before playing
 
     page.click("#start-btn")
     step(page, 45)
@@ -265,7 +280,7 @@ def test_controls(browser, base):
     check("in the game the new bindings work (right mouse fires, T reloads, R doesn't)", fired and r_idle and ammo() == before, f"{before} -> {after} -> {ammo()}")
     page.evaluate("__unlock()")
     step(page, 5)
-    page.click(".stab[data-tab=controls]")
+    click_tab(page, "controls")
     page.click("#bind-reset")
     check("Reset controls restores the defaults", slot("reload", 0).inner_text() == "R" and slot("jump", 0).inner_text() == "Space"
           and slot("aim", 0).inner_text() == "Right Mouse")
@@ -312,6 +327,29 @@ def test_first_visit(browser, base):
     step(page, 20)
     check("and clicking it plays without the tutorial", not page.is_visible("#tutorial"))
     check("no errors on a first visit", not errors, "; ".join(errors[:3]))
+    page.close()
+
+
+def test_erase(browser, base):
+    """Erase all data: two clicks, then every saved thing is gone and the game starts fresh."""
+    page, errors = open_page(browser, base + "/index.html")
+    click_tab(page, "sound")
+    page.fill("#vol-move", "0.4")
+    page.dispatch_event("#vol-move", "input")
+    page.evaluate("localStorage.setItem('tsb-stats', JSON.stringify({ hits: 12 })); localStorage.setItem('tsb-achievements', JSON.stringify({ first: '2026-10-06' }))")
+    click_tab(page, "other")
+    page.click("#erase-all")
+    armed = "again" in page.inner_text("#erase-all").lower()
+    still = page.evaluate("!!localStorage.getItem('tsb-settings') && !!localStorage.getItem('tsb-stats')")
+    check("the first click only asks to be sure (nothing is deleted yet)", armed and still)
+    with page.expect_navigation():
+        page.click("#erase-all")
+    page.wait_for_timeout(900)
+    left = page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('tsb-'))")
+    click_tab(page, "sound")
+    check("the second click erases every saved setting, stat and achievement",
+          not any(k in left for k in ("tsb-stats", "tsb-achievements")) and page.input_value("#vol-move") == "1", str(left))   # (the game rewrites its settings key on load, with defaults)
+    check("no errors in the erase test", not errors, "; ".join(errors[:3]))
     page.close()
 
 
@@ -365,7 +403,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:
