@@ -292,9 +292,9 @@
         <div class="check-row">
           <label><input type="checkbox" id="unlimited-ammo">Unlimited ammo</label>
           <label><input type="checkbox" id="auto-sprint" data-setting="autoSprint">Auto sprint (<span id="as-key">Shift</span> walks)</label>
-          <label title="Shots spread while you're in the air, and the sniper has a little spread when it isn't scoped"><input type="checkbox" id="realistic-accuracy" data-setting="realisticAccuracy">Realistic accuracy</label>
+          <label title="Shots spread while you move (worse in the air; none standing still), and the sniper has a little spread when it isn't scoped. Always on in deathmatch"><input type="checkbox" id="realistic-accuracy" data-setting="realisticAccuracy">Realistic accuracy</label>
         </div>
-        <p class="set-hint">Realistic accuracy: shots spread while you're in the air, and the sniper isn't perfectly accurate unscoped.</p>
+        <p class="set-hint">Realistic accuracy: shots spread the faster you move (up to 10 u/s), more in the air, and the sniper isn't perfectly accurate unscoped. Always on in deathmatch.</p>
         <button type="button" class="btn small" id="best-clear">Clear best trickshot</button>
       </div>
 
@@ -317,6 +317,7 @@
     Speed: <span id="speed-val">0</span> u/s <span class="state" id="state-val"></span>
     <div id="speedbar"><div id="speedbar-fill"></div></div>
     <div id="grapplebar" title="Grappling hook"><div id="grapplebar-fill"></div></div>
+    <div id="hpbar" hidden title="Health"><div id="hpbar-fill"></div><span id="hpbar-text">100</span></div>
   </div>
   <div id="hud-right">
     <div id="score">Score<br><span id="score-val">0</span></div>
@@ -324,6 +325,8 @@
     <div id="streak">Streak<br><span id="streak-val">0</span></div>
     <div id="bonus-tags"></div>
   </div>
+  <div id="dmg-flash"></div>
+  <div id="dmg-dir"><i></i></div>
   <div id="feed"></div>
   <div id="run-count"></div>   <!-- Score Attack countdown: 3, 2, 1, GO -->
   <div id="tutorial" hidden>

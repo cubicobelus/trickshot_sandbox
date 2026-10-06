@@ -220,6 +220,17 @@
   }
   #grapplebar-fill { height: 100%; width: 100%; background: #ffd24a; }
   #grapplebar-fill.cooling { background: rgba(255,255,255,0.45); }
+  /* deathmatch health: a fuller bar than the others, with the number on it */
+  #hpbar { position: relative; width: 150px; height: 12px; background: rgba(255,255,255,0.14); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  #hpbar[hidden] { display: none; }
+  #hpbar-fill { height: 100%; width: 100%; background: #3ddc84; transition: width 0.15s linear; }
+  #hpbar-text { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 12px; font-weight: bold; color: #fff !important; text-shadow: 0 0 3px #000; }
+  /* getting hit: a red edge flash and an arrow toward the shooter */
+  #dmg-flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 4;
+    background: radial-gradient(ellipse at center, rgba(255,0,0,0) 45%, rgba(255,0,0,0.85) 100%); }
+  #dmg-dir { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; opacity: 0; z-index: 4; }
+  #dmg-dir i { position: absolute; left: -18px; top: -150px; width: 36px; height: 20px; background: rgba(255,60,60,0.9);
+    clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 
   /* top right: score, best trickshot, streak, then the multipliers of the last hit */
   #hud-right {

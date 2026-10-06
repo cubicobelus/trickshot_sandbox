@@ -62,6 +62,12 @@ The full list with every value is under **Trickshot list** in the menu.
 Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
 purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
 
+**Multiplayer combat:** deathmatch has 100 health. Sniper: one hit kills, anywhere. Deagle: 55 to the body, a head hit kills.
+AK: 34 body / 50 head. Rifle: 26 body / 40 head. Shotgun: about 11 a pellet, falling off with distance. Knife: 55 a swing, a thrown
+knife kills. Health starts coming back after 10 seconds without taking damage or shooting. Only kills score. Realistic accuracy is
+always on in deathmatch: standing still is perfectly accurate, spread grows with speed up to 10 u/s, and is worse in the air;
+crouching steadies recoil.
+
 Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo and so on) are saved in your
 browser. **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
 Call of Duty, so the same hand movement turns you the same amount here. **Settings > View > Graphics** trades looks for speed

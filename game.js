@@ -158,7 +158,10 @@
     reverseSpeed: 8,            // moving at least this fast...
     reverseMult: 1.4,           // ...away from where you're aiming
     // Realistic accuracy (a setting, off by default): extra spread, in radians
-    realisticAirSpread: 0.025,  // any gun, while you're in the air
+    realisticAirSpread: 0.025,  // any gun, while you're in the air (on top of the moving spread)
+    realisticMoveSpread: 0.016, // any gun on the ground: none standing still, growing with speed until...
+    realisticMoveFullSpeed: 10, // ...this speed (u/s), where it levels out. Aiming down sights halves it.
+    crouchRecoilMult: 0.6,      // holding crouch (on the ground) tames recoil
     realisticHipSpread: 0.012,  // the sniper when it isn't scoped, so a no-scope is a real gamble
 
   };
@@ -1657,7 +1660,7 @@
       action: "none", ejectOnShot: true, casing: "small",
       muzzle: new THREE.Vector3(0, 0.015, -0.68), eject: new THREE.Vector3(0.03, 0.025, -0.01),
       sound: { recording: "ar", rate: 1, lowcut: 80, length: 0.6, gain: 0.8 },
-      recoilKick: { up: 0.006, grow: 0.0007, side: 0.0035, max: 0.11, recover: 7, hold: 0.12 },
+      recoilKick: { up: 0.0075, grow: 0.0009, side: 0.0043, max: 0.13, recover: 7, hold: 0.12 },
       mag: arMag, magRestY: arMag.position.y,
       reload: {
         time: 2.0, magOut: 0.2, magDrop: 0.36, magUp: 0.75, magSeat: 1.2, travel: 0.15, rise: 0.3, charge: 1.5,
@@ -1685,7 +1688,7 @@
       action: "none", ejectOnShot: true, casing: "small",
       muzzle: new THREE.Vector3(0, 0, -0.6), eject: new THREE.Vector3(0.03, 0.02, 0.0),
       sound: { recording: "ak", rate: 1, lowcut: 80, length: 0.6, gain: 0.85 },
-      recoilKick: { up: 0.011, grow: 0.0018, side: 0.016, max: 0.26, recover: 5, hold: 0.15 },   // terrible on purpose
+      recoilKick: { up: 0.0135, grow: 0.0023, side: 0.019, max: 0.30, recover: 5, hold: 0.15 },   // terrible on purpose
       mag: akMag, magRestY: akMag.position.y, dropGeo: new THREE.BoxGeometry(0.028, 0.17, 0.07),
       reload: {
         time: 2.2, magOut: 0.22, magDrop: 0.4, magUp: 0.8, magSeat: 1.3, travel: 0.13, rise: 0.3, charge: 1.62,
@@ -1744,7 +1747,7 @@
       name: "KNIFE", group: knifeGroup,
       restPos: new THREE.Vector3(0.24, -0.24, -0.42), restRot: new THREE.Euler(0.06, -0.26, 0.10),
       adsPos: new THREE.Vector3(0.24, -0.24, -0.42), adsRot: new THREE.Euler(0.06, -0.26, 0.10),
-      canADS: false, fireRate: 0.38, auto: true, isMelee: true,
+      canADS: false, fireRate: 0.38, auto: true, isMelee: true, throwGap: 350,   // ms: the host drops thrown knives that come faster
       usesAmmo: false, range: 3.0, inspectDuration: 1.9, inspects: KNIFE_INSPECTS,
       slashDuration: 0.42,
     },
@@ -2528,6 +2531,7 @@
   const speedEl = document.getElementById("speed-val");
   const speedbarEl = document.getElementById("speedbar-fill");
   const grappleFillEl = document.getElementById("grapplebar-fill");
+  const hpBarEl = document.getElementById("hpbar"), hpFillEl = document.getElementById("hpbar-fill"), hpTextEl = document.getElementById("hpbar-text");
   const stateEl = document.getElementById("state-val");
   const streakEl = document.getElementById("streak-val");
   const scoreEl = document.getElementById("score-val");
@@ -4129,7 +4133,7 @@
       ["Aim", [
         ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per meter past " + C.distanceFrom + " m: " +
           x(1 + 15 * C.distanceMultPerM) + " at 30 m, " + x(1 + 35 * C.distanceMultPerM) + " at 50 m, " + x(1 + 65 * C.distanceMultPerM) + " at 80 m."],
-        ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more. With Realistic accuracy on, unscoped shots spread a little."],
+        ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more. With Realistic accuracy on, unscoped shots spread a little, and moving spreads every gun."],
         ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of scoping in."],
         ["FLICK", x(C.flickMult), "Turn your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
         ["SNAP FLICK", x(C.snapFlickMult), C.snapFlickAngle + "° or more in the last " + C.snapFlickWindow + " s: a faster, bigger flick (instead of FLICK)."],
@@ -4246,7 +4250,7 @@
     let hit = true;
     if (pres.p && pres.dist < occ) {
       playKnifeHit();
-      mpPvpKill(pres, true, 0);
+      mpPvpHit(pres, true, 0);
     } else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) {
       playKnifeHit();
       scoreHit(res.target, res.dist, true, 0);
@@ -4311,7 +4315,8 @@
     const inBurst = elapsedTime - vm.lastShotAt < Math.max(w.fireRate * 1.8, 0.25);
     vm.burstShots = inBurst ? vm.burstShots + 1 : 0;
     vm.lastShotAt = elapsedTime;
-    const steady = 1 - 0.2 * easeInOut(vm.adsProgress);   // aiming down sights steadies it a little
+    let steady = 1 - 0.2 * easeInOut(vm.adsProgress);   // aiming down sights steadies it a little
+    if (player.onGround && held("slide")) steady *= CFG.crouchRecoilMult;   // and so does crouching
     vm.recoilPitch = Math.min(vm.recoilPitch + (R.up + R.grow * vm.burstShots) * steady, R.max);
     const side = R.side * (1 + vm.burstShots * 0.15) * steady;
     vm.recoilYaw = Math.max(-R.max * 0.5, Math.min(R.max * 0.5, vm.recoilYaw + (Math.random() * 2 - 1) * side));
@@ -4347,9 +4352,14 @@
     // aim, plus this gun's spread: tighter aiming down sights, wider while the AR blooms
     const ads = easeInOut(vm.adsProgress);
     let cone = (w.spread + (w.spreadAds - w.spread) * ads) + (w.bloomNow || 0);
-    if (SETTINGS.realisticAccuracy) {
+    if (SETTINGS.realisticAccuracy || (net.active && net.sub === "dm")) {   // always on in player-vs-player modes
       if (w.scope) cone += CFG.realisticHipSpread * (1 - ads);
-      if (!player.onGround) cone += CFG.realisticAirSpread;
+      if (player.onGround) {
+        const moveK = Math.min(Math.max((Math.hypot(player.velocity.x, player.velocity.z) - 0.5) / (CFG.realisticMoveFullSpeed - 0.5), 0), 1);
+        cone += CFG.realisticMoveSpread * moveK * (1 - 0.5 * ads);
+      } else {
+        cone += CFG.realisticAirSpread + CFG.realisticMoveSpread * (1 - 0.5 * ads);   // worst in the air
+      }
     }
     if (w.bloom) w.bloomNow = Math.min((w.bloomNow || 0) + w.bloom, w.bloomMax);
     const maxD = w.range || CFG.maxShootDistance;
@@ -4364,7 +4374,7 @@
     muzzleSmoke(_muzzleWorld, _aimDir, w.smoke);
 
     const targetHits = new Map();   // a target hit by several pellets scores once
-    let anyHit = false, pvp = null, puffs = 0;
+    let anyHit = false, pvp = null, puffs = 0, pvpN = 0, pvpH = 0;   // pvpN/pvpH: pellets that hit that player, and how many in the head
     for (let i = 0; i < w.pellets; i++) {
       spreadDirection(_aimDir, cone, _pelletDir);
       raycaster.ray.direction.copy(_pelletDir);
@@ -4390,6 +4400,7 @@
       if (playerHit) {
         anyHit = true;
         if (!pvp) pvp = pres;
+        if (pres.p === pvp.p) { pvpN++; if (pres.head) pvpH++; }
       } else if (res.target && (!propHits.length || res.dist < propHits[0].distance)) {
         anyHit = true;
         if (!targetHits.has(res.target) || targetHits.get(res.target) > res.dist) targetHits.set(res.target, res.dist);
@@ -4407,7 +4418,7 @@
       }
     }
 
-    if (pvp) mpPvpKill(pvp, false, ammoBefore, w);
+    if (pvp) mpPvpHit(pvp, false, ammoBefore, w, undefined, false, pvpN, pvpH);
     for (const [target, dist] of targetHits) scoreHit(target, dist, false, ammoBefore, undefined, false, w);
     if (anyHit && !targetHits.size && !pvp) flashCrosshair();
     if (!targetHits.size && !pvp) breakStreak();   // hitting only a crate or a wall is a miss
@@ -4579,7 +4590,7 @@
         playKnifeHit();
         lastShotOrigin.copy(k.from);
         hitPlayer.dist = k.from.distanceTo(o);   // how far it was thrown, not just this frame's step
-        mpPvpKill(hitPlayer, true, 0, undefined, k.snap, true);
+        mpPvpHit(hitPlayer, true, 0, undefined, k.snap, true);
         retireKnife(k);
         continue;
       }
@@ -4633,11 +4644,20 @@
   // simulates their own movement and does their own hit-scan, then reports hits.
   // Two sub-modes share that plumbing:
   //   race - everyone shoots the same targets, highest trickscore wins
-  //   dm   - targets are off, players eliminate each other (one hit kills)
+  //   dm   - targets are off, players eliminate each other (health, see DAMAGE)
   // ======================================================================
   const ROOM_PREFIX = "trickshot-sandbox-";
   const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // no 0/O/1/I to avoid misreads
   const ROUND_SECONDS = 180, RESULTS_SECONDS = 10, RESPAWN_MS = 3000, PROTECT_MS = 1500, MAX_PLAYERS = 8;
+  // health: 100, healing starts after REGEN_DELAY ms with no damage taken and no shooting. The host works damage out
+  // from the gun, so a client only ever says what it hit. Sniper and Deagle one-shot to the head; the sniper to the body too.
+  const REGEN_DELAY = 10000, REGEN_PER_SEC = 10;
+  const DAMAGE = {
+    rifle: { body: 100, head: 100 }, pistol: { body: 55, head: 100 },
+    ak: { body: 34, head: 50 }, ar: { body: 26, head: 40 },
+    shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
+  };
+  const KNIFE_SWING_DMG = 55, KNIFE_THROW_DMG = 100;
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
   const SPAWNS = [[0, 8], [-28, 28], [28, 28], [28, -28], [-28, -28], [0, 28], [-28, 2], [8, -26]];
@@ -4764,7 +4784,8 @@
       id, name, color, score: 0, kills: 0, deaths: 0, alive: true,
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
-      lastShot: null, lastShotAt: -1e9, lastThrowAt: -1e9, lastHitAt: -1e9,   // for checking kill claims (host only)
+      hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
+      lastShot: null, lastShotAt: -1e9, lastThrowAt: -1e9, lastHitAt: -1e9, lastMeleeAt: -1e9, knivesUp: 0,   // for checking hit claims (host only)
     };
   }
 
@@ -4923,11 +4944,12 @@
         id: String(raw.id).slice(0, 64), name: String(raw.name).replace(/[^\w \-]/g, "").slice(0, 14) || "Player",
         color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
         score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), alive: raw.alive === true,
+        hp: Math.max(0, Math.min(Number.isFinite(raw.hp) ? raw.hp : 100, 100)),
       };
       seen.add(e.id);
       let p = net.players.get(e.id);
       if (!p) { p = makePlayerRecord(e.id, e.name, e.color); net.players.set(e.id, p); }
-      p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths;
+      p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths; p.hp = e.hp;
       if (e.id !== net.id) {
         if (net.role === "client") p.alive = e.alive;
         ensureAvatar(p);
@@ -4941,6 +4963,28 @@
     }
     mpRefreshRoomUI();
     mpRefreshScoreboard();
+  }
+
+  // a red flash that fades, and an arrow toward whoever hit you
+  const dmgFlashEl = document.getElementById("dmg-flash"), dmgDirEl = document.getElementById("dmg-dir");
+  let dmgFadeTimer = 0;
+  function showDamage(byId, lost) {
+    dmgFlashEl.style.transition = "none";
+    dmgFlashEl.style.opacity = Math.min(0.2 + lost / 100 * 0.6, 0.75).toFixed(2);
+    const by = net.players.get(byId);
+    if (by && by.mesh) {
+      const dx = by.mesh.position.x - yawObject.position.x, dz = by.mesh.position.z - yawObject.position.z;
+      const yaw = yawObject.rotation.y;
+      const fwd = dx * -Math.sin(yaw) + dz * -Math.cos(yaw), right = dx * Math.cos(yaw) + dz * -Math.sin(yaw);
+      dmgDirEl.style.transition = "none";
+      dmgDirEl.style.transform = "rotate(" + Math.atan2(right, fwd).toFixed(3) + "rad)";
+      dmgDirEl.style.opacity = 1;
+    }
+    clearTimeout(dmgFadeTimer);
+    dmgFadeTimer = setTimeout(() => {
+      dmgFlashEl.style.transition = "opacity 0.9s"; dmgFlashEl.style.opacity = 0;
+      dmgDirEl.style.transition = "opacity 1.1s"; dmgDirEl.style.opacity = 0;
+    }, 60);
   }
 
   function setLocalDead(by) {
@@ -5060,9 +5104,23 @@
         break;
       }
 
+      case "hp": {
+        const p = net.players.get(m.id);
+        const hp = Math.max(0, Math.min(Number(m.hp) || 0, 100));
+        if (p) {
+          const lost = Math.max(0, p.hp - hp);
+          p.hp = hp;
+          if (m.id === net.id) showDamage(String(m.by), lost);
+        }
+        if (m.by === net.id) { flashCrosshair(); playHitSound(m.head ? 1.6 : 0.8); }   // your hit landed
+        break;
+      }
+
       case "kill": {
         const k = net.players.get(m.k), v = net.players.get(m.v);
-        if (v) { v.alive = false; }
+        if (v) { v.alive = false; v.hp = 0; }
+        if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res); }   // the kill pays out
+        pendingRes.delete(m.v);
         const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
         feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + (m.knife ? "knifed" : (m.head ? "headshot" : "sniped")) +
           " <b>" + esc(v ? v.name : "?") + "</b><i>+" + (Number(m.pts) || 0) + (tags ? " " + esc(tags) : "") + "</i>");
@@ -5074,7 +5132,7 @@
       case "respawn": {
         const p = net.players.get(m.id);
         if (!Array.isArray(m.pos) || !Number.isFinite(m.pos[0]) || !Number.isFinite(m.pos[1])) break;
-        if (p) { p.alive = true; p.x = m.pos[0]; p.y = 0.25; p.z = m.pos[1]; p.snap = true; }
+        if (p) { p.alive = true; p.hp = 100; p.x = m.pos[0]; p.y = 0.25; p.z = m.pos[1]; p.snap = true; }
         if (m.id === net.id) {
           localDead = false;
           mpEls.dead.hidden = true;
@@ -5099,7 +5157,7 @@
     else if (net.hostConn && net.hostConn.open) net.hostConn.send(msg);
   }
   function mpSendShot(origin, dir, dist) {
-    sendToHost({ t: "shot", o: [r2(origin.x), r2(origin.y), r2(origin.z)], d: [r2(dir.x * 1000) / 1000, r2(dir.y * 1000) / 1000, r2(dir.z * 1000) / 1000], l: r2(dist) });
+    sendToHost({ t: "shot", g: vm.current, o: [r2(origin.x), r2(origin.y), r2(origin.z)], d: [r2(dir.x * 1000) / 1000, r2(dir.y * 1000) / 1000, r2(dir.z * 1000) / 1000], l: r2(dist) });
   }
   function mpSendThrow(pos, vel) {
     sendToHost({ t: "throw", o: [r2(pos.x), r2(pos.y), r2(pos.z)], v: [r2(vel.x), r2(vel.y), r2(vel.z)] });
@@ -5120,17 +5178,19 @@
   function mpTargetHit(target, pts) { sendToHost({ t: "hit", i: target.userData.idx, pts }); }
 
   const _pseudoTarget = { userData: { small: false, moving: false } };
-  function mpPvpKill(pres, isKnife, ammoBefore, weapon, snap, thrown) {
+  const pendingRes = new Map();   // victim id -> the score of the latest hit on them, paid out only if that hit turns out to be the kill
+  function mpPvpHit(pres, isKnife, ammoBefore, weapon, snap, thrown, pellets, heads) {
     const res = computeMultipliers(_pseudoTarget, pres.dist, isKnife, ammoBefore, snap, !!thrown, weapon);
     if (pres.head && !isKnife) { res.mult *= 1.5; res.tags.push("HEADSHOT x1.50"); }
-    const pts = awardPoints(res);
-    burst(pres.point, 0xff5555, 14);
-    sendToHost({ t: "pvp", v: pres.p.id, pts, tags: res.tags, head: !!pres.head, knife: !!isKnife, thr: !!thrown });
+    pendingRes.set(pres.p.id, res);
+    burst(pres.point, 0xff5555, 8);
+    sendToHost({ t: "hurt", v: pres.p.id, pts: Math.round(CFG.basePoints * res.mult * (res.scale || 1)), tags: res.tags, head: !!pres.head,
+      knife: !!isKnife, thr: !!thrown, n: pellets || 1, h: heads || 0 });
   }
 
   // ---------------- host logic ----------------
   function boardList() {
-    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, alive: p.alive }));
+    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, alive: p.alive, hp: Math.round(p.hp) }));
   }
   function hostSendRaw(m) { for (const c of net.conns.values()) if (c.open) c.send(m); }
   function hostBroadcast(m) { hostSendRaw(m); applyEvent(m); }
@@ -5164,6 +5224,7 @@
   function hostRespawn(p) {
     const s = pickSpawn(p.id);
     p.alive = true; p.x = s[0]; p.y = 0.25; p.z = s[1];
+    p.hp = 100; p.lastDamageAt = -1e9;
     p.protectUntil = net.sub === "dm" ? nowMs() + PROTECT_MS : 0;
     hostBroadcast({ t: "respawn", id: p.id, pos: s });
   }
@@ -5173,7 +5234,7 @@
     net.phase = "play";
     net.left = ROUND_SECONDS;
     net.resultsLeft = 0;
-    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.alive = true; }
+    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
     if (net.sub === "race") for (const t of targets) { respawnTarget(t); t.userData.respawnTimer = 1.1; }
     hostBroadcast(roundMsg(true));
     for (const p of net.players.values()) hostRespawn(p);
@@ -5219,18 +5280,41 @@
   // a thrown knife needs a throw in the last few seconds. Lag makes the host's picture of a moving player
   // a little old, so the aim check is generous (it still rules out a kill from across the map).
   const AIM_SLACK = 5, SWING_SLACK = 6, SHOT_WINDOW = 1500, THROW_WINDOW = 6000, MSG_BURST = 80, MSG_PER_SEC = 50, MSG_KICK = 300;
-  function killPlausible(p, v, m, now) {
-    if (m.knife && m.thr) return now - p.lastThrowAt <= THROW_WINDOW;
-    if (m.knife) return Math.hypot(p.x - v.x, p.z - v.z) <= SWING_SLACK && Math.abs(p.y - v.y) <= SWING_SLACK;
+  // returns what the claim was made with ("knife", "knifeThrow" or a gun id), or null if it isn't believable
+  function checkClaim(p, v, m, now) {
+    if (m.knife && m.thr) {
+      if (p.knivesUp <= 0 || now - p.lastThrowAt > THROW_WINDOW) return null;
+      p.knivesUp--;
+      return "knifeThrow";
+    }
+    if (m.knife) {
+      if (now - p.lastMeleeAt < 250) return null;
+      if (Math.hypot(p.x - v.x, p.z - v.z) > SWING_SLACK || Math.abs(p.y - v.y) > SWING_SLACK) return null;
+      p.lastMeleeAt = now; p.lastFireAt = now;
+      return "knife";
+    }
     const sh = p.lastShot;
-    if (!sh || now - p.lastShotAt > SHOT_WINDOW) return false;
-    p.lastShot = null;   // one shot, one kill claim
+    if (!sh || now - p.lastShotAt > SHOT_WINDOW) return null;
+    p.lastShot = null;   // one shot, one claim
     const len = Math.hypot(sh.d[0], sh.d[1], sh.d[2]) || 1;
     const dx = sh.d[0] / len, dy = sh.d[1] / len, dz = sh.d[2] / len;
     const qx = v.x - sh.o[0], qy = v.y + 0.9 - sh.o[1], qz = v.z - sh.o[2];
     const t = qx * dx + qy * dy + qz * dz;
-    if (t < 0 || t > sh.l + AIM_SLACK) return false;
-    return Math.hypot(qx - dx * t, qy - dy * t, qz - dz * t) <= AIM_SLACK;
+    if (t < 0 || t > sh.l + AIM_SLACK) return null;
+    return Math.hypot(qx - dx * t, qy - dy * t, qz - dz * t) <= AIM_SLACK ? sh.g : null;
+  }
+  function hostDamage(p, v, m, g) {
+    if (g === "knife") return KNIFE_SWING_DMG;
+    if (g === "knifeThrow") return KNIFE_THROW_DMG;
+    const d = DAMAGE[g];
+    if (!d) return 0;
+    if (g === "shotgun") {
+      const n = Math.max(1, Math.min(Math.floor(Number(m.n)) || 1, d.pellets)), h = Math.max(0, Math.min(Math.floor(Number(m.h)) || 0, n));
+      const dist = Math.hypot(p.x - v.x, p.z - v.z);
+      const f = dist <= d.near ? 1 : Math.max(d.farMult, 1 - (1 - d.farMult) * (dist - d.near) / (d.far - d.near));
+      return d.pellet * f * (n - h + h * d.headMult);
+    }
+    return m.head ? d.head : d.body;
   }
   // a connection may send this many messages: a burst, then a steady rate (normal play is about 20 a second)
   function takeToken(b, now) {
@@ -5253,9 +5337,11 @@
 
       case "shot": {
         const o = vec3(m.o, 1000), d = vec3(m.d, 2), l = Number(m.l);
-        if (p.alive && o && d && Number.isFinite(l)) {
+        const g = typeof m.g === "string" && WEAPONS[m.g] && !WEAPONS[m.g].isMelee ? m.g : null;
+        const now = nowMs();
+        if (p.alive && o && d && Number.isFinite(l) && g && now - p.lastFireAt >= WEAPONS[g].fireRate * 500) {   // faster than the gun can fire: dropped
           const len = Math.max(0, Math.min(l, 2000));
-          p.lastShot = { o, d, l: len }; p.lastShotAt = nowMs();
+          p.lastShot = { o, d, l: len, g }; p.lastShotAt = now; p.lastFireAt = now;
           hostBroadcast({ t: "shot", id: fromId, o, d, l: len });
         }
         break;
@@ -5263,7 +5349,13 @@
 
       case "throw": {
         const o = vec3(m.o, 1000), v = vec3(m.v, 200);
-        if (p.alive && o && v) { p.lastThrowAt = nowMs(); hostBroadcast({ t: "throw", id: fromId, o, v }); }
+        const now = nowMs();
+        if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap) {
+          if (now - p.lastThrowAt > THROW_WINDOW) p.knivesUp = 0;
+          p.knivesUp = Math.min(p.knivesUp + 1, 4);
+          p.lastThrowAt = now; p.lastFireAt = now;
+          hostBroadcast({ t: "throw", id: fromId, o, v });
+        }
         break;
       }
 
@@ -5280,12 +5372,18 @@
         break;
       }
 
-      case "pvp": {
+      case "hurt": {
         const v = net.players.get(m.v);
         if (net.sub !== "dm" || net.phase !== "play" || !v || v === p || !v.alive || !p.alive) break;
         if (nowMs() < v.protectUntil) break;
-        if (!killPlausible(p, v, m, nowMs())) break;
-        const pts = Math.max(0, Math.min(Number(m.pts) || 0, 20000));
+        const g = checkClaim(p, v, m, nowMs());
+        if (!g) break;
+        const dmg = hostDamage(p, v, m, g);
+        if (dmg <= 0) break;
+        v.hp -= dmg; v.lastDamageAt = nowMs();
+        if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: fromId, head: !!m.head }); break; }
+        v.hp = 0;
+        const pts = Math.max(0, Math.min(Number(m.pts) || 0, 20000));   // only a kill scores
         v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
         p.kills++; p.score += pts;
         hostBroadcast({ t: "kill", k: fromId, v: v.id, pts, tags: Array.isArray(m.tags) ? m.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!m.head, knife: !!m.knife });
@@ -5314,6 +5412,9 @@
     }
     if (net.phase === "play" && net.sub === "dm") {
       for (const p of net.players.values()) if (!p.alive && now >= p.respawnAt) hostRespawn(p);
+      for (const p of net.players.values()) {   // slow healing, only once they've stayed out of the fight
+        if (p.alive && p.hp < 100 && now - p.lastDamageAt > REGEN_DELAY && now - p.lastFireAt > REGEN_DELAY) p.hp = Math.min(100, p.hp + REGEN_PER_SEC * dt);
+      }
     }
 
     if (!localDead) hostHandle(net.id, localStateMsg());
@@ -6711,6 +6812,13 @@
         const gReady = player.grappleCooldown <= 0, gUsed = !!player.hook || player.grappleWant;
         grappleFillEl.style.width = (gUsed ? 0 : gReady ? 100 : (1 - player.grappleCooldown / player.grappleCooldownMax) * 100).toFixed(0) + "%";
         grappleFillEl.classList.toggle("cooling", !gReady || gUsed);
+        const me = net.active && net.sub === "dm" && !localDead ? localPlayer() : null;   // health only matters in deathmatch
+        hpBarEl.hidden = !me;
+        if (me) {
+          hpFillEl.style.width = me.hp.toFixed(0) + "%";
+          hpFillEl.style.background = me.hp > 60 ? "#3ddc84" : me.hp > 30 ? "#ffd24a" : "#ff4d4d";
+          hpTextEl.textContent = Math.ceil(me.hp);
+        }
         speedbarEl.style.background = speed > 18 ? "#22d3ee" : (speed > 12 ? "#7CFC00" : "#ffd24a");
         const st = player.sliding ? "SLIDING"
           : (!player.onGround ? (player.wallContactTime >= 0 ? "WALL" : "AIR") : "");
