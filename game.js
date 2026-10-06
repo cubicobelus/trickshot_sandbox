@@ -1,6 +1,13 @@
 (function () {
   "use strict";
 
+  // A first-time visitor (nothing saved yet) is walked through the tutorial on their first click to play.
+  // Read before anything below saves a setting or a stat. (The tests turn this off with window.__noForceTutorial.)
+  const FIRST_VISIT = !window.__noForceTutorial && (() => {
+    try { return !localStorage.getItem("tsb-tutorial") && !localStorage.getItem("tsb-stats") && !localStorage.getItem("tsb-settings"); } catch (e) { return false; }
+  })();
+  let tutOffered = false, hasPlayed = false;
+
   // ======================================================================
   // CONFIG
   // ======================================================================
@@ -2864,6 +2871,7 @@
     if (uiMode === "mp" && !net.active) return;   // nothing to play until you're in a room
     if (!resultsEl.hidden) return;                  // the results screen has its own buttons
     initAudio();
+    if (FIRST_VISIT && !tutOffered && uiMode === "solo" && !tut.active) { tutOffered = true; startTutorial(); return; }   // first time: the tutorial comes first
     if (uiMode === "solo" && isRunMode() && !runInProgress() && !tut.active) startRun();
     lockPointer();
   }
@@ -2883,6 +2891,7 @@
   }
   document.addEventListener("pointerlockchange", () => {
     pointerLocked = document.pointerLockElement === domEl;
+    if (pointerLocked) hasPlayed = true;
     if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; saveStats(); refreshTutorialUI(); }
     if (replay.active) return;   // a replay frees the mouse on purpose and runs its own screens
     showScreen(pointerLocked ? "play" : resultsEl.hidden ? "menu" : "results");
@@ -6186,7 +6195,7 @@
     const quit = document.getElementById("run-quit");
     if (!isRunMode()) {
       note.textContent = "Endless: targets keep coming back, play as long as you like.";
-      startBtn.textContent = "Click to play";
+      startBtn.textContent = FIRST_VISIT && !tutOffered ? "Click to start (a short tutorial first)" : hasPlayed ? "Click to resume" : "Click to play";
     } else {
       const tops = runTopsFor(SETTINGS.playMode);
       note.textContent = fmtClock(RUN_LENGTHS[SETTINGS.playMode]) + " to score as much as you can. Esc pauses the clock." +

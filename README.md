@@ -19,7 +19,7 @@ unzip, and open `index.html`. No internet connection is needed.
 
 ## How to play
 
-**Controls:** WASD move, Space jump, Shift sprint (or walk, with Auto sprint on in Settings > Other), Ctrl slide
+**Controls:** WASD move, Space jump, Shift sprint (or walk, with Auto sprint on in Settings > Gameplay), Ctrl slide
 (when moving faster than a walk; slower, Ctrl crouch-walks), E grappling hook (tap it at a wall, the floor or a target to zip
 there; tap again or jump to let go), R reload, F inspect, P replay last hit, left click attack,
 right click aim (scope on the sniper, sights on the others) or throw (knife),
@@ -28,7 +28,7 @@ Every one of these can be changed in **Settings > Controls**: each action has tw
 mouse button (left, right, middle, back, forward) or a wheel direction. Esc, Tab and Enter stay fixed for the menus.
 
 **Tutorial:** new here? The Tutorial button in the menu walks you through the basics one goal at a time, from
-looking around to landing a 3x trickshot. Each goal ticks off when you do it; Enter skips one.
+looking around to landing a 3x trickshot. Each goal ticks off when you do it; Enter skips one. It starts by itself the first time you click to play.
 
 **Modes:** Free play is endless. **Score Attack** gives you 1 minute (after a 3-2-1 countdown) to
 score as much as you can; Esc pauses the clock, and your top 5 runs are kept in your browser.
@@ -71,7 +71,7 @@ crouching steadies recoil.
 Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo and so on) are saved in your
 browser. **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
 Call of Duty, so the same hand movement turns you the same amount here. **Settings > View > Graphics** trades looks for speed
-(Auto steps down by itself if the game runs slow), and **Show FPS** puts a frame counter in the corner. **Realistic accuracy** (Settings > Other, off by default) makes shots spread while you're in the air
+(Auto steps down by itself if the game runs slow), and **Show FPS** puts a frame counter in the corner. **Realistic accuracy** (Settings > Gameplay, off by default) makes shots spread while you're in the air
 and gives the sniper a little spread when it isn't scoped.
 
 ## Files

@@ -31,6 +31,7 @@ Document.prototype.exitPointerLock = function () { window.__unlock(); };
 let __t = 1000; performance.now = () => __t;
 window.__step = (n, ms) => new Promise((res) => { let i = 0; (function f() { if (i++ >= n) return res(); __t += ms; requestAnimationFrame(f); })(); });
 window.__played = 0;
+window.__noForceTutorial = true;   // a first visit would otherwise start the tutorial on the first click to play
 const __start = AudioBufferSourceNode.prototype.start;
 AudioBufferSourceNode.prototype.start = function (...a) { if (this.buffer) window.__played++; return __start.apply(this, a); };
 """
@@ -214,7 +215,7 @@ def test_score_attack(browser, base):
     page.evaluate("__unlock()")
     step(page, 3)
     page.click("[data-play-mode=free]")
-    check("switching back to free play ends the run", not page.is_visible("#mp-timer") and page.inner_text("#start-btn") == "Click to play")
+    check("switching back to free play ends the run", not page.is_visible("#mp-timer") and page.inner_text("#start-btn") in ("Click to play", "Click to resume"))
     check("no errors in Score Attack", not errors, "; ".join(errors[:3]))
     page.close()
 
@@ -289,6 +290,31 @@ def test_grapple(browser, base):
     page.close()
 
 
+def test_first_visit(browser, base):
+    """A brand-new visitor is walked through the tutorial on the first click to play; a returning one isn't."""
+    page = browser.new_page(viewport={"width": 1280, "height": 720})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script(INIT)
+    page.add_init_script("window.__noForceTutorial = false;")
+    page.goto(base + "/index.html")
+    page.wait_for_timeout(1000)
+    check("a first-time visitor's play button says the tutorial comes first", "tutorial" in page.inner_text("#start-btn").lower(), page.inner_text("#start-btn"))
+    page.click("#start-btn")
+    step(page, 30)
+    check("their first click to play starts the tutorial", page.is_visible("#tutorial") and "1/" in page.inner_text("#tut-count"), page.inner_text("#tut-count"))
+    page.evaluate("__unlock()")
+    step(page, 5)
+    page.reload()
+    page.wait_for_timeout(1000)
+    check("on the next visit the play button is plain again", "tutorial" not in page.inner_text("#start-btn").lower(), page.inner_text("#start-btn"))
+    page.click("#start-btn")
+    step(page, 20)
+    check("and clicking it plays without the tutorial", not page.is_visible("#tutorial"))
+    check("no errors on a first visit", not errors, "; ".join(errors[:3]))
+    page.close()
+
+
 def test_tutorial(browser, base):
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
@@ -339,7 +365,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:
