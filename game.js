@@ -3432,17 +3432,18 @@
 
   // lay the rope and spear out from `start` to a spear at `pos` pointing along `dir`
   const _gRope = new THREE.Vector3(), _gRStart = new THREE.Vector3(), _gRPos = new THREE.Vector3(), _gRDir = new THREE.Vector3();
-  function poseRope(start, pos, dir) {
+  function poseRopeOn(rope, head, start, pos, dir) {
     _gTail.copy(pos).addScaledVector(dir, -SPEAR_LEN);   // the rope ties on at the spear's tail
     _gRope.subVectors(_gTail, start);
     const len = _gRope.length();
-    ropeMesh.position.copy(start).addScaledVector(_gRope, 0.5);
-    ropeMesh.quaternion.setFromUnitVectors(_gUp, _gRope.divideScalar(len || 1));
-    ropeMesh.scale.set(1, len, 1);
-    hookHead.quaternion.setFromUnitVectors(_gUp, dir);
-    hookHead.position.copy(pos).addScaledVector(dir, -SPEAR_LEN / 2);   // the tip is what sticks in
-    ropeMesh.visible = hookHead.visible = true;
+    rope.position.copy(start).addScaledVector(_gRope, 0.5);
+    rope.quaternion.setFromUnitVectors(_gUp, _gRope.divideScalar(len || 1));
+    rope.scale.set(1, len, 1);
+    head.quaternion.setFromUnitVectors(_gUp, dir);
+    head.position.copy(pos).addScaledVector(dir, -SPEAR_LEN / 2);   // the tip is what sticks in
+    rope.visible = head.visible = true;
   }
+  function poseRope(start, pos, dir) { poseRopeOn(ropeMesh, hookHead, start, pos, dir); }
   function updateRopeVisual() {
     const hk = player.hook;
     if (!hk) return;
@@ -4301,6 +4302,7 @@
       vm.slashTimer = w.slashDuration;
       vm.meleePending = true;
       playKnifeSwing();
+      if (net.active) sendToHost({ t: "swing" });
       return;
     }
     fireGun(w);
@@ -4653,6 +4655,7 @@
   // health: 100, healing starts after REGEN_DELAY ms with no damage taken and no shooting. The host works damage out
   // from the gun, so a client only ever says what it hit. Sniper and Deagle one-shot to the head; the sniper to the body too.
   const REGEN_DELAY = 10000, REGEN_PER_SEC = 10;
+  const HEARTBEAT_MS = 12000;   // nothing heard from the other end for this long and the connection is treated as dead
   const DAMAGE = {
     rifle: { body: 100, head: 100 }, pistol: { body: 55, head: 100 },
     ak: { body: 34, head: 50 }, ar: { body: 26, head: 40 },
@@ -4684,7 +4687,7 @@
     id: null, code: "", sub: "race", pendingSub: "race",
     phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
     players: new Map(), ttOffset: 0, ttSynced: false,
-    lastTick: 0, boardTimer: 0,
+    lastTick: 0, boardTimer: 0, lastHostMsg: 0,
   };
   let uiMode = "solo";
   let localDead = false;
@@ -4786,11 +4789,13 @@
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
       hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
+      g: 0, rl: 0, gr: 0, gh: null, swingT: 0, lastSwingAt: -1e9, lastRecv: nowMs(), ropeSet: null,
       lastShot: null, lastShotAt: -1e9, lastThrowAt: -1e9, lastHitAt: -1e9, lastMeleeAt: -1e9, knivesUp: 0,   // for checking hit claims (host only)
     };
   }
 
   function disposeAvatar(p) {
+    if (p.ropeSet) { scene.remove(p.ropeSet.rope, p.ropeSet.head); p.ropeSet = null; }   // (shared materials, nothing to free)
     if (!p.mesh) return;
     scene.remove(p.mesh);
     p.mesh.traverse((o) => {
@@ -4817,6 +4822,43 @@
     return spr;
   }
 
+  // simple per-gun shapes for other players: barrel runs along -z from the hand
+  function makeAvatarGun(id, dark, steel, wood) {
+    const g = new THREE.Group();
+    const P = (geo, mat, x, y, z, rx) => addPart(g, geo, mat, x, y, z, rx || 0, 0, 0);
+    const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    const HP = Math.PI / 2;
+    if (id === "rifle") {            // sniper: long barrel, scope, wooden stock
+      P(B(0.07, 0.09, 0.55), dark, 0, 0, -0.15); P(B(0.04, 0.04, 0.6), steel, 0, 0.01, -0.7);
+      P(new THREE.CylinderGeometry(0.035, 0.035, 0.34, 10), steel, 0, 0.1, -0.25, HP); P(B(0.06, 0.1, 0.2), wood, 0, -0.02, 0.2);
+    } else if (id === "ar") {        // rifle: short and black
+      P(B(0.065, 0.085, 0.7), dark, 0, 0, -0.3); P(B(0.025, 0.025, 0.25), steel, 0, 0.005, -0.75);
+      P(B(0.03, 0.2, 0.05), steel, 0, -0.14, -0.2); P(B(0.05, 0.07, 0.2), dark, 0, 0, 0.15);
+    } else if (id === "ak") {        // AK: wooden furniture and a curved magazine
+      P(B(0.065, 0.085, 0.75), dark, 0, 0, -0.3); P(B(0.07, 0.07, 0.28), wood, 0, 0, -0.62);
+      P(B(0.03, 0.22, 0.05), steel, 0, -0.15, -0.15, 0.35); P(B(0.05, 0.1, 0.25), wood, 0, -0.02, 0.2);
+    } else if (id === "shotgun") {   // shotgun: fat barrel and a pump
+      P(new THREE.CylinderGeometry(0.03, 0.03, 0.95, 10), steel, 0, 0.02, -0.5, HP);
+      P(new THREE.CylinderGeometry(0.035, 0.035, 0.7, 10), dark, 0, -0.03, -0.4, HP);
+      P(B(0.07, 0.06, 0.2), wood, 0, -0.05, -0.55); P(B(0.06, 0.1, 0.3), wood, 0, -0.02, 0.2);
+    } else {                         // Deagle: a big pistol
+      P(B(0.055, 0.05, 0.32), steel, 0, 0.02, -0.12); P(B(0.05, 0.08, 0.26), steel, 0, -0.01, -0.1);
+      P(B(0.045, 0.12, 0.06), dark, 0, -0.09, 0.03, 0.2);
+    }
+    g.position.set(0.24, -0.25, -0.1);
+    g.visible = false;
+    return g;
+  }
+
+  // the rope and spear of another player's grapple, made when they first use it
+  function ensureRope(p) {
+    if (p.ropeSet) return p.ropeSet;
+    const rope = ropeMesh.clone(), head = hookHead.clone(true);
+    rope.visible = head.visible = false; rope.frustumCulled = false;
+    scene.add(rope, head);
+    return (p.ropeSet = { rope, head });
+  }
+
   function makeAvatar(p) {
     const g = new THREE.Group();
     const suit = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.7 });
@@ -4827,20 +4869,27 @@
     const headPivot = new THREE.Group();
     headPivot.position.set(0, 1.5, 0);
     addPart(headPivot, new THREE.SphereGeometry(0.2, 12, 10), skin, 0, 0.14, 0);
-    const gun = new THREE.Group();
-    addPart(gun, new THREE.BoxGeometry(0.07, 0.09, 0.95), dark, 0, 0, -0.45);
-    addPart(gun, new THREE.BoxGeometry(0.06, 0.06, 0.3), metalMid, 0, 0.07, -0.3);
-    gun.position.set(0.24, -0.25, -0.1);
-    headPivot.add(gun);
-    g.add(headPivot);
+    const steel = new THREE.MeshStandardMaterial({ color: 0x4a4e57, roughness: 0.5, metalness: 0.5 });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.8 });
+    const guns = {};
+    for (const id of GUNS) { guns[id] = makeAvatarGun(id, dark, steel, wood); headPivot.add(guns[id]); }
+    const launcher = new THREE.Group();   // the grapple, while they have it out
+    addPart(launcher, new THREE.CylinderGeometry(0.03, 0.03, 0.5, 10), dark, 0, 0, -0.2, Math.PI / 2, 0, 0);
+    addPart(launcher, new THREE.BoxGeometry(0.04, 0.1, 0.05), steel, 0, -0.07, 0.02);
+    launcher.position.set(0.24, -0.25, -0.1);
+    launcher.visible = false;
+    headPivot.add(launcher);
     const knife = new THREE.Group();
     addPart(knife, new THREE.BoxGeometry(0.035, 0.07, 0.3), metalMid, 0, 0, -0.2);
     knife.position.set(0.24, -0.25, -0.1);
     knife.visible = false;
     headPivot.add(knife);
+    g.add(headPivot);
     g.userData.pivot = headPivot;
-    g.userData.gun = gun;
+    g.userData.guns = guns;
+    g.userData.launcher = launcher;
     g.userData.knife = knife;
+    g.userData.reloadK = 0;
     g.add(makeNameTag(p.name, p.color));
     scene.add(g);
     return g;
@@ -4853,13 +4902,14 @@
 
   function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
+  const _avStart = new THREE.Vector3(), _avPos = new THREE.Vector3(), _avDir = new THREE.Vector3();
   function updateAvatars(dt) {
     const k = 1 - Math.exp(-dt * 18);
     for (const p of net.players.values()) {
       if (p.id === net.id || !p.mesh) continue;
       const m = p.mesh;
       m.visible = p.alive;
-      if (!p.alive) continue;
+      if (!p.alive) { if (p.ropeSet) p.ropeSet.rope.visible = p.ropeSet.head.visible = false; continue; }
       if (p.snap) {
         m.position.set(p.x, p.y, p.z); m.rotation.y = p.yaw; p.snap = false;
       } else {
@@ -4871,8 +4921,28 @@
       m.userData.pivot.rotation.x = p.pitch;
       const squash = p.sl ? 0.62 : 1;
       m.scale.y += (squash - m.scale.y) * k;
-      m.userData.gun.visible = p.w === "rifle";
-      m.userData.knife.visible = p.w === "knife";
+      const ud = m.userData, gid = WEAPON_ORDER[p.g] || "rifle", grap = p.gr > 0;
+      for (const id of GUNS) ud.guns[id].visible = !grap && gid === id;
+      ud.knife.visible = !grap && gid === "knife";
+      ud.launcher.visible = grap;
+      // reloading: the gun drops and tilts; knife swing: a quick arc
+      ud.reloadK += ((p.rl && !grap ? 1 : 0) - ud.reloadK) * k;
+      const held = ud.guns[gid];
+      if (held) { held.rotation.x = ud.reloadK * 0.8; held.position.y = -0.25 - ud.reloadK * 0.1; }
+      if (p.swingT > 0) {
+        p.swingT -= dt;
+        const u = 1 - Math.max(p.swingT, 0) / 0.32;
+        ud.knife.rotation.x = -1.2 + 2.4 * u; ud.knife.position.z = -0.1 - 0.25 * Math.sin(u * Math.PI);
+      } else { ud.knife.rotation.x = 0; ud.knife.position.z = -0.1; }
+      // grapple: the rope runs from their hand to the spear
+      if (p.gr === 2 && p.gh) {
+        const set = ensureRope(p);
+        m.updateMatrixWorld(true);
+        ud.launcher.getWorldPosition(_avStart);
+        _avPos.set(p.gh[0], p.gh[1], p.gh[2]);
+        _avDir.subVectors(_avPos, _avStart);
+        if (_avDir.lengthSq() > 0.01) poseRopeOn(set.rope, set.head, _avStart, _avPos, _avDir.normalize());
+      } else if (p.ropeSet) p.ropeSet.rope.visible = p.ropeSet.head.visible = false;
     }
   }
 
@@ -5066,8 +5136,18 @@
           const p = net.players.get(s[0]);
           if (!p) continue;
           p.x = s[1]; p.y = s[2]; p.z = s[3]; p.yaw = s[4]; p.pitch = s[5]; p.w = s[6] ? "knife" : "rifle"; p.sl = !!s[7];
+          p.g = Number.isInteger(s[8]) && s[8] >= 0 && s[8] < WEAPON_ORDER.length ? s[8] : 0;
+          p.rl = s[9] ? 1 : 0;
+          p.gr = s[10] === 2 ? 2 : s[10] === 1 ? 1 : 0;
+          p.gh = p.gr === 2 && s.length >= 14 && s.slice(11, 14).every(Number.isFinite) ? [s[11], s[12], s[13]] : null;
         }
         break;
+
+      case "swing": {
+        const p = net.players.get(m.id);
+        if (p && m.id !== net.id) p.swingT = 0.32;
+        break;
+      }
 
       case "throw": {
         const o = vec3(m.o, 1000), v = vec3(m.v, 200);
@@ -5329,11 +5409,20 @@
   function hostHandle(fromId, m) {
     const p = net.players.get(fromId);
     if (!p || !m || typeof m !== "object") return;
+    p.lastRecv = nowMs();
     switch (m.t) {
       case "st":
         if (p.alive && Number.isFinite(m.x + m.y + m.z + m.yaw + m.pitch)) {
           p.x = m.x; p.y = m.y; p.z = m.z; p.yaw = m.yaw; p.pitch = m.pitch; p.w = m.w ? "knife" : "rifle"; p.sl = !!m.sl;
+          p.g = Number.isInteger(m.g) && m.g >= 0 && m.g < WEAPON_ORDER.length ? m.g : 0;
+          p.rl = m.rl ? 1 : 0;
+          p.gr = m.gr === 2 ? 2 : m.gr === 1 ? 1 : 0;
+          p.gh = p.gr === 2 ? vec3(m.gh, 1000) : null;
         }
+        break;
+
+      case "swing":
+        if (p.alive && nowMs() - p.lastSwingAt >= 150) { p.lastSwingAt = nowMs(); hostBroadcast({ t: "swing", id: fromId }); }
         break;
 
       case "shot": {
@@ -5399,6 +5488,9 @@
       t: "st", x: r2(yawObject.position.x), y: r2(player.feetY), z: r2(yawObject.position.z),
       yaw: r2(yawObject.rotation.y * 100) / 100, pitch: r2(pitchObject.rotation.x * 100) / 100,
       w: vm.current === "knife" ? 1 : 0, sl: player.sliding ? 1 : 0,
+      g: WEAPON_ORDER.indexOf(vm.current), rl: reload.active ? 1 : 0,
+      gr: player.hook ? 2 : player.grappleWant ? 1 : 0,
+      gh: player.hook ? [r2(player.hook.pos.x), r2(player.hook.pos.y), r2(player.hook.pos.z)] : null,
     };
   }
 
@@ -5419,9 +5511,15 @@
     }
 
     if (!localDead) hostHandle(net.id, localStateMsg());
+    for (const p of [...net.players.values()]) {   // anyone who has gone silent has dropped, even if the browser hasn't noticed yet
+      if (p.id === net.id || now - p.lastRecv <= HEARTBEAT_MS) continue;
+      const c = net.conns.get(p.id);
+      try { if (c) c.close(); } catch (e) { /* ignore */ }
+      hostRemovePlayer(p.id);
+    }
     const s = [];
     for (const p of net.players.values()) {
-      if (p.alive) s.push([p.id, p.x, p.y, p.z, p.yaw, p.pitch, p.w === "knife" ? 1 : 0, p.sl ? 1 : 0]);
+      if (p.alive) s.push([p.id, p.x, p.y, p.z, p.yaw, p.pitch, p.w === "knife" ? 1 : 0, p.sl ? 1 : 0, p.g || 0, p.rl ? 1 : 0, p.gr || 0].concat(p.gr === 2 && p.gh ? p.gh : []));
     }
     hostSendRaw({ t: "states", s });
 
@@ -5435,7 +5533,10 @@
     net.lastTick = now;
     if (!net.active) return;
     if (net.role === "host") hostTick(dt);
-    else if (!localDead && net.hostConn && net.hostConn.open) net.hostConn.send(localStateMsg());
+    else if (net.hostConn && net.hostConn.open) {
+      net.hostConn.send(localDead ? { t: "ping" } : localStateMsg());   // (a dead player still says they're there)
+      if (now - net.lastHostMsg > HEARTBEAT_MS) mpLeave("Lost the connection to the host.");
+    }
   }
   // a timer rather than requestAnimationFrame so a backgrounded host keeps the room alive
   setInterval(mpTick, 50);
@@ -5450,7 +5551,7 @@
   function mpEnter(role, code) {
     net.active = true; net.role = role; net.code = code;
     net.players.clear(); net.ttSynced = false; net.ttOffset = 0;
-    net.phase = "play"; net.left = ROUND_SECONDS; net.leftRecv = nowMs();
+    net.phase = "play"; net.left = ROUND_SECONDS; net.leftRecv = nowMs(); net.lastHostMsg = nowMs();
     const name = myName();
     const me = makePlayerRecord(net.id, name, PLAYER_COLORS[0]);
     net.players.set(net.id, me);
@@ -5589,6 +5690,7 @@
       conn.on("data", (m) => {
         if (!m) return;
         if (m.t === "full") { fail("That room is full."); return; }
+        net.lastHostMsg = nowMs();
         if (!net.active && m.t === "round") { clearTimeout(timeout); mpEnter("client", code); net.lastTick = nowMs(); }
         if (net.active) { try { applyEvent(m); } catch (e) { /* a malformed message from the host is dropped */ } }
       });
