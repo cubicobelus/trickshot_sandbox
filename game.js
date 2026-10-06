@@ -176,7 +176,7 @@
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
-    playMode: "free",   // "free" play, or a Score Attack run: "sa60" / "sa120"
+    playMode: "free",   // "free" play, or a Score Attack run: "sa60"
     // how many of each target kind are up at once
     tgtNormal: 6, tgtMoving: 4, tgtSmall: 3, tgtTiny: 2,
   };
@@ -2709,7 +2709,7 @@
     if (typeof saved.unlimitedAmmo === "boolean") SETTINGS.unlimitedAmmo = saved.unlimitedAmmo;
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
-    if (["free", "sa60", "sa120"].includes(saved.playMode)) SETTINGS.playMode = saved.playMode;
+    if (["free", "sa60"].includes(saved.playMode)) SETTINGS.playMode = saved.playMode;
     if (saved.binds && typeof saved.binds === "object") {
       for (const a of ACTION_IDS) {
         const s = saved.binds[a];
@@ -5840,7 +5840,7 @@
   // clock runs; it pauses while the menu is open. At zero the results come up and the score goes on
   // your top-5 list for that length, kept in this browser.
   // ======================================================================
-  const RUN_LENGTHS = { sa60: 60, sa120: 120 };
+  const RUN_LENGTHS = { sa60: 60 };
   const RUN_KEY = "tsb-score-attack";
   const run = { state: "off", mode: null, left: 0, count: 0, shots: 0, shotsHit: 0, hits: 0, best: null };
   const runTimerEl = document.getElementById("mp-timer"), runTimerVal = document.getElementById("mp-timer-val");

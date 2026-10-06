@@ -30,8 +30,8 @@ mouse button (left, right, middle, back, forward) or a wheel direction. Esc, Tab
 **Tutorial:** new here? The Tutorial button in the menu walks you through the basics one goal at a time, from
 looking around to landing a 3x trickshot. Each goal ticks off when you do it; Enter skips one.
 
-**Modes:** Free play is endless. **Score Attack** gives you 1 or 2 minutes (after a 3-2-1 countdown) to
-score as much as you can; Esc pauses the clock, and your top 5 runs for each length are kept in your browser.
+**Modes:** Free play is endless. **Score Attack** gives you 1 minute (after a 3-2-1 countdown) to
+score as much as you can; Esc pauses the clock, and your top 5 runs are kept in your browser.
 
 **Stats:** the Stats button in the menu shows your lifetime numbers: play time, accuracy, records (longest
 shot, highest multiplier, top speed...), each gun, targets by colour, movement, and how often you've landed
