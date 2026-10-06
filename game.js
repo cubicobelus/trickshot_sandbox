@@ -4764,6 +4764,7 @@
       id, name, color, score: 0, kills: 0, deaths: 0, alive: true,
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
+      lastShot: null, lastShotAt: -1e9, lastThrowAt: -1e9, lastHitAt: -1e9,   // for checking kill claims (host only)
     };
   }
 
@@ -4912,6 +4913,7 @@
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
   function syncPlayers(list) {
+    if (!Array.isArray(list)) return;
     const seen = new Set();
     for (const raw of list) {
       // everything here came over the network and ends up in the page: force plain types and ranges
@@ -5012,7 +5014,9 @@
         break;
 
       case "states":
-        for (const s of m.s) {
+        if (!Array.isArray(m.s)) break;
+        for (const s of m.s.slice(0, MAX_PLAYERS + 8)) {
+          if (!Array.isArray(s) || s.length < 8 || !s.slice(1, 6).every(Number.isFinite)) continue;
           if (s[0] === net.id) continue;
           const p = net.players.get(s[0]);
           if (!p) continue;
@@ -5020,15 +5024,21 @@
         }
         break;
 
-      case "throw":
-        if (m.id !== net.id) spawnRemoteKnife(m.o, m.v);
+      case "throw": {
+        const o = vec3(m.o, 1000), v = vec3(m.v, 200);
+        if (m.id !== net.id && o && v) spawnRemoteKnife(o, v);
         break;
+      }
 
       case "shot":
         if (m.id === net.id) break;
-        _tmpV1.set(m.o[0], m.o[1], m.o[2]);
-        _tmpV2.set(m.d[0], m.d[1], m.d[2]);
-        spawnTracer(_tmpV1, _tmpV2, m.l);
+        {
+          const o = vec3(m.o, 1000), d = vec3(m.d, 2), l = Number(m.l);
+          if (!o || !d || !Number.isFinite(l)) break;
+          _tmpV1.set(o[0], o[1], o[2]);
+          _tmpV2.set(d[0], d[1], d[2]);
+          spawnTracer(_tmpV1, _tmpV2, Math.max(0, Math.min(l, 2000)));
+        }
         playRemoteShot();
         break;
 
@@ -5046,14 +5056,14 @@
 
       case "tspawn": {
         const t = targets[m.i];
-        if (t) applyTargetData(t, m.d);
+        if (t && m.d && vec3(m.d.b, 1000)) applyTargetData(t, m.d);
         break;
       }
 
       case "kill": {
         const k = net.players.get(m.k), v = net.players.get(m.v);
         if (v) { v.alive = false; }
-        const tags = (m.tags || []).slice(0, 3).join(" · ");
+        const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
         feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + (m.knife ? "knifed" : (m.head ? "headshot" : "sniped")) +
           " <b>" + esc(v ? v.name : "?") + "</b><i>+" + (Number(m.pts) || 0) + (tags ? " " + esc(tags) : "") + "</i>");
         if (m.v === net.id) setLocalDead(k ? k.name : "");
@@ -5063,6 +5073,7 @@
 
       case "respawn": {
         const p = net.players.get(m.id);
+        if (!Array.isArray(m.pos) || !Number.isFinite(m.pos[0]) || !Number.isFinite(m.pos[1])) break;
         if (p) { p.alive = true; p.x = m.pos[0]; p.y = 0.25; p.z = m.pos[1]; p.snap = true; }
         if (m.id === net.id) {
           localDead = false;
@@ -5114,7 +5125,7 @@
     if (pres.head && !isKnife) { res.mult *= 1.5; res.tags.push("HEADSHOT x1.50"); }
     const pts = awardPoints(res);
     burst(pres.point, 0xff5555, 14);
-    sendToHost({ t: "pvp", v: pres.p.id, pts, tags: res.tags, head: !!pres.head, knife: !!isKnife });
+    sendToHost({ t: "pvp", v: pres.p.id, pts, tags: res.tags, head: !!pres.head, knife: !!isKnife, thr: !!thrown });
   }
 
   // ---------------- host logic ----------------
@@ -5203,6 +5214,33 @@
     return [a[0], a[1], a[2]];
   }
 
+  // The host can't see the shots, so it checks that a claimed kill is believable against what it did see: a
+  // gun kill needs that player's shot message just before it, aimed near the victim; a knife swing needs them close;
+  // a thrown knife needs a throw in the last few seconds. Lag makes the host's picture of a moving player
+  // a little old, so the aim check is generous (it still rules out a kill from across the map).
+  const AIM_SLACK = 5, SWING_SLACK = 6, SHOT_WINDOW = 1500, THROW_WINDOW = 6000, MSG_BURST = 80, MSG_PER_SEC = 50, MSG_KICK = 300;
+  function killPlausible(p, v, m, now) {
+    if (m.knife && m.thr) return now - p.lastThrowAt <= THROW_WINDOW;
+    if (m.knife) return Math.hypot(p.x - v.x, p.z - v.z) <= SWING_SLACK && Math.abs(p.y - v.y) <= SWING_SLACK;
+    const sh = p.lastShot;
+    if (!sh || now - p.lastShotAt > SHOT_WINDOW) return false;
+    p.lastShot = null;   // one shot, one kill claim
+    const len = Math.hypot(sh.d[0], sh.d[1], sh.d[2]) || 1;
+    const dx = sh.d[0] / len, dy = sh.d[1] / len, dz = sh.d[2] / len;
+    const qx = v.x - sh.o[0], qy = v.y + 0.9 - sh.o[1], qz = v.z - sh.o[2];
+    const t = qx * dx + qy * dy + qz * dz;
+    if (t < 0 || t > sh.l + AIM_SLACK) return false;
+    return Math.hypot(qx - dx * t, qy - dy * t, qz - dz * t) <= AIM_SLACK;
+  }
+  // a connection may send this many messages: a burst, then a steady rate (normal play is about 20 a second)
+  function takeToken(b, now) {
+    b.tok = Math.min(MSG_BURST, b.tok + (now - b.t) / 1000 * MSG_PER_SEC);
+    b.t = now;
+    if (b.tok < 1) return false;
+    b.tok -= 1;
+    return true;
+  }
+
   function hostHandle(fromId, m) {
     const p = net.players.get(fromId);
     if (!p || !m || typeof m !== "object") return;
@@ -5215,13 +5253,17 @@
 
       case "shot": {
         const o = vec3(m.o, 1000), d = vec3(m.d, 2), l = Number(m.l);
-        if (p.alive && o && d && Number.isFinite(l)) hostBroadcast({ t: "shot", id: fromId, o, d, l: Math.max(0, Math.min(l, 2000)) });
+        if (p.alive && o && d && Number.isFinite(l)) {
+          const len = Math.max(0, Math.min(l, 2000));
+          p.lastShot = { o, d, l: len }; p.lastShotAt = nowMs();
+          hostBroadcast({ t: "shot", id: fromId, o, d, l: len });
+        }
         break;
       }
 
       case "throw": {
         const o = vec3(m.o, 1000), v = vec3(m.v, 200);
-        if (p.alive && o && v) hostBroadcast({ t: "throw", id: fromId, o, v });
+        if (p.alive && o && v) { p.lastThrowAt = nowMs(); hostBroadcast({ t: "throw", id: fromId, o, v }); }
         break;
       }
 
@@ -5229,6 +5271,8 @@
         if (net.sub !== "race" || net.phase !== "play") break;
         const t = targets[m.i];
         if (!t || (fromId !== net.id && !t.userData.alive)) break;   // someone beat them to it
+        if (nowMs() - p.lastHitAt < 120) break;                      // nobody hits two targets in a blink
+        p.lastHitAt = nowMs();
         const pts = Math.max(0, Math.min(Number(m.pts) || 0, 20000));
         p.score += pts; p.kills++;
         hostBroadcast({ t: "tkill", i: m.i, by: fromId });
@@ -5240,10 +5284,11 @@
         const v = net.players.get(m.v);
         if (net.sub !== "dm" || net.phase !== "play" || !v || v === p || !v.alive || !p.alive) break;
         if (nowMs() < v.protectUntil) break;
+        if (!killPlausible(p, v, m, nowMs())) break;
         const pts = Math.max(0, Math.min(Number(m.pts) || 0, 20000));
         v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
         p.kills++; p.score += pts;
-        hostBroadcast({ t: "kill", k: fromId, v: v.id, pts, tags: Array.isArray(m.tags) ? m.tags.slice(0, 6).map(String) : [], head: !!m.head, knife: !!m.knife });
+        hostBroadcast({ t: "kill", k: fromId, v: v.id, pts, tags: Array.isArray(m.tags) ? m.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!m.head, knife: !!m.knife });
         hostBroadcastBoard();
         break;
       }
@@ -5385,18 +5430,29 @@
     open();
   }
 
+  let hostPending = 0;   // connections still opening or waiting to say hello
   function hostOnConnection(conn) {
+    // a limit on connections that haven't joined yet, so a flood of them can't pile up
+    if (net.conns.size + hostPending >= MAX_PLAYERS + 2) { conn.on("open", () => conn.close()); return; }
+    hostPending++;
+    let counted = true;
+    const uncount = () => { if (counted) { counted = false; hostPending--; } };
+    const bucket = { tok: MSG_BURST, t: nowMs(), over: 0 };
+    let hello = null;
     conn.on("open", () => {
-      if (net.players.size >= MAX_PLAYERS) { conn.send({ t: "full" }); setTimeout(() => conn.close(), 300); return; }
+      if (net.players.size >= MAX_PLAYERS) { uncount(); conn.send({ t: "full" }); setTimeout(() => conn.close(), 300); return; }
       net.conns.set(conn.peer, conn);
+      hello = setTimeout(() => { if (!net.players.has(conn.peer)) conn.close(); }, 6000);   // say hello or go
     });
     conn.on("data", (m) => {
       if (!net.conns.has(conn.peer)) return;
-      if (m && m.t === "hello" && !net.players.has(conn.peer)) hostAddPlayer(conn, m);
+      if (!takeToken(bucket, nowMs())) { if (++bucket.over > MSG_KICK) conn.close(); return; }   // flooding
+      if (m && m.t === "hello" && !net.players.has(conn.peer)) { uncount(); hostAddPlayer(conn, m); }
       else hostHandle(conn.peer, m);
     });
-    conn.on("close", () => hostRemovePlayer(conn.peer));
-    conn.on("error", () => hostRemovePlayer(conn.peer));
+    const gone = () => { uncount(); clearTimeout(hello); hostRemovePlayer(conn.peer); };
+    conn.on("close", gone);
+    conn.on("error", gone);
   }
 
   function mpJoin() {
@@ -5432,7 +5488,7 @@
         if (!m) return;
         if (m.t === "full") { fail("That room is full."); return; }
         if (!net.active && m.t === "round") { clearTimeout(timeout); mpEnter("client", code); net.lastTick = nowMs(); }
-        if (net.active) applyEvent(m);
+        if (net.active) { try { applyEvent(m); } catch (e) { /* a malformed message from the host is dropped */ } }
       });
       conn.on("close", () => { if (net.active) mpLeave("The host closed the room."); else fail("The host closed the connection."); });
       conn.on("error", (err) => fail("Connection failed (" + (err && err.type || "error") + ")."));
