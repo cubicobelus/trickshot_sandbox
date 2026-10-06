@@ -2481,6 +2481,34 @@
   function playKnifeSwing() { playSfx("knifeSwing", 0.6, 1.15, 0.1, "volKnife"); }
   function playKnifeHit() { playSfx("knifeHit", 0.6, 1, 0.2, "volKnife"); }
   // jump pad: an air rush, deeper for the mega pads
+  // the grapple: all generated, quiet under the other movement sounds, and on the movement volume
+  function playGrappleFire() {   // the launcher's thump, and the line racing out
+    const v = SETTINGS.volMove; if (v <= 0) return;
+    noiseHit(900, 1.2, 0.2 * v, 0.12, "bandpass", 0, 0.3);
+    tone("square", 190, 70, 0.16 * v, 0.1, 0, 0.2);
+    tone("sawtooth", 420, 1700, 0.05 * v, 0.22, 0.02, 0.2);
+  }
+  function playGrappleStick() {   // the spear biting in: a metal thunk and a short ring
+    const v = SETTINGS.volMove; if (v <= 0) return;
+    tone("triangle", 270, 90, 0.26 * v, 0.14, 0, 0.2);
+    noiseHit(2600, 2, 0.18 * v, 0.07, "highpass", 0, 0.25);
+    tone("sine", 1500, 950, 0.07 * v, 0.2, 0.015, 0.35);
+  }
+  function playGrappleReel() {   // the winch taking up the line
+    const v = SETTINGS.volMove; if (v <= 0) return;
+    tone("sawtooth", 150, 560, 0.06 * v, 0.45, 0.04, 0.15);
+    noiseHit(1800, 1.5, 0.05 * v, 0.4, "bandpass", 0.04, 0.2);
+  }
+  function playGrappleRelease() {   // letting go: a clack
+    const v = SETTINGS.volMove; if (v <= 0) return;
+    noiseHit(1500, 3, 0.14 * v, 0.06, "bandpass", 0, 0.2);
+    tone("triangle", 620, 300, 0.09 * v, 0.08, 0, 0.2);
+  }
+  function playGrappleMiss() {   // nothing to catch: a whistle as the line snaps back
+    const v = SETTINGS.volMove; if (v <= 0) return;
+    tone("sine", 1000, 320, 0.07 * v, 0.3, 0, 0.25);
+    noiseHit(2200, 1, 0.06 * v, 0.25, "bandpass", 0, 0.2);
+  }
   function playPadLaunch(power) { playSfx("jumpPad", 0.7, power > 15 ? 0.8 : 1.05, 0.25, "volMove"); }
 
   // thrown knife biting into a surface: quieter the further away it lands
@@ -3386,7 +3414,7 @@
     if (!had) return;
     player.lastGrappleAt = elapsedTime;
     player.grappleCooldown = player.grappleCooldownMax = cooldown === undefined ? CFG.grappleCooldown : cooldown;
-    playSfx("slide", 0.3, 1.8, 0.1, "volMove");
+    playGrappleRelease();
   }
 
   // the grapple is out: fire the hook along the view (a miss just puts it away again)
@@ -3419,7 +3447,7 @@
     const pos = ropeStart(new THREE.Vector3());
     const dir = _gBest.clone().sub(pos).normalize();
     player.hook = { anchor: _gBest.clone(), len: best, flying: true, miss: !found, target: hitTarget, pos, dir };
-    playKnifeSwing();
+    playGrappleFire();
   }
 
   // the hook flies out, then the rope pulls toward it and never gets longer
@@ -3433,12 +3461,12 @@
     if (hk.flying) {
       const left = hk.pos.distanceTo(hk.anchor), step = CFG.grappleFlightSpeed * dt;
       if (step < left) hk.pos.addScaledVector(hk.dir, step);
-      else if (hk.miss) { hk.pos.copy(hk.anchor); hk.flying = false; hk.returning = true; playSfx("dryFire", 0.35, 1.4, 0.1, "volMove"); }
+      else if (hk.miss) { hk.pos.copy(hk.anchor); hk.flying = false; hk.returning = true; playGrappleMiss(); }
       else {
         hk.pos.copy(hk.anchor); hk.flying = false;
         hk.len = yawObject.position.distanceTo(hk.anchor);
         stat("grapples"); achProgress();
-        playKnifeStick(hk.len); burst(hk.anchor, 0xffd24a, 4);
+        playGrappleStick(); playGrappleReel(); burst(hk.anchor, 0xffd24a, 4);
       }
       return;
     }
@@ -5055,6 +5083,7 @@
   }
 
   // ---------------- events: what actually happens on every peer ----------------
+  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned" };
   function feedLine(html) {
     const el = document.createElement("div");
     el.innerHTML = html;
@@ -5263,7 +5292,7 @@
         if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res); }   // the kill pays out
         pendingRes.delete(m.v);
         const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
-        feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + (m.knife ? "knifed" : (m.head ? "headshot" : "sniped")) +
+        feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + ((Object.prototype.hasOwnProperty.call(KILL_VERBS, m.w) ? KILL_VERBS[m.w] : m.knife ? "knifed" : "shot") + (m.head && !m.knife ? " (headshot)" : "")) +
           " <b>" + esc(v ? v.name : "?") + "</b><i>+" + (Number(m.pts) || 0) + (tags ? " " + esc(tags) : "") + "</i>");
         if (m.v === net.id) setLocalDead(k ? k.name : "");
         else if (m.k !== net.id) { playHitSound(0.7); if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8); }
@@ -5476,7 +5505,7 @@
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
     v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
     p.kills++; p.score += pts;
-    hostBroadcast({ t: "kill", k: p.id, v: v.id, pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
+    hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
     hostBroadcastBoard();
   }
 
@@ -5544,7 +5573,7 @@
         if (!g) break;
         const dmg = hostDamage(p, v, m, g);
         if (dmg <= 0) break;
-        hostDealDamage(p, v, dmg, m);
+        hostDealDamage(p, v, dmg, Object.assign({}, m, { g }));
         break;
       }
     }
@@ -5623,6 +5652,10 @@
     medium: { react: 0.40, err: 3.0, turn: 4.8, head: 0.14, speed: 5.9, burst: [3, 6], pause: [0.4, 1.0] },
     hard:   { react: 0.22, err: 1.6, turn: 7.5, head: 0.24, speed: 6.6, burst: [4, 8], pause: [0.2, 0.55] },
   };
+  // hop: hops a second while strafing in a fight; grapple: how long it waits between grapples (null = never)
+  BOT_LEVELS.easy.hop = 0; BOT_LEVELS.easy.grapple = null;
+  BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.medium.grapple = [9, 15];
+  BOT_LEVELS.hard.hop = 0.3; BOT_LEVELS.hard.grapple = [5, 9];
   const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14 };   // the distance each gun likes to fight at
   const BOT_RELOAD = 2.3;
   const _botRay = new THREE.Ray(), _botHit = new THREE.Vector3(), _botPos = new THREE.Vector3(), _botFrom = new THREE.Vector3();
@@ -5633,7 +5666,7 @@
     const p = makePlayerRecord("bot" + i, "Bot " + BOT_NAMES[i % BOT_NAMES.length], PLAYER_COLORS[(i + 1) % PLAYER_COLORS.length]);
     p.bot = true;
     p.ai = { lvl: BOT_LEVELS[level] || BOT_LEVELS.medium, gun: "ar", ammo: 30, reloadT: 0, fireT: 1, burstLeft: 0, seeT: 0, strafe: 1, strafeT: 0,
-      stuckT: 0, aimYaw: 0, aimPitch: 0, tspd: 0, tx: 0, tz: 0 };
+      stuckT: 0, aimYaw: 0, aimPitch: 0, tspd: 0, tx: 0, tz: 0, vy: 0, gr: null, grCd: 3 };
     net.players.set(p.id, p);
     ensureAvatar(p);
     return p;
@@ -5645,6 +5678,7 @@
     p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
     ai.ammo = WEAPONS[ai.gun].magSize; ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
     ai.aimYaw = p.yaw = Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;
+    ai.vy = 0; ai.gr = null; ai.grCd = 3 + Math.random() * 3; p.gr = 0; p.gh = null;
   }
 
   function botLineClear(ax, ay, az, bx, by, bz) {
@@ -5686,12 +5720,40 @@
     ai.aimYaw += Math.max(-maxTurn, Math.min(maxTurn, wrapAngle(wantYaw - ai.aimYaw)));
     ai.aimPitch += Math.max(-maxTurn, Math.min(maxTurn, wantPitch - ai.aimPitch));
     p.yaw = ai.aimYaw; p.pitch = ai.aimPitch;
+    const fx = dx / (dist || 1), fz = dz / (dist || 1);
+
+    // a grapple in progress: zip toward the hooked wall (the gun is away, so no shooting meanwhile)
+    if (ai.gr) {
+      const gx = ai.gr.ax - p.x, gz = ai.gr.az - p.z, gd = Math.hypot(gx, gz);
+      ai.gr.left -= dt;
+      if (gd < 2.5 || ai.gr.left <= 0) { ai.gr = null; p.gr = 0; p.gh = null; ai.fireT = Math.max(ai.fireT, 0.3); }
+      else {
+        _botFrom.set(p.x, p.y, p.z);
+        _botPos.set(p.x + gx / gd * 22 * dt, p.y, p.z + gz / gd * 22 * dt);
+        resolveWalls(_botPos, p.y, _botFrom); resolveWalls(_botPos, p.y, _botFrom);
+        p.x = _botPos.x; p.z = _botPos.z;
+        return;
+      }
+    }
+    // ...and when to start one: the target is far or out of sight, so hook the first wall on the way
+    ai.grCd -= dt;
+    if (L.grapple && ai.grCd <= 0 && p.y <= 0.26 && (!los || dist > 30)) {
+      _botRay.origin.set(p.x, eyeY, p.z);
+      _botRay.direction.set(fx, 0, fz);
+      let bestD = 33, found = false;
+      for (const box of wallBoxes) {
+        if (!_botRay.intersectBox(box, _botHit)) continue;
+        const d = _botHit.distanceTo(_botRay.origin);
+        if (d > 6 && d < bestD) { bestD = d; found = true; ai.gr = { ax: _botHit.x, ay: _botHit.y, az: _botHit.z, left: 1.0 }; }
+      }
+      if (found) { p.gr = 2; p.gh = [r2(ai.gr.ax), r2(ai.gr.ay), r2(ai.gr.az)]; ai.grCd = rnd(L.grapple[0], L.grapple[1]); return; }
+      ai.grCd = 1.5;
+    }
 
     // move: close in or back off to the distance this gun likes, strafing around the target
     const prefer = BOT_PREFER[g] || 18;
     ai.strafeT -= dt;
     if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? 1 : -1; ai.strafeT = rnd(0.6, 1.8); }
-    const fx = dx / (dist || 1), fz = dz / (dist || 1);
     let mx = 0, mz = 0;
     const along = !los || dist > prefer + 4 ? 1 : dist < prefer - 4 ? -0.8 : 0;
     mx += fx * along; mz += fz * along;
@@ -5706,6 +5768,17 @@
     _botPos.x = Math.max(-B, Math.min(B, _botPos.x)); _botPos.z = Math.max(-B, Math.min(B, _botPos.z));
     const moved = Math.hypot(_botPos.x - p.x, _botPos.z - p.z);
     p.x = _botPos.x; p.z = _botPos.z; p.sl = false;
+    // vertical: a jump pad it runs over throws it up, and in a fight it hops now and then while strafing
+    if (p.y <= 0.2501 && ai.vy <= 0) {
+      p.y = 0.25; ai.vy = 0;
+      for (const pad of jumpPads) if (Math.hypot(p.x - pad.x, p.z - pad.z) < pad.r) { ai.vy = pad.power; break; }
+      if (!ai.vy && los && dist < 40 && Math.random() < dt * (L.hop || 0)) ai.vy = CFG.jumpSpeed;
+    }
+    if (ai.vy > 0 || p.y > 0.25) {
+      ai.vy -= CFG.gravity * dt;
+      p.y += ai.vy * dt;
+      if (p.y <= 0.25) { p.y = 0.25; ai.vy = 0; }
+    }
     // wedged against something: go the other way for a bit
     ai.stuckT = moved < speed * dt * 0.25 ? ai.stuckT + dt : 0;
     if (ai.stuckT > 0.4) { ai.strafe = -ai.strafe; ai.strafeT = 1.2; ai.stuckT = 0; }

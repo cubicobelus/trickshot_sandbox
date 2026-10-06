@@ -367,6 +367,7 @@ def test_bots(browser, base):
     page.click("#mp-play-btn")
     step(page, 700)
     check("in practice the health bar shows and the game runs without errors", page.is_visible("#hpbar") and not errors, "; ".join(errors[:3]))
+    check("the Esc hint shows top-left during play", page.is_visible("#esc-hint") and "Esc" in page.inner_text("#esc-hint"))
     page.evaluate("__unlock()")
     step(page, 5)
     page.click("#mp-leave-btn")
