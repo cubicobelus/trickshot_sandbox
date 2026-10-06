@@ -62,17 +62,30 @@ The full list with every value is under **Trickshot list** in the menu.
 Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
 purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
 
-**Multiplayer combat:** deathmatch has 100 health. Sniper: one hit kills, anywhere. Deagle: 55 to the body, a head hit kills.
-AK: 34 body / 50 head. Rifle: 26 body / 40 head. Shotgun: about 11 a pellet, falling off with distance. Knife: 55 a swing, a thrown
-knife kills. Health starts coming back after 10 seconds without taking damage or shooting. Only kills score. Realistic accuracy is
-on by default in deathmatch (its own setting): standing still is perfectly accurate, spread grows with speed up to 10 u/s, and is worse in the air;
-crouching steadies recoil.
-
 Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo and so on) are saved in your
 browser. **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
 Call of Duty, so the same hand movement turns you the same amount here. **Settings > View > Graphics** trades looks for speed
-(Auto steps down by itself if the game runs slow), and **Show FPS** puts a frame counter in the corner. **Realistic accuracy** (Settings > Gameplay, off by default) makes shots spread while you're in the air
-and gives the sniper a little spread when it isn't scoped.
+(Auto steps down by itself if the game runs slow), and **Show FPS** puts a frame counter in the corner. **Realistic accuracy** (Settings > Gameplay; off by default in singleplayer, on by default in deathmatch, with its own
+switch for each) makes shots spread the faster you move, up to 10 u/s, and more in the air. Standing still is
+perfectly accurate, crouching tames recoil, and the sniper has a little spread when it isn't scoped.
+
+## Multiplayer
+
+Open the **Multiplayer** tab in the menu, pick a loadout and a name, then **Create room** (share the 5-letter code or
+the invite link) or **Join** with a code. Up to 8 players, 3-minute rounds, peer-to-peer over WebRTC: the host's browser
+runs the room, so the host has to keep their tab open. It is experimental and has only been tested lightly.
+
+- **Score Race:** everyone shoots the same targets, and the best trickscore when the timer ends wins. Players can't hurt each other.
+- **Deathmatch:** targets are off and players shoot each other. 100 health. Sniper: one hit kills, anywhere.
+  Deagle: 55 to the body, a head hit kills. AK: 34 body / 50 head. Rifle: 26 body / 40 head. Shotgun: about 11 a pellet,
+  falling off with distance. Knife: 55 a swing, a thrown knife kills. Health starts coming back after 10 seconds without taking
+  damage or shooting. Only kills score (with the trick multipliers of the killing shot). Other players show what they're holding,
+  reloads, knife swings and their grappling rope.
+- The host checks hits against the shots it saw, limits how fast a player can send messages, and drops anyone who goes silent for
+  12 seconds. It can't stop every kind of cheating, so play with people you know. Players can see each other's IP addresses
+  (that's how WebRTC works).
+
+To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `game.js`.
 
 ## Files
 
@@ -86,8 +99,6 @@ and gives the sniper a little spread when it isn't scoped.
   with sliders to try changes, plus the synthesized sniper shots kept for reference
   ([open it](https://cubicobelus.github.io/trickshot_sandbox/tools/sound-lab.html))
 
-Multiplayer (race and deathmatch rooms over WebRTC) is on, but experimental and lightly tested; switch it off with
-`MULTIPLAYER_ENABLED` in `game.js`.
 
 ## Development
 
