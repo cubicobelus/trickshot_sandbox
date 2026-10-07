@@ -5218,8 +5218,35 @@
     }, 60);
   }
 
-  function setLocalDead(by) {
+  // When you're killed you watch the player who did it (through their eyes) until you respawn; if they die too, you move on
+  // to someone who is still alive. Their model is hidden so you're not inside their head.
+  let spec = null;
+  const deadSpecEl = document.getElementById("dead-spec");
+  function endSpectate() { spec = null; viewmodelRoot.visible = true; if (deadSpecEl) deadSpecEl.textContent = ""; }
+  function updateSpectate(dt) {
+    if (!localDead || !spec) return;
+    let t = net.players.get(spec.id);
+    if (!t || !t.alive || t.id === net.id) {
+      t = [...net.players.values()].find((q) => q.alive && q.id !== net.id) || null;   // the killer is gone: whoever is next
+      spec.id = t ? t.id : null;
+    }
+    viewmodelRoot.visible = false;
+    if (!t) { deadSpecEl.textContent = "Nobody left to watch"; return; }
+    const k = 1 - Math.exp(-dt * 16);
+    _specTo.set(t.x, t.y + 1.6, t.z);
+    yawObject.position.lerp(_specTo, k);
+    yawObject.rotation.y += wrapAngle(t.yaw - yawObject.rotation.y) * k;
+    pitchObject.rotation.x += (t.pitch - pitchObject.rotation.x) * k;
+    camera.rotation.z = 0;
+    if (t.mesh) t.mesh.visible = false;
+    const gun = WEAPONS[WEAPON_ORDER[t.g]];
+    deadSpecEl.textContent = "Watching " + t.name + (gun ? " \u00b7 " + gun.name : "") + " \u00b7 " + Math.ceil(t.hp) + " HP";
+  }
+  const _specTo = new THREE.Vector3();
+
+  function setLocalDead(by, killerId) {
     localDead = true;
+    spec = { id: killerId || null };
     player.velocity.set(0, 0, 0);
     player.sliding = false;
     mouseHeld = false; vm.wantADS = false;
@@ -5243,6 +5270,7 @@
 
   function resetLocalRound() {
     localDead = false;
+    endSpectate();
     mpEls.dead.hidden = true;
     streak = 0; streakEl.textContent = 0;
     score = 0; scoreEl.textContent = 0;
@@ -5283,7 +5311,7 @@
 
       case "phase":
         net.phase = m.phase; net.resultsLeft = m.rl || 0;
-        if (m.phase === "results") { mpEls.dead.hidden = true; mouseHeld = false; }
+        if (m.phase === "results") { mpEls.dead.hidden = true; mouseHeld = false; endSpectate(); }
         syncPlayers(m.p);
         mpRefreshHud();
         break;
@@ -5371,7 +5399,7 @@
         const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
         feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + ((Object.prototype.hasOwnProperty.call(KILL_VERBS, m.w) ? KILL_VERBS[m.w] : m.knife ? "knifed" : "shot") + (m.head && !m.knife ? " (headshot)" : "")) +
           " <b>" + esc(v ? v.name : "?") + "</b><i>+" + (Number(m.pts) || 0) + (tags ? " " + esc(tags) : "") + "</i>");
-        if (m.v === net.id) setLocalDead(k ? k.name : "");
+        if (m.v === net.id) setLocalDead(k ? k.name : "", m.k);
         else if (m.k !== net.id) { playPlayerHit(!!m.head, 0.5); if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8); }
         break;
       }
@@ -5382,6 +5410,7 @@
         if (p) { p.alive = true; p.hp = 100; p.x = m.pos[0]; p.y = 0.25; p.z = m.pos[1]; p.snap = true; }
         if (m.id === net.id) {
           localDead = false;
+          endSpectate();
           mpEls.dead.hidden = true;
           teleportLocal(m.pos[0], m.pos[1]);
           cancelReload(); refillAmmo(); updateAmmoHud();
@@ -6245,6 +6274,7 @@
   let mpUiTimer = 0;
   function mpFrame(dt) {
     updateAvatars(dt);
+    updateSpectate(dt);
     updateDamageNumbers(dt);
     mpUiTimer -= dt;
     if (mpUiTimer <= 0) {
