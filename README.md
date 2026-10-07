@@ -47,7 +47,7 @@ saves it as a .webm you can post anywhere.
 
 **Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too.
 1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns
-score less per hit so trickshots stay king.
+score less per hit so trickshots stay king. Shots that land on a wall, platform or the floor leave bullet holes (switch them off in Settings > View).
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (press jump just as you land) and
 wall bounces, up to 22 u/s. Tap **E** to fire the grappling hook at a wall, the floor or a target and

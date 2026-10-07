@@ -193,7 +193,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, colorblindTargets: false,   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, colorblindTargets: false, bulletHoles: true,   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -2737,8 +2737,10 @@
   }
 
   const xhPreviewEl = document.getElementById("xh-preview");
+  let decalMesh = null;   // the bullet holes (built further down)
   function applySettings() {
     applyTargetPalette();
+    if (decalMesh) decalMesh.visible = !!SETTINGS.bulletHoles;
     if (targetsReady) syncTargetCounts();
     if (SETTINGS.quality === "auto") { if (!gfxLevel) applyGraphics("high"); }
     else applyGraphics(SETTINGS.quality);
@@ -4020,15 +4022,47 @@
 
   // distance along the current ray to the nearest wall, pillar, platform or the floor
   const _occPoint = new THREE.Vector3();
+  // (it also leaves the facing of the surface it found in _occNormal, for the bullet holes)
+  const _occNormal = new THREE.Vector3(0, 1, 0), _occBest = new THREE.Vector3();
   function occluderDistance(maxDist) {
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
-    let best = maxDist;
+    let best = maxDist, bestBox = null, floor = false;
     for (const box of wallBoxes) {
       const hit = raycaster.ray.intersectBox(box, _occPoint);
-      if (hit) { const dist = o.distanceTo(hit); if (dist < best) best = dist; }
+      if (hit) { const dist = o.distanceTo(hit); if (dist < best) { best = dist; bestBox = box; _occBest.copy(hit); } }
     }
-    if (d.y < 0) { const t = (o.y - 0.25) / -d.y; if (t > 0 && t < best) best = t; }
+    if (d.y < 0) { const t = (o.y - 0.25) / -d.y; if (t > 0 && t < best) { best = t; floor = true; } }
+    if (floor) _occNormal.set(0, 1, 0);
+    else if (bestBox) boxFaceNormal(bestBox, _occBest, _occNormal);
     return best;
+  }
+
+  // ---- bullet holes: a dark mark where a shot lands on a wall, the floor or a platform. One instanced mesh
+  // (a single draw call); the oldest hole is the one that gets reused ----
+  const DECAL_MAX = 100;
+  const decalTex = canvasTexture(64, (g, n) => {
+    const grad = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+    grad.addColorStop(0, "rgba(6,6,6,1)"); grad.addColorStop(0.42, "rgba(10,10,10,0.96)");
+    grad.addColorStop(0.68, "rgba(34,30,26,0.5)"); grad.addColorStop(1, "rgba(34,30,26,0)");
+    g.fillStyle = grad; g.fillRect(0, 0, n, n);
+  });
+  decalTex.wrapS = decalTex.wrapT = THREE.ClampToEdgeWrapping;
+  decalMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(1, 16),
+    new THREE.MeshBasicMaterial({ map: decalTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), DECAL_MAX);
+  decalMesh.frustumCulled = false;
+  decalMesh.visible = !!SETTINGS.bulletHoles;
+  const _dM = new THREE.Matrix4(), _dQ = new THREE.Quaternion(), _dQ2 = new THREE.Quaternion(), _dS = new THREE.Vector3(), _dP = new THREE.Vector3(), _dZ = new THREE.Vector3(0, 0, 1);
+  for (let i = 0; i < DECAL_MAX; i++) decalMesh.setMatrixAt(i, _dM.makeScale(0, 0, 0));
+  scene.add(decalMesh);
+  let decalNext = 0;
+  function spawnDecal(point, normal, size) {
+    if (!SETTINGS.bulletHoles) return;
+    _dQ.setFromUnitVectors(_dZ, normal);
+    _dQ.multiply(_dQ2.setFromAxisAngle(_dZ, Math.random() * Math.PI * 2));   // a random turn about its own axis
+    _dP.copy(point).addScaledVector(normal, 0.012);                            // a hair off the surface
+    decalMesh.setMatrixAt(decalNext, _dM.compose(_dP, _dQ, _dS.set(size, size, size)));
+    decalMesh.instanceMatrix.needsUpdate = true;
+    decalNext = (decalNext + 1) % DECAL_MAX;
   }
 
   function raycastTargets(maxDist) {
@@ -4500,9 +4534,10 @@
           prop.velocity.y += w.pellets > 1 ? 0.6 : 2;
         }
         if (puffs++ < 4) burst(propHits[0].point, 0xd2a679, w.pellets > 1 ? 2 : 5);
-      } else if (impactDist < maxD && puffs++ < 4) {
+      } else if (impactDist < maxD) {
         _impactPt.copy(raycaster.ray.origin).addScaledVector(_pelletDir, impactDist);
-        burst(_impactPt, 0xb8c0c8, w.pellets > 1 ? 2 : 4);
+        spawnDecal(_impactPt, _occNormal, w.pellets > 1 ? 0.045 : w.scope ? 0.085 : 0.06);
+        if (puffs++ < 4) burst(_impactPt, 0xb8c0c8, w.pellets > 1 ? 2 : 4);
       }
     }
 
@@ -5252,6 +5287,11 @@
           _tmpV1.set(o[0], o[1], o[2]);
           _tmpV2.set(d[0], d[1], d[2]);
           spawnTracer(_tmpV1, _tmpV2, Math.max(0, Math.min(l, 2000)));
+          if (SETTINGS.bulletHoles && l > 0 && l < 249) {   // it ended on a wall or the floor: leave the mark
+            raycaster.ray.origin.copy(_tmpV1); raycaster.ray.direction.copy(_tmpV2).normalize();
+            const hit = occluderDistance(l + 0.5);
+            if (Math.abs(hit - l) < 0.2) spawnDecal(_dP2.copy(_tmpV1).addScaledVector(raycaster.ray.direction, hit), _occNormal, 0.06);
+          }
         }
         playRemoteShot();
         break;
@@ -5313,7 +5353,7 @@
       }
     }
   }
-  const _tmpV1 = new THREE.Vector3(), _tmpV2 = new THREE.Vector3();
+  const _tmpV1 = new THREE.Vector3(), _tmpV2 = new THREE.Vector3(), _dP2 = new THREE.Vector3();
 
   function playRemoteShot() {
     noiseHit(1400, 0.5, 0.40, 0.09, "lowpass", 0, 0.45, true);
