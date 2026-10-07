@@ -193,7 +193,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, colorblindTargets: false, bulletHoles: true,   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true,   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -2907,8 +2907,29 @@
     initAudio();
     if (FIRST_VISIT && !tutOffered && uiMode === "solo" && !tut.active) { tutOffered = true; startTutorial(); return; }   // first time: the tutorial comes first
     if (uiMode === "solo" && isRunMode() && !runInProgress() && !tut.active) startRun();
+    goFullscreen();
     lockPointer();
   }
+  // Fullscreen with the keyboard locked (Chrome / Edge): keys like W, T and N stop reaching the browser, so Ctrl+W
+  // (slide + forward) can't close the tab. Esc still leaves the game, and a second Esc leaves fullscreen.
+  function goFullscreen() {
+    if (!SETTINGS.fullscreen || window.__noFullscreen || document.fullscreenElement || !document.fullscreenEnabled) return;
+    try {
+      const p = document.documentElement.requestFullscreen({ navigationUI: "hide" });
+      if (p && p.then) p.then(lockKeys, () => {});
+    } catch (e) { /* not allowed here */ }
+  }
+  function lockKeys() {
+    try {
+      if (!navigator.keyboard || !navigator.keyboard.lock) return;
+      const codes = new Set(["KeyW", "KeyT", "KeyN"]);
+      for (const a of ACTION_IDS) for (const b of BINDS[a]) if (b && !isMouseInput(b) && b !== "Escape") codes.add(b);
+      navigator.keyboard.lock([...codes]).catch(() => {});
+    } catch (e) { /* not supported */ }
+  }
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement) { try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) { /* ignore */ } }
+  });
   startBtn.addEventListener("click", requestPlay);
   blocker.addEventListener("click", requestPlay);
 
@@ -4267,7 +4288,15 @@
 
   // Settings: a popup over the menu
   const settingsPopupEl = document.getElementById("settings-popup");
-  function setSettingsPopup(open) { settingsPopupEl.hidden = !open; if (!open) stopListening(); }
+  const settingsOpenBtn = document.getElementById("settings-open");
+  let settingsSeen = false;
+  try { settingsSeen = !!localStorage.getItem("tsb-settings-seen"); } catch (e) { /* ignore */ }
+  settingsOpenBtn.classList.toggle("glow", !settingsSeen);   // until it has been opened once, so nobody hunts for it
+  function setSettingsPopup(open) {
+    settingsPopupEl.hidden = !open;
+    if (!open) stopListening();
+    else if (!settingsSeen) { settingsSeen = true; settingsOpenBtn.classList.remove("glow"); try { localStorage.setItem("tsb-settings-seen", "1"); } catch (e) { /* ignore */ } }
+  }
   document.getElementById("settings-open").addEventListener("click", (e) => { e.stopPropagation(); setSettingsPopup(true); });
   document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
   // Erase all data: ask twice, then everything saved in this browser for the game goes
@@ -5145,7 +5174,7 @@
   const dmgNumsEl = document.getElementById("dmg-numbers");
   const dmgNums = [], _dn = new THREE.Vector3();
   function spawnDamageNumber(p, dmg, head, kill) {
-    if (!p || !p.mesh || !(dmg > 0) || dmgNums.length >= 14) return;
+    if (!SETTINGS.damageNumbers || !p || !p.mesh || !(dmg > 0) || dmgNums.length >= 14) return;
     const el = document.createElement("span");
     el.textContent = Math.round(dmg);
     el.className = kill ? "kill" : head ? "head" : "";

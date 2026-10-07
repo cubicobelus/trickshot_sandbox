@@ -31,6 +31,7 @@ Document.prototype.exitPointerLock = function () { window.__unlock(); };
 let __t = 1000; performance.now = () => __t;
 window.__step = (n, ms) => new Promise((res) => { let i = 0; (function f() { if (i++ >= n) return res(); __t += ms; requestAnimationFrame(f); })(); });
 window.__played = 0;
+window.__noFullscreen = true;   // fullscreen would resize the test browser
 window.__noForceTutorial = true;   // a first visit would otherwise start the tutorial on the first click to play
 const __start = AudioBufferSourceNode.prototype.start;
 AudioBufferSourceNode.prototype.start = function (...a) { if (this.buffer) window.__played++; return __start.apply(this, a); };

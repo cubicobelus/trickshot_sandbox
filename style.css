@@ -34,6 +34,7 @@
   #settings-popup .g-panel { width: min(780px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
   #settings-popup #settings { margin: 0; padding: 0; border-top: 0; }
   #settings-open { margin-top: 10px; }
+  #settings-open.glow { border-color: #ffd24a; color: #ffd24a; box-shadow: 0 0 12px rgba(255,210,74,0.35); }
   #howto { margin: 6px 0 0; text-align: center; }
   #howto summary { cursor: pointer; color: #9a9aa3; font-size: 12px; list-style: none; }
   #howto summary::before { content: "\25B8  "; }
