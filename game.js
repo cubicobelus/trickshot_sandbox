@@ -2432,7 +2432,7 @@
 
   // the recording, processed as tuned in the shot lab: 60 Hz low cut, light
   // compression, full level for 0.9 s then a fade to silence at 1.8 s
-  function playShotSound(profile) {
+  function playShotSound(profile, level) {   // level: 1 = your own gun, less for someone else's
     if (!audioCtx) return;
     const pf = profile || WEAPONS.rifle.sound;
     const buf = pf.recording ? (shotBuffers[pf.recording] || sfxBuffers[pf.recording + "Shot"]) : rifleShotBuffer;
@@ -2447,7 +2447,7 @@
     comp.threshold.value = -15.6; comp.ratio.value = 6; comp.knee.value = 6;
     comp.attack.value = 0.004; comp.release.value = 0.15;
     const makeup = audioCtx.createGain();
-    makeup.gain.value = 1.56 * pf.gain * SETTINGS.volGuns;
+    makeup.gain.value = 1.56 * pf.gain * SETTINGS.volGuns * (level === undefined ? 1 : level);
     const env = audioCtx.createGain();
     env.gain.setValueAtTime(1, now);
     env.gain.setValueAtTime(1, now + pf.length * 0.5);
@@ -2473,6 +2473,12 @@
 
   function playDryFire() { playSfx("dryFire", 0.6, 1, 0.1, "volGuns"); }
   // steel plate ping; bigger multipliers ring a little higher, like the old beep did
+  // another player taking a hit: a dull thump for the body, a sharper thwack for the head (no metal plate ding)
+  function playPlayerHit(head, level) {
+    const l = level === undefined ? 1 : level;
+    if (head) playSfx("knifeStick", 0.85 * l, 0.85, 0.12, "volHits");
+    else playSfx("land", 0.65 * l, 1.25, 0.08, "volHits");
+  }
   function playHitSound(pitch) { playSfx("targetDing", 0.55, 0.92 + (pitch - 1) * 0.3, 0.2, "volHits"); }
   function playSwitchSound() { playSfx("draw", 0.5, 1, 0.1, "volGear"); }
   function playInspectSound() { playSfx("inspect", 0.45, 1, 0.1, "volGear"); }
@@ -2481,34 +2487,6 @@
   function playKnifeSwing() { playSfx("knifeSwing", 0.6, 1.15, 0.1, "volKnife"); }
   function playKnifeHit() { playSfx("knifeHit", 0.6, 1, 0.2, "volKnife"); }
   // jump pad: an air rush, deeper for the mega pads
-  // the grapple: all generated, quiet under the other movement sounds, and on the movement volume
-  function playGrappleFire() {   // the launcher's thump, and the line racing out
-    const v = SETTINGS.volMove; if (v <= 0) return;
-    noiseHit(900, 1.2, 0.2 * v, 0.12, "bandpass", 0, 0.3);
-    tone("square", 190, 70, 0.16 * v, 0.1, 0, 0.2);
-    tone("sawtooth", 420, 1700, 0.05 * v, 0.22, 0.02, 0.2);
-  }
-  function playGrappleStick() {   // the spear biting in: a metal thunk and a short ring
-    const v = SETTINGS.volMove; if (v <= 0) return;
-    tone("triangle", 270, 90, 0.26 * v, 0.14, 0, 0.2);
-    noiseHit(2600, 2, 0.18 * v, 0.07, "highpass", 0, 0.25);
-    tone("sine", 1500, 950, 0.07 * v, 0.2, 0.015, 0.35);
-  }
-  function playGrappleReel() {   // the winch taking up the line
-    const v = SETTINGS.volMove; if (v <= 0) return;
-    tone("sawtooth", 150, 560, 0.06 * v, 0.45, 0.04, 0.15);
-    noiseHit(1800, 1.5, 0.05 * v, 0.4, "bandpass", 0.04, 0.2);
-  }
-  function playGrappleRelease() {   // letting go: a clack
-    const v = SETTINGS.volMove; if (v <= 0) return;
-    noiseHit(1500, 3, 0.14 * v, 0.06, "bandpass", 0, 0.2);
-    tone("triangle", 620, 300, 0.09 * v, 0.08, 0, 0.2);
-  }
-  function playGrappleMiss() {   // nothing to catch: a whistle as the line snaps back
-    const v = SETTINGS.volMove; if (v <= 0) return;
-    tone("sine", 1000, 320, 0.07 * v, 0.3, 0, 0.25);
-    noiseHit(2200, 1, 0.06 * v, 0.25, "bandpass", 0, 0.2);
-  }
   function playPadLaunch(power) { playSfx("jumpPad", 0.7, power > 15 ? 0.8 : 1.05, 0.25, "volMove"); }
 
   // thrown knife biting into a surface: quieter the further away it lands
@@ -3416,7 +3394,7 @@
     if (!had) return;
     player.lastGrappleAt = elapsedTime;
     player.grappleCooldown = player.grappleCooldownMax = cooldown === undefined ? CFG.grappleCooldown : cooldown;
-    playGrappleRelease();
+    playSfx("slide", 0.3, 1.8, 0.1, "volMove");
   }
 
   // the grapple is out: fire the hook along the view (a miss just puts it away again)
@@ -3449,7 +3427,7 @@
     const pos = ropeStart(new THREE.Vector3());
     const dir = _gBest.clone().sub(pos).normalize();
     player.hook = { anchor: _gBest.clone(), len: best, flying: true, miss: !found, target: hitTarget, pos, dir };
-    playGrappleFire();
+    playKnifeSwing();
   }
 
   // the hook flies out, then the rope pulls toward it and never gets longer
@@ -3463,12 +3441,12 @@
     if (hk.flying) {
       const left = hk.pos.distanceTo(hk.anchor), step = CFG.grappleFlightSpeed * dt;
       if (step < left) hk.pos.addScaledVector(hk.dir, step);
-      else if (hk.miss) { hk.pos.copy(hk.anchor); hk.flying = false; hk.returning = true; playGrappleMiss(); }
+      else if (hk.miss) { hk.pos.copy(hk.anchor); hk.flying = false; hk.returning = true; playSfx("dryFire", 0.35, 1.4, 0.1, "volMove"); }
       else {
         hk.pos.copy(hk.anchor); hk.flying = false;
         hk.len = yawObject.position.distanceTo(hk.anchor);
         stat("grapples"); achProgress();
-        playGrappleStick(); playGrappleReel(); burst(hk.anchor, 0xffd24a, 4);
+        playKnifeStick(hk.len); burst(hk.anchor, 0xffd24a, 4);
       }
       return;
     }
@@ -4310,7 +4288,7 @@
   window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !settingsPopupEl.hidden && !listening) setSettingsPopup(false); });
 
   // score, streak, HUD popups and feedback for any scoring hit (target or player)
-  function awardPoints(res) {
+  function awardPoints(res, silent) {   // silent: the caller plays its own hit sound
     const pointsGained = Math.round(CFG.basePoints * res.mult * (res.scale || 1));
     score += pointsGained;
     scoreEl.textContent = score;
@@ -4320,7 +4298,7 @@
     showBonusTags(res.mult, res.tags, res.pens || [], res.dist);
     flashCrosshair();
     hitStopTimer = CFG.hitStopTime;
-    playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
+    if (!silent) playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
     showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x");
     statHit(res, pointsGained);
     tutHit(res);
@@ -5293,7 +5271,7 @@
             if (Math.abs(hit - l) < 0.2) spawnDecal(_dP2.copy(_tmpV1).addScaledVector(raycaster.ray.direction, hit), _occNormal, 0.06);
           }
         }
-        playRemoteShot();
+        playRemoteShot(m.g, _tmpV1.distanceTo(yawObject.position));
         break;
 
       case "tkill": {
@@ -5322,20 +5300,20 @@
           p.hp = hp;
           if (m.id === net.id) showDamage(String(m.by), lost);
         }
-        if (m.by === net.id) { flashCrosshair(); playHitSound(m.head ? 1.6 : 0.8); }   // your hit landed
+        if (m.by === net.id) { flashCrosshair(); playPlayerHit(!!m.head); }   // your hit landed
         break;
       }
 
       case "kill": {
         const k = net.players.get(m.k), v = net.players.get(m.v);
         if (v) { v.alive = false; v.hp = 0; }
-        if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res); }   // the kill pays out
+        if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res, true); playPlayerHit(!!m.head); }   // the kill pays out
         pendingRes.delete(m.v);
         const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
         feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + ((Object.prototype.hasOwnProperty.call(KILL_VERBS, m.w) ? KILL_VERBS[m.w] : m.knife ? "knifed" : "shot") + (m.head && !m.knife ? " (headshot)" : "")) +
           " <b>" + esc(v ? v.name : "?") + "</b><i>+" + (Number(m.pts) || 0) + (tags ? " " + esc(tags) : "") + "</i>");
         if (m.v === net.id) setLocalDead(k ? k.name : "");
-        else if (m.k !== net.id) { playHitSound(0.7); if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8); }
+        else if (m.k !== net.id) { playPlayerHit(!!m.head, 0.5); if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8); }
         break;
       }
 
@@ -5355,10 +5333,11 @@
   }
   const _tmpV1 = new THREE.Vector3(), _tmpV2 = new THREE.Vector3(), _dP2 = new THREE.Vector3();
 
-  function playRemoteShot() {
-    noiseHit(1400, 0.5, 0.40, 0.09, "lowpass", 0, 0.45, true);
-    noiseHit(420, 0.7, 0.35, 0.28, "lowpass", 0.01, 0.6, true);
-    tone("sine", 130, 34, 0.35, 0.3, 0, 0.35, true);
+  // someone else's shot: the recording of that gun, quieter and a touch further back the further away they are
+  function playRemoteShot(gun, dist) {
+    const g = typeof gun === "string" && WEAPONS[gun] && !WEAPONS[gun].isMelee ? gun : "rifle";
+    const level = Math.max(0.12, Math.min(1 / (1 + (dist || 0) / 16), 0.85));
+    playShotSound(WEAPONS[g].sound, level);
   }
 
   // ---------------- local actions that need to reach the host ----------------
@@ -5575,7 +5554,7 @@
         if (p.alive && o && d && Number.isFinite(l) && g && now - p.lastFireAt >= WEAPONS[g].fireRate * 500) {   // faster than the gun can fire: dropped
           const len = Math.max(0, Math.min(l, 2000));
           p.lastShot = { o, d, l: len, g }; p.lastShotAt = now; p.lastFireAt = now;
-          hostBroadcast({ t: "shot", id: fromId, o, d, l: len });
+          hostBroadcast({ t: "shot", id: fromId, g, o, d, l: len });
         }
         break;
       }
@@ -5931,7 +5910,7 @@
     const ox = p.x, oy = p.y + 1.6, oz = p.z;
     const aimHeight = Math.random() < L.head ? 1.55 : 1.15;
     const tx = tgt.x - ox, ty = tgt.y + aimHeight - oy, tz = tgt.z - oz, tl = Math.hypot(tx, ty, tz) || 1;
-    hostBroadcast({ t: "shot", id: p.id, o: [r2(ox), r2(oy), r2(oz)], d: [r2(tx / tl * 1000) / 1000, r2(ty / tl * 1000) / 1000, r2(tz / tl * 1000) / 1000], l: r2(tl) });
+    hostBroadcast({ t: "shot", id: p.id, g, o: [r2(ox), r2(oy), r2(oz)], d: [r2(tx / tl * 1000) / 1000, r2(ty / tl * 1000) / 1000, r2(tz / tl * 1000) / 1000], l: r2(tl) });
 
     // aim error: worse against a moving target and the longer an automatic keeps firing
     const burstK = w.auto ? 1 + 0.12 * Math.min(ai.burstLeft === 0 ? 0 : (L.burst[1] - ai.burstLeft), 8) : 1;

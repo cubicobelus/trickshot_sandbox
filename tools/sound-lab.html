@@ -133,14 +133,11 @@
     ["Movement", "slide", "Slide", 0.35, 1, 0.1, ""],
     ["Movement", "wallBounce", "Wall bounce", 0.6, 1, 0.1, ""],
     ["Movement", "wallBounce", "Perfect wall bounce", 0.6, 1, 0.1, "the bounce plus a generated ping", "perfect"],
-    ["Grapple", "grappleCue", "Grapple fire", 1, 1, 0, "generated: the launcher thump and the line racing out", "grapple-fire"],
-    ["Grapple", "grappleCue", "Grapple stick", 1, 1, 0, "generated: the spear biting in", "grapple-stick"],
-    ["Grapple", "grappleCue", "Grapple reel", 1, 1, 0, "generated: the winch taking up the line", "grapple-reel"],
-    ["Grapple", "grappleCue", "Grapple release", 1, 1, 0, "generated: letting go", "grapple-release"],
-    ["Grapple", "grappleCue", "Grapple miss", 1, 1, 0, "generated: the line snapping back", "grapple-miss"],
     ["Movement", "jumpPad", "Jump pad", 0.7, 1.05, 0.25, "normal pad"],
     ["Movement", "jumpPad", "Mega jump pad", 0.7, 0.8, 0.25, "same clip, deeper"],
     ["Hits and knife", "targetDing", "Target hit", 0.55, 0.92, 0.2, "rises with the multiplier"],
+    ["Hits and knife", "land", "Player hit (body)", 0.65, 1.25, 0.08, "hitting another player: a dull thump"],
+    ["Hits and knife", "knifeStick", "Player hit (headshot)", 0.85, 0.85, 0.12, "hitting another player in the head: sharper"],
     ["Hits and knife", "knifeSwing", "Knife swing", 0.6, 1.15, 0.1, "also the throw"],
     ["Hits and knife", "knifeHit", "Knife hit", 0.6, 1, 0.2, ""],
     ["Hits and knife", "knifeStick", "Knife sticks", 0.6, 1, 0.15, "quieter the further away it lands"],
@@ -478,41 +475,8 @@
     g2.gain.setValueAtTime(0.0001, now); g2.gain.linearRampToValueAtTime(0.16 * level, now + 0.002); g2.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
     src.connect(f).connect(g2); routeOut(g2, 0.4); src.start(now); src.stop(now + 0.13);
   }
-  // the grapple cues, generated like tone() and noiseHit() in game.js (same numbers)
-  function labTone(type, f0, f1, gain, dur, delay, wet) {
-    const t = now0() + (delay || 0), j = rnd(0.97, 1.03), o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.setValueAtTime(f0 * j, t); o.frequency.exponentialRampToValueAtTime(Math.max(f1 * j, 1), t + dur);
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + 0.003); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g); routeOut(g, wet); o.start(t); o.stop(t + dur + 0.02);
-  }
-  function labNoise(freq, q, gain, dur, type, delay, wet) {
-    ensureNoise();
-    const t = now0() + (delay || 0), src = ctx.createBufferSource();
-    src.buffer = noiseBuf; src.loop = true; src.playbackRate.value = rnd(0.85, 1.18);
-    const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq * rnd(0.94, 1.06); f.Q.value = q;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + 0.002); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(f).connect(g); routeOut(g, wet); src.start(t); src.stop(t + dur + 0.02);
-  }
-  let labNow = 0;
-  const now0 = () => labNow;
-  function ensureNoise() {
-    if (noiseBuf) return;
-    const n = Math.floor(ctx.sampleRate), d = (noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate)).getChannelData(0);
-    let last = 0;
-    for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; last = 0.82 * last + 0.18 * w; d[i] = w * 0.75 + last * 0.6; }
-  }
-  function playGrappleCue(kind, now) {
-    labNow = now;
-    if (kind === "grapple-fire") { labNoise(900, 1.2, 0.2, 0.12, "bandpass", 0, 0.3); labTone("square", 190, 70, 0.16, 0.1, 0, 0.2); labTone("sawtooth", 420, 1700, 0.05, 0.22, 0.02, 0.2); }
-    else if (kind === "grapple-stick") { labTone("triangle", 270, 90, 0.26, 0.14, 0, 0.2); labNoise(2600, 2, 0.18, 0.07, "highpass", 0, 0.25); labTone("sine", 1500, 950, 0.07, 0.2, 0.015, 0.35); }
-    else if (kind === "grapple-reel") { labTone("sawtooth", 150, 560, 0.06, 0.45, 0.04, 0.15); labNoise(1800, 1.5, 0.05, 0.4, "bandpass", 0.04, 0.2); }
-    else if (kind === "grapple-release") { labNoise(1500, 3, 0.14, 0.06, "bandpass", 0, 0.2); labTone("triangle", 620, 300, 0.09, 0.08, 0, 0.2); }
-    else if (kind === "grapple-miss") { labTone("sine", 1000, 320, 0.07, 0.3, 0, 0.25); labNoise(2200, 1, 0.06, 0.25, "bandpass", 0, 0.2); }
-  }
   function playClip(it, v, now) {
     if (it.extra === "perfect") playPerfectCue(now, v.vol / 0.6);
-    if (it.extra && it.extra.startsWith("grapple-")) { playGrappleCue(it.extra, now); return; }
     const name = it.clip === "step" ? "step" + (1 + Math.floor(Math.random() * 4)) : it.clip;
     const buf = clipBufs[name];
     if (!buf) return;
