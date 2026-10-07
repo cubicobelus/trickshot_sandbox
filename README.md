@@ -24,7 +24,7 @@ unzip, and open `index.html`. No internet connection is needed.
 there; tap again or jump to let go), R reload, F inspect, P replay last hit, left click attack,
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
-Every one of these can be changed in **Settings > Controls**: each action has two boxes, and a box takes a key, a
+Playing goes fullscreen and locks keys like W, T and N away from the browser (Chrome and Edge), so Ctrl+W can't close the tab; turn that off in Settings > Gameplay. Every one of these can be changed in **Settings > Controls**: each action has two boxes, and a box takes a key, a
 mouse button (left, right, middle, back, forward) or a wheel direction. Esc, Tab and Enter stay fixed for the menus.
 
 **Tutorial:** new here? The Tutorial button in the menu walks you through the basics one goal at a time, from
@@ -77,16 +77,16 @@ the invite link) or **Join** with a code. Up to 8 players, 3-minute rounds, peer
 runs the room, so the host has to keep their tab open. It is experimental and has only been tested lightly.
 
 - **Score Race:** everyone shoots the same targets, and the best trickscore when the timer ends wins. Players can't hurt each other.
-- **Deathmatch:** targets are off and players shoot each other. 100 health. Sniper: one hit kills, anywhere.
+- **Deathmatch** (and **Team Deathmatch**, two teams with no friendly fire): targets are off and players shoot each other. The first to the kill limit (5 to 50, or none) wins, or whoever has the most kills when the 3 minutes end. 100 health. Sniper: one hit kills, anywhere.
   Deagle: 55 to the body, a head hit kills. AK: 34 body / 50 head. Rifle: 26 body / 40 head. Shotgun: about 11 a pellet,
   falling off with distance. Knife: 55 a swing, a thrown knife kills. Health starts coming back after 10 seconds without taking
-  damage or shooting. Only kills score (with the trick multipliers of the killing shot). Other players show what they're holding,
+  damage or shooting. Only kills score (with the trick multipliers of the killing shot). When you're killed you watch the player who did it until you respawn, and the damage you deal floats up from the player you hit (switch the numbers off in Settings > View). Other players show what they're holding,
   reloads, knife swings and their grappling rope.
 - The host checks hits against the shots it saw, limits how fast a player can send messages, and drops anyone who goes silent for
   12 seconds. It can't stop every kind of cheating, so play with people you know. Players can see each other's IP addresses
   (that's how WebRTC works).
 
-**Practice vs bots** (Multiplayer tab, no internet needed): a deathmatch against 1 to 5 AI players on Easy, Medium or Hard. They run
+**Practice vs bots** (Multiplayer tab, no internet needed): a deathmatch or team deathmatch against 1 to 5 AI players on Easy, Medium or Hard. They run
 and strafe, use every gun with its real fire rate, reload, and take and deal the same damage as real players. Esc pauses it.
 
 To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `game.js`.

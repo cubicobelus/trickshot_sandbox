@@ -4795,6 +4795,9 @@
   // spawn points on the open floor, clear of the walls, pillars and platforms
   const SPAWNS = [[0, 8], [-28, 28], [28, 28], [28, -28], [-28, -28], [0, 28], [-28, 2], [8, -26]];
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
+  const TEAM_COLORS = [0x3e8ef7, 0xe5484d], TEAM_NAMES = ["Blue", "Red"];
+  function modeName() { return net.sub === "dm" && net.teams ? "Team Deathmatch" : SUB_NAMES[net.sub]; }
+  const teamKills = (t) => [...net.players.values()].filter((q) => q.team === t).reduce((a, q) => a + q.kills, 0);
 
   // STUN lets two browsers discover how to reach each other; TURN is a relay of last resort for networks
   // (mobile data, school/work, some home routers) that block direct connections. The TURN entry is a free,
@@ -4814,6 +4817,7 @@
     active: false, role: null,            // role: "host" | "client"
     peer: null, hostConn: null, conns: new Map(),
     id: null, code: "", sub: "race", pendingSub: "race",
+    teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
     phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
     players: new Map(), ttOffset: 0, ttSynced: false,
     lastTick: 0, boardTimer: 0, lastHostMsg: 0,
@@ -4837,7 +4841,8 @@
     roomCode: document.getElementById("mp-room-code"),
     roomMode: document.getElementById("mp-room-mode"),
     hostMode: document.getElementById("mp-host-mode"),
-    nextSub: document.getElementById("mp-next-sub"),
+    nextSub: document.getElementById("mp-next-sub"), nextLimit: document.getElementById("mp-next-limit"), hostLimit: document.getElementById("mp-host-limit"),
+    botMode: document.getElementById("bot-mode"), botLimit: document.getElementById("bot-limit"),
     players: document.getElementById("mp-players"),
     playBtn: document.getElementById("mp-play-btn"),
     leaveBtn: document.getElementById("mp-leave-btn"),
@@ -4857,9 +4862,16 @@
 
   const SUB_HINTS = {
     race: "Everyone shoots the same targets and the best trickscore when the timer ends wins. Players can't hurt each other.",
+    tdm: "Two teams, blue and red. 100 health, no friendly fire, and the team with the most kills (or the first to the kill limit) wins. Only kills score.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   function selectedSub() { return document.querySelector('input[name="mp-sub"]:checked').value; }
+  // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
+  function chooseMode(value, limit) {
+    net.pendingSub = value === "race" ? "race" : "dm";
+    net.pendingTeams = value === "tdm";
+    net.pendingLimit = Math.max(0, Math.min(parseInt(limit, 10) || 0, 999));
+  }
   function refreshSubHint() { mpEls.subHint.textContent = SUB_HINTS[selectedSub()]; }
   document.querySelectorAll('input[name="mp-sub"]').forEach((r) => r.addEventListener("change", refreshSubHint));
   refreshSubHint();
@@ -4916,7 +4928,7 @@
 
   function makePlayerRecord(id, name, color) {
     return {
-      id, name, color, score: 0, kills: 0, deaths: 0, alive: true,
+      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, alive: true,
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
       hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
@@ -5102,6 +5114,7 @@
     let best = none;
     for (const p of net.players.values()) {
       if (p.id === net.id || !p.alive || !p.mesh) continue;
+      if (net.teams && localPlayer() && p.team === localPlayer().team) continue;   // shots pass through teammates
       const f = p.mesh.position;
       const c = p.sl ? 0.62 : 1;
       let hit = null, head = false;
@@ -5149,11 +5162,14 @@
         color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
         score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), alive: raw.alive === true,
         hp: Math.max(0, Math.min(Number.isFinite(raw.hp) ? raw.hp : 100, 100)),
+        team: raw.team === 0 || raw.team === 1 ? raw.team : -1,
       };
       seen.add(e.id);
       let p = net.players.get(e.id);
       if (!p) { p = makePlayerRecord(e.id, e.name, e.color); net.players.set(e.id, p); }
-      p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths; p.hp = e.hp;
+      const recolored = p.color !== e.color;
+      p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths; p.hp = e.hp; p.team = e.team;
+      if (recolored && p.mesh && e.id !== net.id) disposeAvatar(p);   // a new team colour: the model is rebuilt below
       if (e.id !== net.id) {
         if (net.role === "client") p.alive = e.alive;
         ensureAvatar(p);
@@ -5281,6 +5297,8 @@
 
   function applyRound(m) {
     net.sub = m.sub;
+    net.teams = m.teams === true;
+    net.limit = Math.max(0, Math.min(Number(m.limit) || 0, 999));
     net.phase = m.phase;
     net.left = m.left; net.leftRecv = nowMs();
     net.resultsLeft = m.rl || 0;
@@ -5467,7 +5485,7 @@
 
   // ---------------- host logic ----------------
   function boardList() {
-    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, alive: p.alive, hp: Math.round(p.hp) }));
+    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
   }
   function hostSendRaw(m) { for (const c of net.conns.values()) if (c.open) c.send(m); }
   function hostBroadcast(m) { hostSendRaw(m); applyEvent(m); }
@@ -5477,7 +5495,7 @@
   function hostBroadcastBoard() { hostBroadcast(hostBoardMsg()); }
   function roundMsg(fresh) {
     return {
-      t: "round", sub: net.sub, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
+      t: "round", sub: net.sub, teams: net.teams, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
       targets: net.sub === "race" ? targets.map(serializeTarget) : null, tt: mpTargetClock(),
     };
   }
@@ -5486,10 +5504,12 @@
 
   function pickSpawn(exceptId) {
     let best = SPAWNS[0], bestScore = -1;
+    const mine = net.players.get(exceptId);
     for (const s of SPAWNS) {
       let nearest = 999;
       for (const p of net.players.values()) {
         if (p.id === exceptId || !p.alive) continue;
+        if (net.teams && mine && p.team === mine.team) continue;   // spawn away from the other team, not from your own
         nearest = Math.min(nearest, Math.hypot(p.x - s[0], p.z - s[1]));
       }
       const sc = nearest + Math.random() * 6;
@@ -5509,6 +5529,13 @@
 
   function hostStartRound() {
     net.sub = net.pendingSub;
+    net.teams = net.sub === "dm" && net.pendingTeams;
+    net.limit = net.sub === "dm" ? net.pendingLimit : 0;
+    let slot = 0;
+    for (const q of net.players.values()) {   // teams: you with the first half of the bots in practice, otherwise alternating as people joined
+      if (net.teams) { q.team = net.practice ? (q.bot ? (q.botIndex < Math.floor(net.botCount / 2) ? 0 : 1) : 0) : (slot++ % 2); q.color = TEAM_COLORS[q.team]; }
+      else { q.team = -1; q.color = q.baseColor; }
+    }
     net.phase = "play";
     net.left = ROUND_SECONDS;
     net.resultsLeft = 0;
@@ -5524,11 +5551,13 @@
     hostBroadcast({ t: "phase", phase: "results", rl: net.resultsLeft, p: boardList() });
   }
 
+  const teamCount = (t) => [...net.players.values()].filter((q) => q.team === t).length;
   function hostAddPlayer(conn, hello) {
     const used = new Set([...net.players.values()].map((p) => p.color));
     const color = PLAYER_COLORS.find((c) => !used.has(c)) || PLAYER_COLORS[0];
     const name = String(hello.name || "Player").replace(/[^\w \-]/g, "").trim().slice(0, 14) || "Player";
     const p = makePlayerRecord(conn.peer, name, color);
+    if (net.teams) { p.team = teamCount(0) <= teamCount(1) ? 0 : 1; p.color = TEAM_COLORS[p.team]; }
     net.players.set(conn.peer, p);
     ensureAvatar(p);
     conn.send(roundMsg(false));
@@ -5615,6 +5644,7 @@
     p.kills++; p.score += pts;
     hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(Math.min(dmg, before)), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
     hostBroadcastBoard();
+    if (net.limit && net.phase === "play" && (net.teams ? teamKills(p.team) : p.kills) >= net.limit) hostEndRound();   // the kill limit is reached
   }
 
   function hostHandle(fromId, m) {
@@ -5676,6 +5706,7 @@
       case "hurt": {
         const v = net.players.get(m.v);
         if (net.sub !== "dm" || net.phase !== "play" || !v || v === p || !v.alive || !p.alive) break;
+        if (net.teams && v.team === p.team) break;   // no friendly fire
         if (nowMs() < v.protectUntil) break;
         const g = checkClaim(p, v, m, nowMs());
         if (!g) break;
@@ -5896,7 +5927,7 @@
     // the nearest living player is who it goes after
     let tgt = null, dist = Infinity;
     for (const q of net.players.values()) {
-      if (q === p || !q.alive) continue;
+      if (q === p || !q.alive || (net.teams && q.team === p.team)) continue;
       const d = Math.hypot(q.x - p.x, q.z - p.z);
       if (d < dist) { dist = d; tgt = q; }
     }
@@ -6027,10 +6058,10 @@
   function mpBots() {
     const count = Math.max(1, Math.min(parseInt(mpEls.botCount.value, 10) || 3, MAX_PLAYERS - 1));
     const level = mpEls.botLevel.value;
-    net.pendingSub = "dm"; net.id = "you"; net.practice = true;
+    chooseMode(mpEls.botMode.value, mpEls.botLimit.value); net.id = "you"; net.practice = true; net.botCount = count;
     mpEnter("host", "BOTS");
     net.lastTick = nowMs();
-    for (let i = 0; i < count; i++) addBot(i, level);
+    for (let i = 0; i < count; i++) addBot(i, level).botIndex = i;
     mpEls.roomCode.textContent = "Practice";
     mpEls.copyBtn.hidden = true; mpEls.hostMode.hidden = true;
     hostStartRound();
@@ -6061,7 +6092,7 @@
     mpEls.roomCode.textContent = code;
     mpEls.hostMode.hidden = role !== "host";
     mpEls.copyBtn.hidden = false;
-    mpEls.nextSub.value = net.pendingSub;
+    mpEls.nextSub.value = net.pendingTeams ? "tdm" : net.pendingSub; mpEls.nextLimit.value = String(net.pendingLimit);
     mpStatus("");
     mpRefreshRoomUI();
     mpRefreshHud();
@@ -6101,7 +6132,7 @@
     if (typeof Peer === "undefined") { mpStatus("Multiplayer library failed to load (check your connection)."); return; }
     setConnectBusy(true);
     mpStatus("Creating room…", true);
-    net.pendingSub = selectedSub();
+    chooseMode(selectedSub(), mpEls.hostLimit.value);
     let attempts = 0, opened = false;
 
     const open = () => {
@@ -6209,7 +6240,8 @@
   mpEls.code.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") mpJoin(); });
   mpEls.name.addEventListener("keydown", (e) => e.stopPropagation());
   mpEls.leaveBtn.addEventListener("click", () => mpLeave(""));
-  mpEls.nextSub.addEventListener("change", () => { net.pendingSub = mpEls.nextSub.value; });
+  mpEls.nextSub.addEventListener("change", () => chooseMode(mpEls.nextSub.value, mpEls.nextLimit.value));
+  mpEls.nextLimit.addEventListener("change", () => chooseMode(mpEls.nextSub.value, mpEls.nextLimit.value));
   mpEls.copyBtn.addEventListener("click", () => {
     const link = /^https?:/.test(location.protocol) ? location.origin + location.pathname + "?room=" + net.code : net.code;
     const done = () => { mpEls.copyBtn.textContent = "Copied"; setTimeout(() => (mpEls.copyBtn.textContent = "Copy"), 1200); };
@@ -6227,7 +6259,7 @@
   // ---------------- UI ----------------
   function mpRefreshRoomUI() {
     if (!net.active) return;
-    mpEls.roomMode.textContent = SUB_NAMES[net.sub];
+    mpEls.roomMode.textContent = modeName();
     mpEls.players.innerHTML = "";
     for (const p of net.players.values()) {
       const li = document.createElement("li");
@@ -6249,8 +6281,11 @@
   function mpRefreshHud() {
     if (!net.active) return;
     mpEls.timerVal.textContent = net.phase === "results" ? "0:00" : fmtTime(leftNow());
-    mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : SUB_NAMES[net.sub];
-    mpEls.roomMode.textContent = SUB_NAMES[net.sub];
+    let label = modeName();
+    if (net.sub === "dm" && net.limit) label += " \u00b7 first to " + net.limit;
+    if (net.sub === "dm" && net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
+    mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
+    mpEls.roomMode.textContent = modeName();
   }
 
   function mpRefreshScoreboard() {
@@ -6258,9 +6293,15 @@
     const held = net.active && pointerLocked && keys["Tab"];
     mpEls.board.hidden = !(results || held);
     if (mpEls.board.hidden) return;
-    const rows = [...net.players.values()].sort((a, b) => b.score - a.score || b.kills - a.kills);
     const dm = net.sub === "dm";
-    mpEls.boardTitle.textContent = results && rows.length ? "Round over — " + rows[0].name + " wins" : SUB_NAMES[net.sub];
+    const rows = [...net.players.values()].sort(dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
+    let title = modeName();
+    if (dm && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
+    if (results && rows.length) {
+      if (dm && net.teams) { const a = teamKills(0), b = teamKills(1); title = a === b ? "Round over \u2014 a draw, " + a + " each" : "Round over \u2014 " + TEAM_NAMES[a > b ? 0 : 1] + " team wins, " + Math.max(a, b) + " to " + Math.min(a, b); }
+      else title = "Round over \u2014 " + rows[0].name + " wins";
+    }
+    mpEls.boardTitle.textContent = title;
     document.querySelector("#scoreboard th:nth-child(4)").textContent = dm ? "Kills" : "Hits";
     document.querySelector("#scoreboard th:nth-child(5)").textContent = dm ? "Deaths" : "";
     mpEls.boardBody.innerHTML = rows.map((p, i) => {
@@ -6591,6 +6632,7 @@
   }
 
   function updateRunHud() {
+    if (net.active) return;   // in a multiplayer room that same box is the round timer (it was being hidden every frame)
     const show = runInProgress();
     runTimerEl.hidden = !show;
     if (!show) return;
