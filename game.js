@@ -2476,8 +2476,10 @@
   // another player taking a hit: a dull thump for the body, a sharper thwack for the head (no metal plate ding)
   function playPlayerHit(head, level) {
     const l = level === undefined ? 1 : level;
-    if (head) playSfx("knifeStick", 0.85 * l, 0.85, 0.12, "volHits");
-    else playSfx("land", 0.65 * l, 1.25, 0.08, "volHits");
+    if (head) {   // a sharp crack, then a heavy thud right behind it: louder and longer than a body hit
+      playSfx("knifeStick", 1.0 * l, 1.15, 0.12, "volHits");
+      setTimeout(() => playSfx("land", 0.85 * l, 0.8, 0.1, "volHits"), 55);
+    } else playSfx("land", 0.6 * l, 1.3, 0.06, "volHits");   // one soft, short thump
   }
   function playHitSound(pitch) { playSfx("targetDing", 0.55, 0.92 + (pitch - 1) * 0.3, 0.2, "volHits"); }
   function playSwitchSound() { playSfx("draw", 0.5, 1, 0.1, "volGear"); }
@@ -5138,6 +5140,33 @@
     mpRefreshScoreboard();
   }
 
+  // damage numbers: what you just did to someone, floating up from them (white for the body, gold and bigger for the
+  // head, red for the hit that kills). They stay attached to the player while they fade.
+  const dmgNumsEl = document.getElementById("dmg-numbers");
+  const dmgNums = [], _dn = new THREE.Vector3();
+  function spawnDamageNumber(p, dmg, head, kill) {
+    if (!p || !p.mesh || !(dmg > 0) || dmgNums.length >= 14) return;
+    const el = document.createElement("span");
+    el.textContent = Math.round(dmg);
+    el.className = kill ? "kill" : head ? "head" : "";
+    dmgNumsEl.appendChild(el);
+    dmgNums.push({ el, p, age: 0, dx: (Math.random() - 0.5) * 36 });
+  }
+  function updateDamageNumbers(dt) {
+    for (let i = dmgNums.length - 1; i >= 0; i--) {
+      const n = dmgNums[i];
+      n.age += dt;
+      if (n.age > 0.95 || !n.p.mesh) { n.el.remove(); dmgNums.splice(i, 1); continue; }
+      _dn.copy(n.p.mesh.position); _dn.y += 2.25;
+      _dn.project(camera);
+      const visible = _dn.z < 1 && _dn.z > -1;
+      n.el.style.display = visible ? "block" : "none";
+      n.el.style.left = ((_dn.x + 1) / 2 * window.innerWidth + n.dx) + "px";
+      n.el.style.top = ((1 - _dn.y) / 2 * window.innerHeight - n.age * 70) + "px";
+      n.el.style.opacity = Math.max(0, 1 - Math.pow(n.age / 0.95, 2)).toFixed(2);
+    }
+  }
+
   // a red flash that fades, and an arrow toward whoever hit you
   const dmgFlashEl = document.getElementById("dmg-flash"), dmgDirEl = document.getElementById("dmg-dir");
   let dmgFadeTimer = 0;
@@ -5295,6 +5324,7 @@
       case "hp": {
         const p = net.players.get(m.id);
         const hp = Math.max(0, Math.min(Number(m.hp) || 0, 100));
+        if (m.by === net.id) spawnDamageNumber(p, Math.max(0, Math.min(Number(m.dmg) || 0, 999)), !!m.head, false);
         if (p) {
           const lost = Math.max(0, p.hp - hp);
           p.hp = hp;
@@ -5307,7 +5337,7 @@
       case "kill": {
         const k = net.players.get(m.k), v = net.players.get(m.v);
         if (v) { v.alive = false; v.hp = 0; }
-        if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res, true); playPlayerHit(!!m.head); }   // the kill pays out
+        if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res, true); playPlayerHit(!!m.head); spawnDamageNumber(v, Math.max(0, Math.min(Number(m.dmg) || 0, 999)), !!m.head, true); }   // the kill pays out
         pendingRes.delete(m.v);
         const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
         feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + ((Object.prototype.hasOwnProperty.call(KILL_VERBS, m.w) ? KILL_VERBS[m.w] : m.knife ? "knifed" : "shot") + (m.head && !m.knife ? " (headshot)" : "")) +
@@ -5518,13 +5548,14 @@
   // damage lands on a player: the hit marker, or the kill if it was the last of their health. `info` carries
   // the points of the shot (paid only on a kill) and whether it was a headshot or a knife
   function hostDealDamage(p, v, dmg, info) {
+    const before = v.hp;
     v.hp -= dmg; v.lastDamageAt = nowMs();
-    if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head }); return; }
+    if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
     v.hp = 0;
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
     v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
     p.kills++; p.score += pts;
-    hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
+    hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(Math.min(dmg, before)), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
     hostBroadcastBoard();
   }
 
@@ -6185,6 +6216,7 @@
   let mpUiTimer = 0;
   function mpFrame(dt) {
     updateAvatars(dt);
+    updateDamageNumbers(dt);
     mpUiTimer -= dt;
     if (mpUiTimer <= 0) {
       mpUiTimer = 0.25;

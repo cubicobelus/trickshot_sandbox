@@ -235,6 +235,12 @@
   #hpbar[hidden] { display: none; }
   #hpbar-fill { height: 100%; width: 100%; background: #3ddc84; transition: width 0.15s linear; }
   #hpbar-text { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 12px; font-weight: bold; color: #fff !important; text-shadow: 0 0 3px #000; }
+  /* damage you deal: numbers floating up from the player you hit */
+  #dmg-numbers { position: fixed; inset: 0; pointer-events: none; z-index: 5; overflow: hidden; }
+  #dmg-numbers span { position: fixed; transform: translate(-50%, -50%); font: bold 20px 'Segoe UI', Arial, sans-serif; color: #fff;
+    text-shadow: 0 0 4px #000, 0 1px 3px #000; white-space: nowrap; }
+  #dmg-numbers span.head { color: #ffd24a; font-size: 27px; }
+  #dmg-numbers span.kill { color: #ff5a4f; font-size: 30px; }
   /* getting hit: a red edge flash and an arrow toward the shooter */
   #dmg-flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 4;
     background: radial-gradient(ellipse at center, rgba(255,0,0,0) 45%, rgba(255,0,0,0.85) 100%); }

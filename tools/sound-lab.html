@@ -136,8 +136,8 @@
     ["Movement", "jumpPad", "Jump pad", 0.7, 1.05, 0.25, "normal pad"],
     ["Movement", "jumpPad", "Mega jump pad", 0.7, 0.8, 0.25, "same clip, deeper"],
     ["Hits and knife", "targetDing", "Target hit", 0.55, 0.92, 0.2, "rises with the multiplier"],
-    ["Hits and knife", "land", "Player hit (body)", 0.65, 1.25, 0.08, "hitting another player: a dull thump"],
-    ["Hits and knife", "knifeStick", "Player hit (headshot)", 0.85, 0.85, 0.12, "hitting another player in the head: sharper"],
+    ["Hits and knife", "land", "Player hit (body)", 0.6, 1.3, 0.06, "hitting another player: one soft thump"],
+    ["Hits and knife", "knifeStick", "Player hit (headshot)", 1, 1.15, 0.12, "in the head: a crack, then a heavy thud 55 ms behind it", "player-head"],
     ["Hits and knife", "knifeSwing", "Knife swing", 0.6, 1.15, 0.1, "also the throw"],
     ["Hits and knife", "knifeHit", "Knife hit", 0.6, 1, 0.2, ""],
     ["Hits and knife", "knifeStick", "Knife sticks", 0.6, 1, 0.15, "quieter the further away it lands"],
@@ -477,6 +477,10 @@
   }
   function playClip(it, v, now) {
     if (it.extra === "perfect") playPerfectCue(now, v.vol / 0.6);
+    if (it.extra === "player-head" && clipBufs.land) {   // the thud behind the crack
+      const s2 = ctx.createBufferSource(); s2.buffer = clipBufs.land; s2.playbackRate.value = 0.8 * rnd(0.97, 1.03);
+      const g2 = ctx.createGain(); g2.gain.value = 0.85 * v.vol; s2.connect(g2).connect(master); s2.start(now + 0.055);
+    }
     const name = it.clip === "step" ? "step" + (1 + Math.floor(Math.random() * 4)) : it.clip;
     const buf = clipBufs[name];
     if (!buf) return;
