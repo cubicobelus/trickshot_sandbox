@@ -45,8 +45,7 @@
     airWishSpeedCap: 1.7,
     airAccel: 46,
     jumpSpeed: 8.6,
-    boostAdd: 8,                // a boost strip adds this much speed along its arrows...
-    boostMaxAlong: 18,          // ...up to this speed along them
+    boostPop: 5,                // a launch strip throws you at full speed along its arrows, with this much lift
     ladderSpeed: 4.4,           // climbing a ladder with forward / back
     bhopWindow: 0.12,           // land-and-jump inside this window skips ground friction...
     bhopKeep: 0.93,             // ...but each hop keeps only this share of the speed above a sprint,
@@ -177,7 +176,7 @@
     megaLaunchMult: 1.4,
     reverseSpeed: 8,            // moving at least this fast...
     reverseMult: 1.4,           // ...away from where you're aiming
-    // Realistic accuracy (a setting, off by default): extra spread, in radians
+    // Realistic shooting (a setting, on by default): extra spread, in radians
     realisticAirSpread: 0.025,  // any gun, while you're in the air (on top of the moving spread)
     realisticMoveSpread: 0.016, // any gun on the ground: none standing still, growing with speed until...
     realisticMoveFullSpeed: 10, // ...this speed (u/s), where it levels out. Aiming down sights halves it.
@@ -189,8 +188,7 @@
   const SETTINGS = {
     sensX: 1.0, sensY: 1.0, scopedSensMult: 0.35, volume: 0.55,
     unlimitedAmmo: false, mouseAccel: false, accelStrength: 0.7,
-    realisticAccuracy: false,
-    realisticAccuracyPvp: true,   // the same, for deathmatch: on by default, and the player can turn it off
+    realisticShooting: true,   // shots spread while moving or airborne, and the unscoped sniper isn't laser-accurate (every mode)
     autoSprint: false,          // sprint whenever you move; Shift walks instead   // shots spread mid-jump, and the unscoped sniper isn't laser-accurate
     // crosshair
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
@@ -494,15 +492,26 @@
       }
       g.strokeStyle = "rgba(120,170,200,0.35)"; g.lineWidth = 2; g.strokeRect(0, 0, n, n);
     },
-    // moon dust with craters
+    // moon dust with craters: a dark bowl, a bright rim on the sunny side, a shadow on the other, and a ring of throw-out
     moon(g, n, base) {
-      g.fillStyle = base || "#8c8f96"; g.fillRect(0, 0, n, n); speckle(g, 2400, n, 0.2, true);
-      for (let i = 0; i < 5; i++) {
-        const x = Math.random() * n, y = Math.random() * n, r = 14 + Math.random() * 30;
-        g.strokeStyle = "rgba(0,0,0,0.22)"; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
-        g.strokeStyle = "rgba(255,255,255,0.12)"; g.lineWidth = 2; g.beginPath(); g.arc(x + 2, y + 2, r - 3, 0, 7); g.stroke();
-      }
-      g.strokeStyle = "rgba(255,255,255,0.08)"; g.lineWidth = 2; g.strokeRect(0, 0, n, n);
+      g.fillStyle = base || "#8c8f96"; g.fillRect(0, 0, n, n); speckle(g, 3500, n, 0.22, true);
+      const crater = (x, y, r) => {
+        for (const dx of [-n, 0, n]) for (const dy of [-n, 0, n]) {   // wrap round the tile edge so it repeats cleanly
+          const cx = x + dx, cy = y + dy;
+          if (cx + r * 1.6 < 0 || cx - r * 1.6 > n || cy + r * 1.6 < 0 || cy - r * 1.6 > n) continue;
+          let grad = g.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 1.6);
+          grad.addColorStop(0, "rgba(255,255,255,0.10)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+          g.fillStyle = grad; g.beginPath(); g.arc(cx, cy, r * 1.6, 0, 7); g.fill();
+          grad = g.createRadialGradient(cx + r * 0.25, cy + r * 0.25, r * 0.1, cx, cy, r);
+          grad.addColorStop(0, "rgba(10,10,16,0.55)"); grad.addColorStop(0.7, "rgba(10,10,16,0.35)"); grad.addColorStop(1, "rgba(10,10,16,0.05)");
+          g.fillStyle = grad; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+          g.lineWidth = Math.max(2, r * 0.14);
+          g.strokeStyle = "rgba(255,255,255,0.35)"; g.beginPath(); g.arc(cx, cy, r, Math.PI * 1.05, Math.PI * 1.95); g.stroke();   // lit rim, top-left
+          g.strokeStyle = "rgba(0,0,0,0.4)"; g.beginPath(); g.arc(cx, cy, r, Math.PI * 0.05, Math.PI * 0.95); g.stroke();             // shaded rim, bottom-right
+        }
+      };
+      crater(n * 0.3, n * 0.3, n * 0.2); crater(n * 0.78, n * 0.55, n * 0.14); crater(n * 0.4, n * 0.82, n * 0.1); crater(n * 0.88, n * 0.12, n * 0.07); crater(n * 0.12, n * 0.62, n * 0.06);
+      g.strokeStyle = "rgba(255,255,255,0.06)"; g.lineWidth = 2; g.strokeRect(0, 0, n, n);
     },
     // turf with a faint line every tile (4 m), handy for judging distance
     grass(g, n, base) {
@@ -585,7 +594,7 @@
 
   // surfaces: "grass" for the floor, "deck" for platforms, "concrete" and "brick" for walls
   function addGround(x, y, z, w, d, surface, solid) {
-    const tile = ["grass", "slab", "ice", "moon", "roof"].includes(surface) ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
+    const tile = surface === "moon" ? 12 : ["grass", "slab", "ice", "roof"].includes(surface) ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), surfaceMaterial(surface, w / tile, d / tile, levelPalette[surface]));
     mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
@@ -595,7 +604,7 @@
     if (solid) wallBoxes.push(new THREE.Box3().setFromObject(mesh));
     return mesh;
   }
-  function addWall(x, y, z, w, h, d, surface) {
+  function addWall(x, y, z, w, h, d, surface, stand) {   // stand: its top is a floor you can land on
     const span = Math.max(w, d), tile = surface === "concrete" ? 4 : 3, facade = surface === "facade" || surface === "facadeb";
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), surfaceMaterial(surface, facade ? span / 4 : span / tile, facade ? h / 3.2 : h / tile, levelPalette[surface]));
     mesh.position.set(x, y, z);
@@ -604,6 +613,7 @@
     const box = new THREE.Box3().setFromObject(mesh);
     wallBoxes.push(box);
     bounceBoxes.push(box);
+    if (stand) { mesh.userData = { topY: y + h / 2, halfW: w / 2, halfD: d / 2, cx: x, cz: z }; groundMeshes.push(mesh); }
   }
 
   // ---- ladders: one plane painted with rails and rungs (cut out with alphaTest) a hair off the wall ----
@@ -713,13 +723,11 @@
     for (const b of boosts) {
       const along = (px - b.x) * b.dx + (pz - b.z) * b.dz, across = -(px - b.x) * b.dz + (pz - b.z) * b.dx;
       if (Math.abs(along) > b.l / 2 || Math.abs(across) > b.w / 2) continue;
-      const sp = player.velocity.x * b.dx + player.velocity.z * b.dz;
-      if (sp < CFG.boostMaxAlong) {
-        const add = Math.min(CFG.boostAdd, CFG.boostMaxAlong - sp);
-        player.velocity.x += b.dx * add; player.velocity.z += b.dz * add;
-        player.boostCool = 0.35;
-        playSfx("jumpPad", 0.35, 1.7, 0.1, "volMove");
-      }
+      player.velocity.x = b.dx * CFG.maxSpeed; player.velocity.z = b.dz * CFG.maxSpeed;   // instantly at top speed, whatever you were doing
+      player.velocity.y = CFG.boostPop;
+      player.onGround = false; player.sliding = false; player.launch = "pad"; player.groundRise = 0;
+      player.boostCool = 0.5;
+      playSfx("jumpPad", 0.6, 1.4, 0.1, "volMove");
       return;
     }
   }
@@ -942,7 +950,7 @@
 
   // Moonbase: low gravity, black sky, two portal pairs and boost strips
   defineMap({
-    id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals, boost strips.",
+    id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals.",
     half: 45, floor: "moon", wallH: 18, targetMaxY: 18, physics: { gravity: 8.5 },
     theme: { skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x33405c, 0x14151a, 0.38],
       surfaces: { moon: "#8c8f96", concrete: "#767a82", brick: "#5b6470", deck: "#a0a6af", facade: "#8f969f", facadeb: "#6e7885", roof: "#6c7078" } },
@@ -955,7 +963,6 @@
     decks: [], ramps: [],
     pads: [[-7, 0, "normal"], [7, 0, "normal"], [0, -7, "normal"], [0, 7, "normal"]],
     portals: [[-38, 0, 1, 0, 38, 0, -1, 0], [0, -38, 0, 1, 0, 38, 0, -1]],
-    boosts: [[-20, 0, 1, 0, 3, 8], [20, 0, -1, 0, 3, 8]],
     spawns: [[-38, -38], [38, -38], [-38, 38], [38, 38], [-40, -20], [40, 20], [-20, 40], [20, -40], [-10, -30], [10, 30], [30, 10], [-30, -10]],
     playerSpawn: [0, -30],
   });
@@ -997,7 +1004,7 @@
     ],
     // a shuttle gliding across the street between the two tall roofs, and a lift beside each tall building
     movers: [[0, 9.75, -3, 4, 4, "x", 4.2, 0.6, 0, "deck"], [-24, 5.1, -3, 3, 3, "y", 4.85, 0.5, 0, "deck"], [24, 5.1, 3, 3, 3, "y", 4.85, 0.5, 3.14, "deck"]],
-    boosts: [[0, -21, 0, 1, 3, 8], [0, 21, 0, -1, 3, 8]],
+
     walls: [
       // vents and crates on the roofs to take cover behind
       roofBox(-16, -20, 6.5, 3, 3, 1.8), roofBox(-10, -16.5, 6.5, 2, 2, 1.2), roofBox(16, -20, 6.5, 3, 3, 1.8), roofBox(10, -16.5, 6.5, 2, 2, 1.2),
@@ -1067,17 +1074,17 @@
     addWall(0, wh / 2, H, H * 2, wh, 1, "concrete");
     addWall(-H, wh / 2, 0, 1, wh, H * 2, "concrete");
     addWall(H, wh / 2, 0, 1, wh, H * 2, "concrete");
-    for (const w of m.walls) addWall(w[0], w[1], w[2], w[3], w[4], w[5], w[6]);
+    for (const w of m.walls) addWall(w[0], w[1], w[2], w[3], w[4], w[5], w[6], true);   // crates and pillars can be jumped onto
     // a building: a solid body with a walkable roof on top (a roof's top is at its height h)
     // [x, z, width, depth, height, surface, parapet edges]: "n" "s" "w" "e" put a low wall along that edge of the roof
     for (const b of m.buildings || []) {
       addWall(b[0], (b[4] - 0.5) / 2, b[1], b[2], b[4] - 0.5, b[3], b[5]);
       addGround(b[0], b[4] - 0.25, b[1], b[2], b[3], "roof", true);
       for (const e of b[6] || "") {
-        if (e === "n") addWall(b[0], b[4] + 0.55, b[1] - b[3] / 2 + 0.2, b[2], 1.1, 0.4, "concrete");
-        if (e === "s") addWall(b[0], b[4] + 0.55, b[1] + b[3] / 2 - 0.2, b[2], 1.1, 0.4, "concrete");
-        if (e === "w") addWall(b[0] - b[2] / 2 + 0.2, b[4] + 0.55, b[1], 0.4, 1.1, b[3], "concrete");
-        if (e === "e") addWall(b[0] + b[2] / 2 - 0.2, b[4] + 0.55, b[1], 0.4, 1.1, b[3], "concrete");
+        if (e === "n") addWall(b[0], b[4] + 0.55, b[1] - b[3] / 2 + 0.2, b[2], 1.1, 0.4, "concrete", true);
+        if (e === "s") addWall(b[0], b[4] + 0.55, b[1] + b[3] / 2 - 0.2, b[2], 1.1, 0.4, "concrete", true);
+        if (e === "w") addWall(b[0] - b[2] / 2 + 0.2, b[4] + 0.55, b[1], 0.4, 1.1, b[3], "concrete", true);
+        if (e === "e") addWall(b[0] + b[2] / 2 - 0.2, b[4] + 0.55, b[1], 0.4, 1.1, b[3], "concrete", true);
       }
     }
     for (const d of m.decks) addGround(d[0], d[1], d[2], d[3], d[4], d[5], d[6]);
@@ -4712,7 +4719,7 @@
       ["Aim", [
         ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per meter past " + C.distanceFrom + " m: " +
           x(1 + 15 * C.distanceMultPerM) + " at 30 m, " + x(1 + 35 * C.distanceMultPerM) + " at 50 m, " + x(1 + 65 * C.distanceMultPerM) + " at 80 m."],
-        ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more. With Realistic accuracy on, unscoped shots spread a little, and moving spreads every gun."],
+        ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more. With Realistic shooting on, unscoped shots spread a little, and moving spreads every gun."],
         ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of scoping in."],
         ["FLICK", x(C.flickMult), "Turn your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
         ["SNAP FLICK", x(C.snapFlickMult), C.snapFlickAngle + "° or more in the last " + C.snapFlickWindow + " s: a faster, bigger flick (instead of FLICK)."],
@@ -4964,7 +4971,7 @@
     // aim, plus this gun's spread: tighter aiming down sights, wider while the AR blooms
     const ads = easeInOut(vm.adsProgress);
     let cone = (w.spread + (w.spreadAds - w.spread) * ads) + (w.bloomNow || 0);
-    if (net.active && net.sub === "dm" ? SETTINGS.realisticAccuracyPvp : SETTINGS.realisticAccuracy) {   // deathmatch has its own switch
+    if (SETTINGS.realisticShooting) {
       if (w.scope) cone += CFG.realisticHipSpread * (1 - ads);
       if (player.onGround) {
         const moveK = Math.min(Math.max((Math.hypot(player.velocity.x, player.velocity.z) - 0.5) / (CFG.realisticMoveFullSpeed - 0.5), 0), 1);
@@ -7148,7 +7155,7 @@
     mouseHeld = false; attackPressed = false;
     const entry = { score, hits: run.hits, acc: run.shots ? run.shotsHit / run.shots : 0,
       gun: WEAPONS[SETTINGS.loadout].name, date: new Date().toISOString().slice(0, 10),
-      notes: [SETTINGS.unlimitedAmmo ? "unlimited ammo" : "", (net.active && net.sub === "dm" ? SETTINGS.realisticAccuracyPvp : SETTINGS.realisticAccuracy) ? "realistic accuracy" : ""].filter(Boolean) };
+      notes: [SETTINGS.unlimitedAmmo ? "unlimited ammo" : "", SETTINGS.realisticShooting ? "realistic shooting" : ""].filter(Boolean) };
     const list = runTopsFor(run.mode);
     list.push(entry);
     list.sort((a, b) => b.score - a.score);
