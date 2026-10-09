@@ -5635,14 +5635,13 @@
   // damage lands on a player: the hit marker, or the kill if it was the last of their health. `info` carries
   // the points of the shot (paid only on a kill) and whether it was a headshot or a knife
   function hostDealDamage(p, v, dmg, info) {
-    const before = v.hp;
     v.hp -= dmg; v.lastDamageAt = nowMs();
     if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
     v.hp = 0;
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
     v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
     p.kills++; p.score += pts;
-    hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(Math.min(dmg, before)), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
+    hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
     hostBroadcastBoard();
     if (net.limit && net.phase === "play" && (net.teams ? teamKills(p.team) : p.kills) >= net.limit) hostEndRound();   // the kill limit is reached
   }
