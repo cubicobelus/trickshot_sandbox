@@ -6202,8 +6202,11 @@
     net.limit = net.sub === "dm" ? net.pendingLimit : 0;
     let slot = 0;
     for (const q of net.players.values()) {   // teams: you with the first half of the bots in practice, otherwise alternating as people joined
+      const was = q.color;
       if (net.teams) { q.team = net.practice ? (q.bot ? (q.botIndex < Math.floor(net.botCount / 2) ? 0 : 1) : 0) : (slot++ % 2); q.color = TEAM_COLORS[q.team]; }
       else { q.team = -1; q.color = q.baseColor; }
+      if (q.color !== was && q.mesh) disposeAvatar(q);   // the model and the name tag are rebuilt in the new colour
+      ensureAvatar(q);
     }
     net.phase = "play";
     net.left = ROUND_SECONDS;
