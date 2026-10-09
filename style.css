@@ -335,6 +335,14 @@
   #loadout button.active { border-color: #ffd24a; color: #ffd24a; background: rgba(255,210,74,0.12); }
 
   /* ---------------- free play / score attack ---------------- */
+  #map-picker { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; flex-wrap: wrap; justify-content: center; }
+  #map-picker .lo-label { font-size: 12px; color: #ffd24a; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
+  #map-picker button { background: rgba(255,255,255,0.04); color: #aaa; border: 1px solid #44444c; border-radius: 8px; padding: 5px 7px 4px; cursor: pointer;
+    font: bold 11px 'Segoe UI', Arial, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  #map-picker button canvas { width: 56px; height: 56px; border-radius: 4px; display: block; }
+  #map-picker button:hover { border-color: #888; color: #fff; }
+  #map-picker button.active { border-color: #ffd24a; color: #ffd24a; background: rgba(255,210,74,0.12); }
+  #map-note { font-size: 11.5px !important; color: #8d8d96 !important; margin: 4px 0 0 !important; min-height: 16px; }
   #play-modes { display: flex; align-items: center; gap: 8px; margin: 14px 0 2px; flex-wrap: wrap; justify-content: center; }
   #play-modes .lo-label { font-size: 12px; color: #ffd24a; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
   #play-modes button {

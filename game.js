@@ -193,7 +193,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true,   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -269,7 +269,7 @@
   // SCENE
   // ======================================================================
   const scene = new THREE.Scene();
-  const SKY_TOP = 0x3f7dc6, SKY_HORIZON = 0xcfe2ee;
+  let SKY_TOP = 0x3f7dc6, SKY_HORIZON = 0xcfe2ee;   // (a map's theme changes them)
   scene.background = new THREE.Color(SKY_HORIZON);
   scene.fog = new THREE.Fog(SKY_HORIZON, 45, 140);
   const SUN_DIR = new THREE.Vector3(30, 50, 20).normalize();
@@ -349,7 +349,8 @@
 
   // the environment map below already lights everything softly from the sky, so the
   // fill light is low and the sun does the shaping
-  scene.add(new THREE.HemisphereLight(0xdbe9ff, 0x56663f, 0.62));
+  const hemi = new THREE.HemisphereLight(0xdbe9ff, 0x56663f, 0.62);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff0d8, 1.05);
   sun.position.copy(SUN_DIR).multiplyScalar(60);
   sun.castShadow = true;
@@ -409,7 +410,7 @@
   // shiny surfaces have something to reflect; without one, metal renders nearly black.
   // Plain 8-bit canvases rather than rendering the sky into float targets, which some
   // GPUs and software renderers get badly wrong.
-  (function buildEnvironment() {
+  function buildEnvironment() {
     const css = (hex) => "#" + new THREE.Color(hex).getHexString();
     const n = 64;
     const face = (kind) => {
@@ -431,8 +432,10 @@
     // +x, -x, +y, -y, +z, -z
     const env = new THREE.CubeTexture([face("side"), face("side"), face("up"), face("down"), face("side"), face("side")]);
     env.needsUpdate = true;
+    if (scene.environment) scene.environment.dispose();
     scene.environment = env;
-  })();
+  }
+  buildEnvironment();
 
   // ---- surface textures, drawn in code: small canvases tiled across each surface ----
   function canvasTexture(size, draw, repeatX, repeatY) {
@@ -454,15 +457,15 @@
   }
   const SURFACE_DRAW = {
     // turf with a faint line every tile (4 m), handy for judging distance
-    grass(g, n) {
-      g.fillStyle = "#6f9a52"; g.fillRect(0, 0, n, n);
+    grass(g, n, base) {
+      g.fillStyle = base || "#6f9a52"; g.fillRect(0, 0, n, n);
       speckle(g, 2600, n, 0.16, true);
       g.strokeStyle = "rgba(255,255,255,0.13)"; g.lineWidth = 3;
       g.strokeRect(0, 0, n, n);
     },
     // concrete panels with seams
-    concrete(g, n) {
-      g.fillStyle = "#a5afb9"; g.fillRect(0, 0, n, n);
+    concrete(g, n, base) {
+      g.fillStyle = base || "#a5afb9"; g.fillRect(0, 0, n, n);
       speckle(g, 1400, n, 0.08, true);
       g.strokeStyle = "rgba(40,48,58,0.35)"; g.lineWidth = 3;
       g.strokeRect(1.5, 1.5, n - 3, n - 3);
@@ -470,8 +473,8 @@
       for (const [x, y] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]]) { g.beginPath(); g.arc(x * n, y * n, 3, 0, 7); g.fill(); }
     },
     // painted blocks
-    brick(g, n) {
-      g.fillStyle = "#b06a62"; g.fillRect(0, 0, n, n);
+    brick(g, n, base) {
+      g.fillStyle = base || "#b06a62"; g.fillRect(0, 0, n, n);
       speckle(g, 900, n, 0.08, true);
       g.strokeStyle = "rgba(60,30,28,0.35)"; g.lineWidth = 2;
       const rows = 8;
@@ -485,8 +488,17 @@
       }
     },
     // steel deck plate inside a yellow and black hazard border
-    deck(g, n) {
-      g.fillStyle = "#8d949c"; g.fillRect(0, 0, n, n);
+    // a dark steel floor plate, bolted at the corners (tiles every 4 m like the turf)
+    slab(g, n, base) {
+      g.fillStyle = base || "#4f565e"; g.fillRect(0, 0, n, n);
+      speckle(g, 1800, n, 0.1, true);
+      g.strokeStyle = "rgba(0,0,0,0.4)"; g.lineWidth = 4; g.strokeRect(2, 2, n - 4, n - 4);
+      g.strokeStyle = "rgba(255,255,255,0.07)"; g.lineWidth = 2; g.beginPath(); g.moveTo(n / 2, 6); g.lineTo(n / 2, n - 6); g.moveTo(6, n / 2); g.lineTo(n - 6, n / 2); g.stroke();
+      g.fillStyle = "rgba(0,0,0,0.45)";
+      for (const [x, y] of [[0.08, 0.08], [0.92, 0.08], [0.08, 0.92], [0.92, 0.92]]) { g.beginPath(); g.arc(x * n, y * n, 4, 0, 7); g.fill(); }
+    },
+    deck(g, n, base) {
+      g.fillStyle = base || "#8d949c"; g.fillRect(0, 0, n, n);
       g.strokeStyle = "rgba(255,255,255,0.12)"; g.lineWidth = 2;
       for (let y = 8; y < n; y += 16) for (let x = 8 + (y % 32 ? 8 : 0); x < n; x += 16) {
         g.beginPath(); g.moveTo(x - 4, y + 3); g.lineTo(x + 4, y - 3); g.stroke();
@@ -501,12 +513,13 @@
     },
   };
   const surfaceCanvases = {};
-  function surfaceMaterial(kind, repeatX, repeatY) {
-    if (!surfaceCanvases[kind]) surfaceCanvases[kind] = canvasTexture(256, SURFACE_DRAW[kind]);
-    const t = surfaceCanvases[kind].clone();
+  function surfaceMaterial(kind, repeatX, repeatY, base) {
+    const key = kind + (base || "");
+    if (!surfaceCanvases[key]) surfaceCanvases[key] = canvasTexture(256, (g, n) => SURFACE_DRAW[kind](g, n, base));
+    const t = surfaceCanvases[key].clone();
     t.needsUpdate = true;
     t.repeat.set(repeatX, repeatY);
-    return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.6 : 0.9, metalness: kind === "deck" ? 0.3 : 0 });
+    return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.6 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.3 : 0 });
   }
 
   // ======================================================================
@@ -515,24 +528,28 @@
   const groundMeshes = [];
   const wallBoxes = [];      // everything that blocks movement
   const bounceBoxes = [];    // the subset you can wall-bounce off: actual walls and pillars
+  const levelGroup = new THREE.Group();   // everything a map builds lives here, so changing map is: empty it and build again
+  scene.add(levelGroup);
+  let levelPalette = {};     // this map's surface colours
+  let levelLoadedHook = null;
 
   // surfaces: "grass" for the floor, "deck" for platforms, "concrete" and "brick" for walls
   function addGround(x, y, z, w, d, surface, solid) {
-    const tile = surface === "grass" ? 4 : Math.max(w, d);   // grass tiles every 4 m; decks show one border
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), surfaceMaterial(surface, w / tile, d / tile));
+    const tile = surface === "grass" || surface === "slab" ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), surfaceMaterial(surface, w / tile, d / tile, levelPalette[surface]));
     mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
-    scene.add(mesh);
+    levelGroup.add(mesh);
     mesh.userData = { topY: y + 0.25, halfW: w / 2, halfD: d / 2, cx: x, cz: z };
     groundMeshes.push(mesh);
     if (solid) wallBoxes.push(new THREE.Box3().setFromObject(mesh));
   }
   function addWall(x, y, z, w, h, d, surface) {
     const span = Math.max(w, d), tile = surface === "concrete" ? 4 : 3;
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), surfaceMaterial(surface, span / tile, h / tile));
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), surfaceMaterial(surface, span / tile, h / tile, levelPalette[surface]));
     mesh.position.set(x, y, z);
     mesh.castShadow = true; mesh.receiveShadow = true;
-    scene.add(mesh);
+    levelGroup.add(mesh);
     const box = new THREE.Box3().setFromObject(mesh);
     wallBoxes.push(box);
     bounceBoxes.push(box);
@@ -553,10 +570,10 @@
     geo.translate(-length / 2, 0, -width / 2);
     if (along === "x") { if (dir < 0) geo.rotateY(Math.PI); }
     else geo.rotateY(dir > 0 ? -Math.PI / 2 : Math.PI / 2);
-    const mesh = new THREE.Mesh(geo, surfaceMaterial("deck", 0.25, 0.25));
+    const mesh = new THREE.Mesh(geo, surfaceMaterial("deck", 0.25, 0.25, levelPalette.deck));
     mesh.position.set(cx, FLOOR_Y, cz);
     mesh.castShadow = true; mesh.receiveShadow = true;
-    scene.add(mesh);
+    levelGroup.add(mesh);
     // the sides and the tall end block you; on the slope your feet are always within a step
     // of these, so they never get in the way of running up it
     const along0 = (u) => (along === "x" ? cx : cz) + dir * (u - 0.5) * length;
@@ -621,7 +638,7 @@
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     beam.position.y = 0.16 + T.beam / 2;
     g.add(base, glow, ring, beam);
-    scene.add(g);
+    levelGroup.add(g);
     jumpPads.push({ x, y: y + 0.16, z, r: T.radius, power: T.power(), boost: T.boost(), glowMat, beam, flash: 0 });
   }
   function updateJumpPads(dt) {
@@ -632,44 +649,136 @@
     }
   }
 
-  const H = CFG.arenaHalfSize;
-  addGround(0, 0, 0, H * 2, H * 2, "grass");
-  addWall(0, 6, -H, H * 2, 12, 1, "concrete");
-  addWall(0, 6, H, H * 2, 12, 1, "concrete");
-  addWall(-H, 6, 0, 1, 12, H * 2, "concrete");
-  addWall(H, 6, 0, 1, 12, H * 2, "concrete");
+  // ---- maps ----
+  // A map is plain data: walls [x, y, z, w, h, d, surface], decks [x, y, z, w, d, surface] (walkable platforms),
+  // ramps [cx, cz, along, width, length, height, dir], pads [x, z, tier], spawns for deathmatch, a spawn for solo play, and a
+  // theme (sky, light and surface colours). The floor's top is always 0.25 m. The outer walls are added from `half`.
+  const MAPS = {}, MAP_ORDER = [];
+  function defineMap(m) { MAPS[m.id] = m; MAP_ORDER.push(m.id); }
+  const wallAt = (x, z, w, d, h, surface) => [x, h / 2, z, w, h, d, surface];   // a wall resting on the floor
 
-  // bounce corridors: parallel walls to chain wall bounces down. The wall nearer the middle is
-  // 3.5 m lower than the outer one, so climbing the corridor gets you out over it into the open.
-  addWall(-31, 5.75, -8, 1, 11.5, 22, "concrete");
-  addWall(-25, 4, -8, 1, 8, 22, "concrete");
-  addWall(18, 4, 6, 1, 8, 12, "brick");
-  addWall(24, 5.75, 6, 1, 11.5, 12, "brick");
+  // The original arena: built for trickshots (bounce corridors, kicker ramps, pads and a sniper tower)
+  defineMap({
+    id: "arena", name: "Arena", blurb: "The trickshot arena: bounce corridors, kicker ramps, jump pads and a sniper tower.",
+    half: 40, floor: "grass", wallH: 12, targetMaxY: 9.5,
+    theme: { skyTop: 0x3f7dc6, skyHorizon: 0xcfe2ee, fog: [45, 140], sunDir: [30, 50, 20], sunColor: 0xfff0d8, sunIntensity: 1.05, hemi: [0xdbe9ff, 0x56663f, 0.62], surfaces: {} },
+    walls: [
+      // bounce corridors: parallel walls to chain wall bounces down (the inner wall is 3.5 m lower so you can climb out over it)
+      [-31, 5.75, -8, 1, 11.5, 22, "concrete"], [-25, 4, -8, 1, 8, 22, "concrete"],
+      [18, 4, 6, 1, 8, 12, "brick"], [24, 5.75, 6, 1, 11.5, 12, "brick"],
+      // pillars to bounce off and duck behind
+      [-15, 4, -24, 3, 8, 3, "brick"], [13, 4, -24, 3, 8, 3, "brick"], [-18, 4, 20, 3, 8, 3, "brick"], [-6, 3, 30, 3, 6, 3, "brick"],
+      // the legs of the sniper tower
+      [27, 3.15, -33, 0.8, 6.3, 0.8, "concrete"], [33, 3.15, -33, 0.8, 6.3, 0.8, "concrete"], [27, 3.15, -27, 0.8, 6.3, 0.8, "concrete"], [33, 3.15, -27, 0.8, 6.3, 0.8, "concrete"],
+    ],
+    decks: [[30, 6.3, -30, 7, 7, "deck", true]],   // the tower: its top is at 6.55 m, which a mega pad clears
+    ramps: [[-8, 18, "x", 4, 7, 2.4, 1], [12, 22, "z", 4, 7, 2.4, -1], [-4, -30, "x", 4, 7, 2.4, -1]],
+    pads: [[0, -2, "mega"], [24, -24, "mega"], [-30, 30, "mega"], [-28, -27, "normal"], [30, 30, "normal"], [-28, 12, "normal"]],
+    spawns: [[0, 8], [-28, 28], [28, 28], [28, -28], [-28, -28], [0, 28], [-28, 2], [8, -26]],
+    playerSpawn: [0, 8],
+  });
 
-  // pillars to bounce off and duck behind
-  addWall(-15, 4, -24, 3, 8, 3, "brick");
-  addWall(13, 4, -24, 3, 8, 3, "brick");
-  addWall(-18, 4, 20, 3, 8, 3, "brick");
-  addWall(-6, 3, 30, 3, 6, 3, "brick");
+  // Courtyard: close quarters. A ring of walls with four gates round a small court, a lane all the way round outside it
+  defineMap({
+    id: "courtyard", name: "Courtyard", blurb: "Close quarters at dusk: a ring of walls with four gates, a lane round the outside. Great with shotguns and Deagles.",
+    half: 25, floor: "grass", wallH: 8, targetMaxY: 6.5,
+    theme: { skyTop: 0x3c4a8c, skyHorizon: 0xf0b58a, fog: [26, 90], sunDir: [-40, 16, 30], sunColor: 0xffc99a, sunIntensity: 1.0, hemi: [0xffd9b8, 0x6a5a44, 0.55],
+      surfaces: { grass: "#c9b48a", concrete: "#b7a89a", brick: "#a35c48", deck: "#7d8591" } },
+    walls: [
+      // the ring (4.5 m: nobody sees over it), with a 5 m gate in the middle of each side
+      wallAt(-7.25, -12, 9.5, 1, 4.5, "brick"), wallAt(7.25, -12, 9.5, 1, 4.5, "brick"),
+      wallAt(-7.25, 12, 9.5, 1, 4.5, "brick"), wallAt(7.25, 12, 9.5, 1, 4.5, "brick"),
+      wallAt(-12, -7.25, 1, 9.5, 4.5, "brick"), wallAt(-12, 7.25, 1, 9.5, 4.5, "brick"),
+      wallAt(12, -7.25, 1, 9.5, 4.5, "brick"), wallAt(12, 7.25, 1, 9.5, 4.5, "brick"),
+      // the court: four pillars round a low block
+      wallAt(-4.5, -4.5, 2.5, 2.5, 4, "concrete"), wallAt(4.5, -4.5, 2.5, 2.5, 4, "concrete"),
+      wallAt(-4.5, 4.5, 2.5, 2.5, 4, "concrete"), wallAt(4.5, 4.5, 2.5, 2.5, 4, "concrete"),
+      wallAt(0, 0, 3, 3, 1.4, "concrete"),
+      // the outside lane: low walls to crouch behind, and a tall pillar in each corner
+      wallAt(18, 5, 1, 4, 1.4, "concrete"), wallAt(18, -5, 1, 4, 1.4, "concrete"), wallAt(-18, 5, 1, 4, 1.4, "concrete"), wallAt(-18, -5, 1, 4, 1.4, "concrete"),
+      wallAt(5, 18, 4, 1, 1.4, "concrete"), wallAt(-5, 18, 4, 1, 1.4, "concrete"), wallAt(5, -18, 4, 1, 1.4, "concrete"), wallAt(-5, -18, 4, 1, 1.4, "concrete"),
+      wallAt(-20, -20, 3, 3, 6, "brick"), wallAt(20, -20, 3, 3, 6, "brick"), wallAt(-20, 20, 3, 3, 6, "brick"), wallAt(20, 20, 3, 3, 6, "brick"),
+    ],
+    decks: [], ramps: [],
+    pads: [[-19.5, 0, "normal"], [19.5, 0, "normal"]],
+    spawns: [[-21, -9], [-21, 9], [21, -9], [21, 9], [-9, -21], [9, -21], [-9, 21], [9, 21], [0, -8], [0, 8], [-8, 0], [8, 0]],
+    playerSpawn: [0, 8],
+  });
 
-  // sniper tower in the north-east corner, reached by its own jump pad
-  addGround(30, 6.3, -30, 7, 7, "deck", true);   // top at 6.55 m: a mega pad clears it
-  for (const [lx, lz] of [[27, -33], [33, -33], [27, -27], [33, -27]]) addWall(lx, 3.15, lz, 0.8, 6.3, 0.8, "concrete");
+  // Foundry: a long central hall with crates, side lanes through gaps in the walls, and a raised gallery at each end
+  defineMap({
+    id: "foundry", name: "Foundry", blurb: "A steel works, symmetric for team play: a long hall of crates, side lanes, and a raised gallery at each end.",
+    half: 35, floor: "slab", wallH: 9, targetMaxY: 7,
+    theme: { skyTop: 0x5f6d7d, skyHorizon: 0xb9c3cc, fog: [30, 105], sunDir: [-25, 45, -30], sunColor: 0xe8eef5, sunIntensity: 0.85, hemi: [0xcfd8e2, 0x4a4f55, 0.7],
+      surfaces: { slab: "#4f565e", concrete: "#8b949d", brick: "#9b5a3d", deck: "#6b747d" } },
+    walls: [
+      // the hall: two long walls with a pair of gaps each (4 m) to cross through
+      wallAt(-9, -14.5, 1, 11, 6, "concrete"), wallAt(-9, 0, 1, 10, 6, "concrete"), wallAt(-9, 14.5, 1, 11, 6, "concrete"),
+      wallAt(9, -14.5, 1, 11, 6, "concrete"), wallAt(9, 0, 1, 10, 6, "concrete"), wallAt(9, 14.5, 1, 11, 6, "concrete"),
+      // crates in the hall
+      wallAt(0, -12, 2.5, 2.5, 2, "deck"), wallAt(0, 12, 2.5, 2.5, 2, "deck"), wallAt(-3.5, 0, 2, 2, 1.4, "deck"), wallAt(3.5, 0, 2, 2, 1.4, "deck"),
+      // the side lanes: an outer wall with a gap, so the lanes can be entered from the yards
+      wallAt(-21, -9, 1, 10, 4.5, "brick"), wallAt(-21, 9, 1, 10, 4.5, "brick"), wallAt(21, -9, 1, 10, 4.5, "brick"), wallAt(21, 9, 1, 10, 4.5, "brick"),
+      // a tall pillar in each corner of the yards
+      wallAt(-30, -30, 3, 3, 7, "brick"), wallAt(30, -30, 3, 3, 7, "brick"), wallAt(-30, 30, 3, 3, 7, "brick"), wallAt(30, 30, 3, 3, 7, "brick"),
+    ],
+    // a raised gallery at each end, reached by a ramp from either side (tops are level with the ramps' high ends: 2.65 m)
+    decks: [[0, 2.4, -28, 14, 6, "deck", true], [0, 2.4, 28, 14, 6, "deck", true]],
+    ramps: [[-10, -28, "x", 4, 6, 2.4, 1], [10, -28, "x", 4, 6, 2.4, -1], [-10, 28, "x", 4, 6, 2.4, 1], [10, 28, "x", 4, 6, 2.4, -1]],
+    pads: [[-28, 0, "normal"], [28, 0, "normal"]],
+    spawns: [[-30, -22], [30, -22], [-30, 22], [30, 22], [-28, 0], [28, 0], [-15, -24], [15, -24], [-15, 24], [15, 24], [0, -23], [0, 23]],
+    playerSpawn: [0, 22],
+  });
 
-  // kicker ramps, aimed out into open ground
-  addRamp(-8, 18, "x", 4, 7, 2.4, 1);
-  addRamp(12, 22, "z", 4, 7, 2.4, -1);
-  addRamp(-4, -30, "x", 4, 7, 2.4, -1);
-
-  // jump pads: teal ones for about 1 s of air, magenta mega pads for about 1.5 s
-  // A mega pad in the middle; mega pads in two opposite corners (north-east, at the tower, and
-  // south-west) and normal pads in the other two.
-  addJumpPad(0, FLOOR_Y, -2, "mega");
-  addJumpPad(24, FLOOR_Y, -24, "mega");   // north-east: the tower pad
-  addJumpPad(-30, FLOOR_Y, 30, "mega");   // south-west
-  addJumpPad(-28, FLOOR_Y, -27, "normal");   // north-west
-  addJumpPad(30, FLOOR_Y, 30, "normal");     // south-east
-  addJumpPad(-28, FLOOR_Y, 12, "normal");    // off the end of the west bounce corridor
+  let currentMap = null;
+  let SPAWNS = [[0, 8]];   // the deathmatch spawn points of the current map
+  // paint the sky, fog and light of a map
+  function applyTheme(t) {
+    SKY_TOP = t.skyTop; SKY_HORIZON = t.skyHorizon;
+    scene.background.setHex(t.skyHorizon);
+    scene.fog.color.setHex(t.skyHorizon); scene.fog.near = t.fog[0]; scene.fog.far = t.fog[1];
+    skyDome.material.uniforms.top.value.setHex(t.skyTop);
+    skyDome.material.uniforms.horizon.value.setHex(t.skyHorizon);
+    SUN_DIR.set(t.sunDir[0], t.sunDir[1], t.sunDir[2]).normalize();
+    sun.position.copy(SUN_DIR).multiplyScalar(60);
+    sun.color.setHex(t.sunColor); sun.intensity = t.sunIntensity;
+    hemi.color.setHex(t.hemi[0]); hemi.groundColor.setHex(t.hemi[1]); hemi.intensity = t.hemi[2];
+    buildEnvironment();
+  }
+  // empty the level and build a map. opts.keepPlayer: leave the player where they are (replays do)
+  function loadMap(id, opts) {
+    const m = MAPS[id] || MAPS.arena;
+    opts = opts || {};
+    if (currentMap === m && !opts.force) return;
+    const first = !currentMap;
+    levelGroup.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((mt) => { if (mt.map) mt.map.dispose(); mt.dispose(); });
+    });
+    levelGroup.clear();
+    groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0;
+    currentMap = m;
+    CFG.arenaHalfSize = m.half;
+    levelPalette = m.theme.surfaces || {};
+    applyTheme(m.theme);
+    const H = m.half, wh = m.wallH || 12;
+    addGround(0, 0, 0, H * 2, H * 2, m.floor || "grass");
+    addWall(0, wh / 2, -H, H * 2, wh, 1, "concrete");
+    addWall(0, wh / 2, H, H * 2, wh, 1, "concrete");
+    addWall(-H, wh / 2, 0, 1, wh, H * 2, "concrete");
+    addWall(H, wh / 2, 0, 1, wh, H * 2, "concrete");
+    for (const w of m.walls) addWall(w[0], w[1], w[2], w[3], w[4], w[5], w[6]);
+    for (const d of m.decks) addGround(d[0], d[1], d[2], d[3], d[4], d[5], d[6]);
+    for (const r of m.ramps) addRamp(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
+    for (const p of m.pads) addJumpPad(p[0], FLOOR_Y, p[1], p[2]);
+    SPAWNS = m.spawns;
+    PLAYER_SPAWN.set(m.playerSpawn[0], 1.7, m.playerSpawn[1]);
+    const e = H + 10;   // the shadow camera has to cover the whole map
+    sun.shadow.camera.left = -e; sun.shadow.camera.right = e; sun.shadow.camera.top = e; sun.shadow.camera.bottom = -e;
+    sun.shadow.camera.updateProjectionMatrix();
+    renderer.shadowMap.needsUpdate = true;
+    if (!first && levelLoadedHook) levelLoadedHook(opts);
+  }
 
   // ======================================================================
   // TARGETS
@@ -722,6 +831,7 @@
   }
 
   const PLAYER_SPAWN = new THREE.Vector3(0, 1.7, 8);
+  loadMap("arena");   // the first build (the level hook isn't set yet, so nothing else is touched)
 
   const _spawnProbe = new THREE.Vector3();
   function insideSolid(x, y, z, margin) {
@@ -734,6 +844,20 @@
   // Where a target of this kind should go: try a batch of random spots and keep the one furthest
   // from the other targets, and further still from ones of the same kind, so the map fills evenly
   // and no colour bunches up in one corner. Never right next to the player.
+  // a target has to be visible from at least 3 of 14 spread-out open spots on the map (picked when the map loads)
+  let mapViews = [];
+  function targetSeen(x, y, z) {
+    if (!mapViews.length) return true;
+    let seen = 0;
+    for (const v of mapViews) if (botLineClear(v[0], 1.7, v[1], x, y, z) && ++seen >= 3) return true;
+    return false;
+  }
+  function buildMapViews() {
+    mapViews = [];
+    const cells = [];
+    for (let j = 0; j < NAV_N; j++) for (let i = 0; i < NAV_N; i++) if (!navBlocked[j * NAV_N + i]) cells.push([-navHalf + (i + 0.5) * NAV_CELL, -navHalf + (j + 0.5) * NAV_CELL]);
+    for (let k = 0; k < 14 && cells.length; k++) mapViews.push(cells.splice(Math.floor(Math.random() * cells.length), 1)[0]);
+  }
   function pickTargetSpot(type, exclude) {
     const lim = CFG.arenaHalfSize - 6;
     const me = yawObject.position;
@@ -741,10 +865,11 @@
     for (let a = 0; a < 48; a++) {
       const x = (Math.random() * 2 - 1) * lim;
       const z = (Math.random() * 2 - 1) * lim;
-      const y = 1.7 + Math.random() * 7.3;
+      const y = 1.7 + Math.random() * ((currentMap.targetMaxY || 9) - 1.7);
       if (Math.hypot(x - PLAYER_SPAWN.x, z - PLAYER_SPAWN.z) < 11) continue;
       if (Math.hypot(x - me.x, z - me.z) < 12) continue;
       if (insideSolid(x, y, z, 1.6)) continue;
+      if (!targetSeen(x, y, z)) continue;   // never somewhere nobody can see from the open parts of the map
       let nearAny = 30, nearSame = 40;
       for (const t of targets) {
         if (t === exclude || !t.userData.base) continue;
@@ -2756,6 +2881,7 @@
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
     if (["free", "sa60"].includes(saved.playMode)) SETTINGS.playMode = saved.playMode;
+    if (typeof saved.map === "string" && MAPS[saved.map]) SETTINGS.map = saved.map;
     if (saved.binds && typeof saved.binds === "object") {
       for (const a of ACTION_IDS) {
         const s = saved.binds[a];
@@ -4793,7 +4919,7 @@
   const KNIFE_SWING_DMG = 55, KNIFE_THROW_DMG = 100;
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
-  const SPAWNS = [[0, 8], [-28, 28], [28, 28], [28, -28], [-28, -28], [0, 28], [-28, 2], [8, -26]];
+  // (the deathmatch spawn points, SPAWNS, come from the map)
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
   const TEAM_COLORS = [0x3e8ef7, 0xe5484d], TEAM_NAMES = ["Blue", "Red"];
   function modeName() { return net.sub === "dm" && net.teams ? "Team Deathmatch" : SUB_NAMES[net.sub]; }
@@ -4817,6 +4943,7 @@
     active: false, role: null,            // role: "host" | "client"
     peer: null, hostConn: null, conns: new Map(),
     id: null, code: "", sub: "race", pendingSub: "race",
+    map: "arena", pendingMap: "arena",
     teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
     phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
     players: new Map(), ttOffset: 0, ttSynced: false,
@@ -4842,6 +4969,7 @@
     roomMode: document.getElementById("mp-room-mode"),
     hostMode: document.getElementById("mp-host-mode"),
     nextSub: document.getElementById("mp-next-sub"), nextLimit: document.getElementById("mp-next-limit"), hostLimit: document.getElementById("mp-host-limit"),
+    hostMap: document.getElementById("mp-host-map"), nextMap: document.getElementById("mp-next-map"), botMap: document.getElementById("bot-map"),
     botMode: document.getElementById("bot-mode"), botLimit: document.getElementById("bot-limit"),
     players: document.getElementById("mp-players"),
     playBtn: document.getElementById("mp-play-btn"),
@@ -4867,6 +4995,7 @@
   };
   function selectedSub() { return document.querySelector('input[name="mp-sub"]:checked').value; }
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
+  function chooseMap(id) { net.pendingMap = MAPS[id] ? id : "arena"; }
   function chooseMode(value, limit) {
     net.pendingSub = value === "race" ? "race" : "dm";
     net.pendingTeams = value === "tdm";
@@ -5296,6 +5425,7 @@
   }
 
   function applyRound(m) {
+    if (typeof m.map === "string" && MAPS[m.map]) { net.map = m.map; loadMap(m.map); }   // build the host's map first
     net.sub = m.sub;
     net.teams = m.teams === true;
     net.limit = Math.max(0, Math.min(Number(m.limit) || 0, 999));
@@ -5495,7 +5625,7 @@
   function hostBroadcastBoard() { hostBroadcast(hostBoardMsg()); }
   function roundMsg(fresh) {
     return {
-      t: "round", sub: net.sub, teams: net.teams, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
+      t: "round", map: net.map, sub: net.sub, teams: net.teams, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
       targets: net.sub === "race" ? targets.map(serializeTarget) : null, tt: mpTargetClock(),
     };
   }
@@ -5528,6 +5658,8 @@
   }
 
   function hostStartRound() {
+    net.map = MAPS[net.pendingMap] ? net.pendingMap : "arena";
+    loadMap(net.map);   // (does nothing if it is already the map)
     net.sub = net.pendingSub;
     net.teams = net.sub === "dm" && net.pendingTeams;
     net.limit = net.sub === "dm" ? net.pendingLimit : 0;
@@ -5831,22 +5963,23 @@
   // The arena as a grid of 2 m cells; a cell is blocked if a wall, pillar, tower leg or ramp is in the way of a player
   // walking at floor level. Bots plan a route across it (A*) whenever the target is far or out of sight, so they go
   // round walls and out of the bounce corridors instead of pushing into them.
-  const NAV_CELL = 2, NAV_N = 40;
-  let navBlocked = null;
+  const NAV_CELL = 2;
+  let NAV_N = 40, navHalf = 40, navBlocked = null;
   function navBuild() {
+    navHalf = CFG.arenaHalfSize; NAV_N = Math.ceil(navHalf * 2 / NAV_CELL);
     navBlocked = new Uint8Array(NAV_N * NAV_N);
     const pad = CFG.playerRadius + 0.15;
     const boxes = wallBoxes.filter((b) => 0.25 < b.max.y - CFG.stepHeight && 0.25 + CFG.playerHeight > b.min.y);
     const block = (x0, x1, z0, z1) => {
       for (let j = 0; j < NAV_N; j++) for (let i = 0; i < NAV_N; i++) {
-        const cx0 = -40 + i * NAV_CELL - pad, cx1 = -40 + (i + 1) * NAV_CELL + pad, cz0 = -40 + j * NAV_CELL - pad, cz1 = -40 + (j + 1) * NAV_CELL + pad;
+        const cx0 = -navHalf + i * NAV_CELL - pad, cx1 = -navHalf + (i + 1) * NAV_CELL + pad, cz0 = -navHalf + j * NAV_CELL - pad, cz1 = -navHalf + (j + 1) * NAV_CELL + pad;
         if (x1 > cx0 && x0 < cx1 && z1 > cz0 && z0 < cz1) navBlocked[j * NAV_N + i] = 1;
       }
     };
     for (const b of boxes) block(b.min.x, b.max.x, b.min.z, b.max.z);
     for (const r of ramps) block(r.cx - r.halfW, r.cx + r.halfW, r.cz - r.halfD, r.cz + r.halfD);
   }
-  const navCell = (v) => Math.max(0, Math.min(NAV_N - 1, Math.floor((v + 40) / NAV_CELL)));
+  const navCell = (v) => Math.max(0, Math.min(NAV_N - 1, Math.floor((v + navHalf) / NAV_CELL)));
   const navFree = (i, j) => i >= 0 && j >= 0 && i < NAV_N && j < NAV_N && !navBlocked[j * NAV_N + i];
   // a straight line between two floor points that stays out of blocked cells
   function navClear(ax, az, bx, bz) {
@@ -5913,7 +6046,7 @@
     }
     if (from[t0] < 0 && t0 !== s0) return null;
     const out = [];
-    for (let c = t0; c !== s0 && c >= 0; c = from[c]) out.push([-40 + ((c % N) + 0.5) * NAV_CELL, -40 + (((c / N) | 0) + 0.5) * NAV_CELL]);
+    for (let c = t0; c !== s0 && c >= 0; c = from[c]) out.push([-navHalf + ((c % N) + 0.5) * NAV_CELL, -navHalf + (((c / N) | 0) + 0.5) * NAV_CELL]);
     return out.reverse();
   }
 
@@ -6057,7 +6190,7 @@
   function mpBots() {
     const count = Math.max(1, Math.min(parseInt(mpEls.botCount.value, 10) || 3, MAX_PLAYERS - 1));
     const level = mpEls.botLevel.value;
-    chooseMode(mpEls.botMode.value, mpEls.botLimit.value); net.id = "you"; net.practice = true; net.botCount = count;
+    chooseMode(mpEls.botMode.value, mpEls.botLimit.value); chooseMap(mpEls.botMap.value); net.id = "you"; net.practice = true; net.botCount = count;
     mpEnter("host", "BOTS");
     net.lastTick = nowMs();
     for (let i = 0; i < count; i++) addBot(i, level).botIndex = i;
@@ -6091,7 +6224,7 @@
     mpEls.roomCode.textContent = code;
     mpEls.hostMode.hidden = role !== "host";
     mpEls.copyBtn.hidden = false;
-    mpEls.nextSub.value = net.pendingTeams ? "tdm" : net.pendingSub; mpEls.nextLimit.value = String(net.pendingLimit);
+    mpEls.nextSub.value = net.pendingTeams ? "tdm" : net.pendingSub; mpEls.nextLimit.value = String(net.pendingLimit); mpEls.nextMap.value = net.pendingMap;
     mpStatus("");
     mpRefreshRoomUI();
     mpRefreshHud();
@@ -6113,6 +6246,7 @@
     if (!wasActive) { setConnectBusy(false); mpStatus(message || ""); return; }
     document.exitPointerLock();
     setPropsEnabled(true);
+    loadMap(SETTINGS.map);   // back to the map picked in the menu
     for (const t of targets) respawnTarget(t);
     resetLocalRound();
     mpEls.tabs.forEach((t) => (t.disabled = false));
@@ -6132,6 +6266,7 @@
     setConnectBusy(true);
     mpStatus("Creating room…", true);
     chooseMode(selectedSub(), mpEls.hostLimit.value);
+    chooseMap(mpEls.hostMap.value);
     let attempts = 0, opened = false;
 
     const open = () => {
@@ -6241,6 +6376,7 @@
   mpEls.leaveBtn.addEventListener("click", () => mpLeave(""));
   mpEls.nextSub.addEventListener("change", () => chooseMode(mpEls.nextSub.value, mpEls.nextLimit.value));
   mpEls.nextLimit.addEventListener("change", () => chooseMode(mpEls.nextSub.value, mpEls.nextLimit.value));
+  mpEls.nextMap.addEventListener("change", () => chooseMap(mpEls.nextMap.value));
   mpEls.copyBtn.addEventListener("click", () => {
     const link = /^https?:/.test(location.protocol) ? location.origin + location.pathname + "?room=" + net.code : net.code;
     const done = () => { mpEls.copyBtn.textContent = "Copied"; setTimeout(() => (mpEls.copyBtn.textContent = "Copy"), 1200); };
@@ -6597,8 +6733,9 @@
   function loadRunTops() {
     try { const o = JSON.parse(localStorage.getItem(RUN_KEY)); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; }
   }
+  const topsKey = (mode) => (currentMap && currentMap.id !== "arena" ? mode + "@" + currentMap.id : mode);   // each map has its own top 5
   function runTopsFor(mode) {
-    const list = loadRunTops()[mode];
+    const list = loadRunTops()[topsKey(mode)];
     return Array.isArray(list) ? list.filter((e) => e && Number.isFinite(e.score)).slice(0, 5) : [];
   }
 
@@ -6661,9 +6798,9 @@
     list.sort((a, b) => b.score - a.score);
     const rank = list.indexOf(entry) + 1;
     const tops = loadRunTops();
-    tops[run.mode] = list.slice(0, 5);
+    tops[topsKey(run.mode)] = list.slice(0, 5);
     try { localStorage.setItem(RUN_KEY, JSON.stringify(tops)); } catch (e) { /* storage blocked */ }
-    showResults(entry, rank, tops[run.mode]);
+    showResults(entry, rank, tops[topsKey(run.mode)]);
     achRun({ mode: run.mode, score: entry.score });
     runTimerEl.hidden = true;
     if (document.pointerLockElement) document.exitPointerLock();
@@ -6718,6 +6855,50 @@
     if (e.code === "Enter" || e.code === "NumpadEnter") { e.preventDefault(); closeResults(true); }
     if (e.code === "Escape") closeResults(false);
   });
+
+  // ---- the map picker in the menu: a thumbnail drawn from each map's own walls ----
+  function drawMapThumb(canvas, m) {
+    const n = canvas.width, g = canvas.getContext("2d"), k = n / (m.half * 2), px = (v) => (v + m.half) * k;
+    const css = (hex) => "#" + new THREE.Color(hex).getHexString();
+    g.fillStyle = (m.theme.surfaces && m.theme.surfaces[m.floor]) || (m.floor === "slab" ? "#4f565e" : "#6f9a52");
+    g.fillRect(0, 0, n, n);
+    const box = (x, z, w, d, fill) => { g.fillStyle = fill; g.fillRect(px(x - w / 2), px(z - d / 2), Math.max(1.5, w * k), Math.max(1.5, d * k)); };
+    for (const d of m.decks) box(d[0], d[2], d[3], d[4], "rgba(190,200,215,0.55)");
+    for (const r of m.ramps) box(r[0], r[1], r[2] === "x" ? r[4] : r[3], r[2] === "x" ? r[3] : r[4], "#e3b53a");
+    for (const w of m.walls) box(w[0], w[2], w[3], w[5], w[4] < 2 ? "rgba(235,235,240,0.5)" : "#e8e8ec");
+    for (const p of m.pads) { g.fillStyle = p[2] === "mega" ? "#d23cff" : "#1bd6c8"; g.beginPath(); g.arc(px(p[0]), px(p[1]), Math.max(2, 1.4 * k), 0, 7); g.fill(); }
+    g.strokeStyle = css(m.theme.skyHorizon); g.lineWidth = 2; g.strokeRect(1, 1, n - 2, n - 2);
+  }
+  const mapPickerEl = document.getElementById("map-picker");
+  for (const id of MAP_ORDER) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.map = id; b.title = MAPS[id].blurb;
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    drawMapThumb(c, MAPS[id]);
+    b.appendChild(c); b.appendChild(document.createTextNode(MAPS[id].name));
+    b.addEventListener("click", (e) => { e.stopPropagation(); setMap(id); });
+    mapPickerEl.appendChild(b);
+  }
+  mapPickerEl.addEventListener("click", (e) => e.stopPropagation());
+  function refreshMapUI() {
+    if (!currentMap) return;
+    mapPickerEl.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.map === currentMap.id));
+    const note = document.getElementById("map-note");
+    if (note) note.textContent = currentMap.blurb;
+  }
+  // choose a map to play on (singleplayer): switching ends a Score Attack run, like switching mode does
+  function setMap(id) {
+    if (!MAPS[id] || (SETTINGS.map === id && currentMap.id === id)) return;
+    if (runInProgress() || run.state === "done") quitRun();
+    SETTINGS.map = id;
+    saveSettings();
+    loadMap(id);
+    refreshModeUI();
+    refreshMapUI();
+  }
+  for (const sel of [document.getElementById("mp-host-map"), document.getElementById("bot-map"), document.getElementById("mp-next-map")]) {
+    for (const id of MAP_ORDER) { const o = document.createElement("option"); o.value = id; o.textContent = MAPS[id].name; sel.appendChild(o); }
+  }
 
   // ---- the mode buttons in the menu ----
   const modeButtons = document.querySelectorAll("#play-modes button");
@@ -6784,6 +6965,7 @@
   const tutEl = document.getElementById("tutorial");
   function startTutorial() {
     if (runInProgress() || run.state === "done") quitRun();
+    if (currentMap.id !== "arena") loadMap("arena");   // its steps use the arena's pads and walls
     tut.active = true; tut.step = 0; tut.doneTimer = 0;
     tutBegin();
     try { localStorage.setItem(TUT_KEY, "started"); } catch (e) { /* ignore */ }
@@ -6797,6 +6979,7 @@
   }
   function endTutorial(finished) {
     tut.active = false;
+    if (currentMap.id !== SETTINGS.map) loadMap(SETTINGS.map);
     tutEl.hidden = true;
     if (finished) try { localStorage.setItem(TUT_KEY, "done"); } catch (e) { /* ignore */ }
     refreshTutorialUI();
@@ -6938,7 +7121,7 @@
     const snap = snaps.length ? snaps[snaps.length - 1] : rec.events.find((e) => e.type === "snap");
     if (!snap) return;
     const shift = (o) => Object.assign({}, o, { t: r3(o.t - t0) });
-    const clip = { v: 1, snap: snap.s, hitT: r3(p.hitT - t0), meta: p.meta,
+    const clip = { v: 1, map: currentMap.id, snap: snap.s, hitT: r3(p.hitT - t0), meta: p.meta,
       frames: frames.map(shift), events: rec.events.filter((e) => e.type !== "snap" && e.t > t0 && e.t <= end).map(shift) };
     lastClip = clip;
     if (p.runBest) run.bestClip = clip;
@@ -6990,6 +7173,10 @@
       mags: WEAPON_ORDER.map((id) => WEAPONS[id].mag ? [WEAPONS[id].mag.position.y, WEAPONS[id].mag.visible] : null),
     };
     for (const d of casingPool.concat(magDropPool)) d.mesh.visible = false;   // live brass and magazines stay out of the replay
+    // a clip from another map plays on that map, and the live map comes back afterwards
+    replay.restoreMap = null;
+    const clipMap = clip.map && MAPS[clip.map] ? clip.map : "arena";
+    if (clipMap !== currentMap.id) { replay.restoreMap = currentMap.id; loadMap(clipMap, { keepPlayer: true }); }
     // the gun moves from the live camera onto the replay camera, holding whatever was in your hand
     replayCam.add(viewmodelRoot);
     for (const k of thrownPool) k.root.visible = false;
@@ -7023,6 +7210,7 @@
   function stopReplay() {
     if (!replay.active) return;
     replay.active = false;
+    if (replay.restoreMap) { loadMap(replay.restoreMap, { keepPlayer: true }); replay.restoreMap = null; }
     // the live world, as it was
     targets.forEach((t, i) => {
       const s = replay.saved.targets[i];
@@ -7482,6 +7670,20 @@
   player.lastYaw = yawObject.rotation.y;
   fitMuzzleFlash(currentWeapon());
   setLoadout(SETTINGS.loadout);   // last, once the reload and ammo state it touches exist
+  // whatever depends on the level's shape is redone every time a map loads
+  levelLoadedHook = function (opts) {
+    groundBoxes = null; grappleFloors = null;
+    navBuild(); buildMapViews();
+    if (decalMesh) { for (let i = 0; i < DECAL_MAX; i++) decalMesh.setMatrixAt(i, _dM.makeScale(0, 0, 0)); decalMesh.instanceMatrix.needsUpdate = true; decalNext = 0; }
+    for (const k of thrownPool) if (k.state !== "idle") retireKnife(k);
+    releaseHook(0);
+    if (!opts.keepPlayer && !net.active) teleportLocal(PLAYER_SPAWN.x, PLAYER_SPAWN.z);
+    for (const t of targets) respawnTarget(t);
+    refreshMapUI();
+  };
+  navBuild(); buildMapViews();
+  if (SETTINGS.map !== currentMap.id) loadMap(SETTINGS.map);
+  refreshMapUI();
   targetsReady = true;
   syncTargetCounts();
   updateAmmoHud();

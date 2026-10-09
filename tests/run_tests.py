@@ -389,6 +389,35 @@ def test_bots(browser, base):
     page.close()
 
 
+def test_maps(browser, base):
+    """Every map builds, shows up in the picker, and can be played with bots."""
+    page, errors = open_page(browser, base + "/index.html")
+    ids = page.eval_on_selector_all("#map-picker button", "els => els.map(e => e.dataset.map)")
+    check("the menu offers every map", len(ids) >= 3 and "arena" in ids and "courtyard" in ids and "foundry" in ids, ", ".join(ids))
+    for mid in ids:
+        page.click(f'#map-picker button[data-map="{mid}"]')
+        page.wait_for_timeout(150)
+        page.click("#start-btn")
+        step(page, 90)
+        page.evaluate("__unlock()")
+        step(page, 3)
+        check(f"{mid}: picking it and playing runs without errors", page.eval_on_selector(f'#map-picker button[data-map="{mid}"]', "e => e.classList.contains('active')") and not errors, "; ".join(errors[:2]))
+    page.click('#mode-tabs .tab[data-mode="mp"]')
+    for mid in ids:
+        page.select_option("#bot-map", mid)
+        page.select_option("#bot-count", "3")
+        page.click("#bot-start-btn")
+        page.wait_for_timeout(250)
+        page.click("#mp-play-btn")
+        step(page, 200)
+        page.evaluate("__unlock()")
+        step(page, 3)
+        page.click("#mp-leave-btn")
+        page.wait_for_timeout(150)
+        check(f"{mid}: a practice match with bots runs without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_tutorial(browser, base):
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
@@ -439,7 +468,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_maps, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:

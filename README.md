@@ -30,6 +30,8 @@ mouse button (left, right, middle, back, forward) or a wheel direction. Esc, Tab
 **Tutorial:** new here? The Tutorial button in the menu walks you through the basics one goal at a time, from
 looking around to landing a 3x trickshot. Each goal ticks off when you do it; Enter skips one. It starts by itself the first time you click to play.
 
+**Maps:** pick one in the menu (a small picture of each is shown). **Arena** is the original trickshot map; **Courtyard** is close quarters at dusk (a ring of walls with four gates); **Foundry** is a steel works built for team play (a long hall of crates, side lanes and a raised gallery at each end). Free play, Score Attack, practice with bots and online rooms all use them (the host picks the map for a room), and each map keeps its own Score Attack top 5.
+
 **Modes:** Free play is endless. **Score Attack** gives you 1 minute (after a 3-2-1 countdown) to
 score as much as you can; Esc pauses the clock, and your top 5 runs are kept in your browser.
 

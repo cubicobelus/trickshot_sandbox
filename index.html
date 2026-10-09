@@ -38,6 +38,8 @@
     <div id="loadout"><span class="lo-label">Loadout</span></div>   <!-- gun buttons are built in game.js; shared by singleplayer and multiplayer -->
 
     <div id="panel-solo">
+      <div id="map-picker"><span class="lo-label">Map</span></div>   <!-- thumbnails are built in game.js -->
+      <p id="map-note"></p>
       <div id="play-modes">
         <span class="lo-label">Mode</span>
         <button type="button" data-play-mode="free">Free play</button>
@@ -71,6 +73,7 @@
               <label><input type="radio" name="mp-sub" value="dm">Deathmatch</label>
               <label><input type="radio" name="mp-sub" value="tdm">Team Deathmatch</label>
             </div>
+            <label class="mp-limit">Map <select id="mp-host-map"></select></label>
             <label class="mp-limit">First to <select id="mp-host-limit"><option value="5">5</option><option value="10">10</option><option value="15" selected>15</option><option value="25">25</option><option value="50">50</option><option value="0">no limit</option></select> kills (deathmatch modes)</label>
             <p class="mp-hint" id="mp-sub-hint"></p>
             <button type="button" class="btn" id="mp-host-btn">Create room</button>
@@ -84,6 +87,7 @@
             <h3>Practice vs bots</h3>
             <div class="check-row">
               <label>Bots <select id="bot-count"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
+              <label>Map <select id="bot-map"></select></label>
               <label>Mode <select id="bot-mode"><option value="dm">Deathmatch</option><option value="tdm">Team Deathmatch</option></select></label>
               <label>First to <select id="bot-limit"><option value="5">5</option><option value="10">10</option><option value="15" selected>15</option><option value="25">25</option><option value="50">50</option><option value="0">no limit</option></select></label>
               <label>Level <select id="bot-level"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></label>
@@ -99,7 +103,7 @@
         <div class="mp-codebar">Room code <b id="mp-room-code">-----</b>
           <button type="button" class="btn small" id="mp-copy-btn">Copy</button></div>
         <div class="mp-modeline">Mode: <b id="mp-room-mode"></b>
-          <span id="mp-host-mode" hidden>&nbsp;&middot; next round:
+          <span id="mp-host-mode" hidden>&nbsp;&middot; next round: <select id="mp-next-map"></select>
             <select id="mp-next-sub"><option value="race">Score Race</option><option value="dm">Deathmatch</option><option value="tdm">Team Deathmatch</option></select>
             first to <select id="mp-next-limit"><option value="5">5</option><option value="10">10</option><option value="15">15</option><option value="25">25</option><option value="50">50</option><option value="0">no limit</option></select></span>
         </div>
