@@ -45,6 +45,7 @@
     airWishSpeedCap: 1.7,
     airAccel: 46,
     jumpSpeed: 8.6,
+    ladderSpeed: 4.4,           // climbing a ladder with forward / back
     bhopWindow: 0.12,           // land-and-jump inside this window skips ground friction...
     bhopKeep: 0.93,             // ...but each hop keeps only this share of the speed above a sprint,
     bhopKeepHeld: 0.81,         // and less when space is just held down instead of pressed on landing
@@ -530,6 +531,7 @@
   const bounceBoxes = [];    // the subset you can wall-bounce off: actual walls and pillars
   const levelGroup = new THREE.Group();   // everything a map builds lives here, so changing map is: empty it and build again
   scene.add(levelGroup);
+  const ladders = [];        // { x, z, nx, nz, y0, y1 }: where it meets the wall, which way it faces (the side you climb from), bottom and top
   let levelPalette = {};     // this map's surface colours
   let levelLoadedHook = null;
 
@@ -553,6 +555,26 @@
     const box = new THREE.Box3().setFromObject(mesh);
     wallBoxes.push(box);
     bounceBoxes.push(box);
+  }
+
+  // ---- ladders: one plane painted with rails and rungs (cut out with alphaTest) a hair off the wall ----
+  const ladderTex = canvasTexture(64, (g, n) => {
+    g.clearRect(0, 0, n, n);
+    g.fillStyle = "#c7a548";
+    g.fillRect(7, 0, 6, n); g.fillRect(n - 13, 0, 6, n);                       // the two rails
+    for (let y = 4; y < n; y += 16) g.fillRect(9, y, n - 18, 4);                // a rung every quarter metre
+    g.fillStyle = "rgba(0,0,0,0.35)";
+    g.fillRect(11, 0, 2, n); g.fillRect(n - 9, 0, 2, n);
+  });
+  function addLadder(x, z, nx, nz, y0, y1) {
+    const h = y1 - y0, tex = ladderTex.clone();
+    tex.needsUpdate = true; tex.repeat.set(1, h);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.7, h), new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.3 }));
+    mesh.position.set(x + nx * 0.05, (y0 + y1) / 2, z + nz * 0.05);
+    mesh.rotation.y = Math.atan2(nx, nz);
+    mesh.castShadow = false;
+    levelGroup.add(mesh);
+    ladders.push({ x, z, nx, nz, y0, y1 });
   }
 
   // ---- kicker ramps: a sloped floor rising along x or z. Running off the high end turns
@@ -730,7 +752,48 @@
     playerSpawn: [0, 22],
   });
 
+  // Rooftops: a street canyon between two rows of buildings at three heights, with ladders, ramps, bridges and pads between the levels
+  const roofBox = (x, z, top, w, d, h) => [x, top + h / 2, z, w, h, d, "deck"];   // a crate or vent standing on a roof
+  defineMap({
+    id: "rooftops", name: "Rooftops", blurb: "Three levels: a street canyon, rooftops at 6.5 and 10 m, climbed by ladders and ramps, linked by bridges. Hold forward at a ladder to climb.",
+    half: 34, floor: "slab", wallH: 14, targetMaxY: 13,
+    theme: { skyTop: 0x4f86d4, skyHorizon: 0xf1e2c8, fog: [55, 170], sunDir: [35, 40, -25], sunColor: 0xfff3dc, sunIntensity: 1.1, hemi: [0xe6f0ff, 0x6d6f73, 0.6],
+      surfaces: { slab: "#5a5e66", concrete: "#aeb2b7", brick: "#b66d4f", deck: "#838b95" } },
+    buildings: [
+      [-13.5, -18.5, 17, 15, 6.5, "concrete"], [-13.5, 0, 17, 14, 10, "brick"], [-13.5, 18.5, 17, 15, 6.5, "concrete"],
+      [13.5, -18.5, 17, 15, 6.5, "concrete"], [13.5, 0, 17, 14, 10, "brick"], [13.5, 18.5, 17, 15, 6.5, "concrete"],
+    ],
+    walls: [
+      // vents and crates on the roofs to take cover behind
+      roofBox(-16, -20, 6.5, 3, 3, 1.8), roofBox(-10, -16.5, 6.5, 2, 2, 1.2), roofBox(16, -20, 6.5, 3, 3, 1.8), roofBox(10, -16.5, 6.5, 2, 2, 1.2),
+      roofBox(-16, 20, 6.5, 3, 3, 1.8), roofBox(-10, 16.5, 6.5, 2, 2, 1.2), roofBox(16, 20, 6.5, 3, 3, 1.8), roofBox(10, 16.5, 6.5, 2, 2, 1.2),
+      roofBox(-15, 3, 10, 3, 3, 2), roofBox(-9, -3, 10, 2, 2, 1.2), roofBox(15, 3, 10, 3, 3, 2), roofBox(9, -3, 10, 2, 2, 1.2),
+      // low cover down in the street and the yards
+      wallAt(0, -8, 3, 1, 1.4, "concrete"), wallAt(0, 8, 3, 1, 1.4, "concrete"), wallAt(-27, -12, 1, 4, 1.4, "concrete"), wallAt(27, -12, 1, 4, 1.4, "concrete"),
+      wallAt(-27, 12, 1, 4, 1.4, "concrete"), wallAt(27, 12, 1, 4, 1.4, "concrete"),
+    ],
+    // a bridge over the street between each pair of low roofs
+    decks: [[0, 6.25, -18.5, 10, 3, "deck", true], [0, 6.25, 18.5, 10, 3, "deck", true]],
+    // a ramp from each yard up to a low roof (the roof edge is at 6.5 m)
+    ramps: [[-27, -18.5, "x", 4, 10, 6.25, 1], [27, -18.5, "x", 4, 10, 6.25, -1], [-27, 18.5, "x", 4, 10, 6.25, 1], [27, 18.5, "x", 4, 10, 6.25, -1]],
+    pads: [[0, -29, "normal"], [0, 29, "normal"], [-27, -7, "mega"], [-27, 7, "mega"], [27, -7, "mega"], [27, 7, "mega"]],
+    // [x, z, facing x, facing z, bottom, top]: on the street walls up to each roof, and on the yard side of the tall buildings
+    ladders: [
+      [-5, -22, 1, 0, 0.25, 6.5], [-5, 0, 1, 0, 0.25, 10], [-5, 22, 1, 0, 0.25, 6.5],
+      [5, -22, -1, 0, 0.25, 6.5], [5, 0, -1, 0, 0.25, 10], [5, 22, -1, 0, 0.25, 6.5],
+      [-22, 0, -1, 0, 0.25, 10], [22, 0, 1, 0, 0.25, 10],
+    ],
+    spawns: [[-29, -27], [29, -27], [-29, 27], [29, 27], [-29, 0], [29, 0], [0, -26], [0, 26], [-13, -9], [13, -9], [-13, 9], [13, 9]],
+    playerSpawn: [0, 26],
+  });
+
   let currentMap = null;
+  // "random" is a choice, never a map: it picks one of the real maps (a different one from the current map each time)
+  function pickRandomMap(excludeId) {
+    const pool = MAP_ORDER.filter((i) => i !== excludeId);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  const resolveMapChoice = (choice) => (choice === "random" ? pickRandomMap(currentMap && currentMap.id) : choice);
   let SPAWNS = [[0, 8]];   // the deathmatch spawn points of the current map
   // paint the sky, fog and light of a map
   function applyTheme(t) {
@@ -756,7 +819,7 @@
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((mt) => { if (mt.map) mt.map.dispose(); mt.dispose(); });
     });
     levelGroup.clear();
-    groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0;
+    groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0; ladders.length = 0;
     currentMap = m;
     CFG.arenaHalfSize = m.half;
     levelPalette = m.theme.surfaces || {};
@@ -768,9 +831,12 @@
     addWall(-H, wh / 2, 0, 1, wh, H * 2, "concrete");
     addWall(H, wh / 2, 0, 1, wh, H * 2, "concrete");
     for (const w of m.walls) addWall(w[0], w[1], w[2], w[3], w[4], w[5], w[6]);
+    // a building: a solid body with a walkable roof on top (a roof's top is at its height h)
+    for (const b of m.buildings || []) { addWall(b[0], (b[4] - 0.5) / 2, b[1], b[2], b[4] - 0.5, b[3], b[5]); addGround(b[0], b[4] - 0.25, b[1], b[2], b[3], "deck", true); }
     for (const d of m.decks) addGround(d[0], d[1], d[2], d[3], d[4], d[5], d[6]);
     for (const r of m.ramps) addRamp(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
     for (const p of m.pads) addJumpPad(p[0], FLOOR_Y, p[1], p[2]);
+    for (const l of m.ladders || []) addLadder(l[0], l[1], l[2], l[3], l[4], l[5]);
     SPAWNS = m.spawns;
     PLAYER_SPAWN.set(m.playerSpawn[0], 1.7, m.playerSpawn[1]);
     const e = H + 10;   // the shadow camera has to cover the whole map
@@ -2881,7 +2947,7 @@
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
     if (["free", "sa60"].includes(saved.playMode)) SETTINGS.playMode = saved.playMode;
-    if (typeof saved.map === "string" && MAPS[saved.map]) SETTINGS.map = saved.map;
+    if (typeof saved.map === "string" && (MAPS[saved.map] || saved.map === "random")) SETTINGS.map = saved.map;
     if (saved.binds && typeof saved.binds === "object") {
       for (const a of ACTION_IDS) {
         const s = saved.binds[a];
@@ -2993,6 +3059,8 @@
     refillAmmo();
     setLoadout(SETTINGS.loadout);
     refreshSettingsUI();
+    loadMap(resolveMapChoice(SETTINGS.map));
+    refreshMapUI();
   });
 
   settingsPanel.addEventListener("click", (e) => e.stopPropagation());
@@ -3478,6 +3546,7 @@
   // ======================================================================
   // PLAYER
   // ======================================================================
+  const ladderHintEl = document.getElementById("ladder-hint");
   const player = {
     velocity: new THREE.Vector3(),
     onGround: false,
@@ -3494,6 +3563,7 @@
     launchRun: 0,    // horizontal speed when that launch fired
     wallImpactSpeed: 0, wallImpactAt: -99,   // the last time a wall stopped us, and how fast we hit it
     viewRoll: 0,
+    ladder: null, ladderCool: 0,   // the ladder being climbed
     hook: null,      // { anchor, len, flying, pos, dir } from the moment the hook is fired
     grappleWant: false,   // the grapple is out (or coming out) in the hand
     grappleCooldown: 0, grappleCooldownMax: 1, lastGrappleAt: -99, grappleWasHeld: false,
@@ -3912,8 +3982,35 @@
       }
     }
 
+    // ---------------- LADDERS ----------------
+    // walk up to one and hold forward to climb (forward and back move you along it); jump to leave it, or climb over the top
+    if (player.ladderCool > 0) player.ladderCool -= dt;
+    let ladderNear = null;
+    {
+      const px = yawObject.position.x, pz = yawObject.position.z, fy = player.feetY;
+      for (const L of ladders) {
+        const dx = px - L.x, dz = pz - L.z, out = dx * L.nx + dz * L.nz, tan = -dx * L.nz + dz * L.nx;
+        if (out > 0.15 && out < 1.3 && Math.abs(tan) < 0.8 && fy > L.y0 - 0.5 && fy < L.y1 + 0.15) { ladderNear = L; break; }
+      }
+    }
+    if (!player.ladder && ladderNear && player.ladderCool <= 0 && held("forward") && -(_forward.x * ladderNear.nx + _forward.z * ladderNear.nz) > 0.35) player.ladder = ladderNear;
+    if (player.ladder && (ladderNear !== player.ladder || (player.onGround && !held("forward")))) player.ladder = null;
+    ladderHintEl.hidden = !(ladderNear && !player.ladder);
     // ---------------- GROUND / AIR ----------------
-    if (player.onGround) {
+    if (player.ladder) {
+      const L = player.ladder, climb = (held("forward") ? 1 : 0) - (held("back") ? 1 : 0);
+      player.velocity.x = -L.nx * 0.6; player.velocity.z = -L.nz * 0.6;   // hugging the wall
+      player.velocity.y = climb * CFG.ladderSpeed;
+      player.onGround = false; player.sliding = false;
+      if (jumpQueued) {          // jump off, away from the wall
+        jumpQueued = false; jumpQueueTimer = 0;
+        player.velocity.x = L.nx * 4.5; player.velocity.z = L.nz * 4.5; player.velocity.y = 6;
+        player.ladder = null; player.ladderCool = 0.35;
+      } else if (player.feetY >= L.y1 - 0.1 && climb > 0) {   // over the top, onto the roof
+        player.velocity.x = -L.nx * 3.5; player.velocity.z = -L.nz * 3.5; player.velocity.y = 3.2;
+        player.ladder = null; player.ladderCool = 0.4;
+      }
+    } else if (player.onGround) {
       // bunnyhop: jumping on the same frame you land skips friction, so a chained hop carries
       // speed; each hop still bleeds some of what's above a sprint (see CFG.bhopKeep)
       const jumpHeld = held("jump");
@@ -4995,7 +5092,7 @@
   };
   function selectedSub() { return document.querySelector('input[name="mp-sub"]:checked').value; }
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
-  function chooseMap(id) { net.pendingMap = MAPS[id] ? id : "arena"; }
+  function chooseMap(id) { net.pendingMap = id === "random" || MAPS[id] ? id : "arena"; }
   function chooseMode(value, limit) {
     net.pendingSub = value === "race" ? "race" : "dm";
     net.pendingTeams = value === "tdm";
@@ -5658,7 +5755,7 @@
   }
 
   function hostStartRound() {
-    net.map = MAPS[net.pendingMap] ? net.pendingMap : "arena";
+    net.map = net.pendingMap === "random" ? pickRandomMap(currentMap.id) : MAPS[net.pendingMap] ? net.pendingMap : "arena";
     loadMap(net.map);   // (does nothing if it is already the map)
     net.sub = net.pendingSub;
     net.teams = net.sub === "dm" && net.pendingTeams;
@@ -5963,7 +6060,7 @@
   // The arena as a grid of 2 m cells; a cell is blocked if a wall, pillar, tower leg or ramp is in the way of a player
   // walking at floor level. Bots plan a route across it (A*) whenever the target is far or out of sight, so they go
   // round walls and out of the bounce corridors instead of pushing into them.
-  const NAV_CELL = 2;
+  const NAV_CELL = 1;   // metres per cell: fine enough that a 3 m wall does not close a 10 m street
   let NAV_N = 40, navHalf = 40, navBlocked = null;
   function navBuild() {
     navHalf = CFG.arenaHalfSize; NAV_N = Math.ceil(navHalf * 2 / NAV_CELL);
@@ -6246,7 +6343,7 @@
     if (!wasActive) { setConnectBusy(false); mpStatus(message || ""); return; }
     document.exitPointerLock();
     setPropsEnabled(true);
-    loadMap(SETTINGS.map);   // back to the map picked in the menu
+    loadMap(resolveMapChoice(SETTINGS.map));   // back to the map picked in the menu
     for (const t of targets) respawnTarget(t);
     resetLocalRound();
     mpEls.tabs.forEach((t) => (t.disabled = false));
@@ -6744,6 +6841,7 @@
       shots: 0, shotsHit: 0, hits: 0, best: null, bestClip: null });
     score = 0; scoreEl.textContent = 0;
     streak = 0; streakEl.textContent = 0;
+    if (SETTINGS.map === "random") loadMap(pickRandomMap(currentMap.id));   // Random: a new map for every run
     teleportLocal(PLAYER_SPAWN.x, PLAYER_SPAWN.z);
     cancelReload(); refillAmmo(); updateAmmoHud();
     for (const t of targets) respawnTarget(t);   // a fresh, spread-out set for every run
@@ -6863,6 +6961,7 @@
     g.fillStyle = (m.theme.surfaces && m.theme.surfaces[m.floor]) || (m.floor === "slab" ? "#4f565e" : "#6f9a52");
     g.fillRect(0, 0, n, n);
     const box = (x, z, w, d, fill) => { g.fillStyle = fill; g.fillRect(px(x - w / 2), px(z - d / 2), Math.max(1.5, w * k), Math.max(1.5, d * k)); };
+    for (const b of m.buildings || []) box(b[0], b[1], b[2], b[3], b[4] > 8 ? "#d8dbe0" : "#aab0b8");
     for (const d of m.decks) box(d[0], d[2], d[3], d[4], "rgba(190,200,215,0.55)");
     for (const r of m.ramps) box(r[0], r[1], r[2] === "x" ? r[4] : r[3], r[2] === "x" ? r[3] : r[4], "#e3b53a");
     for (const w of m.walls) box(w[0], w[2], w[3], w[5], w[4] < 2 ? "rgba(235,235,240,0.5)" : "#e8e8ec");
@@ -6879,25 +6978,37 @@
     b.addEventListener("click", (e) => { e.stopPropagation(); setMap(id); });
     mapPickerEl.appendChild(b);
   }
+  {   // the Random choice, last in the row
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.map = "random"; b.title = "A different random map each Score Attack run and each online round.";
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const g = c.getContext("2d");
+    g.fillStyle = "#1c1d22"; g.fillRect(0, 0, 64, 64);
+    g.strokeStyle = "#ffd24a"; g.lineWidth = 2; g.strokeRect(1, 1, 62, 62);
+    g.fillStyle = "#ffd24a"; g.font = "bold 44px Segoe UI, Arial, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("?", 32, 35);
+    b.appendChild(c); b.appendChild(document.createTextNode("Random"));
+    b.addEventListener("click", (e) => { e.stopPropagation(); setMap("random"); });
+    mapPickerEl.appendChild(b);
+  }
   mapPickerEl.addEventListener("click", (e) => e.stopPropagation());
   function refreshMapUI() {
     if (!currentMap) return;
-    mapPickerEl.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.map === currentMap.id));
+    mapPickerEl.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.map === SETTINGS.map));
     const note = document.getElementById("map-note");
-    if (note) note.textContent = currentMap.blurb;
+    if (note) note.textContent = SETTINGS.map === "random" ? "Random: a different map each Score Attack run and each online round. Right now: " + currentMap.name + "." : currentMap.blurb;
   }
   // choose a map to play on (singleplayer): switching ends a Score Attack run, like switching mode does
   function setMap(id) {
-    if (!MAPS[id] || (SETTINGS.map === id && currentMap.id === id)) return;
+    if (id !== "random" && (!MAPS[id] || (SETTINGS.map === id && currentMap.id === id))) return;
     if (runInProgress() || run.state === "done") quitRun();
     SETTINGS.map = id;
     saveSettings();
-    loadMap(id);
+    loadMap(resolveMapChoice(id));
     refreshModeUI();
     refreshMapUI();
   }
   for (const sel of [document.getElementById("mp-host-map"), document.getElementById("bot-map"), document.getElementById("mp-next-map")]) {
-    for (const id of MAP_ORDER) { const o = document.createElement("option"); o.value = id; o.textContent = MAPS[id].name; sel.appendChild(o); }
+    for (const id of MAP_ORDER.concat(["random"])) { const o = document.createElement("option"); o.value = id; o.textContent = id === "random" ? "Random" : MAPS[id].name; sel.appendChild(o); }
   }
 
   // ---- the mode buttons in the menu ----
@@ -6979,7 +7090,7 @@
   }
   function endTutorial(finished) {
     tut.active = false;
-    if (currentMap.id !== SETTINGS.map) loadMap(SETTINGS.map);
+    if (SETTINGS.map !== "random" && currentMap.id !== SETTINGS.map) loadMap(SETTINGS.map);
     tutEl.hidden = true;
     if (finished) try { localStorage.setItem(TUT_KEY, "done"); } catch (e) { /* ignore */ }
     refreshTutorialUI();
@@ -7677,12 +7788,13 @@
     if (decalMesh) { for (let i = 0; i < DECAL_MAX; i++) decalMesh.setMatrixAt(i, _dM.makeScale(0, 0, 0)); decalMesh.instanceMatrix.needsUpdate = true; decalNext = 0; }
     for (const k of thrownPool) if (k.state !== "idle") retireKnife(k);
     releaseHook(0);
+    player.ladder = null;
     if (!opts.keepPlayer && !net.active) teleportLocal(PLAYER_SPAWN.x, PLAYER_SPAWN.z);
     for (const t of targets) respawnTarget(t);
     refreshMapUI();
   };
   navBuild(); buildMapViews();
-  if (SETTINGS.map !== currentMap.id) loadMap(SETTINGS.map);
+  if (SETTINGS.map === "random" || SETTINGS.map !== currentMap.id) loadMap(resolveMapChoice(SETTINGS.map));
   refreshMapUI();
   targetsReady = true;
   syncTargetCounts();
