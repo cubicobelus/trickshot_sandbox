@@ -5508,7 +5508,7 @@
   const SUB_HINTS = {
     race: "Everyone shoots the same targets and the best trickscore when the timer ends wins. Players can't hurt each other.",
     tdm: "Two teams, blue and red. 100 health, no friendly fire, and the team with the most kills (or the first to the kill limit) wins. Only kills score.",
-    koth: "A hill with a ring on top. Stand alone on it to score a point a second; with someone else on it, nobody scores. First to the score wins (the first-to number times 10). Kills only clear the hill. It always plays on the map with a hill.",
+    koth: "A hill with a ring on top. Stand alone on it to score a point a second; with someone else on it, nobody scores. First to the score wins (the first-to number times 5). Kills only clear the hill. It always plays on the map with a hill.",
     tkoth: "King of the Hill with two teams: your team scores while only your team is on the hill. Kills only clear the hill.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
@@ -6419,7 +6419,7 @@
     if (kind !== 1) return;
     for (const p of on) p.hill += dt;
     if (net.teams) net.teamHill[who] += dt;
-    const need = net.limit * 10;
+    const need = net.limit * 5;
     if (need > 0 && (net.teams ? net.teamHill[who] : on[0].hill) >= need) hostEndRound();
   }
 
@@ -6759,7 +6759,8 @@
     }
     const perchD = ai.perch ? Math.hypot(ai.perch.x - p.x, ai.perch.z - p.z) : 0;
     const perching = !!ai.perch && perchD > 2.5 && !(los && dist < 14);
-    const holding = !!ai.perch && perchD <= (net.koth && currentMap.hill ? Math.max(2.5, currentMap.hill.r * 0.6) : 2.5);   // up there: stay and shoot what it sees
+    const kothHill = net.koth && currentMap.hill ? currentMap.hill : null;
+    const holding = !!ai.perch && perchD <= (kothHill ? kothHill.r * 1.1 : 2.5);   // up there: stay and shoot what it sees
     const navigating = perching || (!holding && (!los || dist > prefer + 4 || Math.abs(tgt.y - p.y) > 2.2));   // also when the target is on another level
     ai.repath -= dt;
     const myLv = navLevelFor(p.y);
@@ -6806,11 +6807,16 @@
     ai.strafeT -= dt;
     if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? 1 : -1; ai.strafeT = rnd(0.6, 1.8); }
     let mx = 0, mz = 0;
-    const along = navigating ? 1 : dist < prefer - 4 ? -0.8 : 0;
+    const along = navigating ? 1 : kothHill && holding ? 0 : dist < prefer - 4 ? -0.8 : 0;   // (on the hill it does not back away: that walks it off the edge)
     const hx = wx - p.x, hz = wz - p.z, hl = Math.hypot(hx, hz) || 1;   // toward the next point on the route
     if (along > 0) { mx += hx / hl; mz += hz / hl; } else { mx += fx * along; mz += fz * along; }
     const side = !navigating ? 0.9 : los ? 0.4 : 0;
     mx += fz * ai.strafe * side; mz += -fx * ai.strafe * side;
+    if (kothHill && holding && !navigating) {   // on the hill it strafes and fights, and drifts back to the middle if it wanders to the rim
+      const hx2 = kothHill.x - p.x, hz2 = kothHill.z - p.z, hd2 = Math.hypot(hx2, hz2) || 1;
+      const pull = Math.max(0, (hd2 - kothHill.r * 0.55) / (kothHill.r * 0.55)) * 2.2;
+      mx = mx * 0.6 + (hx2 / hd2) * pull; mz = mz * 0.6 + (hz2 / hd2) * pull;
+    }
     const ml = Math.hypot(mx, mz) || 1;
     const speed = L.speed * (ai.burstLeft > 0 ? 0.75 : 1);
     _botFrom.set(p.x, p.y, p.z);
@@ -7130,7 +7136,7 @@
     mpEls.timerVal.textContent = net.phase === "results" ? "0:00" : fmtTime(leftNow());
     let label = modeName();
     if (net.sub === "dm" && net.koth) {
-      const need = net.limit * 10, me = localPlayer();
+      const need = net.limit * 5, me = localPlayer();
       if (need) label += " \u00b7 first to " + need;
       if (net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + Math.floor(net.teamHill[0]) + " \u2013 " + Math.floor(net.teamHill[1]) + " " + TEAM_NAMES[1];
       else if (me) label += " \u00b7 you " + Math.floor(me.hill);
