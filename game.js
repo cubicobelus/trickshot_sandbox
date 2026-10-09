@@ -45,6 +45,8 @@
     airWishSpeedCap: 1.7,
     airAccel: 46,
     jumpSpeed: 8.6,
+    boostAdd: 8,                // a boost strip adds this much speed along its arrows...
+    boostMaxAlong: 18,          // ...up to this speed along them
     ladderSpeed: 4.4,           // climbing a ladder with forward / back
     bhopWindow: 0.12,           // land-and-jump inside this window skips ground friction...
     bhopKeep: 0.93,             // ...but each hop keeps only this share of the speed above a sprint,
@@ -456,7 +458,52 @@
       g.fillRect(Math.random() * size, Math.random() * size, w, w);
     }
   }
+  // the two windows of a building front (a tile is 4 m by 3.2 m)
+  function drawWindows(g, n) {
+    g.strokeStyle = "rgba(0,0,0,0.35)"; g.lineWidth = 2;
+    for (const x of [0.1, 0.56]) {
+      const wx = x * n, wy = 0.2 * n, ww = 0.34 * n, wh = 0.5 * n;
+      const grad = g.createLinearGradient(wx, wy, wx + ww, wy + wh);
+      grad.addColorStop(0, "#5f7488"); grad.addColorStop(0.5, "#2b3948"); grad.addColorStop(1, "#1f2a36");
+      g.fillStyle = grad; g.fillRect(wx, wy, ww, wh); g.strokeRect(wx, wy, ww, wh);
+      g.fillStyle = "rgba(255,255,255,0.14)";
+      g.beginPath(); g.moveTo(wx + 4, wy + wh - 4); g.lineTo(wx + ww * 0.45, wy + 4); g.lineTo(wx + ww * 0.62, wy + 4); g.lineTo(wx + 14, wy + wh - 4); g.fill();   // a glint
+      g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(wx - 3, wy + wh, ww + 6, 5);   // the sill
+    }
+  }
   const SURFACE_DRAW = {
+    // a building front: rows of windows on a plain wall, or on brick
+    facade(g, n, base) { g.fillStyle = base || "#aeb2b7"; g.fillRect(0, 0, n, n); speckle(g, 900, n, 0.07, true); drawWindows(g, n); },
+    facadeb(g, n, base) { SURFACE_DRAW.brick(g, n, base || "#b66d4f"); drawWindows(g, n); },
+    // a flat roof: gravel and tar patches
+    roof(g, n, base) {
+      g.fillStyle = base || "#6e7279"; g.fillRect(0, 0, n, n); speckle(g, 2200, n, 0.2, true);
+      g.fillStyle = "rgba(0,0,0,0.12)";
+      for (let i = 0; i < 6; i++) g.fillRect(Math.random() * n, Math.random() * n, 40 + Math.random() * 60, 20 + Math.random() * 40);
+      g.strokeStyle = "rgba(255,255,255,0.1)"; g.lineWidth = 3; g.strokeRect(0, 0, n, n);
+    },
+    // pale lake ice with cracks
+    ice(g, n, base) {
+      g.fillStyle = base || "#bfe3f2"; g.fillRect(0, 0, n, n); speckle(g, 700, n, 0.08, true);
+      g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = 1.5;
+      for (let i = 0; i < 5; i++) {
+        let x = Math.random() * n, y = Math.random() * n;
+        g.beginPath(); g.moveTo(x, y);
+        for (let k = 0; k < 4; k++) { x += (Math.random() - 0.5) * 70; y += (Math.random() - 0.5) * 70; g.lineTo(x, y); }
+        g.stroke();
+      }
+      g.strokeStyle = "rgba(120,170,200,0.35)"; g.lineWidth = 2; g.strokeRect(0, 0, n, n);
+    },
+    // moon dust with craters
+    moon(g, n, base) {
+      g.fillStyle = base || "#8c8f96"; g.fillRect(0, 0, n, n); speckle(g, 2400, n, 0.2, true);
+      for (let i = 0; i < 5; i++) {
+        const x = Math.random() * n, y = Math.random() * n, r = 14 + Math.random() * 30;
+        g.strokeStyle = "rgba(0,0,0,0.22)"; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
+        g.strokeStyle = "rgba(255,255,255,0.12)"; g.lineWidth = 2; g.beginPath(); g.arc(x + 2, y + 2, r - 3, 0, 7); g.stroke();
+      }
+      g.strokeStyle = "rgba(255,255,255,0.08)"; g.lineWidth = 2; g.strokeRect(0, 0, n, n);
+    },
     // turf with a faint line every tile (4 m), handy for judging distance
     grass(g, n, base) {
       g.fillStyle = base || "#6f9a52"; g.fillRect(0, 0, n, n);
@@ -520,7 +567,7 @@
     const t = surfaceCanvases[key].clone();
     t.needsUpdate = true;
     t.repeat.set(repeatX, repeatY);
-    return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.6 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.3 : 0 });
+    return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.6 : kind === "ice" ? 0.15 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.3 : kind === "ice" ? 0.15 : 0 });
   }
 
   // ======================================================================
@@ -531,13 +578,14 @@
   const bounceBoxes = [];    // the subset you can wall-bounce off: actual walls and pillars
   const levelGroup = new THREE.Group();   // everything a map builds lives here, so changing map is: empty it and build again
   scene.add(levelGroup);
+  const movers = [], portals = [], boosts = [];   // moving platforms, portal ends, boost strips
   const ladders = [];        // { x, z, nx, nz, y0, y1 }: where it meets the wall, which way it faces (the side you climb from), bottom and top
   let levelPalette = {};     // this map's surface colours
   let levelLoadedHook = null;
 
   // surfaces: "grass" for the floor, "deck" for platforms, "concrete" and "brick" for walls
   function addGround(x, y, z, w, d, surface, solid) {
-    const tile = surface === "grass" || surface === "slab" ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
+    const tile = ["grass", "slab", "ice", "moon", "roof"].includes(surface) ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), surfaceMaterial(surface, w / tile, d / tile, levelPalette[surface]));
     mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
@@ -545,10 +593,11 @@
     mesh.userData = { topY: y + 0.25, halfW: w / 2, halfD: d / 2, cx: x, cz: z };
     groundMeshes.push(mesh);
     if (solid) wallBoxes.push(new THREE.Box3().setFromObject(mesh));
+    return mesh;
   }
   function addWall(x, y, z, w, h, d, surface) {
-    const span = Math.max(w, d), tile = surface === "concrete" ? 4 : 3;
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), surfaceMaterial(surface, span / tile, h / tile, levelPalette[surface]));
+    const span = Math.max(w, d), tile = surface === "concrete" ? 4 : 3, facade = surface === "facade" || surface === "facadeb";
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), surfaceMaterial(surface, facade ? span / 4 : span / tile, facade ? h / 3.2 : h / tile, levelPalette[surface]));
     mesh.position.set(x, y, z);
     mesh.castShadow = true; mesh.receiveShadow = true;
     levelGroup.add(mesh);
@@ -575,6 +624,110 @@
     mesh.castShadow = false;
     levelGroup.add(mesh);
     ladders.push({ x, z, nx, nz, y0, y1 });
+  }
+
+  // ---- moving platforms: a deck that glides back and forth along x, y or z (everyone computes it from the same clock) ----
+  function addMover(a) {   // [x, y, z, w, d, axis, range, speed, phase, surface]
+    const mesh = addGround(a[0], a[1], a[2], a[3], a[4], a[9] || "deck", true);
+    movers.push({ mesh, box: wallBoxes[wallBoxes.length - 1], base: new THREE.Vector3(a[0], a[1], a[2]), axis: a[5], range: a[6], speed: a[7], phase: a[8] || 0 });
+  }
+  function updateMovers() {
+    if (!movers.length) return;
+    const clock = net.active ? mpTargetClock() : elapsedTime;
+    for (const mv of movers) {
+      const off = Math.sin(clock * mv.speed + mv.phase) * mv.range;
+      const nx = mv.base.x + (mv.axis === "x" ? off : 0), ny = mv.base.y + (mv.axis === "y" ? off : 0), nz = mv.base.z + (mv.axis === "z" ? off : 0);
+      const ud = mv.mesh.userData, oy = ud.topY - 0.25, ox = ud.cx, oz = ud.cz;
+      // anyone standing on it is carried along
+      const riding = player.onGround && !localDead && Math.abs(player.feetY - ud.topY) < 0.15 &&
+        Math.abs(yawObject.position.x - ox) < ud.halfW + 0.1 && Math.abs(yawObject.position.z - oz) < ud.halfD + 0.1;
+      mv.mesh.position.set(nx, ny, nz);
+      ud.cx = nx; ud.cz = nz; ud.topY = ny + 0.25;
+      mv.mesh.updateMatrixWorld(true);
+      mv.box.setFromObject(mv.mesh);
+      if (riding) { yawObject.position.x += nx - ox; yawObject.position.z += nz - oz; yawObject.position.y += ny - oy; player.feetY += ny - oy; }
+    }
+  }
+
+  // ---- portals: walk into one end and come out of the other, still going the way you were (keeps your speed) ----
+  function addPortalPair(a) {   // [x, z, facing x, facing z, x2, z2, facing x2, facing z2]
+    const make = (x, z, nx, nz, color) => {
+      const g = new THREE.Group();
+      g.position.set(x, FLOOR_Y + 1.5, z);
+      g.rotation.y = Math.atan2(nx, nz);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.09, 8, 40), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.1, roughness: 0.4 }));
+      ring.scale.y = 1.5;
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.97, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      disc.scale.y = 1.5;
+      g.add(ring, disc);
+      levelGroup.add(g);
+      return { x, z, nx, nz, disc, pair: null };
+    };
+    const p = make(a[0], a[1], a[2], a[3], 0x2f9bff), q = make(a[4], a[5], a[6], a[7], 0xff8a2a);
+    p.pair = q; q.pair = p;
+    portals.push(p, q);
+  }
+  function tryPortals() {
+    if (player.portalCool > 0) return;
+    const px = yawObject.position.x, pz = yawObject.position.z, fy = player.feetY;
+    for (const P of portals) {
+      const dx = px - P.x, dz = pz - P.z, out = dx * P.nx + dz * P.nz, tan = -dx * P.nz + dz * P.nx;
+      if (Math.abs(out) > 0.55 || Math.abs(tan) > 1.05 || fy > FLOOR_Y + 2.6 || fy < FLOOR_Y - 0.6) continue;
+      if (-(player.velocity.x * P.nx + player.velocity.z * P.nz) < 1.0) continue;   // only when moving into it
+      const Q = P.pair;
+      const phi = Math.atan2(Q.nx, Q.nz) - (Math.atan2(P.nx, P.nz) + Math.PI);   // turn so that "into this one" becomes "out of that one"
+      const c = Math.cos(phi), sn = Math.sin(phi), vx = player.velocity.x, vz = player.velocity.z;
+      burst(_gStart.set(P.x, FLOOR_Y + 1.5, P.z), 0x7fc4ff, 10);
+      yawObject.position.x = Q.x + Q.nx * 1.05; yawObject.position.z = Q.z + Q.nz * 1.05;
+      yawObject.rotation.y += phi; player.lastYaw = yawObject.rotation.y;
+      player.velocity.x = vx * c + vz * sn; player.velocity.z = vz * c - vx * sn;
+      player.portalCool = 0.6;
+      releaseHook(0);
+      burst(_gStart.set(Q.x, FLOOR_Y + 1.5, Q.z), 0xffb070, 10);
+      playSfx("jumpPad", 0.5, 1.5, 0.2, "volMove");
+      return;
+    }
+  }
+
+  // ---- boost strips: step on one and it adds speed along its arrows ----
+  const boostTexBase = canvasTexture(64, (g, n) => {
+    g.fillStyle = "rgba(20,12,4,0.55)"; g.fillRect(0, 0, n, n);
+    g.strokeStyle = "#ffb42a"; g.lineWidth = 8; g.lineJoin = "miter";
+    for (const y of [10, 40]) { g.beginPath(); g.moveTo(10, y + 18); g.lineTo(n / 2, y); g.lineTo(n - 10, y + 18); g.stroke(); }
+  });
+  function addBoost(a) {   // [x, z, direction x, direction z, width, length]
+    const dl = Math.hypot(a[2], a[3]) || 1, dx = a[2] / dl, dz = a[3] / dl;
+    const tex = boostTexBase.clone(); tex.needsUpdate = true; tex.repeat.set(1, Math.max(1, Math.round(a[5] / 2)));
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(a[4], a[5]), new THREE.MeshBasicMaterial({ map: tex, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    mesh.rotation.x = -Math.PI / 2;
+    const g = new THREE.Group();
+    g.position.set(a[0], FLOOR_Y + 0.02, a[1]);
+    g.rotation.y = Math.atan2(-dx, -dz);
+    g.add(mesh);
+    levelGroup.add(g);
+    boosts.push({ x: a[0], z: a[1], dx, dz, w: a[4], l: a[5], tex });
+  }
+  function tryBoosts() {
+    if (player.boostCool > 0 || !player.onGround) return;
+    const px = yawObject.position.x, pz = yawObject.position.z;
+    for (const b of boosts) {
+      const along = (px - b.x) * b.dx + (pz - b.z) * b.dz, across = -(px - b.x) * b.dz + (pz - b.z) * b.dx;
+      if (Math.abs(along) > b.l / 2 || Math.abs(across) > b.w / 2) continue;
+      const sp = player.velocity.x * b.dx + player.velocity.z * b.dz;
+      if (sp < CFG.boostMaxAlong) {
+        const add = Math.min(CFG.boostAdd, CFG.boostMaxAlong - sp);
+        player.velocity.x += b.dx * add; player.velocity.z += b.dz * add;
+        player.boostCool = 0.35;
+        playSfx("jumpPad", 0.35, 1.7, 0.1, "volMove");
+      }
+      return;
+    }
+  }
+  // the animated part: arrows run along the strips, portals shimmer
+  function updateLevelFx(dt) {
+    for (const b of boosts) b.tex.offset.y -= dt * 1.2;
+    const t = elapsedTime;
+    for (const p of portals) p.disc.material.opacity = 0.34 + 0.12 * Math.sin(t * 3 + p.x + p.z);
   }
 
   // ---- kicker ramps: a sloped floor rising along x or z. Running off the high end turns
@@ -671,6 +824,40 @@
     }
   }
 
+  // ---- decoration: a mast, a water tank (solid), a door painted on a wall ----
+  function addDecor(d) {   // ["mast", x, roof height, z] ["tank", x, roof height, z] ["door", x, z, facing x, facing z]
+    const kind = d[0];
+    if (kind === "mast") {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 6, 8), new THREE.MeshStandardMaterial({ color: 0x59606a, metalness: 0.6, roughness: 0.5 }));
+      pole.position.set(d[1], d[2] + 3, d[3]);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b30 }));
+      lamp.position.set(d[1], d[2] + 6.1, d[3]);
+      levelGroup.add(pole, lamp);
+    } else if (kind === "tank") {
+      const steel = new THREE.MeshStandardMaterial({ color: 0x7b8794, metalness: 0.5, roughness: 0.6 });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 2.2, 20), steel);
+      body.position.set(d[1], d[2] + 2.0, d[3]); body.castShadow = true;
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.5, 20), steel);
+      cap.position.set(d[1], d[2] + 3.35, d[3]);
+      levelGroup.add(body, cap);
+      for (const [lx, lz] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.0, 0.15), new THREE.MeshStandardMaterial({ color: 0x3a3f46 }));
+        leg.position.set(d[1] + lx, d[2] + 0.5, d[3] + lz);
+        levelGroup.add(leg);
+      }
+      const box = new THREE.Box3(new THREE.Vector3(d[1] - 1.25, d[2], d[3] - 1.25), new THREE.Vector3(d[1] + 1.25, d[2] + 3.3, d[3] + 1.25));
+      wallBoxes.push(box); bounceBoxes.push(box);
+    } else if (kind === "door") {
+      const frame = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.8), new THREE.MeshStandardMaterial({ color: 0x555d66, roughness: 0.8 }));
+      const leaf = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.6), new THREE.MeshStandardMaterial({ color: 0x20252b, roughness: 0.7 }));
+      for (const [m, off] of [[frame, 0.04], [leaf, 0.06]]) {
+        m.position.set(d[1] + d[3] * off, FLOOR_Y + 1.4, d[2] + d[4] * off);
+        m.rotation.y = Math.atan2(d[3], d[4]);
+        levelGroup.add(m);
+      }
+    }
+  }
+
   // ---- maps ----
   // A map is plain data: walls [x, y, z, w, h, d, surface], decks [x, y, z, w, d, surface] (walkable platforms),
   // ramps [cx, cz, along, width, length, height, dir], pads [x, z, tier], spawns for deathmatch, a spawn for solo play, and a
@@ -748,21 +935,69 @@
     decks: [[0, 2.4, -28, 14, 6, "deck", true], [0, 2.4, 28, 14, 6, "deck", true]],
     ramps: [[-10, -28, "x", 4, 6, 2.4, 1], [10, -28, "x", 4, 6, 2.4, -1], [-10, 28, "x", 4, 6, 2.4, 1], [10, 28, "x", 4, 6, 2.4, -1]],
     pads: [[-28, 0, "normal"], [28, 0, "normal"]],
+    boosts: [[0, -18, 0, 1, 3, 7], [0, 18, 0, -1, 3, 7]],
     spawns: [[-30, -22], [30, -22], [-30, 22], [30, 22], [-28, 0], [28, 0], [-15, -24], [15, -24], [-15, 24], [15, 24], [0, -23], [0, 23]],
     playerSpawn: [0, 22],
+  });
+
+  // Moonbase: low gravity, black sky, two portal pairs and boost strips
+  defineMap({
+    id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals, boost strips.",
+    half: 45, floor: "moon", wallH: 18, targetMaxY: 18, physics: { gravity: 8.5 },
+    theme: { skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x33405c, 0x14151a, 0.38],
+      surfaces: { moon: "#8c8f96", concrete: "#767a82", brick: "#5b6470", deck: "#a0a6af", facade: "#8f969f", facadeb: "#6e7885", roof: "#6c7078" } },
+    buildings: [[-22, -20, 12, 8, 4.5, "facade"], [22, 20, 12, 8, 4.5, "facade"], [22, -22, 8, 12, 6.5, "facadeb"], [-22, 22, 8, 12, 6.5, "facadeb"], [0, 0, 7, 7, 9.5, "facade"]],
+    walls: [
+      wallAt(-33, -5, 4, 4, 7, "brick"), wallAt(33, 5, 4, 4, 7, "brick"), wallAt(-6, -33, 4, 4, 8, "brick"), wallAt(6, 33, 4, 4, 8, "brick"),
+      wallAt(-35, 30, 5, 5, 5, "brick"), wallAt(35, -30, 5, 5, 5, "brick"),
+      wallAt(-12, -10, 3, 3, 1.6, "brick"), wallAt(12, 10, 3, 3, 1.6, "brick"), wallAt(-10, 12, 3, 3, 1.6, "brick"), wallAt(10, -12, 3, 3, 1.6, "brick"),
+    ],
+    decks: [], ramps: [],
+    pads: [[-7, 0, "normal"], [7, 0, "normal"], [0, -7, "normal"], [0, 7, "normal"]],
+    portals: [[-38, 0, 1, 0, 38, 0, -1, 0], [0, -38, 0, 1, 0, 38, 0, -1]],
+    boosts: [[-20, 0, 1, 0, 3, 8], [20, 0, -1, 0, 3, 8]],
+    spawns: [[-38, -38], [38, -38], [-38, 38], [38, 38], [-40, -20], [40, 20], [-20, 40], [20, -40], [-10, -30], [10, 30], [30, 10], [-30, -10]],
+    playerSpawn: [0, -30],
+  });
+
+  // Ice Lake: slippery. Everything you do carries on; steering is slow
+  defineMap({
+    id: "icelake", name: "Ice Lake", blurb: "A frozen lake where nothing stops: slides never end and turning is slow. Ice pillars, snowbanks, an iceberg with a ramp up.",
+    half: 40, floor: "ice", wallH: 7, targetMaxY: 9, physics: { friction: 0.7, momentumFriction: 0.25, groundAccel: 3.2, slideFriction: 0.22 },
+    theme: { skyTop: 0x5f9bd6, skyHorizon: 0xe4f1fb, fog: [50, 170], sunDir: [20, 45, -35], sunColor: 0xfff6e6, sunIntensity: 1.0, hemi: [0xe6f3ff, 0x9fb4c4, 0.8],
+      surfaces: { ice: "#bfe3f2", concrete: "#dfeaf2", brick: "#9fd0e8", deck: "#c9d9e6", facade: "#dfeaf2", facadeb: "#9fd0e8", roof: "#d6e4ee" } },
+    walls: [
+      wallAt(-25, -20, 3, 3, 6, "brick"), wallAt(25, -20, 3, 3, 6, "brick"), wallAt(-25, 20, 3, 3, 6, "brick"), wallAt(25, 20, 3, 3, 6, "brick"), wallAt(0, -30, 3, 3, 6, "brick"), wallAt(0, 30, 3, 3, 6, "brick"),
+      wallAt(-12, -8, 10, 1.5, 1.3, "concrete"), wallAt(12, 8, 10, 1.5, 1.3, "concrete"), wallAt(-14, 12, 1.5, 8, 1.3, "concrete"), wallAt(14, -12, 1.5, 8, 1.3, "concrete"),
+      [0, 1.9, 0, 10, 3.8, 10, "brick"],   // the iceberg
+    ],
+    decks: [[0, 4.25, 0, 10, 10, "deck", true]],   // its top, at 4.5 m
+    ramps: [[-9, 0, "x", 4, 8, 4.25, 1], [28, -5, "x", 4, 8, 2.4, -1], [-28, 6, "x", 4, 8, 2.4, 1]],
+    pads: [],
+    boosts: [[0, -14, 1, 0, 3, 10], [0, 14, -1, 0, 3, 10]],
+    spawns: [[-34, -34], [34, -34], [-34, 34], [34, 34], [-36, 0], [36, 0], [0, -36], [0, 36], [-20, -30], [20, 30]],
+    playerSpawn: [0, 24],
   });
 
   // Rooftops: a street canyon between two rows of buildings at three heights, with ladders, ramps, bridges and pads between the levels
   const roofBox = (x, z, top, w, d, h) => [x, top + h / 2, z, w, h, d, "deck"];   // a crate or vent standing on a roof
   defineMap({
-    id: "rooftops", name: "Rooftops", blurb: "Three levels: a street canyon, rooftops at 6.5 and 10 m, climbed by ladders and ramps, linked by bridges. Hold forward at a ladder to climb.",
+    id: "rooftops", name: "Rooftops", blurb: "Three levels: a street canyon, rooftops at 6.5 and 10 m, climbed by ladders, ramps and lifts, linked by bridges and a shuttle. Hold forward at a ladder to climb.",
     half: 34, floor: "slab", wallH: 14, targetMaxY: 13,
     theme: { skyTop: 0x4f86d4, skyHorizon: 0xf1e2c8, fog: [55, 170], sunDir: [35, 40, -25], sunColor: 0xfff3dc, sunIntensity: 1.1, hemi: [0xe6f0ff, 0x6d6f73, 0.6],
-      surfaces: { slab: "#5a5e66", concrete: "#aeb2b7", brick: "#b66d4f", deck: "#838b95" } },
+      surfaces: { slab: "#5a5e66", concrete: "#aeb2b7", brick: "#b66d4f", deck: "#838b95", facade: "#aeb2b7", facadeb: "#b66d4f", roof: "#6e7279" } },
+    // [x, z, width, depth, height, surface, parapet edges]: windows on the fronts, a low wall round each roof except where a ladder, ramp or bridge arrives
     buildings: [
-      [-13.5, -18.5, 17, 15, 6.5, "concrete"], [-13.5, 0, 17, 14, 10, "brick"], [-13.5, 18.5, 17, 15, 6.5, "concrete"],
-      [13.5, -18.5, 17, 15, 6.5, "concrete"], [13.5, 0, 17, 14, 10, "brick"], [13.5, 18.5, 17, 15, 6.5, "concrete"],
+      [-13.5, -18.5, 17, 15, 6.5, "facade", "ns"], [-13.5, 0, 17, 14, 10, "facadeb", "ns"], [-13.5, 18.5, 17, 15, 6.5, "facade", "ns"],
+      [13.5, -18.5, 17, 15, 6.5, "facade", "ns"], [13.5, 0, 17, 14, 10, "facadeb", "ns"], [13.5, 18.5, 17, 15, 6.5, "facade", "ns"],
     ],
+    decor: [
+      ["mast", -20, 6.5, -24], ["mast", 20, 6.5, 24], ["mast", -20, 6.5, 24], ["mast", 20, 6.5, -24], ["tank", -17, 10, -4], ["tank", 17, 10, 4],
+      ["door", -5, -15, 1, 0], ["door", -5, 4.5, 1, 0], ["door", -5, 15, 1, 0], ["door", 5, -15, -1, 0], ["door", 5, -4.5, -1, 0], ["door", 5, 15, -1, 0],
+    ],
+    // a shuttle gliding across the street between the two tall roofs, and a lift beside each tall building
+    movers: [[0, 9.75, -3, 4, 4, "x", 4.2, 0.6, 0, "deck"], [-24, 5.1, -3, 3, 3, "y", 4.85, 0.5, 0, "deck"], [24, 5.1, 3, 3, 3, "y", 4.85, 0.5, 3.14, "deck"]],
+    boosts: [[0, -21, 0, 1, 3, 8], [0, 21, 0, -1, 3, 8]],
     walls: [
       // vents and crates on the roofs to take cover behind
       roofBox(-16, -20, 6.5, 3, 3, 1.8), roofBox(-10, -16.5, 6.5, 2, 2, 1.2), roofBox(16, -20, 6.5, 3, 3, 1.8), roofBox(10, -16.5, 6.5, 2, 2, 1.2),
@@ -787,6 +1022,7 @@
     playerSpawn: [0, 26],
   });
 
+  const BASE_PHYS = { gravity: CFG.gravity, friction: CFG.friction, momentumFriction: CFG.momentumFriction, groundAccel: CFG.groundAccel, slideFriction: CFG.slideFriction };
   let currentMap = null;
   // "random" is a choice, never a map: it picks one of the real maps (a different one from the current map each time)
   function pickRandomMap(excludeId) {
@@ -819,9 +1055,10 @@
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((mt) => { if (mt.map) mt.map.dispose(); mt.dispose(); });
     });
     levelGroup.clear();
-    groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0; ladders.length = 0;
+    groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0; ladders.length = 0; movers.length = 0; portals.length = 0; boosts.length = 0;
     currentMap = m;
     CFG.arenaHalfSize = m.half;
+    Object.assign(CFG, BASE_PHYS, m.physics || {});   // some maps change gravity or friction
     levelPalette = m.theme.surfaces || {};
     applyTheme(m.theme);
     const H = m.half, wh = m.wallH || 12;
@@ -832,11 +1069,25 @@
     addWall(H, wh / 2, 0, 1, wh, H * 2, "concrete");
     for (const w of m.walls) addWall(w[0], w[1], w[2], w[3], w[4], w[5], w[6]);
     // a building: a solid body with a walkable roof on top (a roof's top is at its height h)
-    for (const b of m.buildings || []) { addWall(b[0], (b[4] - 0.5) / 2, b[1], b[2], b[4] - 0.5, b[3], b[5]); addGround(b[0], b[4] - 0.25, b[1], b[2], b[3], "deck", true); }
+    // [x, z, width, depth, height, surface, parapet edges]: "n" "s" "w" "e" put a low wall along that edge of the roof
+    for (const b of m.buildings || []) {
+      addWall(b[0], (b[4] - 0.5) / 2, b[1], b[2], b[4] - 0.5, b[3], b[5]);
+      addGround(b[0], b[4] - 0.25, b[1], b[2], b[3], "roof", true);
+      for (const e of b[6] || "") {
+        if (e === "n") addWall(b[0], b[4] + 0.55, b[1] - b[3] / 2 + 0.2, b[2], 1.1, 0.4, "concrete");
+        if (e === "s") addWall(b[0], b[4] + 0.55, b[1] + b[3] / 2 - 0.2, b[2], 1.1, 0.4, "concrete");
+        if (e === "w") addWall(b[0] - b[2] / 2 + 0.2, b[4] + 0.55, b[1], 0.4, 1.1, b[3], "concrete");
+        if (e === "e") addWall(b[0] + b[2] / 2 - 0.2, b[4] + 0.55, b[1], 0.4, 1.1, b[3], "concrete");
+      }
+    }
     for (const d of m.decks) addGround(d[0], d[1], d[2], d[3], d[4], d[5], d[6]);
     for (const r of m.ramps) addRamp(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
     for (const p of m.pads) addJumpPad(p[0], FLOOR_Y, p[1], p[2]);
     for (const l of m.ladders || []) addLadder(l[0], l[1], l[2], l[3], l[4], l[5]);
+    for (const d of m.decor || []) addDecor(d);
+    for (const a of m.movers || []) addMover(a);
+    for (const a of m.portals || []) addPortalPair(a);
+    for (const a of m.boosts || []) addBoost(a);
     SPAWNS = m.spawns;
     PLAYER_SPAWN.set(m.playerSpawn[0], 1.7, m.playerSpawn[1]);
     const e = H + 10;   // the shadow camera has to cover the whole map
@@ -3564,6 +3815,7 @@
     wallImpactSpeed: 0, wallImpactAt: -99,   // the last time a wall stopped us, and how fast we hit it
     viewRoll: 0,
     ladder: null, ladderCool: 0,   // the ladder being climbed
+    portalCool: 0, boostCool: 0,
     hook: null,      // { anchor, len, flying, pos, dir } from the moment the hook is fired
     grappleWant: false,   // the grapple is out (or coming out) in the hand
     grappleCooldown: 0, grappleCooldownMax: 1, lastGrappleAt: -99, grappleWasHeld: false,
@@ -3982,6 +4234,12 @@
       }
     }
 
+    // ---------------- PORTALS AND BOOST STRIPS ----------------
+    if (player.portalCool > 0) player.portalCool -= dt;
+    if (player.boostCool > 0) player.boostCool -= dt;
+    if (portals.length) tryPortals();
+    if (boosts.length) tryBoosts();
+
     // ---------------- LADDERS ----------------
     // walk up to one and hold forward to climb (forward and back move you along it); jump to leave it, or climb over the top
     if (player.ladderCool > 0) player.ladderCool -= dt;
@@ -4340,7 +4598,7 @@
       sliding: player.sliding,
       wallRide: elapsedTime - player.lastWallBounceAt <= CFG.wallRideScoreWindow,
       grapple: elapsedTime - player.lastGrappleAt <= CFG.grappleScoreWindow,
-      airTime: player.onGround ? 0 : elapsedTime - player.groundedAt,
+      airTime: player.onGround ? 0 : (elapsedTime - player.groundedAt) * Math.sqrt(CFG.gravity / BASE_PHYS.gravity),   // low gravity doesn't make hang time cheap
       airId: player.groundedAt,   // the same for every shot in one jump
       launch: !player.onGround && player.velocity.y > 0 ? player.launch : null,
       // anywhere in a pad or ramp flight you ran onto, so it isn't "standing still"
@@ -6965,7 +7223,10 @@
     for (const d of m.decks) box(d[0], d[2], d[3], d[4], "rgba(190,200,215,0.55)");
     for (const r of m.ramps) box(r[0], r[1], r[2] === "x" ? r[4] : r[3], r[2] === "x" ? r[3] : r[4], "#e3b53a");
     for (const w of m.walls) box(w[0], w[2], w[3], w[5], w[4] < 2 ? "rgba(235,235,240,0.5)" : "#e8e8ec");
+    for (const b of m.boosts || []) { g.save(); g.translate(px(b[0]), px(b[1])); g.rotate(Math.atan2(b[3], b[2])); g.fillStyle = "#ffb42a"; g.fillRect(-b[5] * k / 2, -Math.max(1, b[4] * k / 2), b[5] * k, Math.max(2, b[4] * k)); g.restore(); }
+    for (const a of m.movers || []) box(a[0], a[2], a[3], a[4], "rgba(255,255,255,0.7)");
     for (const p of m.pads) { g.fillStyle = p[2] === "mega" ? "#d23cff" : "#1bd6c8"; g.beginPath(); g.arc(px(p[0]), px(p[1]), Math.max(2, 1.4 * k), 0, 7); g.fill(); }
+    for (const a of m.portals || []) { g.fillStyle = "#2f9bff"; g.beginPath(); g.arc(px(a[0]), px(a[1]), Math.max(2, 1.6 * k), 0, 7); g.fill(); g.fillStyle = "#ff8a2a"; g.beginPath(); g.arc(px(a[4]), px(a[5]), Math.max(2, 1.6 * k), 0, 7); g.fill(); }
     g.strokeStyle = css(m.theme.skyHorizon); g.lineWidth = 2; g.strokeRect(1, 1, n - 2, n - 2);
   }
   const mapPickerEl = document.getElementById("map-picker");
@@ -7716,6 +7977,7 @@
     // in a room the world keeps running while the menu is up, so everyone else's view stays correct
     if (pointerLocked || net.active) {
       if ((player.hook || player.grappleWant) && (!pointerLocked || localDead || run.state === "countdown")) releaseHook(0);
+      updateMovers();
       if (pointerLocked && !localDead && run.state !== "countdown") updatePlayer(dt);
       updateProps(dt);
       updateParticles(dt);
@@ -7723,6 +7985,7 @@
       updateSmoke(dt);
       clouds.rotation.y += dt * 0.004;
       updateJumpPads(dt);
+      updateLevelFx(dt);
       updateCasings(dt);
       updateMagDrops(dt);
       updateThrownKnives(dt);
