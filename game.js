@@ -711,20 +711,21 @@
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(a[4], a[5]), new THREE.MeshBasicMaterial({ map: tex, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     mesh.rotation.x = -Math.PI / 2;
     const g = new THREE.Group();
-    g.position.set(a[0], FLOOR_Y + 0.02, a[1]);
+    const by = a[6] === undefined ? FLOOR_Y : a[6];
+    g.position.set(a[0], by + 0.02, a[1]);
     g.rotation.y = Math.atan2(-dx, -dz);
     g.add(mesh);
     levelGroup.add(g);
-    boosts.push({ x: a[0], z: a[1], dx, dz, w: a[4], l: a[5], tex });
+    boosts.push({ x: a[0], z: a[1], y: by, dx, dz, w: a[4], l: a[5], pop: a[7] || CFG.boostPop, tex });
   }
   function tryBoosts() {
     if (player.boostCool > 0 || !player.onGround) return;
     const px = yawObject.position.x, pz = yawObject.position.z;
     for (const b of boosts) {
       const along = (px - b.x) * b.dx + (pz - b.z) * b.dz, across = -(px - b.x) * b.dz + (pz - b.z) * b.dx;
-      if (Math.abs(along) > b.l / 2 || Math.abs(across) > b.w / 2) continue;
+      if (Math.abs(along) > b.l / 2 || Math.abs(across) > b.w / 2 || Math.abs(player.feetY - b.y) > 0.6) continue;
       player.velocity.x = b.dx * CFG.maxSpeed; player.velocity.z = b.dz * CFG.maxSpeed;   // instantly at top speed, whatever you were doing
-      player.velocity.y = CFG.boostPop;
+      player.velocity.y = b.pop;
       player.onGround = false; player.sliding = false; player.launch = "pad"; player.groundRise = 0;
       player.boostCool = 0.5;
       playSfx("jumpPad", 0.6, 1.4, 0.1, "volMove");
@@ -933,7 +934,7 @@
       wallAt(-9, -14.5, 1, 11, 6, "concrete"), wallAt(-9, 0, 1, 10, 6, "concrete"), wallAt(-9, 14.5, 1, 11, 6, "concrete"),
       wallAt(9, -14.5, 1, 11, 6, "concrete"), wallAt(9, 0, 1, 10, 6, "concrete"), wallAt(9, 14.5, 1, 11, 6, "concrete"),
       // crates in the hall
-      wallAt(0, -12, 2.5, 2.5, 2, "deck"), wallAt(0, 12, 2.5, 2.5, 2, "deck"), wallAt(-3.5, 0, 2, 2, 1.4, "deck"), wallAt(3.5, 0, 2, 2, 1.4, "deck"),
+      wallAt(-3.5, 0, 2, 2, 1.4, "deck"), wallAt(3.5, 0, 2, 2, 1.4, "deck"),
       // the side lanes: an outer wall with a gap, so the lanes can be entered from the yards
       wallAt(-21, -9, 1, 10, 4.5, "brick"), wallAt(-21, 9, 1, 10, 4.5, "brick"), wallAt(21, -9, 1, 10, 4.5, "brick"), wallAt(21, 9, 1, 10, 4.5, "brick"),
       // a tall pillar in each corner of the yards
@@ -943,7 +944,7 @@
     decks: [[0, 2.4, -28, 14, 6, "deck", true], [0, 2.4, 28, 14, 6, "deck", true]],
     ramps: [[-10, -28, "x", 4, 6, 2.4, 1], [10, -28, "x", 4, 6, 2.4, -1], [-10, 28, "x", 4, 6, 2.4, 1], [10, 28, "x", 4, 6, 2.4, -1]],
     pads: [[-28, 0, "normal"], [28, 0, "normal"]],
-    boosts: [[0, -18, 0, 1, 3, 7], [0, 18, 0, -1, 3, 7]],
+    boosts: [[0, -18, 0, 1, 3.5, 3.5], [0, 18, 0, -1, 3.5, 3.5]],
     spawns: [[-30, -22], [30, -22], [-30, 22], [30, 22], [-28, 0], [28, 0], [-15, -24], [15, -24], [-15, 24], [15, 24], [0, -23], [0, 23]],
     playerSpawn: [0, 22],
   });
@@ -975,13 +976,13 @@
       surfaces: { ice: "#bfe3f2", concrete: "#dfeaf2", brick: "#9fd0e8", deck: "#c9d9e6", facade: "#dfeaf2", facadeb: "#9fd0e8", roof: "#d6e4ee" } },
     walls: [
       wallAt(-25, -20, 3, 3, 6, "brick"), wallAt(25, -20, 3, 3, 6, "brick"), wallAt(-25, 20, 3, 3, 6, "brick"), wallAt(25, 20, 3, 3, 6, "brick"), wallAt(0, -30, 3, 3, 6, "brick"), wallAt(0, 30, 3, 3, 6, "brick"),
-      wallAt(-12, -8, 10, 1.5, 1.3, "concrete"), wallAt(12, 8, 10, 1.5, 1.3, "concrete"), wallAt(-14, 12, 1.5, 8, 1.3, "concrete"), wallAt(14, -12, 1.5, 8, 1.3, "concrete"),
-      [0, 1.9, 0, 10, 3.8, 10, "brick"],   // the iceberg
+      wallAt(-12, -8, 10, 1.5, 1.3, "concrete"), wallAt(12, 8, 10, 1.5, 1.3, "concrete"),
+      wallAt(0, 0, 10, 10, 4.5, "brick"),   // the iceberg: a solid block whose top (4.5 m) you can stand on
     ],
-    decks: [[0, 4.25, 0, 10, 10, "deck", true]],   // its top, at 4.5 m
+    decks: [],
     ramps: [[-9, 0, "x", 4, 8, 4.25, 1], [28, -5, "x", 4, 8, 2.4, -1], [-28, 6, "x", 4, 8, 2.4, 1]],
     pads: [],
-    boosts: [[0, -14, 1, 0, 3, 10], [0, 14, -1, 0, 3, 10]],
+    boosts: [[0, -14, 1, 0, 3.5, 3.5], [0, 14, -1, 0, 3.5, 3.5]],
     spawns: [[-34, -34], [34, -34], [-34, 34], [34, 34], [-36, 0], [36, 0], [0, -36], [0, 36], [-20, -30], [20, 30]],
     playerSpawn: [0, 24],
   });
@@ -995,14 +996,16 @@
       surfaces: { slab: "#5a5e66", concrete: "#aeb2b7", brick: "#b66d4f", deck: "#838b95", facade: "#aeb2b7", facadeb: "#b66d4f", roof: "#6e7279" } },
     // [x, z, width, depth, height, surface, parapet edges]: windows on the fronts, a low wall round each roof except where a ladder, ramp or bridge arrives
     buildings: [
-      [-13.5, -18.5, 17, 15, 6.5, "facade", "ns"], [-13.5, 0, 17, 14, 10, "facadeb", "ns"], [-13.5, 18.5, 17, 15, 6.5, "facade", "ns"],
-      [13.5, -18.5, 17, 15, 6.5, "facade", "ns"], [13.5, 0, 17, 14, 10, "facadeb", "ns"], [13.5, 18.5, 17, 15, 6.5, "facade", "ns"],
+      [-13.5, -18.5, 17, 15, 6.5, "facade", "n"], [-13.5, 0, 17, 14, 10, "facadeb", ""], [-13.5, 18.5, 17, 15, 6.5, "facade", "s"],
+      [13.5, -18.5, 17, 15, 6.5, "facade", "n"], [13.5, 0, 17, 14, 10, "facadeb", ""], [13.5, 18.5, 17, 15, 6.5, "facade", "s"],
     ],
     decor: [
-      ["mast", -20, 6.5, -24], ["mast", 20, 6.5, 24], ["mast", -20, 6.5, 24], ["mast", 20, 6.5, -24], ["tank", -17, 10, -4], ["tank", 17, 10, 4],
+      ["mast", -20, 6.5, -24], ["mast", 20, 6.5, 24], ["mast", -20, 6.5, 24], ["mast", 20, 6.5, -24], ["tank", -17, 10, -4], ["tank", 17, 10, -4],
       ["door", -5, -15, 1, 0], ["door", -5, 4.5, 1, 0], ["door", -5, 15, 1, 0], ["door", 5, -15, -1, 0], ["door", 5, -4.5, -1, 0], ["door", 5, 15, -1, 0],
     ],
     // a shuttle gliding across the street between the two tall roofs, and a lift beside each tall building
+    // launch strips on the low roofs: [x, z, direction x, direction z, width, length, height, lift]. They throw you over the street onto the tall roof
+    boosts: [[-12, -13.5, 0, 1, 3.5, 3.5, 6.5, 15], [12, 13.5, 0, -1, 3.5, 3.5, 6.5, 15]],
     movers: [[0, 9.75, -3, 4, 4, "x", 4.2, 0.6, 0, "deck"], [-24, 5.1, -3, 3, 3, "y", 4.85, 0.5, 0, "deck"], [24, 5.1, 3, 3, 3, "y", 4.85, 0.5, 3.14, "deck"]],
 
     walls: [
