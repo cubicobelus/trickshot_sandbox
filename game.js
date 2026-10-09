@@ -613,7 +613,7 @@
     const box = new THREE.Box3().setFromObject(mesh);
     wallBoxes.push(box);
     bounceBoxes.push(box);
-    if (stand) { mesh.userData = { topY: y + h / 2, halfW: w / 2, halfD: d / 2, cx: x, cz: z }; groundMeshes.push(mesh); }
+    if (stand) { mesh.userData = { topY: y + h / 2, halfW: w / 2, halfD: d / 2, cx: x, cz: z, wall: true }; groundMeshes.push(mesh); }
   }
 
   // ---- ladders: one plane painted with rails and rungs (cut out with alphaTest) a hair off the wall ----
@@ -6297,7 +6297,7 @@
     const p = makePlayerRecord("bot" + i, "Bot " + BOT_NAMES[i % BOT_NAMES.length], PLAYER_COLORS[(i + 1) % PLAYER_COLORS.length]);
     p.bot = true;
     p.ai = { lvl: BOT_LEVELS[level] || BOT_LEVELS.medium, gun: "ar", ammo: 30, reloadT: 0, fireT: 1, burstLeft: 0, seeT: 0, strafe: 1, strafeT: 0,
-      stuckT: 0, aimYaw: 0, aimPitch: 0, tspd: 0, tx: 0, tz: 0, vy: 0, path: [], pi: 0, repath: 0 };
+      stuckT: 0, aimYaw: 0, aimPitch: 0, tspd: 0, tx: 0, tz: 0, vy: 0, path: [], pi: 0, repath: 0, climb: null, perch: null, perchT: 0, perchWait: 6 + Math.random() * 14 };
     net.players.set(p.id, p);
     ensureAvatar(p);
     return p;
@@ -6309,7 +6309,7 @@
     p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
     ai.ammo = WEAPONS[ai.gun].magSize; ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
     ai.aimYaw = p.yaw = Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;
-    ai.vy = 0; ai.path = []; ai.pi = 0; ai.repath = 0;
+    ai.vy = 0; ai.path = []; ai.pi = 0; ai.repath = 0; ai.climb = null; ai.perch = null; ai.perchWait = 6 + Math.random() * 14;
   }
 
   function botLineClear(ax, ay, az, bx, by, bz) {
@@ -6323,52 +6323,141 @@
     return true;
   }
 
-  // The arena as a grid of 2 m cells; a cell is blocked if a wall, pillar, tower leg or ramp is in the way of a player
-  // walking at floor level. Bots plan a route across it (A*) whenever the target is far or out of sight, so they go
-  // round walls and out of the bounce corridors instead of pushing into them.
+  // The arena as grids of 1 m cells, one grid for each level a player can stand on (the floor, each roof, each deck). A cell is
+  // blocked if a wall, pillar, tower leg or ramp is in the way of a player standing at that level. Bots plan a route across
+  // the grids (A*) whenever the target is far, out of sight or on another level. Ramps, ladders and drops off an edge are links
+  // from one level to another, so a bot can climb to a roof and come back down.
   const NAV_CELL = 1;   // metres per cell: fine enough that a 3 m wall does not close a 10 m street
-  let NAV_N = 40, navHalf = 40, navBlocked = null;
+  let NAV_N = 40, navHalf = 40, navBlocked = null, navLv = [], navLinks = new Map();
   function navBuild() {
     navHalf = CFG.arenaHalfSize; NAV_N = Math.ceil(navHalf * 2 / NAV_CELL);
-    navBlocked = new Uint8Array(NAV_N * NAV_N);
-    const pad = CFG.playerRadius + 0.15;
-    const boxes = wallBoxes.filter((b) => 0.25 < b.max.y - CFG.stepHeight && 0.25 + CFG.playerHeight > b.min.y);
-    const block = (x0, x1, z0, z1) => {
-      for (let j = 0; j < NAV_N; j++) for (let i = 0; i < NAV_N; i++) {
-        const cx0 = -navHalf + i * NAV_CELL - pad, cx1 = -navHalf + (i + 1) * NAV_CELL + pad, cz0 = -navHalf + j * NAV_CELL - pad, cz1 = -navHalf + (j + 1) * NAV_CELL + pad;
-        if (x1 > cx0 && x0 < cx1 && z1 > cz0 && z0 < cz1) navBlocked[j * NAV_N + i] = 1;
+    const N = NAV_N, NN = N * N, pad = CFG.playerRadius + 0.15;
+    const cellC = (i) => -navHalf + (i + 0.5) * NAV_CELL;
+    const isFloorish = (g) => !g.userData.wall && !movers.some((m) => m.mesh === g);   // crate tops and moving platforms are not levels
+    const hs = [];
+    for (const g of groundMeshes) {
+      if (!isFloorish(g)) continue;
+      const h = Math.round(g.userData.topY * 20) / 20;
+      if (!hs.includes(h)) hs.push(h);
+    }
+    hs.sort((x, y) => x - y);
+    navLv = hs.map((h) => ({ h, surf: new Uint8Array(NN), blocked: new Uint8Array(NN).fill(1) }));
+    for (const g of groundMeshes) {
+      if (!isFloorish(g)) continue;
+      const ud = g.userData, lv = navLv.find((l) => Math.abs(l.h - ud.topY) < 0.03);
+      if (!lv) continue;
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+        if (Math.abs(cellC(i) - ud.cx) <= ud.halfW - 0.2 && Math.abs(cellC(j) - ud.cz) <= ud.halfD - 0.2) { lv.surf[j * N + i] = 1; lv.blocked[j * N + i] = 0; }
+      }
+    }
+    const block = (arr, x0, x1, z0, z1, m) => {   // m: how far round the box a cell is still blocked
+      m = m === undefined ? pad : m;
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+        const cx0 = -navHalf + i * NAV_CELL - m, cx1 = -navHalf + (i + 1) * NAV_CELL + m, cz0 = -navHalf + j * NAV_CELL - m, cz1 = -navHalf + (j + 1) * NAV_CELL + m;
+        if (x1 > cx0 && x0 < cx1 && z1 > cz0 && z0 < cz1) arr[j * N + i] = 1;
       }
     };
-    for (const b of boxes) block(b.min.x, b.max.x, b.min.z, b.max.z);
-    for (const r of ramps) block(r.cx - r.halfW, r.cx + r.halfW, r.cz - r.halfD, r.cz + r.halfD);
+    for (const lv of navLv) {
+      for (const b of wallBoxes) if (lv.h < b.max.y - CFG.stepHeight && lv.h + CFG.playerHeight > b.min.y) block(lv.blocked, b.min.x, b.max.x, b.min.z, b.max.z);
+      for (const r of ramps) block(lv.blocked, r.cx - r.halfW, r.cx + r.halfW, r.cz - r.halfD, r.cz + r.halfD, 0);   // the ramp itself (its side rails are boxes, padded as usual)
+    }
+    navBlocked = navLv.length ? navLv[0].blocked : new Uint8Array(NN);   // the floor, for the code that only cares about the floor
+
+    // links between levels
+    navLinks = new Map();
+    const link = (from, l) => { const arr = navLinks.get(from); if (arr) arr.push(l); else navLinks.set(from, [l]); };
+    const levelAt = (h) => navLv.findIndex((l) => Math.abs(l.h - h) < 0.3);
+    const nodeNear = (l, x, z, maxR) => {
+      if (l < 0) return -1;
+      const ci = navCell(x), cj = navCell(z), blocked = navLv[l].blocked;
+      for (let r = 0; r <= maxR; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+        const i = ci + di, j = cj + dj;
+        if (i >= 0 && j >= 0 && i < N && j < N && !blocked[j * N + i]) return l * NN + j * N + i;
+      }
+      return -1;
+    };
+    for (const r of ramps) {   // a ramp up to a roof or deck (a kicker ramp that ends in the air links nowhere)
+      const ax = r.along === "x", c = ax ? r.cx : r.cz;
+      const at = (v) => ax ? [v, r.cz] : [r.cx, v];
+      const e = at(c - r.dir * (r.length / 2 + 0.9)), x = at(c + r.dir * (r.length / 2 + 1.0)), hl = levelAt(FLOOR_Y + r.height);
+      if (hl <= 0) continue;
+      const lo = nodeNear(0, e[0], e[1], 4), hi = nodeNear(hl, x[0], x[1], 3);
+      if (lo < 0 || hi < 0) continue;
+      const cost = r.length * 1.3 + 1;
+      link(lo, { to: hi, cost, type: 0, pre: e }); link(hi, { to: lo, cost, type: 0, pre: x });   // pre: the mouth of the ramp, reached exactly before going up it
+    }
+    for (const L of ladders) {
+      const l0 = levelAt(L.y0), l1 = levelAt(L.y1);
+      if (l0 < 0 || l1 <= l0) continue;
+      const base = [L.x + L.nx * 0.9, L.z + L.nz * 0.9], land = [L.x - L.nx * 1.0, L.z - L.nz * 1.0];
+      const nb = nodeNear(l0, base[0], base[1], 3), nt = nodeNear(l1, land[0], land[1], 2);
+      if (nb < 0 || nt < 0) continue;
+      const cost = (L.y1 - L.y0) * 1.5 + 2;
+      link(nb, { to: nt, cost, type: 1, lad: L, up: true, px: base[0], pz: base[1] });
+      link(nt, { to: nb, cost, type: 1, lad: L, up: false, px: land[0], pz: land[1] });
+    }
+    // dropping off the edge of a roof or deck onto a lower level
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let l = 1; l < navLv.length; l++) {
+      const lv = navLv[l];
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+        const c = j * N + i;
+        if (lv.blocked[c]) continue;
+        for (const [di, dj] of dirs) {
+          const ni = i + di, nj = j + dj;
+          if (ni < 0 || nj < 0 || ni >= N || nj >= N || lv.surf[nj * N + ni]) continue;   // only a real edge
+          let done = false;
+          for (let k = 1; k <= 3 && !done; k++) {
+            const mi = i + di * k, mj = j + dj * k;
+            if (mi < 0 || mj < 0 || mi >= N || mj >= N) break;
+            for (let l2 = l - 1; l2 >= 0; l2--) {
+              if (lv.h - navLv[l2].h < 1.0 || navLv[l2].blocked[mj * N + mi]) continue;
+              link(l * NN + c, { to: l2 * NN + mj * N + mi, cost: 2 + k + (lv.h - navLv[l2].h) * 0.4, type: 2 });
+              done = true; break;
+            }
+          }
+        }
+      }
+    }
   }
   const navCell = (v) => Math.max(0, Math.min(NAV_N - 1, Math.floor((v + navHalf) / NAV_CELL)));
-  const navFree = (i, j) => i >= 0 && j >= 0 && i < NAV_N && j < NAV_N && !navBlocked[j * NAV_N + i];
-  // a straight line between two floor points that stays out of blocked cells
-  function navClear(ax, az, bx, bz) {
+  const navFree = (i, j, l) => i >= 0 && j >= 0 && i < NAV_N && j < NAV_N && !navLv[l || 0].blocked[j * NAV_N + i];
+  // the level someone at this height is standing on (the highest one at or just above their feet)
+  function navLevelFor(y) {
+    if (!navBlocked) navBuild();
+    let k = 0;
+    for (let l = 0; l < navLv.length; l++) if (navLv[l].h <= y + 0.7) k = l;
+    return k;
+  }
+  // a straight line between two points on one level that stays out of blocked cells
+  function navClear(ax, az, bx, bz, l) {
     if (!navBlocked) navBuild();
     const d = Math.hypot(bx - ax, bz - az), steps = Math.ceil(d / 0.5);
     for (let k = 1; k <= steps; k++) {
       const t = k / steps;
-      if (!navFree(navCell(ax + (bx - ax) * t), navCell(az + (bz - az) * t))) return false;
+      if (!navFree(navCell(ax + (bx - ax) * t), navCell(az + (bz - az) * t), l)) return false;
     }
     return true;
   }
-  function navPath(sx, sz, gx, gz) {
+  // a route as points [x, z, level, kind, link]: kind 0 walk, 1 a point to reach exactly (the far end of a ramp or a drop), 2 the foot of a ladder
+  function navPath(sx, sz, sl, gx, gz, gl) {
     if (!navBlocked) navBuild();
-    const N = NAV_N;
-    const nearest = (x, z) => {   // the cell, or the closest free one if that one is blocked
-      const ci = navCell(x), cj = navCell(z);
-      if (navFree(ci, cj)) return ci + cj * N;
-      for (let r = 1; r < 6; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
-        if (Math.max(Math.abs(di), Math.abs(dj)) === r && navFree(ci + di, cj + dj)) return (ci + di) + (cj + dj) * N;
+    const N = NAV_N, NN = N * N, total = NN * navLv.length;
+    const nearest = (x, z, l0) => {   // the cell on that level, or the closest free one (any level, nearest in height first)
+      const order = navLv.map((_, i) => i).sort((p, q) => Math.abs(navLv[p].h - navLv[l0].h) - Math.abs(navLv[q].h - navLv[l0].h));
+      for (const l of order) {
+        const ci = navCell(x), cj = navCell(z);
+        for (let r = 0; r < 6; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+          if (Math.max(Math.abs(di), Math.abs(dj)) === r && navFree(ci + di, cj + dj, l)) return l * NN + (ci + di) + (cj + dj) * N;
+        }
       }
       return -1;
     };
-    const s0 = nearest(sx, sz), t0 = nearest(gx, gz);
+    const s0 = nearest(sx, sz, sl), t0 = nearest(gx, gz, gl);
     if (s0 < 0 || t0 < 0) return null;
-    const tI = t0 % N, tJ = (t0 / N) | 0;
-    const g = new Float32Array(N * N).fill(Infinity), from = new Int32Array(N * N).fill(-1), done = new Uint8Array(N * N);
+    const tl = (t0 / NN) | 0, tc = t0 - tl * NN, tI = tc % N, tJ = (tc / N) | 0;
+    const g = new Float32Array(total).fill(Infinity), from = new Int32Array(total).fill(-1), done = new Uint8Array(total), via = new Map();
     const heap = [];
     const push = (f, idx) => {
       heap.push([f, idx]);
@@ -6397,20 +6486,36 @@
       if (done[cur]) continue;
       done[cur] = 1;
       if (cur === t0) break;
-      const ci = cur % N, cj = (cur / N) | 0;
+      const cl = (cur / NN) | 0, cc = cur - cl * NN, ci = cc % N, cj = (cc / N) | 0;
+      const relax = (n, cost, lk) => {
+        if (cost >= g[n]) return;
+        g[n] = cost; from[n] = cur;
+        if (lk) via.set(n, lk); else via.delete(n);
+        const nl = (n / NN) | 0, nc = n - nl * NN;
+        push(cost + Math.hypot(tI - (nc % N), tJ - ((nc / N) | 0)), n);
+      };
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         if (!di && !dj) continue;
         const ni = ci + di, nj = cj + dj;
-        if (!navFree(ni, nj)) continue;
-        if (di && dj && (!navFree(ci + di, cj) || !navFree(ci, cj + dj))) continue;   // no cutting a corner
-        const n = ni + nj * N, cost = g[cur] + (di && dj ? 1.414 : 1);
-        if (cost < g[n]) { g[n] = cost; from[n] = cur; push(cost + Math.hypot(tI - ni, tJ - nj), n); }
+        if (!navFree(ni, nj, cl)) continue;
+        if (di && dj && (!navFree(ci + di, cj, cl) || !navFree(ci, cj + dj, cl))) continue;   // no cutting a corner
+        relax(cl * NN + ni + nj * N, g[cur] + (di && dj ? 1.414 : 1), null);
       }
+      const links = navLinks.get(cur);
+      if (links) for (const lk of links) relax(lk.to, g[cur] + lk.cost, lk);
     }
     if (from[t0] < 0 && t0 !== s0) return null;
+    const chain = [];
+    for (let c = t0; c !== s0 && c >= 0; c = from[c]) chain.push(c);
+    chain.reverse();
     const out = [];
-    for (let c = t0; c !== s0 && c >= 0; c = from[c]) out.push([-navHalf + ((c % N) + 0.5) * NAV_CELL, -navHalf + (((c / N) | 0) + 0.5) * NAV_CELL]);
-    return out.reverse();
+    for (const n of chain) {
+      const lk = via.get(n), l = (n / NN) | 0, c = n - l * NN;
+      if (lk && lk.type === 1) out.push([lk.px, lk.pz, (from[n] / NN) | 0, 2, lk]);
+      else if (lk && lk.pre) out.push([lk.pre[0], lk.pre[1], (from[n] / NN) | 0, 1]);
+      out.push([-navHalf + ((c % N) + 0.5) * NAV_CELL, -navHalf + (((c / N) | 0) + 0.5) * NAV_CELL, l, lk ? 1 : 0]);
+    }
+    return out;
   }
 
   function botsThink(dt, now) {
@@ -6420,11 +6525,11 @@
   function botUpdate(p, dt, now) {
     const ai = p.ai, L = ai.lvl, g = ai.gun, w = WEAPONS[g];
     // the nearest living player is who it goes after
-    let tgt = null, dist = Infinity;
+    let tgt = null, dist = Infinity, bestScore = Infinity;
     for (const q of net.players.values()) {
       if (q === p || !q.alive || (net.teams && q.team === p.team)) continue;
-      const d = Math.hypot(q.x - p.x, q.z - p.z);
-      if (d < dist) { dist = d; tgt = q; }
+      const d = Math.hypot(q.x - p.x, q.z - p.z), score = d + Math.abs(q.y - p.y) * 1.5;   // someone on another level counts as further away
+      if (score < bestScore) { bestScore = score; dist = d; tgt = q; }
     }
     if (!tgt) return;
     const dx = tgt.x - p.x, dz = tgt.z - p.z, eyeY = p.y + 1.6, aimY = tgt.y + 1.15;
@@ -6437,14 +6542,53 @@
 
     // far or out of sight: follow a route round the walls to the target (re-planned a bit more than once a second)
     const prefer = BOT_PREFER[g] || 18;
-    const navigating = !los || dist > prefer + 4;
+    // now and then a bot heads for a roof or deck to fight from up there (when the map has one)
+    if (!navBlocked) navBuild();
+    if (navLv.length > 1) {
+      if (ai.perch) { ai.perchT -= dt; if (ai.perchT <= 0) { ai.perch = null; ai.perchWait = rnd(15, 35); } }
+      else if ((ai.perchWait -= dt) <= 0) {
+        ai.perchWait = rnd(15, 35);
+        const pl = 1 + Math.floor(Math.random() * (navLv.length - 1)), lv = navLv[pl];
+        for (let k = 0; k < 40; k++) {
+          const i = Math.floor(Math.random() * NAV_N), j = Math.floor(Math.random() * NAV_N);
+          if (lv.surf[j * NAV_N + i] && !lv.blocked[j * NAV_N + i]) { ai.perch = { x: -navHalf + (i + 0.5) * NAV_CELL, z: -navHalf + (j + 0.5) * NAV_CELL, l: pl }; ai.perchT = rnd(20, 35); ai.repath = 0; break; }
+        }
+      }
+    }
+    const perchD = ai.perch ? Math.hypot(ai.perch.x - p.x, ai.perch.z - p.z) : 0;
+    const perching = !!ai.perch && perchD > 2.5 && !(los && dist < 14);
+    const holding = !!ai.perch && perchD <= 2.5;   // up there: stay and shoot what it sees
+    const navigating = perching || (!holding && (!los || dist > prefer + 4 || Math.abs(tgt.y - p.y) > 2.2));   // also when the target is on another level
     ai.repath -= dt;
-    if (navigating && ai.repath <= 0) { ai.path = navPath(p.x, p.z, tgt.x, tgt.z) || []; ai.pi = 0; ai.repath = rnd(0.6, 0.9); }
+    const myLv = navLevelFor(p.y);
+    // halfway up a ramp or in the air it keeps to the route it has, so it does not turn round on the slope
+    const between = ai.vy !== 0 || Math.abs(p.y - navLv[myLv].h) > 0.3;
+    ai.betweenT = between ? (ai.betweenT || 0) + dt : 0;
+    if (navigating && ai.repath <= 0 && !ai.climb && (!between || ai.betweenT > 5)) { const route = perching ? navPath(p.x, p.z, myLv, ai.perch.x, ai.perch.z, ai.perch.l) : navPath(p.x, p.z, myLv, tgt.x, tgt.z, navLevelFor(tgt.y));
+      if (perching && !route) { ai.perch = null; ai.perchWait = rnd(15, 35); }   // no way up there
+      ai.path = route || []; ai.pi = 0; ai.repath = rnd(0.6, 0.9); }
     let wx = tgt.x, wz = tgt.z;   // where it is heading right now
-    if (navigating && ai.path.length) {
-      while (ai.pi < ai.path.length - 1 && Math.hypot(ai.path[ai.pi][0] - p.x, ai.path[ai.pi][1] - p.z) < 1.3) ai.pi++;
-      while (ai.pi < ai.path.length - 1 && navClear(p.x, p.z, ai.path[ai.pi + 1][0], ai.path[ai.pi + 1][1])) ai.pi++;   // cut the corners
-      wx = ai.path[ai.pi][0]; wz = ai.path[ai.pi][1];
+    if (navigating && ai.path.length && !ai.climb) {
+      const P = ai.path;
+      while (ai.pi < P.length - 1 && P[ai.pi][3] !== 2 && Math.hypot(P[ai.pi][0] - p.x, P[ai.pi][1] - p.z) < (P[ai.pi][3] ? 0.7 : 1.3)) ai.pi++;
+      while (ai.pi < P.length - 1 && P[ai.pi][3] === 0 && P[ai.pi + 1][3] === 0 && P[ai.pi + 1][2] === myLv &&
+        navClear(p.x, p.z, P[ai.pi + 1][0], P[ai.pi + 1][1], myLv)) ai.pi++;   // cut the corners
+      const pt = P[ai.pi];
+      wx = pt[0]; wz = pt[1];
+      if (pt[3] === 2 && Math.hypot(pt[0] - p.x, pt[1] - p.z) < 0.6 && Math.abs(p.y - navLv[pt[2]].h) < 1) {   // at the foot of a ladder: start climbing
+        const lk = pt[4], L = lk.lad;
+        ai.climb = lk.up ? { lad: L, dir: 1, toY: L.y1, ex: L.x - L.nx * 1.0, ez: L.z - L.nz * 1.0 } : { lad: L, dir: -1, toY: L.y0, ex: L.x + L.nx * 0.9, ez: L.z + L.nz * 0.9 };
+      }
+    }
+    if (ai.climb) {   // on a ladder: nothing else until it gets to the other end
+      const c = ai.climb, L = c.lad;
+      p.x = L.x + L.nx * 0.45; p.z = L.z + L.nz * 0.45; p.sl = false;
+      p.y += c.dir * CFG.ladderSpeed * 0.85 * dt; ai.vy = 0;
+      ai.aimYaw = p.yaw = Math.atan2(L.nx, L.nz); ai.aimPitch = p.pitch = 0;
+      if (c.dir > 0 ? p.y >= c.toY : p.y <= c.toY) {
+        p.x = c.ex; p.z = c.ez; p.y = c.toY; ai.climb = null; ai.pi++; ai.repath = 0.2; ai.stuckT = 0;
+      }
+      return;
     }
 
     // turn toward the target (or, with no line of sight, where it is heading), no faster than this level can
@@ -6474,16 +6618,19 @@
     _botPos.x = Math.max(-B, Math.min(B, _botPos.x)); _botPos.z = Math.max(-B, Math.min(B, _botPos.z));
     const moved = Math.hypot(_botPos.x - p.x, _botPos.z - p.z);
     p.x = _botPos.x; p.z = _botPos.z; p.sl = false;
-    // vertical: a jump pad it runs over throws it up, and in a fight it hops now and then while strafing
-    if (p.y <= 0.2501 && ai.vy <= 0) {
-      p.y = 0.25; ai.vy = 0;
-      for (const pad of jumpPads) if (Math.hypot(p.x - pad.x, p.z - pad.z) < pad.r) { ai.vy = pad.power; break; }
+    // vertical: it stands on whatever is under it (the floor, a ramp, a roof), a jump pad it runs over throws it up, and in a fight
+    // it hops now and then while strafing. Walking off an edge is a fall.
+    const gy = currentGroundY(p.x, p.z, p.y + CFG.stepHeight);
+    if (ai.vy <= 0 && p.y <= gy + 0.35) {
+      p.y = gy; ai.vy = 0;
+      for (const pad of jumpPads) if (Math.hypot(p.x - pad.x, p.z - pad.z) < pad.r && Math.abs(p.y - pad.y) < 0.4) { ai.vy = pad.power; break; }
       if (!ai.vy && los && dist < 40 && Math.random() < dt * (L.hop || 0)) ai.vy = CFG.jumpSpeed;
     }
-    if (ai.vy > 0 || p.y > 0.25) {
+    if (ai.vy > 0 || p.y > gy + 0.35) {
       ai.vy -= CFG.gravity * dt;
       p.y += ai.vy * dt;
-      if (p.y <= 0.25) { p.y = 0.25; ai.vy = 0; }
+      const land = currentGroundY(p.x, p.z, p.y + CFG.stepHeight);
+      if (ai.vy <= 0 && p.y <= land) { p.y = land; ai.vy = 0; }
     }
     // wedged against something: go the other way for a bit
     ai.stuckT = moved < speed * dt * 0.25 ? ai.stuckT + dt : 0;
