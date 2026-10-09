@@ -415,6 +415,16 @@ def test_maps(browser, base):
         page.click("#mp-leave-btn")
         page.wait_for_timeout(150)
         check(f"{mid}: a practice match with bots runs without errors", not errors, "; ".join(errors[:2]))
+    # King of the Hill always plays on a map with a hill, whatever map was picked
+    page.select_option("#bot-map", "arena")
+    page.select_option("#bot-mode", "koth")
+    page.click("#bot-start-btn")
+    page.wait_for_timeout(250)
+    page.click("#mp-play-btn")
+    step(page, 200)
+    label = page.inner_text("#mp-timer-mode") if page.query_selector("#mp-timer-mode") else ""
+    check("King of the Hill: starts on the hill map and shows the hill in the timer", "king of the hill" in label.lower() and "hill empty" in label.lower() or "holds the hill" in label.lower() or "contested" in label.lower(), label)
+    check("King of the Hill: runs without errors", not errors, "; ".join(errors[:2]))
     page.close()
 
 

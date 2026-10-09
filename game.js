@@ -513,6 +513,40 @@
       crater(n * 0.3, n * 0.3, n * 0.2); crater(n * 0.78, n * 0.55, n * 0.14); crater(n * 0.4, n * 0.82, n * 0.1); crater(n * 0.88, n * 0.12, n * 0.07); crater(n * 0.12, n * 0.62, n * 0.06);
       g.strokeStyle = "rgba(255,255,255,0.06)"; g.lineWidth = 2; g.strokeRect(0, 0, n, n);
     },
+    // meadow: grass with a scatter of wild flowers
+    meadow(g, n, base) {
+      g.fillStyle = base || "#6c9a47"; g.fillRect(0, 0, n, n);
+      speckle(g, 3000, n, 0.18, true);
+      for (let i = 0; i < 26; i++) {
+        g.fillStyle = ["#f4f1e6", "#f3d34a", "#e98fb1", "#b9a2ec"][i % 4];
+        g.beginPath(); g.arc(Math.random() * n, Math.random() * n, 0.8 + Math.random() * 1.0, 0, 7); g.fill();
+      }
+      g.strokeStyle = "rgba(255,255,255,0.05)"; g.lineWidth = 2; g.strokeRect(0, 0, n, n);
+    },
+    // a cliff: layers of stone, cracks and lichen
+    rock(g, n, base) {
+      g.fillStyle = base || "#8b857a"; g.fillRect(0, 0, n, n);
+      for (let y = 0; y < n; y += 18 + Math.random() * 22) {
+        g.fillStyle = Math.random() < 0.5 ? "rgba(0,0,0," + (0.06 + Math.random() * 0.14) + ")" : "rgba(255,255,255," + (0.05 + Math.random() * 0.1) + ")";
+        g.fillRect(0, y, n, 10 + Math.random() * 16);
+      }
+      speckle(g, 2200, n, 0.22, true);
+      g.strokeStyle = "rgba(20,18,14,0.45)"; g.lineWidth = 1.5;
+      for (let i = 0; i < 7; i++) {
+        let x = Math.random() * n, y = Math.random() * n;
+        g.beginPath(); g.moveTo(x, y);
+        for (let k = 0; k < 4; k++) { x += (Math.random() - 0.5) * 18; y += 8 + Math.random() * 22; g.lineTo(x, y); }
+        g.stroke();
+      }
+      g.fillStyle = "rgba(96,128,64,0.28)";
+      for (let i = 0; i < 16; i++) { g.beginPath(); g.arc(Math.random() * n, Math.random() * n, 3 + Math.random() * 8, 0, 7); g.fill(); }
+    },
+    // packed earth with pebbles (trails)
+    dirt(g, n, base) {
+      g.fillStyle = base || "#7c6547"; g.fillRect(0, 0, n, n);
+      speckle(g, 2600, n, 0.24, true);
+      for (let i = 0; i < 40; i++) { g.fillStyle = "rgba(" + (110 + Math.random() * 60 | 0) + "," + (100 + Math.random() * 50 | 0) + "," + (85 + Math.random() * 40 | 0) + ",0.7)"; g.beginPath(); g.arc(Math.random() * n, Math.random() * n, 1.5 + Math.random() * 3, 0, 7); g.fill(); }
+    },
     // turf with a faint line every tile (4 m), handy for judging distance
     grass(g, n, base) {
       g.fillStyle = base || "#6f9a52"; g.fillRect(0, 0, n, n);
@@ -594,7 +628,7 @@
 
   // surfaces: "grass" for the floor, "deck" for platforms, "concrete" and "brick" for walls
   function addGround(x, y, z, w, d, surface, solid) {
-    const tile = surface === "moon" ? 12 : ["grass", "slab", "ice", "roof"].includes(surface) ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
+    const tile = surface === "moon" ? 12 : ["grass", "slab", "ice", "roof", "meadow", "dirt"].includes(surface) ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), surfaceMaterial(surface, w / tile, d / tile, levelPalette[surface]));
     mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
@@ -743,8 +777,10 @@
   // your speed into lift (see player.groundRise), so a fast run-up throws you into the air ----
   const FLOOR_Y = 0.25;   // top of the main ground
   const ramps = [];
-  function addRamp(cx, cz, along, width, length, height, dir) {
-    const r = { cx, cz, along, dir, length, height,
+  let rampKind = "deck";   // the surface a map paints its ramps with
+  function addRamp(cx, cz, along, width, length, height, dir, base) {   // base: the height the foot of the ramp stands at (default the floor)
+    base = base === undefined ? FLOOR_Y : base;
+    const r = { cx, cz, along, dir, length, height, base,
       halfW: along === "x" ? length / 2 : width / 2, halfD: along === "x" ? width / 2 : length / 2 };
     ramps.push(r);
     // a wedge: profile in x (length) and y (height), extruded across the width
@@ -754,8 +790,8 @@
     geo.translate(-length / 2, 0, -width / 2);
     if (along === "x") { if (dir < 0) geo.rotateY(Math.PI); }
     else geo.rotateY(dir > 0 ? -Math.PI / 2 : Math.PI / 2);
-    const mesh = new THREE.Mesh(geo, surfaceMaterial("deck", 0.25, 0.25, levelPalette.deck));
-    mesh.position.set(cx, FLOOR_Y, cz);
+    const mesh = new THREE.Mesh(geo, surfaceMaterial(rampKind, 0.25, 0.25, levelPalette[rampKind]));
+    mesh.position.set(cx, base, cz);
     mesh.castShadow = true; mesh.receiveShadow = true;
     levelGroup.add(mesh);
     // the sides and the tall end block you; on the slope your feet are always within a step
@@ -764,8 +800,8 @@
     const box = (a0, a1, c0, c1, h) => {
       const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
       wallBoxes.push(along === "x"
-        ? new THREE.Box3(new THREE.Vector3(lo, FLOOR_Y, c0), new THREE.Vector3(hi, FLOOR_Y + h, c1))
-        : new THREE.Box3(new THREE.Vector3(c0, FLOOR_Y, lo), new THREE.Vector3(c1, FLOOR_Y + h, hi)));
+        ? new THREE.Box3(new THREE.Vector3(lo, base, c0), new THREE.Vector3(hi, base + h, c1))
+        : new THREE.Box3(new THREE.Vector3(c0, base, lo), new THREE.Vector3(c1, base + h, hi)));
     };
     const across = along === "x" ? cz : cx, half = width / 2, segs = Math.ceil(length);
     for (let i = 0; i < segs; i++) {
@@ -779,7 +815,7 @@
   function rampHeight(r, x, z) {
     if (Math.abs(x - r.cx) > r.halfW || Math.abs(z - r.cz) > r.halfD) return -Infinity;
     const a = r.along === "x" ? x - r.cx : z - r.cz;
-    return FLOOR_Y + r.height * Math.min(Math.max(0.5 + r.dir * a / r.length, 0), 1);
+    return r.base + r.height * Math.min(Math.max(0.5 + r.dir * a / r.length, 0), 1);
   }
   function rampAt(x, z, groundY) {
     for (const r of ramps) if (Math.abs(rampHeight(r, x, z) - groundY) < 0.001) return r;
@@ -856,6 +892,37 @@
       }
       const box = new THREE.Box3(new THREE.Vector3(d[1] - 1.25, d[2], d[3] - 1.25), new THREE.Vector3(d[1] + 1.25, d[2] + 3.3, d[3] + 1.25));
       wallBoxes.push(box); bounceBoxes.push(box);
+    } else if (kind === "tree") {   // ["tree", x, z, scale, height of the ground]
+      const sc = d[3] || 1, gy = d[4] === undefined ? FLOOR_Y : d[4];
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * sc, 0.3 * sc, 3.4 * sc, 7), new THREE.MeshStandardMaterial({ color: 0x5b4331, roughness: 1 }));
+      trunk.position.set(d[1], gy + 1.7 * sc, d[2]); trunk.castShadow = true;
+      levelGroup.add(trunk);
+      const tint = 0.85 + ((Math.abs(d[1] * 7 + d[2] * 13) % 10) / 10) * 0.3;
+      for (let k = 0; k < 3; k++) {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry((2.1 - k * 0.5) * sc, (2.6 - k * 0.2) * sc, 8), new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2f6a35).multiplyScalar(tint), roughness: 1, flatShading: true }));
+        cone.position.set(d[1], gy + (2.6 + k * 1.45) * sc, d[2]);
+        levelGroup.add(cone);
+      }
+      const box = new THREE.Box3(new THREE.Vector3(d[1] - 0.35 * sc, gy, d[2] - 0.35 * sc), new THREE.Vector3(d[1] + 0.35 * sc, gy + 5 * sc, d[2] + 0.35 * sc));
+      wallBoxes.push(box); bounceBoxes.push(box);
+    } else if (kind === "boulder") {   // ["boulder", x, z, size, height of the ground]: something to take cover behind or jump onto
+      const sz = d[3] || 2, gy = d[4] === undefined ? FLOOR_Y : d[4];
+      const geo = new THREE.IcosahedronGeometry(sz * 0.62, 0);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x8d887e, roughness: 1, flatShading: true }));
+      mesh.scale.set(1.1, 0.78, 0.95); mesh.rotation.y = (d[1] * 3.1 + d[2] * 1.7) % 6.28;
+      mesh.position.set(d[1], gy + sz * 0.4, d[2]); mesh.castShadow = true; mesh.receiveShadow = true;
+      levelGroup.add(mesh);
+      const half = sz * 0.58, top = gy + sz * 0.78;
+      const box = new THREE.Box3(new THREE.Vector3(d[1] - half, gy, d[2] - half), new THREE.Vector3(d[1] + half, top, d[2] + half));
+      wallBoxes.push(box); bounceBoxes.push(box);
+      const proxy = new THREE.Object3D();   // so you can land on top of it
+      proxy.userData = { topY: top, halfW: half, halfD: half, cx: d[1], cz: d[2], wall: true };
+      groundMeshes.push(proxy);
+    } else if (kind === "pond") {   // ["pond", x, z, radius]: shallow water you can wade through
+      const water = new THREE.Mesh(new THREE.CircleGeometry(d[3], 28), new THREE.MeshStandardMaterial({ color: 0x3d7fa6, transparent: true, opacity: 0.78, roughness: 0.15, metalness: 0.2 }));
+      water.rotation.x = -Math.PI / 2; water.scale.y = 0.7;
+      water.position.set(d[1], FLOOR_Y + 0.04, d[2]);
+      levelGroup.add(water);
     } else if (kind === "door") {
       const frame = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.8), new THREE.MeshStandardMaterial({ color: 0x555d66, roughness: 0.8 }));
       const leaf = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.6), new THREE.MeshStandardMaterial({ color: 0x20252b, roughness: 0.7 }));
@@ -866,6 +933,22 @@
       }
     }
   }
+
+  // ---- the hill of King of the Hill: a ring and a column of light on the summit, coloured by who holds it ----
+  let hillVis = null;
+  function buildHill(h) {
+    const g = new THREE.Group();
+    g.position.set(h.x, h.y + 0.04, h.z);
+    const mk = (geo, opacity) => new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    const ring = mk(new THREE.TorusGeometry(h.r, 0.12, 8, 56), 0.9); ring.rotation.x = Math.PI / 2; ring.position.y = 0.1;
+    const disc = mk(new THREE.CircleGeometry(h.r, 40), 0.16); disc.rotation.x = -Math.PI / 2;
+    const beam = mk(new THREE.CylinderGeometry(h.r * 0.9, h.r, 14, 28, 1, true), 0.2); beam.position.y = 7;
+    g.add(ring, disc, beam);
+    g.visible = false;
+    levelGroup.add(g);
+    hillVis = { g, mats: [ring.material, disc.material, beam.material], h };
+  }
+  function setHillColor(hex) { if (hillVis) for (const m of hillVis.mats) m.color.setHex(hex); }
 
   // ---- maps ----
   // A map is plain data: walls [x, y, z, w, h, d, surface], decks [x, y, z, w, d, surface] (walkable platforms),
@@ -987,6 +1070,51 @@
     playerSpawn: [0, 24],
   });
 
+  // Summit: a wooded valley around a stepped hill. The hill is where King of the Hill is played
+  const plateau = (cx, cz, w, d, top) => ({ wall: [cx, (top - 0.5) / 2, cz, w, top - 0.5, d, "rock"], deck: [cx, top - 0.25, cz, w, d, "meadow", true] });
+  const SUMMIT_TIERS = [plateau(0, 0, 44, 44, 3), plateau(0, 0, 26, 26, 6), plateau(0, 0, 10, 10, 9)];
+  const summitDecor = [];
+  {
+    let seed = 20261008;
+    const rand = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const spawnsAt = [[-40, -40], [40, -40], [-40, 40], [40, 40], [-41, 0], [41, 0], [0, -41], [0, 41], [-30, -38], [30, 38], [-38, 30], [38, -30]];
+    for (let tries = 0; tries < 400 && summitDecor.length < 46; tries++) {
+      const x = (rand() * 2 - 1) * 41, z = (rand() * 2 - 1) * 41;
+      if (Math.abs(x) < 26 && Math.abs(z) < 26) continue;                     // the hill and its shelf
+      if (Math.abs(x) < 4.5 || Math.abs(z) < 4.5) continue;                   // the trails up
+      if (summitDecor.some((q) => Math.hypot(q[1] - x, q[2] - z) < 4)) continue;
+      if (spawnsAt.some((s) => Math.hypot(s[0] - x, s[1] - z) < 3.5)) continue;
+      if (Math.hypot(x + 34, z + 30) < 8 || Math.hypot(x - 36, z - 34) < 7) continue;   // the ponds
+      summitDecor.push(["tree", x, z, 0.8 + rand() * 0.7]);
+    }
+  }
+  defineMap({
+    id: "summit", name: "Summit", blurb: "A wooded valley round a stepped hill with a lookout on top: trails and ramps up three tiers, ladders up the last cliff, boulders and trees for cover. The home of King of the Hill.",
+    half: 45, floor: "grass", wallH: 12, targetMaxY: 14, boundary: "rock", rampSurface: "dirt",
+    theme: { skyTop: 0x4a93e0, skyHorizon: 0xe3edf3, fog: [75, 230], sunDir: [40, 60, -20], sunColor: 0xfff1d6, sunIntensity: 0.95, hemi: [0xdfe9f5, 0x4c5f33, 0.5],
+      surfaces: { grass: "#46682d", meadow: "#527636", rock: "#8b857a", dirt: "#7c6547", concrete: "#8b857a", deck: "#7c6547" } },
+    walls: SUMMIT_TIERS.map((t) => t.wall),
+    decks: SUMMIT_TIERS.map((t) => t.deck),
+    // up from the valley on all four sides, then up each tier
+    ramps: [
+      [0, 28, "z", 4, 12, 2.75, -1], [0, -28, "z", 4, 12, 2.75, 1], [28, 0, "x", 4, 12, 2.75, -1], [-28, 0, "x", 4, 12, 2.75, 1],
+      [16.5, 0, "x", 4, 7, 3, -1, 3], [-16.5, 0, "x", 4, 7, 3, 1, 3],
+      [0, 8, "z", 4, 6, 3, -1, 6], [0, -8, "z", 4, 6, 3, 1, 6],
+    ],
+    ladders: [[5, 0, 1, 0, 6, 9], [-5, 0, -1, 0, 6, 9]],
+    pads: [[-17, 17, "mega", 3], [17, -17, "mega", 3]],
+    decor: summitDecor.concat([
+      ["boulder", -26, -12, 2.6], ["boulder", 25, 14, 3], ["boulder", -13, 27, 2.4], ["boulder", 14, -28, 2.8], ["boulder", 35, -12, 3.4], ["boulder", -36, 14, 3.2],
+      ["boulder", -16, -17, 1.8, 3], ["boulder", 15, 18, 2, 3], ["boulder", 18, -12, 1.6, 3], ["boulder", -18, 12, 1.6, 3],
+      ["boulder", 9, 10, 1.4, 6], ["boulder", -9, -10, 1.4, 6],
+      ["tree", -19, 19, 0.9, 3], ["tree", 19, -19, 0.9, 3], ["tree", 20, 18, 1, 3], ["tree", -20, -18, 1, 3],
+      ["pond", -34, -30, 5.5], ["pond", 36, 34, 4.5],
+    ]),
+    hill: { x: 0, z: 0, y: 9, r: 3.6 },
+    spawns: [[-40, -40], [40, -40], [-40, 40], [40, 40], [-41, 0], [41, 0], [0, -41], [0, 41], [-30, -38], [30, 38], [-38, 30], [38, -30]],
+    playerSpawn: [0, 41],
+  });
+
   // Rooftops: a street canyon between two rows of buildings at three heights, with ladders, ramps, bridges and pads between the levels
   const roofBox = (x, z, top, w, d, h) => [x, top + h / 2, z, w, h, d, "deck"];   // a crate or vent standing on a roof
   defineMap({
@@ -1071,10 +1199,11 @@
     applyTheme(m.theme);
     const H = m.half, wh = m.wallH || 12;
     addGround(0, 0, 0, H * 2, H * 2, m.floor || "grass");
-    addWall(0, wh / 2, -H, H * 2, wh, 1, "concrete");
-    addWall(0, wh / 2, H, H * 2, wh, 1, "concrete");
-    addWall(-H, wh / 2, 0, 1, wh, H * 2, "concrete");
-    addWall(H, wh / 2, 0, 1, wh, H * 2, "concrete");
+    const bk = m.boundary || "concrete";
+    addWall(0, wh / 2, -H, H * 2, wh, 1, bk);
+    addWall(0, wh / 2, H, H * 2, wh, 1, bk);
+    addWall(-H, wh / 2, 0, 1, wh, H * 2, bk);
+    addWall(H, wh / 2, 0, 1, wh, H * 2, bk);
     for (const w of m.walls) addWall(w[0], w[1], w[2], w[3], w[4], w[5], w[6], true);   // crates and pillars can be jumped onto
     // a building: a solid body with a walkable roof on top (a roof's top is at its height h)
     // [x, z, width, depth, height, surface, parapet edges]: "n" "s" "w" "e" put a low wall along that edge of the roof
@@ -1089,10 +1218,13 @@
       }
     }
     for (const d of m.decks) addGround(d[0], d[1], d[2], d[3], d[4], d[5], d[6]);
-    for (const r of m.ramps) addRamp(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
+    rampKind = m.rampSurface || "deck";
+    for (const r of m.ramps) addRamp(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]);
     for (const p of m.pads) addJumpPad(p[0], p[3] === undefined ? FLOOR_Y : p[3], p[1], p[2]);   // [x, z, tier, height (default the floor)]
     for (const l of m.ladders || []) addLadder(l[0], l[1], l[2], l[3], l[4], l[5]);
     for (const d of m.decor || []) addDecor(d);
+    hillVis = null;
+    if (m.hill) buildHill(m.hill);
     for (const a of m.movers || []) addMover(a);
     for (const a of m.portals || []) addPortalPair(a);
     for (const a of m.boosts || []) addBoost(a);
@@ -1162,7 +1294,7 @@
   function insideSolid(x, y, z, margin) {
     _spawnProbe.set(x, y, z);
     for (const b of wallBoxes) if (b.distanceToPoint(_spawnProbe) < margin) return true;
-    for (const r of ramps) if (rampHeight(r, x, z) > -Infinity && y < r.height + FLOOR_Y + margin) return true;
+    for (const r of ramps) if (rampHeight(r, x, z) > -Infinity && y < r.height + r.base + margin) return true;
     return false;
   }
 
@@ -5285,7 +5417,28 @@
   // (the deathmatch spawn points, SPAWNS, come from the map)
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
   const TEAM_COLORS = [0x3e8ef7, 0xe5484d], TEAM_NAMES = ["Blue", "Red"];
-  function modeName() { return net.sub === "dm" && net.teams ? "Team Deathmatch" : SUB_NAMES[net.sub]; }
+  function modeName() {
+    if (net.sub === "dm" && net.koth) return net.teams ? "Team King of the Hill" : "King of the Hill";
+    return net.sub === "dm" && net.teams ? "Team Deathmatch" : SUB_NAMES[net.sub];
+  }
+  // who has the hill, as a few words for the timer
+  function hillText() {
+    const [kind, who] = net.hs;
+    if (kind === 2) return "hill contested";
+    if (kind !== 1) return "hill empty";
+    if (net.teams) return TEAM_NAMES[who] + " holds the hill";
+    const p = net.players.get(who);
+    return (who === net.id ? "you hold" : (p ? p.name : "someone") + " holds") + " the hill";
+  }
+  function updateHillVis() {
+    if (!hillVis) return;
+    hillVis.g.visible = net.active && net.koth;
+    const [kind, who] = net.hs;
+    let c = 0xe6e6e6;
+    if (kind === 2) c = 0xff4a3d;
+    else if (kind === 1) { const p = net.teams ? null : net.players.get(who); c = net.teams ? TEAM_COLORS[who] : p ? p.color : 0xffd23c; }
+    setHillColor(c);
+  }
   const teamKills = (t) => [...net.players.values()].filter((q) => q.team === t).reduce((a, q) => a + q.kills, 0);
 
   // STUN lets two browsers discover how to reach each other; TURN is a relay of last resort for networks
@@ -5308,6 +5461,7 @@
     id: null, code: "", sub: "race", pendingSub: "race",
     map: "arena", pendingMap: "arena",
     teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
+    koth: false, pendingKoth: false, hs: [0, -1], teamHill: [0, 0],   // King of the Hill: who holds the hill (0 empty, 1 held, 2 contested; who), and each team's time on it
     phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
     players: new Map(), ttOffset: 0, ttSynced: false,
     lastTick: 0, boardTimer: 0, lastHostMsg: 0,
@@ -5354,6 +5508,8 @@
   const SUB_HINTS = {
     race: "Everyone shoots the same targets and the best trickscore when the timer ends wins. Players can't hurt each other.",
     tdm: "Two teams, blue and red. 100 health, no friendly fire, and the team with the most kills (or the first to the kill limit) wins. Only kills score.",
+    koth: "A hill with a ring on top. Stand alone on it to score a point a second; with someone else on it, nobody scores. First to the score wins (the first-to number times 10). Kills only clear the hill. It always plays on the map with a hill.",
+    tkoth: "King of the Hill with two teams: your team scores while only your team is on the hill. Kills only clear the hill.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   function selectedSub() { return document.querySelector('input[name="mp-sub"]:checked').value; }
@@ -5361,7 +5517,8 @@
   function chooseMap(id) { net.pendingMap = id === "random" || MAPS[id] ? id : "arena"; }
   function chooseMode(value, limit) {
     net.pendingSub = value === "race" ? "race" : "dm";
-    net.pendingTeams = value === "tdm";
+    net.pendingTeams = value === "tdm" || value === "tkoth";
+    net.pendingKoth = value === "koth" || value === "tkoth";
     net.pendingLimit = Math.max(0, Math.min(parseInt(limit, 10) || 0, 999));
   }
   function refreshSubHint() { mpEls.subHint.textContent = SUB_HINTS[selectedSub()]; }
@@ -5420,7 +5577,7 @@
 
   function makePlayerRecord(id, name, color) {
     return {
-      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, alive: true,
+      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, hill: 0, alive: true,
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
       hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
@@ -5652,7 +5809,7 @@
       const e = {
         id: String(raw.id).slice(0, 64), name: String(raw.name).replace(/[^\w \-]/g, "").slice(0, 14) || "Player",
         color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
-        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), alive: raw.alive === true,
+        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), alive: raw.alive === true,
         hp: Math.max(0, Math.min(Number.isFinite(raw.hp) ? raw.hp : 100, 100)),
         team: raw.team === 0 || raw.team === 1 ? raw.team : -1,
       };
@@ -5661,6 +5818,7 @@
       if (!p) { p = makePlayerRecord(e.id, e.name, e.color); net.players.set(e.id, p); }
       const recolored = p.color !== e.color;
       p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths; p.hp = e.hp; p.team = e.team;
+      if (net.role !== "host") p.hill = e.hill;
       if (recolored && p.mesh && e.id !== net.id) disposeAvatar(p);   // a new team colour: the model is rebuilt below
       if (e.id !== net.id) {
         if (net.role === "client") p.alive = e.alive;
@@ -5787,10 +5945,20 @@
     updateAmmoHud();
   }
 
+  // who holds the hill, from a round or board message (a host keeps its own, exact numbers)
+  function applyHill(m) {
+    if (net.role === "host") { updateHillVis(); return; }
+    net.hs = Array.isArray(m.hs) ? [m.hs[0] === 1 || m.hs[0] === 2 ? m.hs[0] : 0, typeof m.hs[1] === "string" ? m.hs[1].slice(0, 64) : m.hs[1] === 0 || m.hs[1] === 1 ? m.hs[1] : -1] : [0, -1];
+    const th = Array.isArray(m.th) ? m.th : [0, 0];
+    net.teamHill = [Math.max(0, Number(th[0]) || 0), Math.max(0, Number(th[1]) || 0)];
+    updateHillVis();
+  }
   function applyRound(m) {
     if (typeof m.map === "string" && MAPS[m.map]) { net.map = m.map; loadMap(m.map); }   // build the host's map first
     net.sub = m.sub;
     net.teams = m.teams === true;
+    net.koth = m.koth === true;
+    applyHill(m);
     net.limit = Math.max(0, Math.min(Number(m.limit) || 0, 999));
     net.phase = m.phase;
     net.left = m.left; net.leftRecv = nowMs();
@@ -5815,6 +5983,7 @@
         net.ttOffset = net.ttSynced ? net.ttOffset + (off - net.ttOffset) * 0.25 : off;
         net.ttSynced = true;
         if (net.role === "client") net.sub = m.sub;
+        applyHill(m);
         syncPlayers(m.p);
         mpRefreshHud();
         break;
@@ -5978,17 +6147,17 @@
 
   // ---------------- host logic ----------------
   function boardList() {
-    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
+    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
   }
   function hostSendRaw(m) { for (const c of net.conns.values()) if (c.open) c.send(m); }
   function hostBroadcast(m) { hostSendRaw(m); applyEvent(m); }
   function hostBoardMsg() {
-    return { t: "board", p: boardList(), sub: net.sub, left: net.left, phase: net.phase, rl: net.resultsLeft, tt: mpTargetClock() };
+    return { t: "board", p: boardList(), sub: net.sub, left: net.left, phase: net.phase, rl: net.resultsLeft, tt: mpTargetClock(), hs: net.hs, th: [Math.round(net.teamHill[0] * 10) / 10, Math.round(net.teamHill[1] * 10) / 10] };
   }
   function hostBroadcastBoard() { hostBroadcast(hostBoardMsg()); }
   function roundMsg(fresh) {
     return {
-      t: "round", map: net.map, sub: net.sub, teams: net.teams, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
+      t: "round", map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
       targets: net.sub === "race" ? targets.map(serializeTarget) : null, tt: mpTargetClock(),
     };
   }
@@ -6021,10 +6190,15 @@
   }
 
   function hostStartRound() {
-    net.map = net.pendingMap === "random" ? pickRandomMap(currentMap.id) : MAPS[net.pendingMap] ? net.pendingMap : "arena";
+    let mapId = net.pendingMap === "random" ? pickRandomMap(currentMap.id) : MAPS[net.pendingMap] ? net.pendingMap : "arena";
+    if (net.pendingKoth && net.pendingSub !== "race" && !MAPS[mapId].hill) mapId = MAP_ORDER.find((i) => MAPS[i].hill) || mapId;   // King of the Hill needs a hill
+    net.map = mapId;
     loadMap(net.map);   // (does nothing if it is already the map)
     net.sub = net.pendingSub;
     net.teams = net.sub === "dm" && net.pendingTeams;
+    net.koth = net.sub === "dm" && net.pendingKoth;
+    net.hs = [0, -1]; net.teamHill = [0, 0];
+    updateHillVis();
     net.limit = net.sub === "dm" ? net.pendingLimit : 0;
     let slot = 0;
     for (const q of net.players.values()) {   // teams: you with the first half of the bots in practice, otherwise alternating as people joined
@@ -6034,7 +6208,7 @@
     net.phase = "play";
     net.left = ROUND_SECONDS;
     net.resultsLeft = 0;
-    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
+    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
     if (net.sub === "race") for (const t of targets) { respawnTarget(t); t.userData.respawnTimer = 1.1; }
     hostBroadcast(roundMsg(true));
     for (const p of net.players.values()) hostRespawn(p);
@@ -6138,7 +6312,7 @@
     p.kills++; p.score += pts;
     hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
     hostBroadcastBoard();
-    if (net.limit && net.phase === "play" && (net.teams ? teamKills(p.team) : p.kills) >= net.limit) hostEndRound();   // the kill limit is reached
+    if (net.limit && !net.koth && net.phase === "play" && (net.teams ? teamKills(p.team) : p.kills) >= net.limit) hostEndRound();   // the kill limit is reached
   }
 
   function hostHandle(fromId, m) {
@@ -6223,6 +6397,29 @@
     };
   }
 
+  // King of the Hill: whoever is alone on the hilltop scores for as long as they are
+  function hostHillTick(dt) {
+    const h = currentMap && currentMap.hill;
+    if (!h) return;
+    const on = [];
+    for (const p of net.players.values()) if (p.alive && Math.hypot(p.x - h.x, p.z - h.z) <= h.r && Math.abs(p.y - h.y) < 2.2) on.push(p);
+    let kind = 0, who = -1;
+    if (on.length) {
+      if (net.teams) {
+        const t0 = on.some((p) => p.team === 0), t1 = on.some((p) => p.team === 1);
+        if (t0 && t1) kind = 2; else { kind = 1; who = t0 ? 0 : 1; }
+      } else if (on.length > 1) kind = 2;
+      else { kind = 1; who = on[0].id; }
+    }
+    net.hs = [kind, who];
+    updateHillVis();
+    if (kind !== 1) return;
+    for (const p of on) p.hill += dt;
+    if (net.teams) net.teamHill[who] += dt;
+    const need = net.limit * 10;
+    if (need > 0 && (net.teams ? net.teamHill[who] : on[0].hill) >= need) hostEndRound();
+  }
+
   function hostTick(dt) {
     const now = nowMs();
     if (net.practice && (!pointerLocked || replay.active)) return;   // practice pauses with the menu
@@ -6235,6 +6432,7 @@
     }
     if (net.phase === "play" && net.sub === "dm") {
       if (net.practice) for (let left = dt; left > 0; left -= 0.05) botsThink(Math.min(left, 0.05), now);
+      if (net.koth) hostHillTick(dt);
       for (const p of net.players.values()) if (!p.alive && now >= p.respawnAt) hostRespawn(p);
       for (const p of net.players.values()) {   // slow healing, only once they've stayed out of the fight
         if (p.alive && p.hp < 100 && now - p.lastDamageAt > REGEN_DELAY && now - p.lastFireAt > REGEN_DELAY) p.hp = Math.min(100, p.hp + REGEN_PER_SEC * dt);
@@ -6380,9 +6578,9 @@
     for (const r of ramps) {   // a ramp up to a roof or deck (a kicker ramp that ends in the air links nowhere)
       const ax = r.along === "x", c = ax ? r.cx : r.cz;
       const at = (v) => ax ? [v, r.cz] : [r.cx, v];
-      const e = at(c - r.dir * (r.length / 2 + 0.9)), x = at(c + r.dir * (r.length / 2 + 1.0)), hl = levelAt(FLOOR_Y + r.height);
-      if (hl <= 0) continue;
-      const lo = nodeNear(0, e[0], e[1], 4), hi = nodeNear(hl, x[0], x[1], 3);
+      const e = at(c - r.dir * (r.length / 2 + 0.9)), x = at(c + r.dir * (r.length / 2 + 1.0)), hl = levelAt(r.base + r.height), ll = levelAt(r.base);
+      if (hl <= 0 || ll < 0 || hl <= ll) continue;
+      const lo = nodeNear(ll, e[0], e[1], 4), hi = nodeNear(hl, x[0], x[1], 3);
       if (lo < 0 || hi < 0) continue;
       const cost = r.length * 1.3 + 1;
       link(lo, { to: hi, cost, type: 0, pre: e }); link(hi, { to: lo, cost, type: 0, pre: x });   // pre: the mouth of the ramp, reached exactly before going up it
@@ -6544,6 +6742,7 @@
     const prefer = BOT_PREFER[g] || 18;
     // now and then a bot heads for a roof or deck to fight from up there (when the map has one)
     if (!navBlocked) navBuild();
+    if (net.koth && currentMap.hill) { const hh = currentMap.hill; ai.perch = { x: hh.x, z: hh.z, l: navLevelFor(hh.y) }; ai.perchT = 5; }   // King of the Hill: they all want the hill
     if (navLv.length > 1) {
       if (ai.perch) { ai.perchT -= dt; if (ai.perchT <= 0) { ai.perch = null; ai.perchWait = rnd(15, 35); } }
       else if ((ai.perchWait -= dt) <= 0) {
@@ -6557,7 +6756,7 @@
     }
     const perchD = ai.perch ? Math.hypot(ai.perch.x - p.x, ai.perch.z - p.z) : 0;
     const perching = !!ai.perch && perchD > 2.5 && !(los && dist < 14);
-    const holding = !!ai.perch && perchD <= 2.5;   // up there: stay and shoot what it sees
+    const holding = !!ai.perch && perchD <= (net.koth && currentMap.hill ? Math.max(2.5, currentMap.hill.r * 0.6) : 2.5);   // up there: stay and shoot what it sees
     const navigating = perching || (!holding && (!los || dist > prefer + 4 || Math.abs(tgt.y - p.y) > 2.2));   // also when the target is on another level
     ai.repath -= dt;
     const myLv = navLevelFor(p.y);
@@ -6734,7 +6933,7 @@
     mpEls.roomCode.textContent = code;
     mpEls.hostMode.hidden = role !== "host";
     mpEls.copyBtn.hidden = false;
-    mpEls.nextSub.value = net.pendingTeams ? "tdm" : net.pendingSub; mpEls.nextLimit.value = String(net.pendingLimit); mpEls.nextMap.value = net.pendingMap;
+    mpEls.nextSub.value = net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; mpEls.nextLimit.value = String(net.pendingLimit); mpEls.nextMap.value = net.pendingMap;
     mpStatus("");
     mpRefreshRoomUI();
     mpRefreshHud();
@@ -6927,8 +7126,16 @@
     if (!net.active) return;
     mpEls.timerVal.textContent = net.phase === "results" ? "0:00" : fmtTime(leftNow());
     let label = modeName();
-    if (net.sub === "dm" && net.limit) label += " \u00b7 first to " + net.limit;
-    if (net.sub === "dm" && net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
+    if (net.sub === "dm" && net.koth) {
+      const need = net.limit * 10, me = localPlayer();
+      if (need) label += " \u00b7 first to " + need;
+      if (net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + Math.floor(net.teamHill[0]) + " \u2013 " + Math.floor(net.teamHill[1]) + " " + TEAM_NAMES[1];
+      else if (me) label += " \u00b7 you " + Math.floor(me.hill);
+      label += " \u00b7 " + hillText();
+    } else {
+      if (net.sub === "dm" && net.limit) label += " \u00b7 first to " + net.limit;
+      if (net.sub === "dm" && net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
+    }
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
     mpEls.roomMode.textContent = modeName();
   }
@@ -6938,21 +7145,23 @@
     const held = net.active && pointerLocked && keys["Tab"];
     mpEls.board.hidden = !(results || held);
     if (mpEls.board.hidden) return;
-    const dm = net.sub === "dm";
-    const rows = [...net.players.values()].sort(dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
+    const dm = net.sub === "dm", koth = dm && net.koth;
+    const rows = [...net.players.values()].sort(koth ? (a, b) => b.hill - a.hill || b.kills - a.kills : dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
     let title = modeName();
-    if (dm && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
+    if (koth && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + Math.floor(net.teamHill[0]) + " \u2013 " + Math.floor(net.teamHill[1]) + " " + TEAM_NAMES[1];
+    else if (dm && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
     if (results && rows.length) {
-      if (dm && net.teams) { const a = teamKills(0), b = teamKills(1); title = a === b ? "Round over \u2014 a draw, " + a + " each" : "Round over \u2014 " + TEAM_NAMES[a > b ? 0 : 1] + " team wins, " + Math.max(a, b) + " to " + Math.min(a, b); }
+      if (koth && net.teams) { const a = net.teamHill[0], b = net.teamHill[1]; title = Math.floor(a) === Math.floor(b) ? "Round over \u2014 a draw" : "Round over \u2014 " + TEAM_NAMES[a > b ? 0 : 1] + " team holds the hill, " + Math.floor(Math.max(a, b)) + " to " + Math.floor(Math.min(a, b)); }
+      else if (dm && net.teams) { const a = teamKills(0), b = teamKills(1); title = a === b ? "Round over \u2014 a draw, " + a + " each" : "Round over \u2014 " + TEAM_NAMES[a > b ? 0 : 1] + " team wins, " + Math.max(a, b) + " to " + Math.min(a, b); }
       else title = "Round over \u2014 " + rows[0].name + " wins";
     }
     mpEls.boardTitle.textContent = title;
-    document.querySelector("#scoreboard th:nth-child(4)").textContent = dm ? "Kills" : "Hits";
-    document.querySelector("#scoreboard th:nth-child(5)").textContent = dm ? "Deaths" : "";
+    document.querySelector("#scoreboard th:nth-child(4)").textContent = koth ? "Hill" : dm ? "Kills" : "Hits";
+    document.querySelector("#scoreboard th:nth-child(5)").textContent = koth ? "Kills" : dm ? "Deaths" : "";
     mpEls.boardBody.innerHTML = rows.map((p, i) => {
       const hex = "#" + p.color.toString(16).padStart(6, "0");
       return '<tr class="' + (p.id === net.id ? "me" : "") + '"><td>' + (i + 1) + '</td><td><span class="dot" style="background:' + hex + '"></span>' +
-        esc(p.name) + "</td><td>" + p.score + "</td><td>" + p.kills + "</td><td>" + (dm ? p.deaths : "") + "</td></tr>";
+        esc(p.name) + "</td><td>" + p.score + "</td><td>" + (koth ? Math.floor(p.hill) : p.kills) + "</td><td>" + (koth ? p.kills : dm ? p.deaths : "") + "</td></tr>";
     }).join("");
     mpEls.boardFoot.textContent = results ? "Next round in " + Math.max(0, Math.ceil(net.resultsLeft)) + "s" : "";
   }
