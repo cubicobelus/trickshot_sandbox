@@ -1004,9 +1004,7 @@
       ["door", -5, -15, 1, 0], ["door", -5, 4.5, 1, 0], ["door", -5, 15, 1, 0], ["door", 5, -15, -1, 0], ["door", 5, -4.5, -1, 0], ["door", 5, 15, -1, 0],
     ],
     // a shuttle gliding across the street between the two tall roofs, and a lift beside each tall building
-    // launch strips on the low roofs: [x, z, direction x, direction z, width, length, height, lift]. They throw you over the street onto the tall roof
-    boosts: [[-12, -13.5, 0, 1, 3.5, 3.5, 6.5, 15], [12, 13.5, 0, -1, 3.5, 3.5, 6.5, 15]],
-    movers: [[0, 9.75, -3, 4, 4, "x", 4.2, 0.6, 0, "deck"], [-24, 5.1, -3, 3, 3, "y", 4.85, 0.5, 0, "deck"], [24, 5.1, 3, 3, 3, "y", 4.85, 0.5, 3.14, "deck"]],
+    movers: [[0, 9.75, -3, 4, 4, "x", 2.9, 0.6, 0, "deck"], [-23.5, 5, -3, 3, 3, "y", 4.75, 0.5, 0, "deck"], [23.5, 5, 3, 3, 3, "y", 4.75, 0.5, 3.14, "deck"]],
 
     walls: [
       // vents and crates on the roofs to take cover behind
@@ -1021,7 +1019,7 @@
     decks: [[0, 6.25, -18.5, 10, 3, "deck", true], [0, 6.25, 18.5, 10, 3, "deck", true]],
     // a ramp from each yard up to a low roof (the roof edge is at 6.5 m)
     ramps: [[-27, -18.5, "x", 4, 10, 6.25, 1], [27, -18.5, "x", 4, 10, 6.25, -1], [-27, 18.5, "x", 4, 10, 6.25, 1], [27, 18.5, "x", 4, 10, 6.25, -1]],
-    pads: [[0, -29, "normal"], [0, 29, "normal"], [-27, -7, "mega"], [-27, 7, "mega"], [27, -7, "mega"], [27, 7, "mega"]],
+    pads: [[0, -29, "normal"], [0, 29, "normal"], [-27, -7, "mega"], [-27, 7, "mega"], [27, -7, "mega"], [27, 7, "mega"], [-12, -12.3, "mega", 6.5], [12, 12.3, "mega", 6.5]],   // the last two sit on the low roofs: run off one to reach the tall roof
     // [x, z, facing x, facing z, bottom, top]: on the street walls up to each roof, and on the yard side of the tall buildings
     ladders: [
       [-5, -22, 1, 0, 0.25, 6.5], [-5, 0, 1, 0, 0.25, 10], [-5, 22, 1, 0, 0.25, 6.5],
@@ -1092,7 +1090,7 @@
     }
     for (const d of m.decks) addGround(d[0], d[1], d[2], d[3], d[4], d[5], d[6]);
     for (const r of m.ramps) addRamp(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
-    for (const p of m.pads) addJumpPad(p[0], FLOOR_Y, p[1], p[2]);
+    for (const p of m.pads) addJumpPad(p[0], p[3] === undefined ? FLOOR_Y : p[3], p[1], p[2]);   // [x, z, tier, height (default the floor)]
     for (const l of m.ladders || []) addLadder(l[0], l[1], l[2], l[3], l[4], l[5]);
     for (const d of m.decor || []) addDecor(d);
     for (const a of m.movers || []) addMover(a);
