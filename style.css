@@ -301,6 +301,9 @@
   #streak span { color: #7CFC00; font-weight: bold; font-size: 18px; }
 
   /* the live trick feed: what you are pulling off right now, down the left */
+  #range-info { position: absolute; top: 150px; left: 18px; font-size: 13px; color: #fff; background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 6px; line-height: 1.5; text-align: left; pointer-events: none; }
+  #range-info[hidden] { display: none; }
+  #range-info b { color: #ffd24a; }
   #trick-feed { position: absolute; left: 18px; top: 36%; pointer-events: none; display: flex; flex-direction: column; gap: 3px; z-index: 12; }
   #trick-feed .tf { font-size: 13px; font-weight: bold; letter-spacing: 1px; color: #ffe9a8; text-shadow: 0 1px 3px #000; animation: tf-fade 2.4s ease-out forwards; }
   #trick-feed #trick-chain { font-size: 15px; color: #ffd24a; min-height: 18px; }

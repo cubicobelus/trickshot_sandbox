@@ -91,7 +91,7 @@ runs the room, so the host has to keep their tab open. It is experimental and ha
 
 The **Multiplayer tab** has three choices: **Practice vs bots**, **Host a room** and **Join a room** (type the code). Practice and Host open a setup window with the mode cards, a map picker with a bigger preview, and a collapsed Rules section (first to, bots, bot level); it remembers your last choices, and the host can change the next round from the room. **Rules** also has match options the host can switch on: low gravity, one-shot kills, headshots only and fast respawn (the timer names any that are on).
 
-**Practice vs bots** (no internet needed): a deathmatch, team deathmatch or King of the Hill against 1 to 5 AI players on Easy, Medium or Hard. They run
+**Practice vs bots** (no internet needed): a deathmatch, team deathmatch or King of the Hill against 1 to 5 AI players on Easy, Medium or Hard. There is also a **Shooting range**: stationary dummies stand at 10 to 70 metres on a lane with distance boards, they never shoot back, heal fast and return after a kill, every hit shows its damage, and a corner box lists what your gun does. They run
 and strafe, use every gun with its real fire rate, reload, and take and deal the same damage as real players. Esc pauses it.
 
 To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `game.js`.

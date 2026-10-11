@@ -960,6 +960,18 @@
       water.rotation.x = -Math.PI / 2; water.scale.y = 0.7;
       water.position.set(d[1], FLOOR_Y + 0.04, d[2]);
       levelGroup.add(water);
+    } else if (kind === "sign") {   // ["sign", x, z, "text", direction it faces (1 = +x, -1 = -x)]: a distance board
+      const c = document.createElement("canvas"); c.width = 256; c.height = 128;
+      const g = c.getContext("2d");
+      g.fillStyle = "#22262b"; g.fillRect(0, 0, 256, 128);
+      g.strokeStyle = "#ffd24a"; g.lineWidth = 6; g.strokeRect(4, 4, 248, 120);
+      g.fillStyle = "#fff"; g.font = "bold 64px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(String(d[3]), 128, 68);
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+      board.position.set(d[1], FLOOR_Y + 2.4, d[2]); board.rotation.y = (d[4] || 1) > 0 ? Math.PI / 2 : -Math.PI / 2;
+      levelGroup.add(board);
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.4, 0.15), new THREE.MeshStandardMaterial({ color: 0x555d66 }));
+      post.position.set(d[1] - (d[4] || 1) * 0.12, FLOOR_Y + 1.2, d[2]);
+      levelGroup.add(post);
     } else if (kind === "door") {
       const frame = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.8), new THREE.MeshStandardMaterial({ color: 0x555d66, roughness: 0.8 }));
       const leaf = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.6), new THREE.MeshStandardMaterial({ color: 0x20252b, roughness: 0.7 }));
@@ -1107,6 +1119,21 @@
     playerSpawn: [0, 24],
   });
 
+  // Range: a long lane with distance boards, for the shooting range mode (dummies stand at rangeSpots)
+  defineMap({
+    id: "range", noRandom: true, name: "Range", blurb: "A long firing lane with distance boards every 10 metres. Used by the shooting range mode.",
+    half: 40, floor: "slab", wallH: 8, targetMaxY: 6,
+    theme: { skyTop: 0x6fa8e8, skyHorizon: 0xe8eef2, fog: [80, 240], sunDir: [30, 55, 10], sunColor: 0xfff6e8, sunIntensity: 1.0, hemi: [0xe6f0ff, 0x7d8288, 0.65],
+      surfaces: { slab: "#7d838b", concrete: "#9aa0a8", brick: "#8a6f5c", deck: "#838b95" } },
+    walls: [wallAt(-14, 0, 1, 76, 1.2, "concrete"), wallAt(14, 0, 1, 76, 1.2, "concrete"), wallAt(0, 33, 6, 1, 1.1, "concrete")],   // lane edges, and the firing line
+    decks: [], ramps: [], pads: [],
+    decor: [["sign", -13, 26, "10 m", 1], ["sign", 13, 26, "10 m", -1], ["sign", -13, 16, "20 m", 1], ["sign", 13, 16, "20 m", -1], ["sign", -13, 1, "35 m", 1], ["sign", 13, 1, "35 m", -1],
+      ["sign", -13, -14, "50 m", 1], ["sign", 13, -14, "50 m", -1], ["sign", -13, -34, "70 m", 1], ["sign", 13, -34, "70 m", -1]],
+    rangeSpots: [[0, 26], [-5, 16], [5, 1], [-4, -14], [4, -34]],
+    spawns: [[-6, 36], [-2, 36], [2, 36], [6, 36]],
+    playerSpawn: [0, 36],
+  });
+
   // Summit: a wooded valley around a stepped hill. The hill is where King of the Hill is played
   const plateau = (cx, cz, w, d, top) => ({ wall: [cx, (top - 0.5) / 2, cz, w, top - 0.5, d, "rock"], deck: [cx, top - 0.25, cz, w, d, "meadow", true] });
   const SUMMIT_TIERS = [plateau(0, 0, 44, 44, 3), plateau(0, 0, 26, 26, 6), plateau(0, 0, 10, 10, 9)];
@@ -1199,7 +1226,7 @@
   let currentMap = null;
   // "random" is a choice, never a map: it picks one of the real maps (a different one from the current map each time)
   function pickRandomMap(excludeId) {
-    const pool = MAP_ORDER.filter((i) => i !== excludeId);
+    const pool = MAP_ORDER.filter((i) => i !== excludeId && !MAPS[i].noRandom);
     return pool[Math.floor(Math.random() * pool.length)];
   }
   const resolveMapChoice = (choice) => (choice === "random" ? pickRandomMap(currentMap && currentMap.id) : choice);
@@ -5676,6 +5703,7 @@
   // (the deathmatch spawn points, SPAWNS, come from the map)
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
   function modeName() {
+    if (net.sub === "dm" && net.range) return "Shooting range";
     if (net.sub === "dm" && net.koth) return net.teams ? "Team King of the Hill" : "King of the Hill";
     return net.sub === "dm" && net.teams ? "Team Deathmatch" : SUB_NAMES[net.sub];
   }
@@ -5720,6 +5748,7 @@
     map: "arena", pendingMap: "arena",
     teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
     rules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false }, pendingRules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false },   // the host's match rules
+    range: false, pendingRange: false,   // the shooting range: dummies that stand still and never shoot back (practice only)
     koth: false, pendingKoth: false, hs: [0, -1], teamHill: [0, 0],   // King of the Hill: who holds the hill (0 empty, 1 held, 2 contested; who), and each team's time on it
     phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
     players: new Map(), ttOffset: 0, ttSynced: false,
@@ -5766,6 +5795,7 @@
     tdm: "Two teams, blue and red. 100 health, no friendly fire, and the team with the most kills (or the first to the kill limit) wins. Only kills score.",
     koth: "A hill with a ring on top. Stand alone on it to score a point a second; with someone else on it, nobody scores. First to the score wins (the first-to number times 5). Kills only clear the hill. It always plays on the map with a hill.",
     tkoth: "King of the Hill with two teams: your team scores while only your team is on the hill. Kills only clear the hill.",
+    range: "Stationary dummies stand at set distances and never shoot back. Every hit shows its damage, they heal fast and come back after a kill, and the corner shows what your gun does. Practice only.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
@@ -5783,6 +5813,7 @@
     net.pendingSub = value === "race" ? "race" : "dm";
     net.pendingTeams = value === "tdm" || value === "tkoth";
     net.pendingKoth = value === "koth" || value === "tkoth";
+    net.pendingRange = value === "range";
     net.pendingLimit = Math.max(0, Math.min(parseInt(limit, 10) || 0, 999));
   }
 
@@ -6481,27 +6512,30 @@
   }
 
   function hostRespawn(p) {
-    const s = pickSpawn(p.id);
+    const spots = currentMap.rangeSpots;
+    const s = net.range && p.bot && spots ? spots[Math.max(0, p.botIndex) % spots.length] : pickSpawn(p.id);
     p.alive = true; p.x = s[0]; p.y = 0.25; p.z = s[1];
     p.hp = 100; p.lastDamageAt = -1e9;
     if (p.bot) botReset(p, s);
-    p.protectUntil = net.sub === "dm" ? nowMs() + PROTECT_MS : 0;
+    p.protectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS : 0;
     hostBroadcast({ t: "respawn", id: p.id, pos: s });
   }
 
   function hostStartRound() {
     let mapId = net.pendingMap === "random" ? pickRandomMap(currentMap.id) : MAPS[net.pendingMap] ? net.pendingMap : "arena";
     if (net.pendingKoth && net.pendingSub !== "race" && !MAPS[mapId].hill) mapId = MAP_ORDER.find((i) => MAPS[i].hill) || mapId;   // King of the Hill needs a hill
+    if (net.pendingRange) mapId = "range";   // and the range is its own map
     net.map = mapId;
     loadMap(net.map);   // (does nothing if it is already the map)
     net.sub = net.pendingSub;
     net.teams = net.sub === "dm" && net.pendingTeams;
     net.koth = net.sub === "dm" && net.pendingKoth;
+    net.range = net.sub === "dm" && net.pendingRange;
     net.rules = cleanRules(net.pendingRules);
     applyRulePhysics();
     net.hs = [0, -1]; net.teamHill = [0, 0];
     updateHillVis();
-    net.limit = net.sub === "dm" ? net.pendingLimit : 0;
+    net.limit = net.sub === "dm" && !net.range ? net.pendingLimit : 0;
     let slot = 0;
     for (const q of net.players.values()) {   // teams: you with the first half of the bots in practice, otherwise alternating as people joined
       const was = q.color;
@@ -6511,7 +6545,7 @@
       ensureAvatar(q);
     }
     net.phase = "play";
-    net.left = ROUND_SECONDS;
+    net.left = net.range ? 3599 : ROUND_SECONDS;
     net.resultsLeft = 0;
     for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.heads = 0; p.dmg = 0; p.best = 0; p.streak = 0; p.bstreak = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
     if (net.sub === "race") for (const t of targets) { respawnTarget(t); t.userData.respawnTimer = 1.1; }
@@ -6617,7 +6651,7 @@
     if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
     v.hp = 0;
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
-    v.alive = false; v.deaths++; v.respawnAt = nowMs() + (rules.fastResp ? 1000 : RESPAWN_MS);
+    v.alive = false; v.deaths++; v.respawnAt = nowMs() + (rules.fastResp ? 1000 : net.range ? 1200 : RESPAWN_MS);
     p.kills++; p.score += pts;
     if (info.head) p.heads++;
     p.best = Math.max(p.best, pts); p.streak++; p.bstreak = Math.max(p.bstreak, p.streak); v.streak = 0;
@@ -6746,7 +6780,8 @@
       if (net.koth) hostHillTick(dt);
       for (const p of net.players.values()) if (!p.alive && now >= p.respawnAt) hostRespawn(p);
       for (const p of net.players.values()) {   // slow healing, only once they've stayed out of the fight
-        if (p.alive && p.hp < 100 && now - p.lastDamageAt > REGEN_DELAY && now - p.lastFireAt > REGEN_DELAY) p.hp = Math.min(100, p.hp + REGEN_PER_SEC * dt);
+        const regenDelay = net.range ? 1500 : REGEN_DELAY;
+        if (p.alive && p.hp < 100 && now - p.lastDamageAt > regenDelay && now - p.lastFireAt > regenDelay) p.hp = Math.min(100, p.hp + (net.range ? 80 : REGEN_PER_SEC) * dt);
       }
     }
 
@@ -6796,6 +6831,7 @@
   };
   // hop: hops a second while strafing in a fight
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
+  BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
   const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14 };   // the distance each gun likes to fight at
   const BOT_RELOAD = 2.3;
   const _botRay = new THREE.Ray(), _botHit = new THREE.Vector3(), _botPos = new THREE.Vector3(), _botFrom = new THREE.Vector3();
@@ -6817,7 +6853,7 @@
     ai.gun = GUNS[Math.floor(Math.random() * GUNS.length)];
     p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
     ai.ammo = WEAPONS[ai.gun].magSize; ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
-    ai.aimYaw = p.yaw = Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;
+    ai.aimYaw = p.yaw = net.range ? Math.PI : Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;   // (a dummy faces the firing line)
     ai.vy = 0; ai.path = []; ai.pi = 0; ai.repath = 0; ai.climb = null; ai.perch = null; ai.perchWait = 6 + Math.random() * 14;
   }
 
@@ -7215,7 +7251,7 @@
 
   function mpBots() {
     const count = Math.max(1, Math.min(setup.practice.bots, MAX_PLAYERS - 1));
-    const level = setup.practice.level;
+    const level = setup.practice.mode === "range" ? "dummy" : setup.practice.level;
     chooseMode(setup.practice.mode, setup.practice.limit); chooseMap(setup.practice.map); chooseRules(setup.practice.rules); net.id = "you"; net.practice = true; net.botCount = count;
     mpEnter("host", "BOTS");
     net.lastTick = nowMs();
@@ -7237,6 +7273,7 @@
     { id: "tdm", name: "Team Deathmatch", short: "Blue against red" },
     { id: "koth", name: "King of the Hill", short: "Hold the hilltop alone", hill: true },
     { id: "tkoth", name: "Team King of the Hill", short: "Your team holds the hill", hill: true },
+    { id: "range", name: "Shooting range", short: "Dummies at set distances: every hit shows its damage", host: false },
   ];
   const modeById = (id) => MODES.find((m) => m.id === id) || MODES[1];
   const LIMITS = [5, 10, 15, 25, 50, 0];
@@ -7263,13 +7300,13 @@
   function saveSetup() { try { localStorage.setItem(SETUP_KEY, JSON.stringify(setup)); } catch (e) { /* ignore */ } }
   const mapNameOf = (id) => (id === "random" ? "Random map" : MAPS[id] ? MAPS[id].name : "Arena");
   const hillMapId = () => MAP_ORDER.find((i) => MAPS[i].hill);
-  const limitText = (mode, limit) => (mode.id === "race" ? "" : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
+  const limitText = (mode, limit) => (mode.id === "race" || mode.id === "range" ? "" : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
   function refreshMpCards() {   // the two big buttons remind you what they will start
     const p = setup.practice, h = setup.host, pm = modeById(p.mode), hm = modeById(h.mode);
     document.getElementById("mp-card-practice-sub").textContent = pm.name + " \u00b7 " + mapNameOf(p.map) + " \u00b7 " + p.bots + " bot" + (p.bots === 1 ? "" : "s") + " (" + p.level + ")";
     document.getElementById("mp-card-host-sub").textContent = hm.name + " \u00b7 " + mapNameOf(h.map);
   }
-  function pendingModeValue() { return net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
+  function pendingModeValue() { return net.pendingRange ? "range" : net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
   function refreshLobbyLine() {   // in a hosted room: what the next round will be
     if (!mpEls.nextLine) return;
     const m = modeById(pendingModeValue());
@@ -7280,8 +7317,10 @@
   const psEl = document.getElementById("play-setup");
   let ps = null;   // { kind: "practice" | "host" | "room", draft }
   const isKothMode = (id) => !!modeById(id).hill;
-  function fixHillMap() {   // King of the Hill is only played where there is a hill
+  function fixHillMap() {   // King of the Hill is only played where there is a hill, and the range on the range
     const d = ps.draft;
+    if (d.mode === "range") { d.map = "range"; return; }
+    if (d.map === "range") d.map = "arena";
     if (isKothMode(d.mode) && !(MAPS[d.map] && MAPS[d.map].hill)) d.map = hillMapId() || d.map;
   }
   function openSetup(kind) {
@@ -7301,6 +7340,7 @@
     modesEl.textContent = "";
     for (const m of MODES) {
       if (ps.kind === "practice" && m.practice === false) continue;   // a score race needs real people
+      if (ps.kind !== "practice" && m.host === false) continue;   // and the range is for practice
       const b = document.createElement("button");
       b.type = "button"; b.className = "ps-card" + (m.id === d.mode ? " active" : ""); b.dataset.mode = m.id;
       b.innerHTML = "<b>" + m.name + "</b><span>" + m.short + "</span>";
@@ -7312,8 +7352,9 @@
     const mapsEl = document.getElementById("ps-maps");
     mapsEl.textContent = "";
     for (const id of MAP_ORDER.concat(["random"])) {
+      if (id === "range" && mode.id !== "range") continue;   // the range is only for the range mode
       const b = document.createElement("button");
-      const off = isKothMode(d.mode) && !(MAPS[id] && MAPS[id].hill);
+      const off = (isKothMode(d.mode) && !(MAPS[id] && MAPS[id].hill)) || (mode.id === "range" && id !== "range");
       b.type = "button"; b.dataset.map = id; b.className = (id === d.map ? "active" : "") + (off ? " off" : "");
       const c = document.createElement("canvas"); c.width = c.height = 64;
       if (id === "random") { const g = c.getContext("2d"); g.fillStyle = "#1c1d22"; g.fillRect(0, 0, 64, 64); g.fillStyle = "#ffd24a"; g.font = "bold 36px sans-serif"; g.textAlign = "center"; g.fillText("?", 32, 46); }
@@ -7329,18 +7370,20 @@
     document.getElementById("ps-map-note").textContent = d.map === "random" ? "A different map each round." : MAPS[d.map].blurb;
     // the rules
     const limitRow = document.getElementById("ps-limit-row");
-    limitRow.hidden = mode.id === "race";
+    limitRow.hidden = mode.id === "race" || mode.id === "range";
     document.getElementById("ps-limit").value = String(d.limit);
     document.getElementById("ps-limit-unit").textContent = mode.hill ? "(times 5 seconds on the hill" + (d.limit ? ": " + d.limit * 5 + " s)" : ")") : "kills";
-    document.getElementById("ps-bots-row").hidden = document.getElementById("ps-level-row").hidden = ps.kind !== "practice";
+    document.getElementById("ps-bots-row").hidden = ps.kind !== "practice";
+    document.getElementById("ps-level-row").hidden = ps.kind !== "practice" || mode.id === "range";
+    document.getElementById("ps-bots-label").textContent = mode.id === "range" ? "Dummies" : "Bots";
     if (ps.kind === "practice") { document.getElementById("ps-bots").value = String(d.bots); document.getElementById("ps-level").value = d.level; }
-    const race = mode.id === "race";   // (a score race has no fighting: only gravity matters)
+    const race = mode.id === "race" || mode.id === "range";   // (no fighting there: only gravity matters)
     for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"]]) {
       document.getElementById(id).checked = !!d.rules[key];
       if (key !== "lowGrav") document.getElementById(id).parentElement.hidden = race;
     }
     const sum = [limitText(mode, d.limit)];
-    if (ps.kind === "practice") sum.push(d.bots + " bot" + (d.bots === 1 ? "" : "s"), d.level);
+    if (ps.kind === "practice") sum.push(mode.id === "range" ? d.bots + " dummies" : d.bots + " bot" + (d.bots === 1 ? "" : "s"), mode.id === "range" ? "" : d.level);
     if (ruleText(d.rules)) sum.push(ruleText(d.rules));
     document.getElementById("ps-rules-sum").textContent = sum.filter(Boolean).join(" \u00b7 ");
     document.getElementById("ps-go").textContent = ps.kind === "practice" ? "Start practice" : ps.kind === "host" ? "Create room" : "Use for the next round";
@@ -7591,6 +7634,22 @@
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
     mpEls.roomMode.textContent = modeName();
     updateKothBar();
+    updateRangeInfo();
+  }
+  // the shooting range: what the gun in your hand does, in the corner
+  const rangeInfoEl = document.getElementById("range-info");
+  let rangeInfoFor = "";
+  function updateRangeInfo() {
+    const on = net.active && net.range && net.phase === "play";
+    rangeInfoEl.hidden = !on;
+    if (!on || rangeInfoFor === vm.current) return;
+    rangeInfoFor = vm.current;
+    const id = vm.current, w = WEAPONS[id], d = DAMAGE[id];
+    let html = "<b>" + (w ? w.name : id) + "</b><br>";
+    if (d && d.pellet) html += "per pellet " + d.pellet + " (" + Math.round(d.pellet * d.headMult) + " head) \u00b7 " + d.pellets + " pellets<br>full damage to " + d.near + " m, " + Math.round(d.farMult * 100) + "% by " + d.far + " m";
+    else if (d) html += "body " + d.body + " \u00b7 head " + d.head + "<br>" + Math.ceil(100 / d.body) + " body hit" + (Math.ceil(100 / d.body) === 1 ? "" : "s") + " or " + Math.ceil(100 / d.head) + " head hit" + (Math.ceil(100 / d.head) === 1 ? "" : "s") + " to kill";
+    else if (id === "knife") html += "swing " + KNIFE_SWING_DMG + " \u00b7 throw " + KNIFE_THROW_DMG;
+    rangeInfoEl.innerHTML = html;
   }
 
   // King of the Hill: a bar across the top. Teams fill in from their own side towards the middle; alone, it is your own progress
