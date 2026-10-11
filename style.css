@@ -149,6 +149,12 @@
   /* the crosshair is an SVG drawn from the settings; colour comes from `color` */
   #crosshair { color: #eee; }
   #crosshair.hit { color: #ff3b3b !important; }
+  .xh-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+  /* the other hit markers: an X or a ring that pops at the crosshair */
+  #hitmark { position: absolute; top: 50%; left: 50%; width: 0; height: 0; pointer-events: none; opacity: 0; z-index: 11; }
+  #hitmark svg { position: absolute; left: -14px; top: -14px; overflow: visible; }
+  #hitmark.show { animation: hitpop 0.22s ease-out; }
+  @keyframes hitpop { 0% { opacity: 1; transform: scale(0.6); } 100% { opacity: 0; transform: scale(1.5); } }
   #crosshair svg, .xh-preview svg { display: block; overflow: visible; }
 
   #hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }

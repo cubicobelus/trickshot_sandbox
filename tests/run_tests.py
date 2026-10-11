@@ -398,6 +398,25 @@ def test_bots(browser, base):
     page.close()
 
 
+def test_crosshair(browser, base):
+    """Crosshair presets and the hit-marker style apply, and survive a reload; the new achievements are listed."""
+    page, errors = open_page(browser, base + "/index.html")
+    click_tab(page, "crosshair")
+    names = page.eval_on_selector_all("#xh-presets button", "els => els.map(e => e.textContent)")
+    check("the crosshair tab offers presets", len(names) >= 5, ", ".join(names))
+    page.click('#xh-presets button:has-text("Ring")')
+    page.select_option("#hit-style", "x")
+    page.reload()
+    page.wait_for_timeout(300)
+    click_tab(page, "crosshair")
+    now = page.evaluate("[document.getElementById('xh-style').value, document.getElementById('hit-style').value]")
+    check("a preset and the hit-marker style survive a reload", now == ["circle", "x"], str(now))
+    count = page.evaluate("document.getElementById('ach-count').textContent")
+    check("the achievements include the map and King of the Hill ones", int(count.split("/")[1]) >= 36, count)
+    check("crosshair and achievements run without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_maps(browser, base):
     """Every map builds, shows up in the picker, and can be played with bots."""
     page, errors = open_page(browser, base + "/index.html")
@@ -487,7 +506,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_maps, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_maps, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:

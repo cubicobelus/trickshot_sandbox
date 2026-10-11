@@ -38,7 +38,7 @@ score as much as you can; Esc pauses the clock, and your top 5 runs are kept in 
 **Stats:** the Stats button in the menu shows your lifetime numbers: play time, accuracy, records (longest
 shot, highest multiplier, top speed...), each gun, targets by colour, movement, and how often you've landed
 each trick. **Achievements** (also in the menu) are goals to chase, from your first hit to a 720 no-scope
-or a 100x shot. Both are kept in your browser. **Settings > Gameplay > Erase all data** wipes everything
+or a 100x shot, plus ones for the map features (portals, launch strips, lifts, ladders, the Summit hilltop) and King of the Hill. Both are kept in your browser. **Settings > Gameplay > Erase all data** wipes everything
 the game has saved and starts you over.
 
 **Replays:** every hit is recorded. The menu's **Watch best trickshot** and **Watch last hit** buttons (and
@@ -66,7 +66,7 @@ Targets come in four kinds: red (standard, still), orange (always moving), blue 
 purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
 
 Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo and so on) are saved in your
-browser. **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
+browser. **Settings > Crosshair** has ready-made presets you can fine-tune, and a hit-marker style (a crosshair flash, an X, a ring or none). **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
 Call of Duty, so the same hand movement turns you the same amount here. **Settings > View > Graphics** trades looks for speed
 (Auto steps down by itself if the game runs slow), and **Show FPS** puts a frame counter in the corner. **Realistic shooting** (Settings > Gameplay; on by default in every mode) makes shots spread the faster you move, up to 10 u/s, and more in the air. Standing still is
 perfectly accurate, crouching tames recoil, and the sniper has a little spread when it isn't scoped. Turn it off for perfectly accurate shots, but every shot is then worth half (an UNREALISTIC x0.50 penalty).

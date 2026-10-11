@@ -192,7 +192,7 @@
     realisticShooting: true,   // shots spread while moving or airborne, and the unscoped sniper isn't laser-accurate (every mode)
     autoSprint: false,          // sprint whenever you move; Shift walks instead   // shots spread mid-jump, and the unscoped sniper isn't laser-accurate
     // crosshair
-    xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false,
+    xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
     quality: "auto", showFps: false, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
@@ -677,7 +677,8 @@
     movers.push({ mesh, box: wallBoxes[wallBoxes.length - 1], base: new THREE.Vector3(a[0], a[1], a[2]), axis: a[5], range: a[6], speed: a[7], phase: a[8] || 0 });
   }
   function updateMovers() {
-    if (!movers.length) return;
+    if (!movers.length) { player.onMover = false; return; }
+    let onAny = false;
     const clock = net.active ? mpTargetClock() : elapsedTime;
     for (const mv of movers) {
       const off = Math.sin(clock * mv.speed + mv.phase) * mv.range;
@@ -690,8 +691,9 @@
       ud.cx = nx; ud.cz = nz; ud.topY = ny + 0.25;
       mv.mesh.updateMatrixWorld(true);
       mv.box.setFromObject(mv.mesh);
-      if (riding) { yawObject.position.x += nx - ox; yawObject.position.z += nz - oz; yawObject.position.y += ny - oy; player.feetY += ny - oy; }
+      if (riding) { onAny = true; yawObject.position.x += nx - ox; yawObject.position.z += nz - oz; yawObject.position.y += ny - oy; player.feetY += ny - oy; }
     }
+    player.onMover = onAny;
   }
 
   // ---- portals: walk into one end and come out of the other, still going the way you were (keeps your speed) ----
@@ -726,7 +728,7 @@
       yawObject.position.x = Q.x + Q.nx * 1.05; yawObject.position.z = Q.z + Q.nz * 1.05;
       yawObject.rotation.y += phi; player.lastYaw = yawObject.rotation.y;
       player.velocity.x = vx * c + vz * sn; player.velocity.z = vz * c - vx * sn;
-      player.portalCool = 0.6;
+      player.portalCool = 0.6; player.lastPortalAt = elapsedTime; stat("portals");
       releaseHook(0);
       burst(_gStart.set(Q.x, FLOOR_Y + 1.5, Q.z), 0xffb070, 10);
       playSfx("jumpPad", 0.5, 1.5, 0.2, "volMove");
@@ -762,7 +764,7 @@
       player.velocity.x = b.dx * CFG.maxSpeed; player.velocity.z = b.dz * CFG.maxSpeed;   // instantly at top speed, whatever you were doing
       player.velocity.y = b.pop;
       player.onGround = false; player.sliding = false; player.launch = "pad"; player.groundRise = 0;
-      player.boostCool = 0.5;
+      player.boostCool = 0.5; player.lastBoostAt = elapsedTime;
       playSfx("jumpPad", 0.6, 1.4, 0.1, "volMove");
       return;
     }
@@ -3425,6 +3427,24 @@
   });
   showSensImport();
 
+  // ready-made crosshairs: each one sets every crosshair setting, and they can still be fine-tuned
+  const XH_PRESETS = {
+    "Classic": { xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false },
+    "Gap cross": { xhStyle: "cross", xhColor: "#7cfc00", xhSize: 7, xhThick: 2, xhGap: 4, xhAlpha: 1, xhOutline: true },
+    "Tiny": { xhStyle: "cross", xhColor: "#eeeeee", xhSize: 4, xhThick: 1.5, xhGap: 2, xhAlpha: 0.9, xhOutline: true },
+    "Big cross": { xhStyle: "cross", xhColor: "#22d3ee", xhSize: 16, xhThick: 2, xhGap: 3, xhAlpha: 1, xhOutline: false },
+    "Dot": { xhStyle: "dot", xhColor: "#ffffff", xhSize: 9, xhThick: 4, xhGap: 0, xhAlpha: 1, xhOutline: true },
+    "Ring": { xhStyle: "circle", xhColor: "#ffd24a", xhSize: 10, xhThick: 1.5, xhGap: 0, xhAlpha: 1, xhOutline: true },
+    "T": { xhStyle: "t", xhColor: "#ff4fd8", xhSize: 8, xhThick: 2, xhGap: 2, xhAlpha: 1, xhOutline: false },
+  };
+  const xhPresetsEl = document.getElementById("xh-presets");
+  for (const [name, vals] of Object.entries(XH_PRESETS)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn small"; b.textContent = name;
+    b.addEventListener("click", () => { Object.assign(SETTINGS, vals); refreshSettingsUI(); });
+    xhPresetsEl.appendChild(b);
+  }
+
   // quick colour picks next to the colour input
   const swatchesEl = document.getElementById("xh-swatches");
   for (const c of ["#eeeeee", "#7cfc00", "#22d3ee", "#ffd24a", "#ff4fd8", "#ff3b3b"]) {
@@ -3956,7 +3976,7 @@
     wallImpactSpeed: 0, wallImpactAt: -99,   // the last time a wall stopped us, and how fast we hit it
     viewRoll: 0,
     ladder: null, ladderCool: 0,   // the ladder being climbed
-    portalCool: 0, boostCool: 0,
+    portalCool: 0, boostCool: 0, lastPortalAt: -99, lastBoostAt: -99, onMover: false,   // (the last three are for achievements)
     hook: null,      // { anchor, len, flying, pos, dir } from the moment the hook is fired
     grappleWant: false,   // the grapple is out (or coming out) in the hand
     grappleCooldown: 0, grappleCooldownMax: 1, lastGrappleAt: -99, grappleWasHeld: false,
@@ -4638,7 +4658,22 @@
     clearTimeout(bonusTagsTimer);
     bonusTagsTimer = setTimeout(() => bonusTagsEl.classList.remove("show"), 4000);
   }
+  // your hit landed: the crosshair flashes red, or an X or a ring pops at it (Settings > Crosshair > Hit marker)
+  const hitmarkEl = document.getElementById("hitmark");
+  const HIT_MARKS = {
+    x: '<svg width="28" height="28" viewBox="-14 -14 28 28"><path d="M-9 -9L-3 -3M9 -9L3 -3M-9 9L-3 3M9 9L3 3" stroke="#ff3b3b" stroke-width="3" stroke-linecap="round" fill="none"/></svg>',
+    ring: '<svg width="28" height="28" viewBox="-14 -14 28 28"><circle r="9" stroke="#ff3b3b" stroke-width="2.5" fill="none"/></svg>',
+  };
   function flashCrosshair() {
+    const style = SETTINGS.hitStyle;
+    if (style === "off") return;
+    if (HIT_MARKS[style]) {
+      hitmarkEl.innerHTML = HIT_MARKS[style];
+      hitmarkEl.classList.remove("show");
+      void hitmarkEl.offsetWidth;   // restart the animation if hits come quickly
+      hitmarkEl.classList.add("show");
+      return;
+    }
     crosshairEl.classList.add("hit");
     setTimeout(() => crosshairEl.classList.remove("hit"), 100);
   }
@@ -5996,6 +6031,7 @@
         net.phase = m.phase; net.resultsLeft = m.rl || 0;
         if (m.phase === "results") { mpEls.dead.hidden = true; mouseHeld = false; endSpectate(); }
         syncPlayers(m.p);
+        if (m.phase === "results") achKothResult();
         mpRefreshHud();
         break;
 
@@ -7183,6 +7219,9 @@
     updateAvatars(dt);
     updateSpectate(dt);
     updateDamageNumbers(dt);
+    // time on the hill (alone, or with only your team) counts toward an achievement
+    const me = localPlayer();
+    if (net.koth && net.phase === "play" && me && net.hs[0] === 1 && net.hs[1] === (net.teams ? me.team : net.id)) stat("hillTime", dt);
     mpUiTimer -= dt;
     if (mpUiTimer <= 0) {
       mpUiTimer = 0.25;
@@ -7199,7 +7238,7 @@
   const STATS_KEY = "tsb-stats";
   const STAT_NUMBERS = ["time", "points", "hits", "shots", "shotsHit", "knifeSwingHits", "knifeThrows", "knifeThrowHits",
     "longestShot", "bestMult", "longestStreak", "bestCombo", "topSpeed", "distance", "jumps", "wallBounces",
-    "perfectBounces", "slides", "padLaunches", "runs", "bhops", "grapples"];
+    "perfectBounces", "slides", "padLaunches", "runs", "bhops", "grapples", "portals", "hillTime"];
   function freshStats() {
     const s = { since: new Date().toISOString().slice(0, 10), kinds: {}, guns: {}, tricks: {} };
     for (const k of STAT_NUMBERS) s[k] = 0;
@@ -7369,6 +7408,15 @@
     { id: "bounce100", group: "Grind", name: "Off the Walls", desc: "100 perfect wall bounces.", goal: 100, progress: () => stats.perfectBounces },
     { id: "grapple25", group: "Grind", name: "Spider-Man", desc: "Land 25 grapples.", goal: 25, progress: () => stats.grapples },
     { id: "marathon", group: "Grind", name: "Marathon", desc: "Travel 10 km.", goal: 10000, progress: () => stats.distance, unit: "m" },
+    { id: "portalshot", group: "Maps", name: "Portal Shot", desc: "Hit a target within a moment of coming out of a portal.", hit: () => elapsedTime - player.lastPortalAt < 2.5 },
+    { id: "portal25", group: "Maps", name: "Portal Hopper", desc: "Go through a portal 25 times.", goal: 25, progress: () => stats.portals },
+    { id: "launchshot", group: "Maps", name: "Launch Control", desc: "Hit a target within a moment of leaving a launch strip.", hit: () => elapsedTime - player.lastBoostAt < 2.5 },
+    { id: "moonhang", group: "Maps", name: "Moon Walker", desc: "Land a HANG TIME shot on Moonbase.", hit: (h) => !!currentMap && currentMap.id === "moonbase" && has(h, "HANG TIME") },
+    { id: "liftshot", group: "Maps", name: "Elevator Pitch", desc: "Hit a target while riding a lift or the shuttle.", hit: () => player.onMover },
+    { id: "ladderhit", group: "Maps", name: "Top Rung", desc: "Hit a target while on a ladder.", hit: () => !!player.ladder },
+    { id: "summit", group: "Maps", name: "Summit Climber", desc: "Reach the top of the hill on Summit.", reached: true },
+    { id: "hillhold", group: "King of the Hill", name: "Hill Holder", desc: "Hold the hill for 60 seconds in total.", goal: 60, progress: () => stats.hillTime, unit: "s" },
+    { id: "kothwin", group: "King of the Hill", name: "King of the Hill", desc: "Win a King of the Hill round.", reached: true },
   ];
   let achDone = {};
   try {
@@ -7399,6 +7447,20 @@
     const h = { res, kind, isKnife, thrown, dist, mult: res.mult, tags: res.tags.concat(res.pens || []).map((t) => trickKey(t) || t.replace(/ x[\d.]+$/, "")) };
     for (const a of ACHIEVEMENTS) if (a.hit && !achDone[a.id] && a.hit(h)) unlock(a);
     achProgress();
+  }
+  // the ones with no check of their own: something else calls unlock() for them
+  function achReach(id) { const a = ACHIEVEMENTS.find((x) => x.id === id); if (a && !achDone[id]) unlock(a); }
+  function achSummitCheck() {   // standing on the hilltop of a map that has one
+    const h = currentMap && currentMap.hill;
+    if (!h || achDone.summit || !player.onGround) return;
+    if (Math.hypot(yawObject.position.x - h.x, yawObject.position.z - h.z) <= h.r && Math.abs(player.feetY - h.y) < 0.6) achReach("summit");
+  }
+  function achKothResult() {   // the round just ended: did I win it?
+    const me = localPlayer();
+    if (!net.koth || !me) return;
+    const won = net.teams ? (me.team === 0 ? net.teamHill[0] > net.teamHill[1] : net.teamHill[1] > net.teamHill[0])
+      : me.hill > 0 && [...net.players.values()].every((p) => p === me || p.hill < me.hill);
+    if (won) achReach("kothwin");
   }
   function achRun(r) { for (const a of ACHIEVEMENTS) if (a.run && !achDone[a.id] && a.run(r)) unlock(a); }
   function achProgress() { for (const a of ACHIEVEMENTS) if (a.goal && !achDone[a.id] && a.progress() >= a.goal) unlock(a); }
@@ -8355,6 +8417,7 @@
       if ((player.hook || player.grappleWant) && (!pointerLocked || localDead || run.state === "countdown")) releaseHook(0);
       updateMovers();
       if (pointerLocked && !localDead && run.state !== "countdown") updatePlayer(dt);
+      achSummitCheck();
       updateProps(dt);
       updateParticles(dt);
       updateTracers(dt);

@@ -128,6 +128,7 @@
     <div class="dot"></div>
   </div></div>
   <div id="crosshair"></div>
+  <div id="hitmark"></div>
   <div id="speed">
     Speed: <span id="speed-val">0</span> u/s <span class="state" id="state-val"></span>
     <div id="speedbar"><div id="speedbar-fill"></div></div>
@@ -305,6 +306,7 @@
 
       <div class="spanel" data-panel="crosshair" hidden>
         <div class="xh-preview" id="xh-preview"></div>
+        <div class="xh-presets" id="xh-presets" title="Pick a ready-made crosshair, then fine-tune it below"></div>
         <div class="slider-row">
           <label for="xh-style">Style</label>
           <select id="xh-style" data-setting="xhStyle">
@@ -342,6 +344,15 @@
         </div>
         <div class="check-row">
           <label><input type="checkbox" id="xh-outline" data-setting="xhOutline">Black outline</label>
+        </div>
+        <div class="slider-row">
+          <label for="hit-style">Hit marker</label>
+          <select id="hit-style" data-setting="hitStyle">
+            <option value="flash">Crosshair flash</option>
+            <option value="x">X marker</option>
+            <option value="ring">Ring</option>
+            <option value="off">None</option>
+          </select>
         </div>
       </div>
 
