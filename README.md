@@ -22,7 +22,7 @@ unzip, and open `index.html`. No internet connection is needed.
 **Controls:** WASD move, Space jump, Shift sprint (or walk, with Auto sprint on in Settings > Gameplay), Ctrl slide
 (when moving faster than a walk; slower, Ctrl crouch-walks), E grappling hook (tap it at a wall, the floor or a target to zip
 there; tap again or jump to let go), R reload, F inspect, P replay last hit, hold M for the map, hold L for the leaderboard (Tab does the same in a room), left click attack,
-right click aim (scope on the sniper, sights on the others) or throw (knife),
+right click aim down the sights (iron sights, or the scope or red dot if one is fitted) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
 Playing goes fullscreen and locks keys like W, T and N away from the browser (Chrome and Edge), so Ctrl+W can't close the tab; turn that off in Settings > Gameplay. Every one of these can be changed in **Settings > Controls**: each action has two boxes, and a box takes a key, a
 mouse button (left, right, middle, back, forward) or a wheel direction. Esc, Tab and Enter stay fixed for the menus. A **gamepad** works too (click the game once to start, since a browser won't start the mouse capture from a controller): left stick moves, right stick looks, A jump, B slide, X reload, Y swap gun and knife, LB grapple, RB knife, LT aim, RT fire, stick click sprint, Select the leaderboard, D-pad left the map, Start the menu; the look speed is in Settings > Controls.
@@ -48,7 +48,7 @@ hit (P again to carry on). Your best trickshot's replay is kept in your browser.
 saves it as a .webm you can post anywhere, and **Save card** (also in the menu and on the results screen) makes a picture of your best shot: the map with the shot drawn on it, the points and every trick.
 
 **Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too. **Attachments** (the button under the loadout) add scopes, a red dot, suppressors, brakes, grips, magazines, a choke or a laser to each gun. Every one is a trade (a suppressor is quiet but kicks a bit more, a high-zoom scope is slower to aim, an extended magazine reloads slower), and each unlocks once you have landed enough hits with that gun (15 to 120; a kill online counts as a hit). They show on your gun and on other players' guns.
-1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns
+1 is the gun, 2 the knife. The sniper comes with iron sights; fit a low- or high-zoom scope from Attachments. Its no-scope (a hit from the hip) and quickscope (a hit just after aiming in) bonuses are its own, and the other guns
 score less per hit so trickshots stay king. Shots that land on a wall, platform or the floor leave bullet holes (switch them off in Settings > View).
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (press jump just as you land) and
@@ -70,7 +70,7 @@ Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo an
 browser. **Settings > Crosshair** has ready-made presets you can fine-tune, and a hit-marker style (a crosshair flash, an X, a ring or none). **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
 Call of Duty, so the same hand movement turns you the same amount here. **Settings > View > Graphics** trades looks for speed
 (Auto steps down by itself if the game runs slow), and **Show FPS** puts a frame counter in the corner. **Realistic shooting** (Settings > Gameplay; on by default in every mode) makes shots spread the faster you move, up to 10 u/s, and more in the air. Standing still is
-perfectly accurate, crouching tames recoil, and the sniper has a little spread when it isn't scoped. Turn it off for perfectly accurate shots, but every shot is then worth half (an UNREALISTIC x0.50 penalty).
+perfectly accurate, crouching tames recoil, and the sniper has a little spread from the hip. Turn it off for perfectly accurate shots, but every shot is then worth half (an UNREALISTIC x0.50 penalty).
 
 ## Multiplayer
 

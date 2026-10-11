@@ -215,8 +215,8 @@
   const SETTINGS = {
     sensX: 1.0, sensY: 1.0, scopedSensMult: 0.35, volume: 0.55,
     unlimitedAmmo: false, mouseAccel: false, accelStrength: 0.7,
-    realisticShooting: true,   // shots spread while moving or airborne, and the unscoped sniper isn't laser-accurate (every mode)
-    autoSprint: false,          // sprint whenever you move; Shift walks instead   // shots spread mid-jump, and the unscoped sniper isn't laser-accurate
+    realisticShooting: true,   // shots spread while moving or airborne, and the sniper from the hip isn't laser-accurate (every mode)
+    autoSprint: false,          // sprint whenever you move; Shift walks instead
     // crosshair
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
@@ -4083,7 +4083,7 @@
       k(move.every((l) => l.length === 1) ? move.join("") : move.join(" ")) + " move" + dot + k(L("jump")) + " jump" + dot +
       k(L("sprint")) + " sprint" + dot + k(L("slide")) + " slide" + dot + k(L("reload")) + " reload" + dot +
       k(L("inspect")) + " inspect" + dot + k(L("grapple")) + " grapple" + dot + k(L("replay")) + " replay last hit<br>" +
-      k(L("fire")) + " attack" + dot + k(L("aim")) + " scope / throw knife" + dot + k(gunKnife) + " gun / knife";
+      k(L("fire")) + " attack" + dot + k(L("aim")) + " aim / throw knife" + dot + k(gunKnife) + " gun / knife";
     loadoutWeapons().forEach((w, i) => {
       const el = hotbarSlots[w] && hotbarSlots[w].querySelector(".num");
       if (el) el.textContent = hotbarKey(i === 0 ? "gun" : "knife");
