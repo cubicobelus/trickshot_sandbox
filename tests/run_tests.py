@@ -434,6 +434,12 @@ def test_crosshair(browser, base):
     step(page, 3)
     off = page.evaluate("document.getElementById('map-popup').hidden")
     check("holding M in a game shows the map, and letting go hides it", live and off, f"{live} {off}")
+    page.keyboard.down("KeyL")
+    step(page, 3)
+    rec = page.evaluate("[!document.getElementById('scoreboard').hidden, document.getElementById('sb-title').textContent]")
+    page.keyboard.up("KeyL")
+    step(page, 3)
+    check("holding L on your own shows your records for the map", rec[0] and rec[1].startswith("Records"), str(rec))
     check("crosshair and achievements run without errors", not errors, "; ".join(errors[:2]))
     page.close()
 
@@ -446,6 +452,9 @@ def test_maps(browser, base):
     for mid in ids:
         page.click(f'#map-picker button[data-map="{mid}"]')
         page.wait_for_timeout(150)
+        if page.evaluate("!document.getElementById('map-popup').hidden"):   # clicking the chosen map again opens the bigger map
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(100)
         page.click("#start-btn")
         step(page, 90)
         page.evaluate("__unlock()")
@@ -472,7 +481,14 @@ def test_maps(browser, base):
     page.click("#mp-play-btn")
     step(page, 200)
     label = page.inner_text("#mp-timer-mode") if page.query_selector("#mp-timer-mode") else ""
-    check("King of the Hill: starts on the hill map and shows the hill in the timer", "king of the hill" in label.lower() and "hill empty" in label.lower() or "holds the hill" in label.lower() or "contested" in label.lower(), label)
+    bar = page.evaluate("!document.getElementById('koth-bar').hidden && document.getElementById('kb-mid').textContent")
+    check("King of the Hill: starts on the hill map with the progress bar showing", "king of the hill" in label.lower() and bool(bar), f"{label} / {bar}")
+    page.keyboard.down("KeyL")
+    step(page, 3)
+    cols = page.evaluate("[!document.getElementById('scoreboard').hidden, document.querySelectorAll('#sb-head th').length]")
+    page.keyboard.up("KeyL")
+    step(page, 3)
+    check("holding L in a room shows the leaderboard with the extra stats", cols[0] and cols[1] >= 6, str(cols))
     check("King of the Hill: runs without errors", not errors, "; ".join(errors[:2]))
     page.close()
 

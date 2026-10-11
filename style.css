@@ -506,6 +506,16 @@
     position: absolute; top: 18px; left: 50%; transform: translateX(-50%); text-align: center;
     color: #fff; background: rgba(0,0,0,0.4); padding: 5px 16px; border-radius: 6px;
   }
+  /* King of the Hill: the progress bar across the top */
+  #koth-bar { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); width: min(520px, 70vw); pointer-events: none; }
+  #koth-bar[hidden] { display: none; }
+  .kb-track { position: relative; height: 10px; border-radius: 5px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); overflow: hidden; }
+  .kb-fill { position: absolute; top: 0; bottom: 0; width: 0; transition: width 0.25s linear; }
+  .kb-a { left: 0; background: #ffd24a; }
+  .kb-b { right: 0; background: #e5484d; }
+  .kb-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #fff; left: 0; opacity: 0.85; }
+  .kb-labels { display: flex; justify-content: space-between; align-items: baseline; margin-top: 3px; font-size: 12px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; }
+  #kb-mid { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
   #mp-timer-val { font-size: 24px; font-weight: bold; color: #ffd24a; font-variant-numeric: tabular-nums; }
   #mp-timer-mode { font-size: 10px; letter-spacing: 1.5px; color: #999; text-transform: uppercase; }
   #fps { position: absolute; top: 8px; left: 8px; font: 12px Consolas, monospace; color: #ffe9a8; background: rgba(0,0,0,0.45); padding: 2px 6px; border-radius: 4px; }

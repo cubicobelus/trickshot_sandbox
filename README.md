@@ -21,7 +21,7 @@ unzip, and open `index.html`. No internet connection is needed.
 
 **Controls:** WASD move, Space jump, Shift sprint (or walk, with Auto sprint on in Settings > Gameplay), Ctrl slide
 (when moving faster than a walk; slower, Ctrl crouch-walks), E grappling hook (tap it at a wall, the floor or a target to zip
-there; tap again or jump to let go), R reload, F inspect, P replay last hit, hold M for the map, left click attack,
+there; tap again or jump to let go), R reload, F inspect, P replay last hit, hold M for the map, hold L for the leaderboard (Tab does the same in a room), left click attack,
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
 Playing goes fullscreen and locks keys like W, T and N away from the browser (Chrome and Edge), so Ctrl+W can't close the tab; turn that off in Settings > Gameplay. Every one of these can be changed in **Settings > Controls**: each action has two boxes, and a box takes a key, a
@@ -79,7 +79,7 @@ runs the room, so the host has to keep their tab open. It is experimental and ha
 
 - **Score Race:** everyone shoots the same targets, and the best trickscore when the timer ends wins. Players can't hurt each other.
 - **Deathmatch** (and **Team Deathmatch**, two teams with no friendly fire): targets are off and players shoot each other. The first to the kill limit (5 to 50, or none) wins, or whoever has the most kills when the 3 minutes end. 100 health. Sniper: one hit kills, anywhere.
-- **King of the Hill** (and **Team King of the Hill**): the same health and damage, but kills only clear the hill. A ring marks the hilltop on the **Summit** map (it always plays there); stand alone on it to score a point a second, with someone else on it nobody scores, and the first to the first-to number times 5 wins (or the most hill time when the 3 minutes end). The ring and its column of light show who holds it, and bots fight for it.
+- **King of the Hill** (and **Team King of the Hill**): the same health and damage, but kills only clear the hill. A ring marks the hilltop on the **Summit** map (it always plays there); stand alone on it to score a point a second, with someone else on it nobody scores, and the first to the first-to number times 5 wins (or the most hill time when the 3 minutes end). The ring and its column of light show who holds it, and bots fight for it. A progress bar across the top shows the score (the teams fill in from their own side), and the scoreboard (Tab or L, and at the end of a round) shows kills, deaths, K/D, headshots, damage, best kill and best streak. On your own, L shows this map's Score Attack top 5.
   Deagle: 55 to the body, a head hit kills. AK: 34 body / 50 head. Rifle: 26 body / 40 head. Shotgun: about 11 a pellet,
   falling off with distance. Knife: 55 a swing, a thrown knife kills. Health starts coming back after 10 seconds without taking
   damage or shooting. Only kills score (with the trick multipliers of the killing shot). When you're killed you watch the player who did it until you respawn, and the damage you deal floats up from the player you hit (switch the numbers off in Settings > View). Other players show what they're holding,

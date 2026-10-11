@@ -220,7 +220,7 @@
     ["inspect", "Inspect weapon", ["KeyF"]], ["gun", "Switch to gun", ["Digit1"]],
     ["knife", "Switch to knife", ["Digit2"]], ["swap", "Swap gun / knife", ["KeyQ", "Wheel"]],
     ["replay", "Watch last hit", ["KeyP"]], ["grapple", "Grappling hook", ["KeyE"]],
-    ["map", "Show map (hold)", ["KeyM"]],
+    ["map", "Show map (hold)", ["KeyM"]], ["leaderboard", "Show leaderboard (hold)", ["KeyL"]],
   ];
   const ACTION_IDS = ACTIONS.map((a) => a[0]);
   const ACTION_NAMES = Object.fromEntries(ACTIONS.map((a) => [a[0], a[1]]));
@@ -3633,14 +3633,14 @@
     if (pointerLocked && (actionsFor(id).length || ((e.ctrlKey || e.metaKey) && usesCtrl()))) e.preventDefault();
     if (keys[id]) return;
     keys[id] = true;
-    if (id === "Tab" && pointerLocked) { e.preventDefault(); mpRefreshScoreboard(); }
+    if ((id === "Tab" || actionsFor(id).includes("leaderboard")) && pointerLocked) { e.preventDefault(); mpRefreshScoreboard(); }
     if (!pointerLocked || replay.active) return;
     pressInput(id, e);
   });
   window.addEventListener("keyup", (e) => {
     const id = normalizeInput(e.code);
     keys[id] = false;
-    if (id === "Tab") mpRefreshScoreboard();
+    if (id === "Tab" || actionsFor(id).includes("leaderboard")) mpRefreshScoreboard();
     releaseInput(id);
   });
   window.addEventListener("blur", () => {   // a key let go while the window wasn't looking would stay "held"
@@ -5541,6 +5541,7 @@
     board: document.getElementById("scoreboard"),
     boardTitle: document.getElementById("sb-title"),
     boardBody: document.getElementById("sb-body"),
+    boardHead: document.getElementById("sb-head"),
     boardFoot: document.getElementById("sb-foot"),
   };
 
@@ -5616,7 +5617,7 @@
 
   function makePlayerRecord(id, name, color) {
     return {
-      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, hill: 0, alive: true,
+      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, hill: 0, heads: 0, dmg: 0, best: 0, streak: 0, bstreak: 0, alive: true,
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
       hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
@@ -5848,7 +5849,7 @@
       const e = {
         id: String(raw.id).slice(0, 64), name: String(raw.name).replace(/[^\w \-]/g, "").slice(0, 14) || "Player",
         color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
-        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), alive: raw.alive === true,
+        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
         hp: Math.max(0, Math.min(Number.isFinite(raw.hp) ? raw.hp : 100, 100)),
         team: raw.team === 0 || raw.team === 1 ? raw.team : -1,
       };
@@ -5857,7 +5858,7 @@
       if (!p) { p = makePlayerRecord(e.id, e.name, e.color); net.players.set(e.id, p); }
       const recolored = p.color !== e.color;
       p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths; p.hp = e.hp; p.team = e.team;
-      if (net.role !== "host") p.hill = e.hill;
+      if (net.role !== "host") { p.hill = e.hill; p.heads = e.heads; p.dmg = e.dmg; p.best = e.best; p.bstreak = e.bstreak; }
       if (recolored && p.mesh && e.id !== net.id) disposeAvatar(p);   // a new team colour: the model is rebuilt below
       if (e.id !== net.id) {
         if (net.role === "client") p.alive = e.alive;
@@ -6187,7 +6188,7 @@
 
   // ---------------- host logic ----------------
   function boardList() {
-    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
+    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, heads: p.heads, dmg: Math.round(p.dmg), best: p.best, bstreak: p.bstreak, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
   }
   function hostSendRaw(m) { for (const c of net.conns.values()) if (c.open) c.send(m); }
   function hostBroadcast(m) { hostSendRaw(m); applyEvent(m); }
@@ -6251,7 +6252,7 @@
     net.phase = "play";
     net.left = ROUND_SECONDS;
     net.resultsLeft = 0;
-    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
+    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.heads = 0; p.dmg = 0; p.best = 0; p.streak = 0; p.bstreak = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
     if (net.sub === "race") for (const t of targets) { respawnTarget(t); t.userData.respawnTimer = 1.1; }
     hostBroadcast(roundMsg(true));
     for (const p of net.players.values()) hostRespawn(p);
@@ -6347,12 +6348,15 @@
   // damage lands on a player: the hit marker, or the kill if it was the last of their health. `info` carries
   // the points of the shot (paid only on a kill) and whether it was a headshot or a knife
   function hostDealDamage(p, v, dmg, info) {
+    p.dmg += Math.min(dmg, Math.max(v.hp, 0));   // damage actually dealt
     v.hp -= dmg; v.lastDamageAt = nowMs();
     if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
     v.hp = 0;
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
     v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
     p.kills++; p.score += pts;
+    if (info.head) p.heads++;
+    p.best = Math.max(p.best, pts); p.streak++; p.bstreak = Math.max(p.bstreak, p.streak); v.streak = 0;
     hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
     hostBroadcastBoard();
     if (net.limit && !net.koth && net.phase === "play" && (net.teams ? teamKills(p.team) : p.kills) >= net.limit) hostEndRound();   // the kill limit is reached
@@ -7176,24 +7180,68 @@
     mpEls.timerVal.textContent = net.phase === "results" ? "0:00" : fmtTime(leftNow());
     let label = modeName();
     if (net.sub === "dm" && net.koth) {
-      const need = net.limit * 5, me = localPlayer();
-      if (need) label += " \u00b7 first to " + need;
-      if (net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + Math.floor(net.teamHill[0]) + " \u2013 " + Math.floor(net.teamHill[1]) + " " + TEAM_NAMES[1];
-      else if (me) label += " \u00b7 you " + Math.floor(me.hill);
-      label += " \u00b7 " + hillText();
+      if (net.limit) label += " \u00b7 first to " + net.limit * 5;
     } else {
       if (net.sub === "dm" && net.limit) label += " \u00b7 first to " + net.limit;
       if (net.sub === "dm" && net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
     }
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
     mpEls.roomMode.textContent = modeName();
+    updateKothBar();
+  }
+
+  // King of the Hill: a bar across the top. Teams fill in from their own side towards the middle; alone, it is your own progress
+  // with a tick for whoever is in front
+  const kothBarEl = document.getElementById("koth-bar");
+  function updateKothBar() {
+    const on = net.active && net.koth && net.sub === "dm" && net.phase === "play";
+    kothBarEl.hidden = !on;
+    if (!on) return;
+    const need = net.limit > 0 ? net.limit * 5 : ROUND_SECONDS, me = localPlayer();
+    const fillA = kothBarEl.querySelector(".kb-a"), fillB = kothBarEl.querySelector(".kb-b"), mark = kothBarEl.querySelector(".kb-mark");
+    const left = document.getElementById("kb-left"), mid = document.getElementById("kb-mid"), right = document.getElementById("kb-right");
+    const [kind, who] = net.hs;
+    let midColor = "#e6e6e6";
+    if (kind === 2) midColor = "#ff6a5e";
+    else if (kind === 1) { const hp = net.teams ? null : net.players.get(who); midColor = "#" + (net.teams ? TEAM_COLORS[who] : hp ? hp.color : 0xffd23c).toString(16).padStart(6, "0"); }
+    mid.textContent = hillText().replace(/ the hill$/, "");
+    mid.style.color = midColor;
+    if (net.teams) {
+      const a = net.teamHill[0], b = net.teamHill[1];
+      fillA.style.background = "#" + TEAM_COLORS[0].toString(16).padStart(6, "0"); fillB.style.background = "#" + TEAM_COLORS[1].toString(16).padStart(6, "0");
+      fillA.style.width = Math.min(a / need, 1) * 50 + "%"; fillB.style.width = Math.min(b / need, 1) * 50 + "%";
+      mark.style.left = "50%";
+      left.textContent = TEAM_NAMES[0] + " " + Math.floor(a); right.textContent = Math.floor(b) + " " + TEAM_NAMES[1];
+    } else {
+      const mine = me ? me.hill : 0;
+      let lead = null;
+      for (const p of net.players.values()) if (p !== me && (!lead || p.hill > lead.hill)) lead = p;
+      fillA.style.background = "#ffd24a"; fillB.style.width = "0";
+      fillA.style.width = Math.min(mine / need, 1) * 100 + "%";
+      mark.style.left = lead ? Math.min(lead.hill / need, 1) * 100 + "%" : "0%";
+      mark.style.display = lead && lead.hill > 0 ? "block" : "none";
+      left.textContent = "You " + Math.floor(mine) + " / " + need;
+      right.textContent = lead && lead.hill > 0 ? lead.name + " " + Math.floor(lead.hill) : "";
+    }
+  }
+
+  // hold the leaderboard key on your own: this map's Score Attack top 5 and your best trickshot
+  function soloRecords() {
+    const tops = runTopsFor("sa60");
+    mpEls.boardTitle.textContent = "Records \u00b7 " + (currentMap ? currentMap.name : "");
+    mpEls.boardHead.innerHTML = "<th>#</th><th>Score Attack 1:00</th><th>Score</th><th>Hits</th><th>Acc</th>";
+    mpEls.boardBody.innerHTML = tops.length
+      ? tops.map((e, i) => "<tr><td>" + (i + 1) + "</td><td>" + esc(e.gun || "") + " \u00b7 " + esc(e.date || "") + "</td><td>" + Math.round(e.score).toLocaleString() + "</td><td>" + (e.hits || 0) + "</td><td>" + Math.round((e.acc || 0) * 100) + "%</td></tr>").join("")
+      : '<tr><td></td><td>No Score Attack runs on this map yet</td><td></td><td></td><td></td></tr>';
+    mpEls.boardFoot.textContent = bestShot.points ? "Best trickshot: " + bestShot.points.toLocaleString() + " points (" + bestShot.mult.toFixed(2) + "x)" : "";
   }
 
   function mpRefreshScoreboard() {
     const results = net.active && net.phase === "results";
-    const held = net.active && pointerLocked && keys["Tab"];
-    mpEls.board.hidden = !(results || held);
+    const lbHeld = pointerLocked && (keys["Tab"] || held("leaderboard"));
+    mpEls.board.hidden = !(results || lbHeld);
     if (mpEls.board.hidden) return;
+    if (!net.active) { soloRecords(); return; }   // on your own there is no scoreboard: show your records for this map
     const dm = net.sub === "dm", koth = dm && net.koth;
     const rows = [...net.players.values()].sort(koth ? (a, b) => b.hill - a.hill || b.kills - a.kills : dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
     let title = modeName();
@@ -7205,12 +7253,16 @@
       else title = "Round over \u2014 " + rows[0].name + " wins";
     }
     mpEls.boardTitle.textContent = title;
-    document.querySelector("#scoreboard th:nth-child(4)").textContent = koth ? "Hill" : dm ? "Kills" : "Hits";
-    document.querySelector("#scoreboard th:nth-child(5)").textContent = koth ? "Kills" : dm ? "Deaths" : "";
+    // the columns depend on the mode: deathmatch shows the whole fight, King of the Hill leads with hill time
+    const kd = (p) => (p.kills / Math.max(1, p.deaths)).toFixed(2), n = (v) => Math.round(v).toLocaleString();
+    const cols = koth ? [["Hill", (p) => Math.floor(p.hill)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")]]
+      : dm ? [["Score", (p) => n(p.score)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["HS", (p) => p.heads], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")], ["Streak", (p) => p.bstreak]]
+      : [["Score", (p) => n(p.score)], ["Hits", (p) => p.kills]];
+    mpEls.boardHead.innerHTML = "<th>#</th><th>Player</th>" + cols.map((c) => "<th>" + c[0] + "</th>").join("");
     mpEls.boardBody.innerHTML = rows.map((p, i) => {
       const hex = "#" + p.color.toString(16).padStart(6, "0");
       return '<tr class="' + (p.id === net.id ? "me" : "") + '"><td>' + (i + 1) + '</td><td><span class="dot" style="background:' + hex + '"></span>' +
-        esc(p.name) + "</td><td>" + p.score + "</td><td>" + (koth ? Math.floor(p.hill) : p.kills) + "</td><td>" + (koth ? p.kills : dm ? p.deaths : "") + "</td></tr>";
+        esc(p.name) + "</td>" + cols.map((c) => "<td>" + c[1](p) + "</td>").join("") + "</tr>";
     }).join("");
     mpEls.boardFoot.textContent = results ? "Next round in " + Math.max(0, Math.ceil(net.resultsLeft)) + "s" : "";
   }
