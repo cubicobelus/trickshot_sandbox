@@ -3461,7 +3461,8 @@
     WEAPON_BASE[id] = { mag: w.magSize, spread: w.spread, spreadAds: w.spreadAds, recoil: w.recoil, kick: w.kick, flash: w.flashScale, reload: Object.assign({}, w.reload) };
   }
   const baseMag = (id) => (WEAPON_BASE[id] ? WEAPON_BASE[id].mag : WEAPONS[id].magSize);
-  const attachUnlocked = (gun, opt) => ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= opt.need;
+  const UNLOCK_ALL_ATTACHMENTS = true;   // TEMPORARY, while Ethan tests them: every attachment is open. Set to false to bring the hit-count unlocks back.
+  const attachUnlocked = (gun, opt) => UNLOCK_ALL_ATTACHMENTS || ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= opt.need;
   function chosenAttachments(gun) {   // what is fitted (an option that is still locked, or unknown, is ignored)
     const out = [], fitted = (SETTINGS.attach && SETTINGS.attach[gun]) || {};
     for (const [slot, opts] of Object.entries(ATTACHMENTS[gun] || {})) {
@@ -6810,7 +6811,13 @@
   function pickSpawn(exceptId) {
     let best = SPAWNS[0], bestScore = -1;
     const mine = net.players.get(exceptId);
-    for (const s of SPAWNS) {
+    let list = SPAWNS;
+    if (net.ctf && mine && mine.team >= 0 && currentMap.flags) {   // capture the flag: spawn near your own base
+      const b = ctfBase(mine.team);
+      list = SPAWNS.slice().sort((a, c) => Math.hypot(a[0] - b.x, a[1] - b.z) - Math.hypot(c[0] - b.x, c[1] - b.z)).slice(0, 4);
+      best = list[0];
+    }
+    for (const s of list) {
       let nearest = 999;
       for (const p of net.players.values()) {
         if (p.id === exceptId || !p.alive) continue;
@@ -7109,7 +7116,8 @@
 
   // Battle royale: a circle that closes in on a timetable (the same on every computer: it reads the round clock)
   // [starts at (s), shrinks for (s), to this fraction of the half-size, damage a second outside while it is the current stage]
-  const BR_STAGES = [[20, 25, 0.62, 5], [60, 25, 0.34, 9], [100, 25, 0.14, 15], [140, 20, 0.05, 24]];
+  const BR_STAGES = [[10, 18, 0.62, 10], [38, 18, 0.34, 10], [66, 18, 0.14, 10], [94, 16, 0.05, 10]];   // a faster closing: it is all shut by 110 s
+  const BR_TICK = 0.5, BR_TICK_DAMAGE = 10;   // outside the circle: 10 damage every half second
   function brZoneAt(t) {
     const half = CFG.arenaHalfSize;
     let prev = half * 1.45, dps = 3;
@@ -7128,12 +7136,15 @@
     for (const p of net.players.values()) {
       if (!p.alive) continue;
       if (Math.hypot(p.x - net.zc[0], p.z - net.zc[1]) <= z.r) { p.zoneAcc = 0; continue; }
-      p.hp -= z.dps * dt; p.lastDamageAt = now; p.zoneAcc = (p.zoneAcc || 0) + dt;
-      if (p.hp <= 0) {
-        p.hp = 0; p.alive = false; p.deaths++; p.respawnAt = Infinity;
-        hostBroadcast({ t: "kill", k: "", v: p.id, w: "zone", dmg: 0, pts: 0, tags: [], head: false, knife: false });
-        hostBroadcastBoard();
-      } else if (p.zoneAcc >= 0.5) { p.zoneAcc = 0; hostBroadcast({ t: "hp", id: p.id, hp: Math.round(p.hp), by: "zone", head: false, dmg: 0 }); }
+      p.lastDamageAt = now; p.zoneAcc = (p.zoneAcc || 0) + dt;
+      while (p.zoneAcc >= BR_TICK && p.alive) {   // a flat hit every tick
+        p.zoneAcc -= BR_TICK; p.hp -= BR_TICK_DAMAGE;
+        if (p.hp <= 0) {
+          p.hp = 0; p.alive = false; p.deaths++; p.respawnAt = Infinity;
+          hostBroadcast({ t: "kill", k: "", v: p.id, w: "zone", dmg: 0, pts: 0, tags: [], head: false, knife: false });
+          hostBroadcastBoard();
+        } else hostBroadcast({ t: "hp", id: p.id, hp: Math.round(p.hp), by: "zone", head: false, dmg: BR_TICK_DAMAGE });
+      }
     }
     const alive = [...net.players.values()].filter((p) => p.alive).length;
     if (net.players.size >= 2 && alive <= 1) hostEndRound();   // the last one standing
