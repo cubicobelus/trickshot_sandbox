@@ -161,6 +161,16 @@
   @keyframes hitpop { 0% { opacity: 1; transform: scale(0.6); } 100% { opacity: 0; transform: scale(1.5); } }
   #crosshair svg, .xh-preview svg { display: block; overflow: visible; }
 
+  /* accessibility: the HUD size, and a high-contrast look */
+  #speed, #hud-right, #ammo, #hotbar, #killfeed, #mp-timer, #koth-bar, #trick-feed { zoom: var(--hud-scale, 1); }
+  body.hc #speed, body.hc #score, body.hc #streak, body.hc #best, body.hc #bonus-tags, body.hc #ammo, body.hc #hotbar .slot, body.hc #killfeed div, body.hc #mp-timer, body.hc #feed {
+    background: rgba(0,0,0,0.9) !important; color: #fff; border: 1px solid #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; font-weight: bold; }
+  body.hc .kb-labels, body.hc #trick-feed .tf { text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 3px #000; }
+  body.hc .kb-track { border-color: #fff; background: #000; }
+  #sound-cues { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 4; }
+  #sound-cues i { position: absolute; left: -9px; top: -118px; width: 18px; height: 12px; background: #fff; box-shadow: 0 0 6px #000; clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    animation: cue-fade 1.1s ease-out forwards; }
+  @keyframes cue-fade { 0% { opacity: 0.95; } 100% { opacity: 0; } }
   #hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
 
   #crosshair {

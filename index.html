@@ -129,6 +129,7 @@
     <div class="dot"></div>
   </div></div>
   <div id="crosshair"></div>
+  <div id="sound-cues"></div>
   <div id="trick-feed"><div id="trick-chain"></div></div>
   <div id="hitmark"></div>
   <div id="speed">
@@ -271,6 +272,7 @@
           <button type="button" class="stab" data-tab="controls">Controls</button>
           <button type="button" class="stab" data-tab="crosshair">Crosshair</button>
           <button type="button" class="stab" data-tab="view">View</button>
+          <button type="button" class="stab" data-tab="access">Accessibility</button>
           <button type="button" class="stab" data-tab="targets">Targets</button>
           <button type="button" class="stab" data-tab="sound">Sound</button>
           <button type="button" class="stab" data-tab="other">Gameplay</button>
@@ -374,6 +376,20 @@
         </div>
       </div>
 
+      <div class="spanel" data-panel="access" hidden>
+        <div class="check-row">
+          <label title="Turns off the weapon bob, camera shake, lean, scope sway, the zoom-out at speed, speed lines and the hit freeze"><input type="checkbox" id="reduce-motion" data-setting="reduceMotion">Reduce motion</label>
+          <label title="Solid dark backgrounds, bold text and a crosshair outline on the HUD"><input type="checkbox" id="high-contrast" data-setting="highContrast">High contrast HUD</label>
+          <label title="An arrow around the crosshair points at where other players' shots come from, for when you can't hear them"><input type="checkbox" id="sound-cues" data-setting="soundCues">Show where shots come from</label>
+        </div>
+        <div class="slider-row">
+          <label for="hud-scale">HUD size</label>
+          <input type="range" id="hud-scale" data-setting="hudScale" min="0.8" max="1.6" step="0.05" value="1">
+          <div class="val">1.00</div>
+        </div>
+        <p class="set-hint">The colourblind-friendly colours option (targets, team colours and the hill ring) is under View.</p>
+      </div>
+
       <div class="spanel" data-panel="view" hidden>
         <div class="slider-row">
           <label for="hand">Weapon hand</label>
@@ -404,7 +420,7 @@
           <label title="The damage you deal, floating up from the player you hit"><input type="checkbox" id="damage-numbers" data-setting="damageNumbers">Damage numbers</label>
           <label title="A short list on the left of the tricks you pull off, and your chain, before you even shoot"><input type="checkbox" id="trick-feed-on" data-setting="trickFeed">Live trick feed</label>
           <label title="Dark marks on walls and the floor where shots land"><input type="checkbox" id="bullet-holes" data-setting="bulletHoles">Bullet holes</label>
-          <label title="Recolors the targets so they never rely on red versus orange or green"><input type="checkbox" id="colorblind-targets" data-setting="colorblindTargets">Colorblind-friendly targets</label>
+          <label title="Recolors the targets, the red team and the hill ring so they never rely on red versus orange or green"><input type="checkbox" id="colorblind-targets" data-setting="colorblindTargets">Colorblind-friendly colours</label>
         </div>
         <div class="slider-row">
           <label for="quality">Graphics</label>
@@ -482,6 +498,14 @@
         <p class="set-hint">Realistic shooting: shots spread the faster you move (up to 10 u/s), more in the air, and the sniper isn't perfectly accurate unscoped. On by default, in every mode.</p>
         <button type="button" class="btn small" id="best-clear">Clear best trickshot</button>
         <p class="set-hint">Start over completely: deletes every setting, key binding, stat, achievement, best trickshot and replay, Score Attack score and tutorial progress in this browser, then restarts the game as if you had never played.</p>
+        <p class="set-hint">Back up or move your settings, key bindings, stats, achievements, best shot and records as a file.</p>
+        <div class="check-row">
+          <button type="button" class="btn small" id="data-export">Export my data</button>
+          <button type="button" class="btn small" id="data-import">Import from a file&hellip;</button>
+          <input type="file" id="data-import-file" accept=".json,application/json" hidden>
+        </div>
+        <p class="set-hint" id="data-import-note"></p>
+        <button type="button" class="btn small danger" id="data-import-apply" hidden>Replace my data with this file</button>
         <button type="button" class="btn small danger" id="erase-all">Erase all data&hellip;</button>
       </div>
 

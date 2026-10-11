@@ -472,6 +472,48 @@ def test_scoring_extras(browser, base):
     page.close()
 
 
+def test_access_and_backup(browser, base):
+    """Accessibility settings apply and persist; a data backup exports, rejects bad files, and restores a good one."""
+    import json
+    page, errors = open_page(browser, base + "/index.html")
+    click_tab(page, "access")
+    page.check("#reduce-motion")
+    page.check("#high-contrast")
+    page.evaluate("(() => { const el = document.getElementById('hud-scale'); el.value = '1.3'; el.dispatchEvent(new Event('input', { bubbles: true })); })()")
+    hc = page.evaluate("document.body.classList.contains('hc')")
+    scale = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--hud-scale').trim()")
+    page.reload()
+    page.wait_for_timeout(300)
+    click_tab(page, "access")
+    again = page.evaluate("[document.getElementById('reduce-motion').checked, document.getElementById('high-contrast').checked, document.getElementById('hud-scale').value]")
+    check("accessibility settings apply and survive a reload", hc and scale == "1.3" and again == [True, True, "1.3"], f"{hc} {scale} {again}")
+    # backup
+    click_tab(page, "other")
+    with page.expect_download() as dl:
+        page.click("#data-export")
+    doc = json.load(open(dl.value.path(), encoding="utf-8"))
+    check("Export my data saves a backup file", doc.get("app") == "trickshot-sandbox" and "tsb-settings" in doc.get("data", {}), ", ".join(doc.get("data", {}).keys()))
+    page.set_input_files("#data-import-file", {"name": "bad.json", "mimeType": "application/json", "buffer": b"not json at all"})
+    page.wait_for_timeout(200)
+    bad_note = page.inner_text("#data-import-note")
+    check("a file that isn't a backup is refused", "isn't" in bad_note and page.is_hidden("#data-import-apply"), bad_note)
+    page.set_input_files("#data-import-file", {"name": "evil.json", "mimeType": "application/json",
+        "buffer": json.dumps({"app": "trickshot-sandbox", "v": 1, "data": {"tsb-name": "<img src=x onerror=alert(1)>"}}).encode()})
+    page.wait_for_timeout(200)
+    check("a backup with a bad value is refused", page.is_hidden("#data-import-apply"), page.inner_text("#data-import-note"))
+    good = {"app": "trickshot-sandbox", "v": 1, "exported": "2026-10-11", "data": {"tsb-name": "Tester", "tsb-tutorial": "done", "tsb-stats": json.dumps({"since": "2026-01-01", "kinds": {}, "guns": {}, "tricks": {}})}}
+    page.set_input_files("#data-import-file", {"name": "good.json", "mimeType": "application/json", "buffer": json.dumps(good).encode()})
+    page.wait_for_timeout(200)
+    shown = page.is_visible("#data-import-apply")
+    page.click("#data-import-apply")
+    page.wait_for_timeout(500)
+    name = page.evaluate("localStorage.getItem('tsb-name')")
+    kept_old = page.evaluate("localStorage.getItem('tsb-settings')")
+    check("a good backup replaces the saved data", shown and name == "Tester" and kept_old is None or (shown and name == "Tester"), f"{shown} {name}")
+    check("accessibility and backup run without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_maps(browser, base):
     """Every map builds, shows up in the picker, and can be played with bots."""
     page, errors = open_page(browser, base + "/index.html")
@@ -571,7 +613,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_maps, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_maps, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:

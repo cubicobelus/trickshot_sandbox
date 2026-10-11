@@ -10,6 +10,17 @@
     }
   } catch (e) { /* storage blocked: nothing to wipe */ }
 
+  // "Import from a file" does the same: it leaves the checked data in sessionStorage and reloads, and it is written here.
+  try {
+    const pending = sessionStorage.getItem("tsb-import");
+    if (pending) {
+      sessionStorage.removeItem("tsb-import");
+      const data = JSON.parse(pending);
+      for (const k of Object.keys(localStorage)) if (k.startsWith("tsb-")) localStorage.removeItem(k);
+      for (const k of Object.keys(data)) localStorage.setItem(k, data[k]);
+    }
+  } catch (e) { /* storage blocked: nothing to import */ }
+
   // A first-time visitor (nothing saved yet) is walked through the tutorial on their first click to play.
   // Read before anything below saves a setting or a stat. (The tests turn this off with window.__noForceTutorial.)
   const FIRST_VISIT = !window.__noForceTutorial && (() => {
@@ -199,6 +210,8 @@
 
   };
 
+  // team colours (the red team turns orange with the colourblind setting) and the hill ring when two sides are on it
+  const TEAM_COLORS = [0x3e8ef7, 0xe5484d], TEAM_NAMES = ["Blue", "Red"], HILL_CONTESTED = { c: 0xff4a3d, css: "#ff6a5e" };
   const SETTINGS = {
     sensX: 1.0, sensY: 1.0, scopedSensMult: 0.35, volume: 0.55,
     unlimitedAmmo: false, mouseAccel: false, accelStrength: 0.7,
@@ -208,7 +221,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, trickFeed: true, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, trickFeed: true, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -2640,7 +2653,7 @@
 
     const speedFactor = moving ? (sprinting ? 1.6 : 1.0) : 0;
     vm.bobTimer += dt * (onGround ? (2 + speedFactor * 8) : 1.2);
-    const bobScale = (1 - adsEased) * (0.3 + speedFactor) * SETTINGS.bob;
+    const bobScale = (1 - adsEased) * (0.3 + speedFactor) * (SETTINGS.reduceMotion ? 0 : SETTINGS.bob);
     const bobX = Math.sin(vm.bobTimer) * 0.012 * bobScale;
     const bobY = Math.abs(Math.sin(vm.bobTimer * 2)) * 0.008 * bobScale;
 
@@ -2650,8 +2663,8 @@
     // figure-eight breathing sway while scoped. Both move the real aim, so what
     // the reticle shows is where the shot goes.
     vm.camKick *= Math.max(0, 1 - dt * 10);
-    const sway = SETTINGS.scopeSway && w.scope ? CFG.scopeSway * adsEased : 0;
-    const kick = vm.camKick * SETTINGS.shake;
+    const sway = SETTINGS.scopeSway && !SETTINGS.reduceMotion && w.scope ? CFG.scopeSway * adsEased : 0;
+    const kick = vm.camKick * (SETTINGS.reduceMotion ? 0 : SETTINGS.shake);
     if (w.recoilKick && elapsedTime - vm.lastShotAt > w.recoilKick.hold) {
       const settle = Math.exp(-w.recoilKick.recover * dt);
       vm.recoilPitch *= settle;
@@ -2791,14 +2804,14 @@
     // FOV: scope zoom, plus a speed-driven widening for a sense of momentum
     const speedNow = Math.hypot(player.velocity.x, player.velocity.z);
     const speedT = Math.max(0, Math.min((speedNow - CFG.groundMaxSpeed) / (CFG.maxSpeed - CFG.groundMaxSpeed), 1));
-    const speedFov = CFG.speedFovBoost * speedT * (1 - adsEased);
+    const speedFov = SETTINGS.reduceMotion ? 0 : CFG.speedFovBoost * speedT * (1 - adsEased);
     const adsFov = w.scope ? CFG.scopedFov : SETTINGS.fov * (w.adsZoom || 1);
     const targetFov = SETTINGS.fov + (adsFov - SETTINGS.fov) * adsEased + speedFov;
     if (Math.abs(camera.fov - targetFov) > 0.02) {
       camera.fov += (targetFov - camera.fov) * Math.min(dt * 12, 1);
       camera.updateProjectionMatrix();
     }
-    speedlinesEl.style.opacity = SETTINGS.speedLines ? Math.max(0, (speedT - 0.35) / 0.65) * 0.85 * (1 - adsEased) : 0;
+    speedlinesEl.style.opacity = SETTINGS.speedLines && !SETTINGS.reduceMotion ? Math.max(0, (speedT - 0.35) / 0.65) * 0.85 * (1 - adsEased) : 0;
 
     const scopeAlpha = w.scope ? Math.max(0, (adsEased - 0.55) / 0.45) : 0;
     lastScopeAlpha = scopeAlpha;
@@ -3297,7 +3310,7 @@
 
   // ---- crosshair, drawn as SVG from the settings ----
   function crosshairSVG(s) {
-    const L = s.xhSize, T = s.xhThick, G = s.xhGap, st = s.xhStyle;
+    const L = s.xhSize, T = s.xhThick, G = s.xhGap, st = s.xhStyle, outline = s.xhOutline || s.highContrast;
     const lines = [], dots = [];
     if (st === "cross" || st === "cross-dot" || st === "t") {
       lines.push([-G - L, 0, -G, 0], [G, 0, G + L, 0], [0, G, 0, G + L]);
@@ -3314,13 +3327,18 @@
         : `<circle r="${c.r + extra / 2}" fill="${color}"/>`)).join("");
     const half = Math.ceil(Math.max(G + L, st === "circle" ? ringR : 0) + T + 3);
     return `<svg width="${half * 2}" height="${half * 2}" viewBox="${-half} ${-half} ${half * 2} ${half * 2}" opacity="${s.xhAlpha}">` +
-      (s.xhOutline ? draw(2, "#000") : "") + draw(0, "currentColor") + "</svg>";
+      (outline ? draw(2, "#000") : "") + draw(0, "currentColor") + "</svg>";
   }
 
   const xhPreviewEl = document.getElementById("xh-preview");
   let decalMesh = null;   // the bullet holes (built further down)
   function applySettings() {
     applyTargetPalette();
+    TEAM_COLORS[1] = SETTINGS.colorblindTargets ? 0xf5a623 : 0xe5484d;
+    TEAM_NAMES[1] = SETTINGS.colorblindTargets ? "Orange" : "Red";
+    HILL_CONTESTED.c = SETTINGS.colorblindTargets ? 0xff4fd8 : 0xff4a3d; HILL_CONTESTED.css = SETTINGS.colorblindTargets ? "#ff7be3" : "#ff6a5e";
+    document.body.classList.toggle("hc", !!SETTINGS.highContrast);
+    document.documentElement.style.setProperty("--hud-scale", String(SETTINGS.hudScale));
     if (decalMesh) decalMesh.visible = !!SETTINGS.bulletHoles;
     if (targetsReady) syncTargetCounts();
     if (SETTINGS.quality === "auto") { if (!gfxLevel) applyGraphics("high"); }
@@ -4584,6 +4602,7 @@
     // camera roll: lean into strafes, and tilt harder into a slide
     let targetRoll = -moveX * 0.03;   // the lean into a strafe (was 0.022)
     if (player.sliding) targetRoll += 0.085 + Math.sin(elapsedTime * 22) * 0.006;
+    if (SETTINGS.reduceMotion) targetRoll = 0;
     player.viewRoll += (targetRoll - player.viewRoll) * Math.min(dt * 8, 1);
     camera.rotation.z = player.viewRoll;
 
@@ -5032,6 +5051,60 @@
   }
   document.getElementById("settings-open").addEventListener("click", (e) => { e.stopPropagation(); setSettingsPopup(true); });
   document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
+  // Back up and restore: everything the game keeps in this browser as one file. An imported file is checked key by key and
+  // value by value before it replaces anything (and the game's own loaders check again when it starts).
+  const DATA_JSON_KEYS = ["tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-score-attack"];
+  const DATA_KEYS = DATA_JSON_KEYS.concat(["tsb-tutorial", "tsb-name", "tsb-settings-seen"]);
+  const importNoteEl = document.getElementById("data-import-note"), importApplyEl = document.getElementById("data-import-apply");
+  let importClean = null;
+  function exportData() {
+    const data = {};
+    try { for (const k of DATA_KEYS) { const v = localStorage.getItem(k); if (typeof v === "string") data[k] = v; } } catch (e) { /* storage blocked */ }
+    const blob = new Blob([JSON.stringify({ app: "trickshot-sandbox", v: 1, exported: new Date().toISOString().slice(0, 10), data })], { type: "application/json" });
+    const url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = "trickshot-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    importNoteEl.textContent = "Saved a backup of " + Object.keys(data).length + " items.";
+  }
+  function checkImport(text) {   // returns the clean { key: string } or an error message
+    let obj;
+    try { obj = JSON.parse(text); } catch (e) { return "That isn't a backup file (it isn't valid JSON)."; }
+    if (!obj || typeof obj !== "object" || obj.app !== "trickshot-sandbox" || obj.v !== 1 || !obj.data || typeof obj.data !== "object") return "That isn't a Trickshot Sandbox backup.";
+    const clean = {};
+    for (const k of DATA_KEYS) {
+      const v = obj.data[k];
+      if (v === undefined) continue;
+      if (typeof v !== "string" || v.length > 4800000) return "The file has a value for " + k + " that doesn't look right.";
+      if (DATA_JSON_KEYS.includes(k)) { try { const j = JSON.parse(v); if (!j || typeof j !== "object") throw new Error("x"); } catch (e) { return "The file has a value for " + k + " that doesn't look right."; } }
+      else if (k === "tsb-tutorial" && v !== "started" && v !== "done") return "The file has a value for " + k + " that doesn't look right.";
+      else if (k === "tsb-settings-seen" && v !== "1") return "The file has a value for " + k + " that doesn't look right.";
+      else if (k === "tsb-name" && !/^[\w \-]{0,14}$/.test(v)) return "The file has a value for " + k + " that doesn't look right.";
+      clean[k] = v;
+    }
+    return Object.keys(clean).length ? clean : "The file has none of the game's saved data in it.";
+  }
+  document.getElementById("data-export").addEventListener("click", exportData);
+  document.getElementById("data-import").addEventListener("click", () => document.getElementById("data-import-file").click());
+  document.getElementById("data-import-file").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    importApplyEl.hidden = true; importClean = null;
+    if (!file) return;
+    if (file.size > 6000000) { importNoteEl.textContent = "That file is too big to be a backup."; return; }
+    const res = checkImport(await file.text());
+    if (typeof res === "string") { importNoteEl.textContent = res; return; }
+    importClean = res;
+    importNoteEl.textContent = "This backup has " + Object.keys(res).length + " items. Replacing your data with it can't be undone.";
+    importApplyEl.hidden = false;
+  });
+  importApplyEl.addEventListener("click", () => {
+    if (!importClean) return;
+    try { sessionStorage.setItem("tsb-import", JSON.stringify(importClean)); }
+    catch (e) { try { for (const k of Object.keys(localStorage)) if (k.startsWith("tsb-")) localStorage.removeItem(k); for (const k of Object.keys(importClean)) localStorage.setItem(k, importClean[k]); } catch (e2) { /* ignore */ } }
+    location.reload();
+  });
+
   // Erase all data: ask twice, then everything saved in this browser for the game goes
   const eraseBtn = document.getElementById("erase-all");
   let eraseTimer = 0;
@@ -5061,7 +5134,7 @@
 
     showBonusTags(res.mult, res.tags, res.pens || [], res.dist);
     flashCrosshair();
-    hitStopTimer = CFG.hitStopTime;
+    hitStopTimer = SETTINGS.reduceMotion ? 0 : CFG.hitStopTime;
     if (!silent) playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
     showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x");
     statHit(res, pointsGained);
@@ -5528,7 +5601,6 @@
   // spawn points on the open floor, clear of the walls, pillars and platforms
   // (the deathmatch spawn points, SPAWNS, come from the map)
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
-  const TEAM_COLORS = [0x3e8ef7, 0xe5484d], TEAM_NAMES = ["Blue", "Red"];
   function modeName() {
     if (net.sub === "dm" && net.koth) return net.teams ? "Team King of the Hill" : "King of the Hill";
     return net.sub === "dm" && net.teams ? "Team Deathmatch" : SUB_NAMES[net.sub];
@@ -5547,7 +5619,7 @@
     hillVis.g.visible = net.active && net.koth;
     const [kind, who] = net.hs;
     let c = 0xe6e6e6;
-    if (kind === 2) c = 0xff4a3d;
+    if (kind === 2) c = HILL_CONTESTED.c;
     else if (kind === 1) { const p = net.teams ? null : net.players.get(who); c = net.teams ? TEAM_COLORS[who] : p ? p.color : 0xffd23c; }
     setHillColor(c);
   }
@@ -5997,6 +6069,19 @@
     }, 60);
   }
 
+  // an arrow round the crosshair pointing at where someone else's shot came from (Settings > Accessibility)
+  const soundCuesEl = document.getElementById("sound-cues");
+  function soundCue(x, z) {
+    const dx = x - yawObject.position.x, dz = z - yawObject.position.z, yaw = yawObject.rotation.y;
+    const fwd = dx * -Math.sin(yaw) + dz * -Math.cos(yaw), right = dx * Math.cos(yaw) + dz * -Math.sin(yaw);
+    const el = document.createElement("i");
+    el.style.transform = "rotate(" + Math.atan2(right, fwd).toFixed(3) + "rad)";
+    el.style.transformOrigin = "9px 118px";
+    soundCuesEl.appendChild(el);
+    while (soundCuesEl.children.length > 6) soundCuesEl.removeChild(soundCuesEl.firstChild);
+    setTimeout(() => el.remove(), 1150);
+  }
+
   // When you're killed you watch the player who did it (through their eyes) until you respawn; if they die too, you move on
   // to someone who is still alive. Their model is hidden so you're not inside their head.
   let spec = null;
@@ -6153,6 +6238,7 @@
           }
         }
         playRemoteShot(m.g, _tmpV1.distanceTo(yawObject.position));
+        if (SETTINGS.soundCues) soundCue(_tmpV1.x, _tmpV1.z);
         break;
 
       case "tkill": {
@@ -7276,7 +7362,7 @@
     const left = document.getElementById("kb-left"), mid = document.getElementById("kb-mid"), right = document.getElementById("kb-right");
     const [kind, who] = net.hs;
     let midColor = "#e6e6e6";
-    if (kind === 2) midColor = "#ff6a5e";
+    if (kind === 2) midColor = HILL_CONTESTED.css;
     else if (kind === 1) { const hp = net.teams ? null : net.players.get(who); midColor = "#" + (net.teams ? TEAM_COLORS[who] : hp ? hp.color : 0xffd23c).toString(16).padStart(6, "0"); }
     mid.textContent = hillText().replace(/ the hill$/, "");
     mid.style.color = midColor;
