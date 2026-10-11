@@ -211,7 +211,7 @@
     realisticMoveSpread: 0.016, // any gun on the ground: none standing still, growing with speed until...
     realisticMoveFullSpeed: 10, // ...this speed (u/s), where it levels out. Aiming down sights halves it.
     crouchRecoilMult: 0.6,      // holding crouch (on the ground) tames recoil
-    realisticHipSpread: 0.012,  // the sniper when it isn't scoped, so a no-scope is a real gamble
+    realisticHipSpread: 0.012,  // the sniper from the hip (not aiming), so a no-scope is a real gamble
 
   };
 
@@ -2084,31 +2084,49 @@
   addPart(rifleGroup, new THREE.BoxGeometry(0.075, 0.07, 0.36), woodStock, 0, -0.025, -0.40);
   // tapered barrel
   addPart(rifleGroup, new THREE.CylinderGeometry(0.023, 0.033, 0.88, 16), metalDark, 0, 0.005, -0.64, HALF_PI, 0, 0);
-  // muzzle brake: a block with three gas ports cut into each side
-  addPart(rifleGroup, new THREE.BoxGeometry(0.068, 0.058, 0.15), metalDark, 0, 0.005, -1.11);
+  // muzzle brake: a block with three gas ports cut into each side (a fitted muzzle attachment replaces it)
+  const rifleBrake = new THREE.Group();
+  rifleGroup.add(rifleBrake);
+  addPart(rifleBrake, new THREE.BoxGeometry(0.068, 0.058, 0.15), metalDark, 0, 0.005, -1.11);
   for (let i = 0; i < 3; i++) {
     for (const side of [-1, 1]) {
-      addPart(rifleGroup, new THREE.BoxGeometry(0.004, 0.036, 0.022), portMat, side * 0.0335, 0.005, -1.065 - i * 0.04);
+      addPart(rifleBrake, new THREE.BoxGeometry(0.004, 0.036, 0.022), portMat, side * 0.0335, 0.005, -1.065 - i * 0.04);
     }
   }
   // folded bipod, legs tucked along the barrel
   addPart(rifleGroup, new THREE.CylinderGeometry(0.034, 0.034, 0.03, 12), metalDark, 0, 0.0, -0.62, HALF_PI, 0, 0);
-  // scope: tube, objective bell, eyepiece, turrets and mounts
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.034, 0.034, 0.38, 16), metalDark, 0, 0.12, -0.05, HALF_PI, 0, 0);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.052, 0.034, 0.09, 16), metalDark, 0, 0.12, -0.285, HALF_PI, 0, 0);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.054, 0.054, 0.025, 16), metalDark, 0, 0.12, -0.34, HALF_PI, 0, 0);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.034, 0.042, 0.06, 16), metalDark, 0, 0.12, 0.165, HALF_PI, 0, 0);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.019, 0.019, 0.032, 12), metalMid, 0, 0.165, -0.04);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.019, 0.019, 0.032, 12), metalMid, 0.045, 0.12, -0.04, 0, 0, HALF_PI);
-  addPart(rifleGroup, new THREE.CylinderGeometry(0.044, 0.044, 0.07, 16), metalMid, 0, 0.12, -0.04, HALF_PI, 0, 0);
-  addPart(rifleGroup, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0.12, -0.14);
-  addPart(rifleGroup, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0.12, 0.07);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, 0.085, -0.14);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, 0.085, 0.07);
+  // scope: tube, objective bell, eyepiece, turrets and mounts. It is an attachment: hidden until
+  // a scope is fitted (the high-zoom one stretches it), and the iron sights below fold away under it
+  const rifleScope = new THREE.Group();
+  rifleScope.position.set(0, 0.12, -0.05);
+  rifleScope.visible = false;
+  rifleGroup.add(rifleScope);
+  addPart(rifleScope, new THREE.CylinderGeometry(0.034, 0.034, 0.38, 16), metalDark, 0, 0, 0, HALF_PI, 0, 0);
+  addPart(rifleScope, new THREE.CylinderGeometry(0.052, 0.034, 0.09, 16), metalDark, 0, 0, -0.235, HALF_PI, 0, 0);
+  addPart(rifleScope, new THREE.CylinderGeometry(0.054, 0.054, 0.025, 16), metalDark, 0, 0, -0.29, HALF_PI, 0, 0);
+  addPart(rifleScope, new THREE.CylinderGeometry(0.034, 0.042, 0.06, 16), metalDark, 0, 0, 0.215, HALF_PI, 0, 0);
+  addPart(rifleScope, new THREE.CylinderGeometry(0.019, 0.019, 0.032, 12), metalMid, 0, 0.045, 0.01);
+  addPart(rifleScope, new THREE.CylinderGeometry(0.019, 0.019, 0.032, 12), metalMid, 0.045, 0, 0.01, 0, 0, HALF_PI);
+  addPart(rifleScope, new THREE.CylinderGeometry(0.044, 0.044, 0.07, 16), metalMid, 0, 0, 0.01, HALF_PI, 0, 0);
+  addPart(rifleScope, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0, -0.09);
+  addPart(rifleScope, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0, 0.12);
+  addPart(rifleScope, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, -0.035, -0.09);
+  addPart(rifleScope, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, -0.035, 0.12);
   // lenses: dark coated glass with a faint glint
-  addPart(rifleGroup, new THREE.CircleGeometry(0.048, 20), scopeGlass, 0, 0.12, -0.353);
-  addPart(rifleGroup, new THREE.CircleGeometry(0.012, 10), glintMat, -0.016, 0.137, -0.354);
-  addPart(rifleGroup, new THREE.CircleGeometry(0.038, 20), scopeGlass, 0, 0.12, 0.196, 0, Math.PI, 0);
+  addPart(rifleScope, new THREE.CircleGeometry(0.048, 20), scopeGlass, 0, 0, -0.303);
+  addPart(rifleScope, new THREE.CircleGeometry(0.012, 10), glintMat, -0.016, 0.017, -0.304);
+  addPart(rifleScope, new THREE.CircleGeometry(0.038, 20), scopeGlass, 0, 0, 0.246, 0, Math.PI, 0);
+  // iron sights: a hooded front post near the muzzle and a notched rear on the receiver; aiming
+  // puts the post's tip level with the top of the notch
+  const rifleIrons = new THREE.Group();
+  rifleGroup.add(rifleIrons);
+  addPart(rifleIrons, new THREE.BoxGeometry(0.024, 0.032, 0.03), metalDark, 0, 0.052, -0.99);      // front sight block
+  addPart(rifleIrons, new THREE.BoxGeometry(0.004, 0.04, 0.004), metalMid, 0, 0.088, -0.99);        // front post
+  addPart(rifleIrons, new THREE.BoxGeometry(0.004, 0.044, 0.022), metalDark, -0.013, 0.09, -0.99);  // hood ears
+  addPart(rifleIrons, new THREE.BoxGeometry(0.004, 0.044, 0.022), metalDark, 0.013, 0.09, -0.99);
+  addPart(rifleIrons, new THREE.BoxGeometry(0.034, 0.016, 0.03), metalDark, 0, 0.084, 0.06);        // rear sight base
+  addPart(rifleIrons, new THREE.BoxGeometry(0.011, 0.016, 0.006), metalDark, -0.0105, 0.1, 0.06);   // rear ears, the notch between
+  addPart(rifleIrons, new THREE.BoxGeometry(0.011, 0.016, 0.006), metalDark, 0.0105, 0.1, 0.06);
   const magMesh = addPart(rifleGroup, new THREE.BoxGeometry(0.055, 0.19, 0.07), metalDark, 0, -0.15, 0.02, -0.15, 0, 0);
 
   // ---- dropped magazines: the empty mag falls out during a reload and lies on the floor ----
@@ -2238,8 +2256,10 @@
   addPart(arGroup, new THREE.CylinderGeometry(0.015, 0.015, 0.055, 10), metalDark, 0, 0.015, -0.64, HALF_PI, 0, 0);  // flash hider
   // iron sights: aiming looks through the rear ring with the front post's tip at its centre
   addPart(arGroup, new THREE.BoxGeometry(0.008, 0.036, 0.012), metalDark, 0, 0.059, -0.37);     // front sight post
-  addPart(arGroup, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.064, 0.08);        // rear sight base
-  addPart(arGroup, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.077, 0.08);  // rear sight ring
+  const arRear = new THREE.Group();   // folds away under a red dot
+  arGroup.add(arRear);
+  addPart(arRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.064, 0.08);        // rear sight base
+  addPart(arRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.077, 0.08);  // rear sight ring
   addPart(arGroup, new THREE.BoxGeometry(0.035, 0.1, 0.04), gripMat, 0, -0.085, 0.10, 0.35, 0, 0);   // pistol grip
   addPart(arGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.058, 0.04, 0, HALF_PI, Math.PI);
   addPart(arGroup, new THREE.CylinderGeometry(0.016, 0.016, 0.17, 10), metalDark, 0, 0.008, 0.21, HALF_PI, 0, 0);    // buffer tube
@@ -2446,7 +2466,8 @@
   ];
 
   // Every weapon is data; all the guns share one firing path.
-  //   scope: sniper overlay; other guns aim down sights, zooming to adsZoom x FOV
+  //   scope: the sniper overlay, only with a scope fitted; otherwise every gun aims down sights, zooming to adsZoom x FOV
+  //   sniper: the sniper, scoped or not (its no-scope and quickscope tags, and its hip spread)
   //   spread/spreadAds: half-angle of the shot cone in radians; bloom widens it per shot
   //   scoreScale: points multiplier, so spraying can't outscore a sniper trickshot
   //   action: what cycles after a shot (bolt, pump, slide or nothing)
@@ -2459,8 +2480,8 @@
     rifle: {
       name: "SNIPER", group: rifleGroup,
       restPos: new THREE.Vector3(0.30, -0.30, -0.62), restRot: new THREE.Euler(0.03, -0.09, 0.01),
-      adsPos: new THREE.Vector3(0.0, -0.118, -0.24), adsRot: new THREE.Euler(0, 0, 0),
-      canADS: true, scope: true, fireRate: 1.1, auto: false, isMelee: false, usesAmmo: true,
+      adsPos: new THREE.Vector3(0.0, -0.108, -0.24), adsRot: new THREE.Euler(0, 0, 0),   // iron sights; a fitted scope lifts this to its own axis
+      canADS: true, scope: false, adsZoom: 0.62, sniper: true, scopeAdsY: -0.12, fireRate: 1.1, auto: false, isMelee: false, usesAmmo: true,
       magSize: CFG.magSize, ammoLabel: "ROUNDS", pellets: 1, spread: 0, spreadAds: 0, bloom: 0, bloomMax: 0, bloomRecover: 0,
       scoreScale: 1, recoil: 1, kick: 1, flashScale: 1, brake: true, smoke: 1,
       action: "bolt", ejectOnShot: false, casing: "rifle",
@@ -3426,28 +3447,66 @@
       mag: [{ id: "extmag", name: "Extended magazine", need: 70, fx: { mag: 1.3, reload: 1.1 }, text: "Two more rounds, slower reload" }],
     },
   };
-  // what a fitted attachment looks like: a few parts placed from the gun's muzzle (z, forward is negative) and the height of its barrel
+  // what a fitted attachment looks like, built from where each gun's parts really are (see AT_MOUNT)
   const AT_STEEL = new THREE.MeshStandardMaterial({ color: 0x2b2f35, metalness: 0.7, roughness: 0.45 });
+  const AT_RUBBER = new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.9 });
   const AT_DOT = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
-  function attachParts(ids, muzzleZ, muzzleY) {
+  const AT_LENS = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
+  const AT_DOT_RISE = 0.034;   // a red dot's window centre sits this far above the rail it is clamped to
+  // per gun (the viewmodel, and AV_MOUNT for the other-player models; forward is -z):
+  //   muzzle [z where a muzzle device starts, barrel height, barrel radius, suppressor length]
+  //   optic [z, rail top]; under [z, fore-end bottom]; butt [z of the butt's back face, centre height, height]; tube [z of the tube's end, height, radius]
+  const AT_MOUNT = {
+    rifle: { muzzle: [-1.035, 0.005, 0.034, 0.34], butt: [0.555, -0.03, 0.15] },
+    ar: { muzzle: [-0.64, 0.015, 0.015, 0.26], optic: [-0.03, 0.062], under: [-0.3, -0.016] },
+    ak: { muzzle: [-0.545, 0, 0.014, 0.24], optic: [0.04, 0.047], under: [-0.23, -0.032] },
+    shotgun: { muzzle: [-0.75, 0.022, 0.016, 0.2], tube: [-0.671, -0.018, 0.0145] },
+    pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024] },
+  };
+  const AV_MOUNT = {
+    rifle: { muzzle: [-1.0, 0.01, 0.022, 0.32], butt: [0.3, -0.02, 0.1] },
+    ar: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425] },
+    ak: { muzzle: [-0.76, 0, 0.018, 0.24], optic: [-0.05, 0.0425], under: [-0.55, -0.035] },
+    shotgun: { muzzle: [-0.975, 0.02, 0.03, 0.2], tube: [-0.75, -0.03, 0.035] },
+    pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05] },
+  };
+  function attachParts(ids, M) {
     const g = new THREE.Group();
     const add = (geo, mat, x, y, z, rx) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx) m.rotation.x = rx; g.add(m); return m; };
-    const HP = Math.PI / 2, top = muzzleY + 0.075;
+    const HP = Math.PI / 2, mz = M.muzzle;
     for (const id of ids) {
-      if (id === "suppressor") add(new THREE.CylinderGeometry(0.032, 0.032, 0.36, 12), AT_STEEL, 0, muzzleY, muzzleZ - 0.16, HP);
-      else if (id === "brake" || id === "comp") add(new THREE.BoxGeometry(0.075, 0.075, 0.11), AT_STEEL, 0, muzzleY, muzzleZ - 0.02);
-      else if (id === "choke") add(new THREE.CylinderGeometry(0.03, 0.036, 0.09, 12), AT_STEEL, 0, muzzleY, muzzleZ - 0.02, HP);
-      else if (id === "reddot") { add(new THREE.BoxGeometry(0.05, 0.035, 0.12), AT_STEEL, 0, top + 0.02, muzzleZ * 0.4); add(new THREE.BoxGeometry(0.018, 0.018, 0.004), AT_DOT, 0, top + 0.05, muzzleZ * 0.4 - 0.05); }
-      else if (id === "scope-low") add(new THREE.CylinderGeometry(0.036, 0.036, 0.3, 12), AT_STEEL, 0, top + 0.05, muzzleZ * 0.4, HP);
-      else if (id === "scope-high") { add(new THREE.CylinderGeometry(0.042, 0.042, 0.5, 12), AT_STEEL, 0, top + 0.055, muzzleZ * 0.4, HP); add(new THREE.CylinderGeometry(0.056, 0.056, 0.05, 12), AT_STEEL, 0, top + 0.055, muzzleZ * 0.4 - 0.27, HP); }
-      else if (id === "vgrip") add(new THREE.BoxGeometry(0.03, 0.11, 0.04), AT_STEEL, 0, muzzleY - 0.1, muzzleZ * 0.5);
-      else if (id === "agrip") add(new THREE.BoxGeometry(0.03, 0.05, 0.09), AT_STEEL, 0, muzzleY - 0.07, muzzleZ * 0.5, -0.5);
-      else if (id === "laser") { add(new THREE.BoxGeometry(0.03, 0.03, 0.07), AT_STEEL, 0, muzzleY - 0.05, muzzleZ * 0.7); add(new THREE.BoxGeometry(0.008, 0.008, 0.004), AT_DOT, 0, muzzleY - 0.05, muzzleZ * 0.7 - 0.04); }
-      else if (id === "stock-heavy") add(new THREE.BoxGeometry(0.07, 0.08, 0.14), AT_STEEL, 0, muzzleY - 0.01, 0.28);
+      if (id === "suppressor" && mz) {   // a can twice the barrel's width, from the muzzle forward
+        const r = Math.max(mz[2] * 1.9, 0.024), len = mz[3];
+        add(new THREE.CylinderGeometry(r, r, len, 14), AT_STEEL, 0, mz[1], mz[0] - len / 2, HP);
+        add(new THREE.CylinderGeometry(r * 0.45, r * 0.45, 0.004, 10), AT_RUBBER, 0, mz[1], mz[0] - len - 0.002, HP);
+      } else if ((id === "brake" || id === "comp") && mz) {   // a ported block a little wider than the barrel
+        const w = mz[2] * 2.5, len = Math.max(mz[2] * 4, 0.06);
+        add(new THREE.BoxGeometry(w, w, len), AT_STEEL, 0, mz[1], mz[0] - len / 2);
+        for (const side of [-1, 1]) for (let i = 0; i < 2; i++) add(new THREE.BoxGeometry(0.003, w * 0.6, len * 0.16), AT_RUBBER, side * (w / 2 + 0.0005), mz[1], mz[0] - len * (0.3 + i * 0.36));
+      } else if (id === "choke" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.15, mz[2] * 1.3, 0.05, 14), AT_STEEL, 0, mz[1], mz[0] - 0.025, HP);
+      else if (id === "wide" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.7, mz[2] * 1.2, 0.045, 14), AT_STEEL, 0, mz[1], mz[0] - 0.022, HP);
+      else if (id === "reddot" && M.optic) {   // clamped to the rail: a riser, an open frame, a faint lens and the dot
+        const [z, t] = M.optic, c = t + AT_DOT_RISE;
+        add(new THREE.BoxGeometry(0.026, 0.011, 0.05), AT_STEEL, 0, t + 0.0055, z);
+        add(new THREE.BoxGeometry(0.038, 0.006, 0.045), AT_STEEL, 0, c - 0.021, z);
+        add(new THREE.BoxGeometry(0.038, 0.006, 0.045), AT_STEEL, 0, c + 0.021, z);
+        for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.006, 0.048, 0.045), AT_STEEL, side * 0.016, c, z);
+        add(new THREE.PlaneGeometry(0.026, 0.036), AT_LENS, 0, c, z - 0.02);
+        add(new THREE.BoxGeometry(0.0032, 0.0032, 0.001), AT_DOT, 0, c, z - 0.021);
+      } else if (id === "vgrip" && M.under) add(new THREE.CylinderGeometry(0.015, 0.017, 0.1, 10), AT_STEEL, 0, M.under[1] - 0.048, M.under[0]);
+      else if (id === "agrip" && M.under) add(new THREE.BoxGeometry(0.028, 0.03, 0.085), AT_STEEL, 0, M.under[1] - 0.012, M.under[0] + 0.01, 0.35);
+      else if (id === "laser" && M.under) {   // a box under the frame, the red lens facing forward
+        add(new THREE.BoxGeometry(0.026, 0.022, 0.06), AT_STEEL, 0, M.under[1] - 0.011, M.under[0]);
+        add(new THREE.CylinderGeometry(0.004, 0.004, 0.002, 8), AT_DOT, 0, M.under[1] - 0.011, M.under[0] - 0.031, HP);
+      } else if (id === "stock-heavy" && M.butt) add(new THREE.BoxGeometry(0.09, M.butt[2] * 1.05, 0.05), AT_RUBBER, 0, M.butt[1], M.butt[0] + 0.02);
+      else if (id === "tube" && M.tube) {   // the magazine tube runs on past its old end
+        const [z, y, r] = M.tube;
+        add(new THREE.CylinderGeometry(r, r, 0.08, 12), AT_STEEL, 0, y, z - 0.04, HP);
+        add(new THREE.CylinderGeometry(r * 1.1, r * 1.1, 0.02, 12), AT_STEEL, 0, y, z - 0.09, HP);
+      }
     }
     return g;
   }
-  const AV_MUZZLE = { rifle: [-1.0, 0.02], ar: [-0.88, 0.01], ak: [-0.9, 0.01], shotgun: [-1.0, 0.02], pistol: [-0.28, 0.02] };   // where each other-player gun ends (z, height)
   const attachCode = () => { const ids = chosenAttachments(SETTINGS.loadout).map((o) => o.id); return ids.length ? SETTINGS.loadout + ":" + ids.join(",") : ""; };
   const AT_CODE_OK = /^[a-z]{2,8}:[a-z0-9,\-]{1,50}$/;
   function randomAttachCode(gun) {   // a bot's look: a few random attachments (they do not change how a bot shoots)
@@ -3458,7 +3517,7 @@
   const WEAPON_BASE = {};   // what each gun is without attachments
   for (const id of GUNS) {
     const w = WEAPONS[id];
-    WEAPON_BASE[id] = { mag: w.magSize, spread: w.spread, spreadAds: w.spreadAds, recoil: w.recoil, kick: w.kick, flash: w.flashScale, reload: Object.assign({}, w.reload) };
+    WEAPON_BASE[id] = { mag: w.magSize, spread: w.spread, spreadAds: w.spreadAds, recoil: w.recoil, kick: w.kick, flash: w.flashScale, reload: Object.assign({}, w.reload), adsY: w.adsPos.y };
   }
   const baseMag = (id) => (WEAPON_BASE[id] ? WEAPON_BASE[id].mag : WEAPONS[id].magSize);
   const UNLOCK_ALL_ATTACHMENTS = true;   // TEMPORARY, while Ethan tests them: every attachment is open. Set to false to bring the hit-count unlocks back.
@@ -3483,8 +3542,18 @@
       w.adsMult = fx.ads; w.scopeFovMult = fx.scopeFov; w.soundMult = fx.sound;
       if (w.ammo > w.magSize) w.ammo = w.magSize;
       if (w.atGroup) { w.group.remove(w.atGroup); w.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.atGroup = null; }
-      const ids = chosenAttachments(id).map((o) => o.id);
-      if (ids.length && w.muzzle) { w.atGroup = attachParts(ids, w.muzzle.z, w.muzzle.y); w.group.add(w.atGroup); }
+      const ids = chosenAttachments(id).map((o) => o.id), has = (x) => ids.includes(x);
+      if (ids.length && AT_MOUNT[id]) { w.atGroup = attachParts(ids, AT_MOUNT[id]); w.group.add(w.atGroup); }
+      w.adsPos.y = base.adsY;
+      if (id === "rifle") {   // the sniper: iron sights, unless a scope is fitted
+        const scoped = has("scope-low") || has("scope-high");
+        w.scope = scoped; rifleScope.visible = scoped; rifleIrons.visible = !scoped;
+        rifleScope.scale.set(has("scope-high") ? 1.12 : 1, has("scope-high") ? 1.12 : 1, has("scope-high") ? 1.3 : 1);
+        rifleBrake.visible = !has("suppressor") && !has("brake");
+        if (scoped) w.adsPos.y = w.scopeAdsY;
+      }
+      if (AT_MOUNT[id].optic && has("reddot")) w.adsPos.y = -(AT_MOUNT[id].optic[1] + AT_DOT_RISE);   // look through the dot
+      if (id === "ar") arRear.visible = !has("reddot");
     }
     updateAmmoHud();
   }
@@ -5217,8 +5286,9 @@
     if (isKnife && !thrown && CFG.knifeMult !== 1) add("KNIFE", CFG.knifeMult);
     else if (isKnife) { if (CFG.thrownKnifeMult !== 1) add("THROWN KNIFE", CFG.thrownKnifeMult); }
     else {
-      if (weapon && weapon.scope && vm.adsProgress < 0.35 && dist >= CFG.noScopeMinDist) add("NO-SCOPE", CFG.noScopeMult);
-      else if (weapon && weapon.scope && vm.adsProgress >= 0.5 && (elapsedTime - vm.adsStartTime) <= CFG.quickscopeWindow) {
+      // the sniper's tags go by aiming, not by what is fitted: from the hip is a no-scope, iron sights or scope
+      if (weapon && weapon.sniper && vm.adsProgress < 0.35 && dist >= CFG.noScopeMinDist) add("NO-SCOPE", CFG.noScopeMult);
+      else if (weapon && weapon.sniper && vm.adsProgress >= 0.5 && (elapsedTime - vm.adsStartTime) <= CFG.quickscopeWindow) {
         add("QUICKSCOPE", CFG.quickscopeMult);   // scoped in and fired almost immediately
       }
       // the last round of a full magazine, once (a shotgun firing its one reloaded shell doesn't count)
@@ -5309,8 +5379,8 @@
       ["Aim", [
         ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per meter past " + C.distanceFrom + " m: " +
           x(1 + 15 * C.distanceMultPerM) + " at 30 m, " + x(1 + 35 * C.distanceMultPerM) + " at 50 m, " + x(1 + 65 * C.distanceMultPerM) + " at 80 m."],
-        ["NO-SCOPE", x(C.noScopeMult), "Sniper, unscoped, from " + C.noScopeMinDist + " m or more. With Realistic shooting on, unscoped shots spread a little, and moving spreads every gun."],
-        ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of scoping in."],
+        ["NO-SCOPE", x(C.noScopeMult), "Sniper, fired from the hip (not aiming), from " + C.noScopeMinDist + " m or more. With Realistic shooting on, hip shots spread a little, and moving spreads every gun."],
+        ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of aiming in (iron sights or a scope)."],
         ["FLICK", x(C.flickMult), "Turn your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
         ["SNAP FLICK", x(C.snapFlickMult), C.snapFlickAngle + "° or more in the last " + C.snapFlickWindow + " s: a faster, bigger flick (instead of FLICK)."],
         ["QUICK SWITCH", x(C.quickSwitchMult), "Hit within " + C.quickSwitchWindow + " s of finishing a weapon swap, with a gun that hadn't just fired."],
@@ -5635,7 +5705,7 @@
     const ads = easeInOut(vm.adsProgress);
     let cone = (w.spread + (w.spreadAds - w.spread) * ads) + (w.bloomNow || 0);
     if (SETTINGS.realisticShooting) {
-      if (w.scope) cone += CFG.realisticHipSpread * (1 - ads);
+      if (w.sniper) cone += CFG.realisticHipSpread * (1 - ads);
       if (player.onGround) {
         const moveK = Math.min(Math.max((Math.hypot(player.velocity.x, player.velocity.z) - 0.5) / (CFG.realisticMoveFullSpeed - 0.5), 0), 1);
         cone += CFG.realisticMoveSpread * moveK * (1 - 0.5 * ads);
@@ -5696,7 +5766,7 @@
         if (puffs++ < 4) burst(propHits[0].point, 0xd2a679, w.pellets > 1 ? 2 : 5);
       } else if (impactDist < maxD) {
         _impactPt.copy(raycaster.ray.origin).addScaledVector(_pelletDir, impactDist);
-        spawnDecal(_impactPt, _occNormal, w.pellets > 1 ? 0.045 : w.scope ? 0.085 : 0.06);
+        spawnDecal(_impactPt, _occNormal, w.pellets > 1 ? 0.045 : w.sniper ? 0.085 : 0.06);
         if (puffs++ < 4) burst(_impactPt, 0xb8c0c8, w.pellets > 1 ? 2 : 4);
       }
     }
@@ -6170,9 +6240,10 @@
     const P = (geo, mat, x, y, z, rx) => addPart(g, geo, mat, x, y, z, rx || 0, 0, 0);
     const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
     const HP = Math.PI / 2;
-    if (id === "rifle") {            // sniper: long barrel, scope, wooden stock
+    if (id === "rifle") {            // sniper: long barrel, wooden stock, and a scope when one is fitted
       P(B(0.07, 0.09, 0.55), dark, 0, 0, -0.15); P(B(0.04, 0.04, 0.6), steel, 0, 0.01, -0.7);
-      P(new THREE.CylinderGeometry(0.035, 0.035, 0.34, 10), steel, 0, 0.1, -0.25, HP); P(B(0.06, 0.1, 0.2), wood, 0, -0.02, 0.2);
+      g.userData.scope = P(new THREE.CylinderGeometry(0.035, 0.035, 0.34, 10), steel, 0, 0.1, -0.25, HP); P(B(0.06, 0.1, 0.2), wood, 0, -0.02, 0.2);
+      g.userData.scope.visible = false;   // only with a scope fitted
     } else if (id === "ar") {        // rifle: short and black
       P(B(0.065, 0.085, 0.7), dark, 0, 0, -0.3); P(B(0.025, 0.025, 0.25), steel, 0, 0.005, -0.75);
       P(B(0.03, 0.2, 0.05), steel, 0, -0.14, -0.2); P(B(0.05, 0.07, 0.2), dark, 0, 0, 0.15);
@@ -6253,13 +6324,15 @@
       const g = ud.guns[id];
       if (g && g.userData.atGroup) { g.remove(g.userData.atGroup); g.userData.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); g.userData.atGroup = null; }
     }
+    if (ud.guns.rifle.userData.scope) ud.guns.rifle.userData.scope.visible = false;
     if (!p.at) return;
-    const [gun, list] = p.at.split(":"), mz = AV_MUZZLE[gun], target = ud.guns[gun];
-    if (!target || !mz) return;
+    const [gun, list] = p.at.split(":"), mount = AV_MOUNT[gun], target = ud.guns[gun];
+    if (!target || !mount) return;
     const known = new Set(Object.values(ATTACHMENTS[gun] || {}).flat().map((o) => o.id));
     const ids = list.split(",").filter((x) => known.has(x));
     if (!ids.length) return;
-    target.userData.atGroup = attachParts(ids, mz[0], mz[1]);
+    if (gun === "rifle" && target.userData.scope) target.userData.scope.visible = ids.includes("scope-low") || ids.includes("scope-high");
+    target.userData.atGroup = attachParts(ids, mount);
     target.add(target.userData.atGroup);
   }
   const _avStart = new THREE.Vector3(), _avPos = new THREE.Vector3(), _avDir = new THREE.Vector3();
@@ -8957,7 +9030,7 @@
     { title: "Jump", text: () => "Press " + keyOf("jump") + " to jump.", done: () => tutDelta("jumps") >= 1 },
     { title: "Slide", text: () => "Sprint, then hold " + keyOf("slide") + " to slide: it keeps your speed. Under " + CFG.slideMinSpeed + " on the speed meter, " + keyOf("slide") + " only crouch-walks.", done: () => tutDelta("slides") >= 1 },
     { title: "Shoot", text: () => "Hit a target with " + keyOf("fire") + ". Smaller and faster targets are worth more.", done: () => tutDelta("hits") >= 1 },
-    { title: "Aim", text: () => "Hold " + keyOf("aim") + " to aim (the sniper scopes in), then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
+    { title: "Aim", text: () => "Hold " + keyOf("aim") + " to aim down the sights, then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
     { title: "Shoot in the air", text: "Hit a target while you're in the air. Every trick multiplies the shot.", done: () => tut.lastHit && tut.lastHit.tags.includes("AIR") },
     { title: "Jump pad", text: "Run onto a glowing jump pad. The purple ones throw you higher.", done: () => tutDelta("padLaunches") >= 1 },
     { title: "Bunnyhop", text: "Jump again the moment you land to keep your speed. Do it twice.", done: () => tutDelta("bhops") >= 2 },
