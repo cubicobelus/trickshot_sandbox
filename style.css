@@ -602,6 +602,8 @@
   #ps-rules summary span { color: #9a9aa3; font-size: 12px; margin-left: 8px; }
   .ps-rules-body { display: flex; gap: 18px; flex-wrap: wrap; padding: 8px 0 0; font-size: 13px; color: #ccc; }
   .ps-go { margin: 16px auto 0; }
+  .ps-rule-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; width: 100%; }
+  .ps-rule-checks label[hidden] { display: none; }
   #play-setup select { background: #202026; color: #e8e8ea; border: 1px solid #44444c; border-radius: 4px; padding: 2px 4px; font: inherit; margin: 0 4px; }
   #play-setup .ps-go { display: block; text-align: center; width: 100%; max-width: 360px; padding: 13px 16px; border: 1px solid #ffd24a; border-radius: 8px; background: rgba(255,210,74,0.12);
     color: #ffd24a; font-weight: bold; font-size: 16px; cursor: pointer; }

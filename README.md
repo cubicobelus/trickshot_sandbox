@@ -89,7 +89,7 @@ runs the room, so the host has to keep their tab open. It is experimental and ha
   12 seconds. It can't stop every kind of cheating, so play with people you know. Players can see each other's IP addresses
   (that's how WebRTC works).
 
-The **Multiplayer tab** has three choices: **Practice vs bots**, **Host a room** and **Join a room** (type the code). Practice and Host open a setup window with the mode cards, a map picker with a bigger preview, and a collapsed Rules section (first to, bots, bot level); it remembers your last choices, and the host can change the next round from the room.
+The **Multiplayer tab** has three choices: **Practice vs bots**, **Host a room** and **Join a room** (type the code). Practice and Host open a setup window with the mode cards, a map picker with a bigger preview, and a collapsed Rules section (first to, bots, bot level); it remembers your last choices, and the host can change the next round from the room. **Rules** also has match options the host can switch on: low gravity, one-shot kills, headshots only and fast respawn (the timer names any that are on).
 
 **Practice vs bots** (no internet needed): a deathmatch, team deathmatch or King of the Hill against 1 to 5 AI players on Easy, Medium or Hard. They run
 and strafe, use every gun with its real fire rate, reload, and take and deal the same damage as real players. Esc pauses it.

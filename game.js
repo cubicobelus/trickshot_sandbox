@@ -5645,6 +5645,7 @@
     id: null, code: "", sub: "race", pendingSub: "race",
     map: "arena", pendingMap: "arena",
     teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
+    rules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false }, pendingRules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false },   // the host's match rules
     koth: false, pendingKoth: false, hs: [0, -1], teamHill: [0, 0],   // King of the Hill: who holds the hill (0 empty, 1 held, 2 contested; who), and each team's time on it
     phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
     players: new Map(), ttOffset: 0, ttSynced: false,
@@ -5694,6 +5695,15 @@
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
+  const cleanRules = (r) => ({ lowGrav: !!(r && r.lowGrav), oneShot: !!(r && r.oneShot), headOnly: !!(r && r.headOnly), fastResp: !!(r && r.fastResp) });
+  function chooseRules(r) { net.pendingRules = cleanRules(r); }
+  const RULE_NAMES = [["lowGrav", "low gravity"], ["oneShot", "one-shot kills"], ["headOnly", "headshots only"], ["fastResp", "fast respawn"]];
+  const ruleText = (r) => RULE_NAMES.filter(([k]) => r && r[k]).map(([, n]) => n).join(", ");
+  // the map's own physics, then low gravity on top when the room asks for it (everyone's physics runs on their own computer)
+  function applyRulePhysics() {
+    Object.assign(CFG, BASE_PHYS, (currentMap && currentMap.physics) || {});
+    if (net.active && net.rules && net.rules.lowGrav) CFG.gravity *= 0.35;
+  }
   function chooseMap(id) { net.pendingMap = id === "random" || MAPS[id] ? id : "arena"; }
   function chooseMode(value, limit) {
     net.pendingSub = value === "race" ? "race" : "dm";
@@ -6149,6 +6159,8 @@
     net.sub = m.sub;
     net.teams = m.teams === true;
     net.koth = m.koth === true;
+    net.rules = cleanRules(m.rules);
+    applyRulePhysics();
     applyHill(m);
     net.limit = Math.max(0, Math.min(Number(m.limit) || 0, 999));
     net.phase = m.phase;
@@ -6350,7 +6362,7 @@
   function hostBroadcastBoard() { hostBroadcast(hostBoardMsg()); }
   function roundMsg(fresh) {
     return {
-      t: "round", map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
+      t: "round", map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
       targets: net.sub === "race" ? targets.map(serializeTarget) : null, tt: mpTargetClock(),
     };
   }
@@ -6390,6 +6402,8 @@
     net.sub = net.pendingSub;
     net.teams = net.sub === "dm" && net.pendingTeams;
     net.koth = net.sub === "dm" && net.pendingKoth;
+    net.rules = cleanRules(net.pendingRules);
+    applyRulePhysics();
     net.hs = [0, -1]; net.teamHill = [0, 0];
     updateHillVis();
     net.limit = net.sub === "dm" ? net.pendingLimit : 0;
@@ -6500,12 +6514,15 @@
   // damage lands on a player: the hit marker, or the kill if it was the last of their health. `info` carries
   // the points of the shot (paid only on a kill) and whether it was a headshot or a knife
   function hostDealDamage(p, v, dmg, info) {
+    const rules = net.rules || {};
+    if (rules.headOnly && !info.head && !info.knife) return;   // only headshots (and the knife) count
+    if (rules.oneShot) dmg = Math.max(dmg, 1000);
     p.dmg += Math.min(dmg, Math.max(v.hp, 0));   // damage actually dealt
     v.hp -= dmg; v.lastDamageAt = nowMs();
     if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
     v.hp = 0;
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
-    v.alive = false; v.deaths++; v.respawnAt = nowMs() + RESPAWN_MS;
+    v.alive = false; v.deaths++; v.respawnAt = nowMs() + (rules.fastResp ? 1000 : RESPAWN_MS);
     p.kills++; p.score += pts;
     if (info.head) p.heads++;
     p.best = Math.max(p.best, pts); p.streak++; p.bstreak = Math.max(p.bstreak, p.streak); v.streak = 0;
@@ -7104,7 +7121,7 @@
   function mpBots() {
     const count = Math.max(1, Math.min(setup.practice.bots, MAX_PLAYERS - 1));
     const level = setup.practice.level;
-    chooseMode(setup.practice.mode, setup.practice.limit); chooseMap(setup.practice.map); net.id = "you"; net.practice = true; net.botCount = count;
+    chooseMode(setup.practice.mode, setup.practice.limit); chooseMap(setup.practice.map); chooseRules(setup.practice.rules); net.id = "you"; net.practice = true; net.botCount = count;
     mpEnter("host", "BOTS");
     net.lastTick = nowMs();
     for (let i = 0; i < count; i++) addBot(i, level).botIndex = i;
@@ -7129,7 +7146,8 @@
   const modeById = (id) => MODES.find((m) => m.id === id) || MODES[1];
   const LIMITS = [5, 10, 15, 25, 50, 0];
   const BOT_LEVEL_IDS = ["easy", "medium", "hard"];
-  const setup = { practice: { mode: "dm", map: "arena", limit: 15, bots: 3, level: "medium" }, host: { mode: "dm", map: "arena", limit: 15 } };
+  const NO_RULES = { lowGrav: false, oneShot: false, headOnly: false, fastResp: false };
+  const setup = { practice: { mode: "dm", map: "arena", limit: 15, bots: 3, level: "medium", rules: Object.assign({}, NO_RULES) }, host: { mode: "dm", map: "arena", limit: 15, rules: Object.assign({}, NO_RULES) } };
   (function loadSetup() {   // the last choices come back (each value is checked, so a damaged save can't break the menu)
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(SETUP_KEY)); } catch (e) { /* none saved */ }
@@ -7140,6 +7158,7 @@
       if (MODES.some((m) => m.id === s.mode) && !(kind === "practice" && s.mode === "race")) d.mode = s.mode;
       if (s.map === "random" || MAPS[s.map]) d.map = s.map;
       if (LIMITS.includes(s.limit)) d.limit = s.limit;
+      if (s.rules && typeof s.rules === "object") d.rules = cleanRules(s.rules);
       if (kind === "practice") {
         if (Number.isInteger(s.bots) && s.bots >= 1 && s.bots <= 5) d.bots = s.bots;
         if (BOT_LEVEL_IDS.includes(s.level)) d.level = s.level;
@@ -7159,8 +7178,8 @@
   function refreshLobbyLine() {   // in a hosted room: what the next round will be
     if (!mpEls.nextLine) return;
     const m = modeById(pendingModeValue());
-    const lt = limitText(m, net.pendingLimit);
-    mpEls.nextLine.textContent = net.role === "host" && !net.practice ? "Next round: " + m.name + " \u00b7 " + mapNameOf(net.pendingMap) + (lt ? " \u00b7 " + lt : "") : "";
+    const lt = limitText(m, net.pendingLimit), rt = ruleText(net.pendingRules);
+    mpEls.nextLine.textContent = net.role === "host" && !net.practice ? "Next round: " + m.name + " \u00b7 " + mapNameOf(net.pendingMap) + (lt ? " \u00b7 " + lt : "") + (rt ? " \u00b7 " + rt : "") : "";
   }
 
   const psEl = document.getElementById("play-setup");
@@ -7171,8 +7190,8 @@
     if (isKothMode(d.mode) && !(MAPS[d.map] && MAPS[d.map].hill)) d.map = hillMapId() || d.map;
   }
   function openSetup(kind) {
-    const base = kind === "practice" ? setup.practice : kind === "host" ? setup.host : { mode: pendingModeValue(), map: net.pendingMap, limit: net.pendingLimit };
-    ps = { kind, draft: Object.assign({}, base) };
+    const base = kind === "practice" ? setup.practice : kind === "host" ? setup.host : { mode: pendingModeValue(), map: net.pendingMap, limit: net.pendingLimit, rules: net.pendingRules };
+    ps = { kind, draft: Object.assign({}, base, { rules: Object.assign({}, base.rules) }) };
     if (kind === "practice" && ps.draft.mode === "race") ps.draft.mode = "dm";
     fixHillMap();
     renderSetup();
@@ -7220,10 +7239,19 @@
     document.getElementById("ps-limit-unit").textContent = mode.hill ? "(times 5 seconds on the hill" + (d.limit ? ": " + d.limit * 5 + " s)" : ")") : "kills";
     document.getElementById("ps-bots-row").hidden = document.getElementById("ps-level-row").hidden = ps.kind !== "practice";
     if (ps.kind === "practice") { document.getElementById("ps-bots").value = String(d.bots); document.getElementById("ps-level").value = d.level; }
+    const race = mode.id === "race";   // (a score race has no fighting: only gravity matters)
+    for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"]]) {
+      document.getElementById(id).checked = !!d.rules[key];
+      if (key !== "lowGrav") document.getElementById(id).parentElement.hidden = race;
+    }
     const sum = [limitText(mode, d.limit)];
     if (ps.kind === "practice") sum.push(d.bots + " bot" + (d.bots === 1 ? "" : "s"), d.level);
+    if (ruleText(d.rules)) sum.push(ruleText(d.rules));
     document.getElementById("ps-rules-sum").textContent = sum.filter(Boolean).join(" \u00b7 ");
     document.getElementById("ps-go").textContent = ps.kind === "practice" ? "Start practice" : ps.kind === "host" ? "Create room" : "Use for the next round";
+  }
+  for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"]]) {
+    document.getElementById(id).addEventListener("change", (e) => { if (ps) { ps.draft.rules[key] = e.target.checked; renderSetup(); } });
   }
   document.getElementById("ps-limit").addEventListener("change", (e) => { if (ps) { ps.draft.limit = parseInt(e.target.value, 10); renderSetup(); } });
   document.getElementById("ps-bots").addEventListener("change", (e) => { if (ps) { ps.draft.bots = parseInt(e.target.value, 10); renderSetup(); } });
@@ -7232,8 +7260,8 @@
     if (!ps) return;
     const d = ps.draft, kind = ps.kind;
     if (kind === "practice") { Object.assign(setup.practice, d); saveSetup(); closeSetup(); refreshMpCards(); mpBots(); }
-    else if (kind === "host") { Object.assign(setup.host, { mode: d.mode, map: d.map, limit: d.limit }); saveSetup(); closeSetup(); refreshMpCards(); mpHost(); }
-    else { chooseMode(d.mode, d.limit); chooseMap(d.map); closeSetup(); refreshLobbyLine(); }
+    else if (kind === "host") { Object.assign(setup.host, { mode: d.mode, map: d.map, limit: d.limit, rules: d.rules }); saveSetup(); closeSetup(); refreshMpCards(); mpHost(); }
+    else { chooseMode(d.mode, d.limit); chooseMap(d.map); chooseRules(d.rules); closeSetup(); refreshLobbyLine(); }
   });
   document.getElementById("ps-close").addEventListener("click", closeSetup);
   psEl.addEventListener("click", (e) => { if (e.target === psEl) closeSetup(); });
@@ -7290,6 +7318,7 @@
     document.exitPointerLock();
     setPropsEnabled(true);
     loadMap(resolveMapChoice(SETTINGS.map));   // back to the map picked in the menu
+    applyRulePhysics();
     for (const t of targets) respawnTarget(t);
     resetLocalRound();
     mpEls.tabs.forEach((t) => (t.disabled = false));
@@ -7310,6 +7339,7 @@
     mpStatus("Creating room…", true);
     chooseMode(setup.host.mode, setup.host.limit);
     chooseMap(setup.host.map);
+    chooseRules(setup.host.rules);
     let attempts = 0, opened = false;
 
     const open = () => {
@@ -7457,8 +7487,10 @@
     let label = modeName();
     if (net.sub === "dm" && net.koth) {
       if (net.limit) label += " \u00b7 first to " + net.limit * 5;
+      if (ruleText(net.rules)) label += " \u00b7 " + ruleText(net.rules);
     } else {
       if (net.sub === "dm" && net.limit) label += " \u00b7 first to " + net.limit;
+      if (ruleText(net.rules)) label += " \u00b7 " + ruleText(net.rules);
       if (net.sub === "dm" && net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
     }
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
