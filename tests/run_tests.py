@@ -674,6 +674,36 @@ def test_attachments(browser, base):
     page.close()
 
 
+def test_gamepad(browser, base):
+    """A (pretend) gamepad moves, aims and fires like the keys once the game is running."""
+    page, errors = open_page(browser, base + "/index.html")
+    page.evaluate("""() => {
+      window.__pad = { id: 'test pad', axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+      navigator.getGamepads = () => [window.__pad];
+    }""")
+    page.click("#start-btn")
+    step(page, 300)
+    speed0 = float(page.inner_text("#speed-val") or 0)
+    page.evaluate("window.__pad.axes[1] = -1")   # the left stick forward
+    step(page, 90)
+    speed1 = float(page.inner_text("#speed-val") or 0)
+    page.evaluate("window.__pad.axes[1] = 0")
+    check("the left stick moves you", speed1 > speed0 + 2, f"{speed0} -> {speed1}")
+    before = page.inner_text("#ammo-count")
+    page.evaluate("window.__pad.buttons[7] = { pressed: true, value: 1 }")   # the right trigger fires
+    step(page, 4)
+    page.evaluate("window.__pad.buttons[7] = { pressed: false, value: 0 }")
+    step(page, 6)
+    after = page.inner_text("#ammo-count")
+    check("the right trigger fires", before != after, f"{before} -> {after}")
+    page.evaluate("window.__pad.buttons[9] = { pressed: true, value: 1 }")   # Start opens the menu
+    step(page, 4)
+    menu = page.evaluate("!window.__pl")
+    check("Start opens the menu", menu)
+    check("the gamepad runs without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_maps(browser, base):
     """Every map builds, shows up in the picker, and can be played with bots."""
     page, errors = open_page(browser, base + "/index.html")
@@ -769,7 +799,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_play_setup, test_attachments, test_maps, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_play_setup, test_attachments, test_gamepad, test_maps, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:

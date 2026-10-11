@@ -25,7 +25,7 @@ there; tap again or jump to let go), R reload, F inspect, P replay last hit, hol
 right click aim (scope on the sniper, sights on the others) or throw (knife),
 1 / 2 / Q / mouse wheel switch between gun and knife.
 Playing goes fullscreen and locks keys like W, T and N away from the browser (Chrome and Edge), so Ctrl+W can't close the tab; turn that off in Settings > Gameplay. Every one of these can be changed in **Settings > Controls**: each action has two boxes, and a box takes a key, a
-mouse button (left, right, middle, back, forward) or a wheel direction. Esc, Tab and Enter stay fixed for the menus.
+mouse button (left, right, middle, back, forward) or a wheel direction. Esc, Tab and Enter stay fixed for the menus. A **gamepad** works too (click the game once to start, since a browser won't start the mouse capture from a controller): left stick moves, right stick looks, A jump, B slide, X reload, Y swap gun and knife, LB grapple, RB knife, LT aim, RT fire, stick click sprint, Select the leaderboard, D-pad left the map, Start the menu; the look speed is in Settings > Controls.
 
 **Tutorial:** new here? The Tutorial button in the menu walks you through the basics one goal at a time, from
 looking around to landing a 3x trickshot. Each goal ticks off when you do it; Enter skips one. It starts by itself the first time you click to play.

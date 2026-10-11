@@ -226,7 +226,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, trickFeed: true, specialTargets: true, attach: {}, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, trickFeed: true, specialTargets: true, attach: {}, padOn: true, padLook: 1, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -3912,9 +3912,47 @@
     pitchObject.rotation.x = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitchObject.rotation.x));
   });
 
+  function padReleaseAll() {
+    for (const [action] of PAD_ACTIONS) if (pad.held[action]) { pad.held[action] = false; if (onRelease[action]) onRelease[action](); }
+    pad.start = false;
+  }
+  function pollGamepad(dt) {
+    if (!SETTINGS.padOn || !navigator.getGamepads) { padReleaseAll(); return; }
+    const gp = [...navigator.getGamepads()].find(Boolean);
+    if (!gp || !pointerLocked || replay.active) { padReleaseAll(); return; }
+    for (const [action, test] of PAD_ACTIONS) {
+      const now = !!test(gp), was = !!pad.held[action];
+      pad.held[action] = now;
+      if (now && !was && onPress[action]) onPress[action]();
+      if (!now && was && onRelease[action]) onRelease[action]();
+    }
+    const start = padBtn(gp, 9);
+    if (start && !pad.start) document.exitPointerLock();   // Start opens the menu
+    pad.start = start;
+    // the right stick looks: a dead zone, then a curve so small nudges are fine and a full push is a fast turn
+    const dz = 0.14, shape = (v) => { const a = Math.abs(v || 0); return a < dz ? 0 : Math.sign(v) * Math.pow((a - dz) / (1 - dz), 2); };
+    const rx = shape(gp.axes[2]), ry = shape(gp.axes[3]);
+    if (!rx && !ry) return;
+    const cw = currentWeapon(), adsSens = cw.scope ? SETTINGS.scopedSensMult : (cw.adsZoom || 1);
+    const rate = 3.2 * SETTINGS.padLook * (1 + (adsSens - 1) * easeInOut(vm.adsProgress));   // radians a second at a full push
+    yawObject.rotation.y -= rx * rate * dt * SETTINGS.sensX;
+    if (tut.active) tut.look += Math.abs(rx * rate * dt * SETTINGS.sensX);
+    pitchObject.rotation.x = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitchObject.rotation.x - ry * rate * dt * SETTINGS.sensY));
+  }
+
   // what's held right now, by binding (a wheel notch counts as a tap held for a moment)
   const inputHeld = (b) => (b === "Wheel" ? !!(keys.WheelUp || keys.WheelDown) : !!keys[b]);
-  const held = (action) => BINDS[action].some((b) => b && inputHeld(b));
+  // ---- gamepad: the controller's buttons and sticks act as the same actions as the keys (a fixed layout; click the game once to start, as a
+  // browser will not start the mouse capture from a controller) ----
+  const pad = { held: {}, start: false };
+  const padBtn = (g, i) => { const b = g.buttons[i]; return !!b && (b.pressed || b.value > 0.4); };
+  const PAD_ACTIONS = [
+    ["forward", (g) => (g.axes[1] || 0) < -0.35], ["back", (g) => (g.axes[1] || 0) > 0.35], ["left", (g) => (g.axes[0] || 0) < -0.35], ["right", (g) => (g.axes[0] || 0) > 0.35],
+    ["jump", (g) => padBtn(g, 0)], ["slide", (g) => padBtn(g, 1)], ["reload", (g) => padBtn(g, 2)], ["swap", (g) => padBtn(g, 3)],
+    ["grapple", (g) => padBtn(g, 4)], ["knife", (g) => padBtn(g, 5)], ["aim", (g) => padBtn(g, 6)], ["fire", (g) => padBtn(g, 7)],
+    ["sprint", (g) => padBtn(g, 10)], ["inspect", (g) => padBtn(g, 12)], ["leaderboard", (g) => padBtn(g, 8)], ["map", (g) => padBtn(g, 14)],
+  ];
+  const held = (action) => BINDS[action].some((b) => b && inputHeld(b)) || !!pad.held[action];
   // Ctrl+D (bookmark), Ctrl+S and friends would fire mid-game while Ctrl is a game key, so they're blocked then
   const usesCtrl = () => ACTION_IDS.some((a) => BINDS[a].includes("ControlLeft"));
 
@@ -9611,6 +9649,7 @@
 
     if (net.active) mpFrame(realDt);
 
+    pollGamepad(dt);
     if (!pointerLocked && mapPopupLive) hideMapPopup();   // the menu opened while the map was held
     // in a room the world keeps running while the menu is up, so everyone else's view stays correct
     if (pointerLocked || net.active) {
