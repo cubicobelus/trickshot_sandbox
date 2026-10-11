@@ -637,13 +637,55 @@
     },
   };
   const surfaceCanvases = {};
+  // Materials a level makes are shared when they are the same (so identical walls and every tree use one), and cleared when the map changes
+  const levelMats = new Map();
+  const sharedMat = (key, make) => { let m = levelMats.get(key); if (!m) { m = make(); levelMats.set(key, m); } return m; };
   function surfaceMaterial(kind, repeatX, repeatY, base) {
     const key = kind + (base || "");
-    if (!surfaceCanvases[key]) surfaceCanvases[key] = canvasTexture(256, (g, n) => SURFACE_DRAW[kind](g, n, base));
-    const t = surfaceCanvases[key].clone();
-    t.needsUpdate = true;
-    t.repeat.set(repeatX, repeatY);
-    return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.6 : kind === "ice" ? 0.15 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.3 : kind === "ice" ? 0.15 : 0 });
+    return sharedMat("surf|" + key + "|" + repeatX.toFixed(3) + "|" + repeatY.toFixed(3), () => {
+      if (!surfaceCanvases[key]) surfaceCanvases[key] = canvasTexture(256, (g, n) => SURFACE_DRAW[kind](g, n, base));
+      const t = surfaceCanvases[key].clone();
+      t.needsUpdate = true;
+      t.repeat.set(repeatX, repeatY);
+      return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.6 : kind === "ice" ? 0.15 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.3 : kind === "ice" ? 0.15 : 0 });
+    });
+  }
+  // The still pieces of a level that share a material become one mesh each (a draw call per mesh is what costs, and a
+  // wooded map has hundreds of trees). Anything that moves, anything you stand on, and anything see-through is left alone.
+  function mergeLevelMeshes() {
+    const skip = new Set(groundMeshes);
+    for (const mv of movers) skip.add(mv.mesh);
+    for (const g of gates) skip.add(g.mesh);
+    const groups = new Map();
+    for (const o of levelGroup.children) {
+      if (!o.isMesh || skip.has(o) || !o.geometry || !o.geometry.attributes.position || Array.isArray(o.material)) continue;
+      if (o.material.transparent || o.material.alphaTest) continue;
+      let list = groups.get(o.material);
+      if (!list) groups.set(o.material, list = []);
+      list.push(o);
+    }
+    for (const [mat, list] of groups) {
+      if (list.length < 2) continue;
+      const geos = list.map((o) => { o.updateMatrixWorld(true); const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); return g; });
+      let total = 0;
+      for (const g of geos) total += g.attributes.position.count;
+      const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2);
+      let off = 0;
+      for (const g of geos) {
+        pos.set(g.attributes.position.array, off * 3); nor.set(g.attributes.normal.array, off * 3);
+        if (g.attributes.uv) uv.set(g.attributes.uv.array, off * 2);
+        off += g.attributes.position.count;
+      }
+      const merged = new THREE.BufferGeometry();
+      merged.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      merged.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+      merged.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.castShadow = list.some((o) => o.castShadow); mesh.receiveShadow = list.some((o) => o.receiveShadow);
+      levelGroup.add(mesh);
+      for (const o of list) { levelGroup.remove(o); o.geometry.dispose(); }
+      for (const g of geos) g.dispose();
+    }
   }
 
   // ======================================================================
@@ -929,20 +971,20 @@
   function addDecor(d) {   // ["mast", x, roof height, z] ["tank", x, roof height, z] ["door", x, z, facing x, facing z]
     const kind = d[0];
     if (kind === "mast") {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 6, 8), new THREE.MeshStandardMaterial({ color: 0x59606a, metalness: 0.6, roughness: 0.5 }));
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 6, 8), sharedMat("mast", () => new THREE.MeshStandardMaterial({ color: 0x59606a, metalness: 0.6, roughness: 0.5 })));
       pole.position.set(d[1], d[2] + 3, d[3]);
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b30 }));
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), sharedMat("lamp", () => new THREE.MeshBasicMaterial({ color: 0xff3b30 })));
       lamp.position.set(d[1], d[2] + 6.1, d[3]);
       levelGroup.add(pole, lamp);
     } else if (kind === "tank") {
-      const steel = new THREE.MeshStandardMaterial({ color: 0x7b8794, metalness: 0.5, roughness: 0.6 });
+      const steel = sharedMat("tank", () => new THREE.MeshStandardMaterial({ color: 0x7b8794, metalness: 0.5, roughness: 0.6 }));
       const body = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 2.2, 20), steel);
       body.position.set(d[1], d[2] + 2.0, d[3]); body.castShadow = true;
       const cap = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.5, 20), steel);
       cap.position.set(d[1], d[2] + 3.35, d[3]);
       levelGroup.add(body, cap);
       for (const [lx, lz] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.0, 0.15), new THREE.MeshStandardMaterial({ color: 0x3a3f46 }));
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.0, 0.15), sharedMat("leg", () => new THREE.MeshStandardMaterial({ color: 0x3a3f46 })));
         leg.position.set(d[1] + lx, d[2] + 0.5, d[3] + lz);
         levelGroup.add(leg);
       }
@@ -950,12 +992,12 @@
       wallBoxes.push(box); bounceBoxes.push(box);
     } else if (kind === "tree") {   // ["tree", x, z, scale, height of the ground]
       const sc = d[3] || 1, gy = d[4] === undefined ? FLOOR_Y : d[4];
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * sc, 0.3 * sc, 3.4 * sc, 7), new THREE.MeshStandardMaterial({ color: 0x5b4331, roughness: 1 }));
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * sc, 0.3 * sc, 3.4 * sc, 7), sharedMat("trunk", () => new THREE.MeshStandardMaterial({ color: 0x5b4331, roughness: 1 })));
       trunk.position.set(d[1], gy + 1.7 * sc, d[2]); trunk.castShadow = true;
       levelGroup.add(trunk);
-      const tint = 0.85 + ((Math.abs(d[1] * 7 + d[2] * 13) % 10) / 10) * 0.3;
+      const bucket = Math.floor((Math.abs(d[1] * 7 + d[2] * 13) % 10) / 2.5), tint = 0.85 + bucket * 0.1;   // four shades of green, so the trees can share materials
       for (let k = 0; k < 3; k++) {
-        const cone = new THREE.Mesh(new THREE.ConeGeometry((2.1 - k * 0.5) * sc, (2.6 - k * 0.2) * sc, 8), new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2f6a35).multiplyScalar(tint), roughness: 1, flatShading: true }));
+        const cone = new THREE.Mesh(new THREE.ConeGeometry((2.1 - k * 0.5) * sc, (2.6 - k * 0.2) * sc, 8), sharedMat("cone" + bucket, () => new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2f6a35).multiplyScalar(tint), roughness: 1, flatShading: true })));
         cone.position.set(d[1], gy + (2.6 + k * 1.45) * sc, d[2]);
         levelGroup.add(cone);
       }
@@ -964,7 +1006,7 @@
     } else if (kind === "boulder") {   // ["boulder", x, z, size, height of the ground]: something to take cover behind or jump onto
       const sz = d[3] || 2, gy = d[4] === undefined ? FLOOR_Y : d[4];
       const geo = new THREE.IcosahedronGeometry(sz * 0.62, 0);
-      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x8d887e, roughness: 1, flatShading: true }));
+      const mesh = new THREE.Mesh(geo, sharedMat("boulder", () => new THREE.MeshStandardMaterial({ color: 0x8d887e, roughness: 1, flatShading: true })));
       mesh.scale.set(1.1, 0.78, 0.95); mesh.rotation.y = (d[1] * 3.1 + d[2] * 1.7) % 6.28;
       mesh.position.set(d[1], gy + sz * 0.4, d[2]); mesh.castShadow = true; mesh.receiveShadow = true;
       levelGroup.add(mesh);
@@ -1303,6 +1345,7 @@
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((mt) => { if (mt.map) mt.map.dispose(); mt.dispose(); });
     });
     levelGroup.clear();
+    levelMats.clear();
     groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0; ladders.length = 0; movers.length = 0; portals.length = 0; boosts.length = 0; gates.length = 0;
     currentMap = m;
     CFG.arenaHalfSize = m.half;
@@ -1341,6 +1384,7 @@
     for (const a of m.gates || []) addGate(a);
     for (const a of m.portals || []) addPortalPair(a);
     for (const a of m.boosts || []) addBoost(a);
+    mergeLevelMeshes();
     SPAWNS = m.spawns;
     PLAYER_SPAWN.set(m.playerSpawn[0], 1.7, m.playerSpawn[1]);
     const e = H + 10;   // the shadow camera has to cover the whole map
