@@ -3811,9 +3811,9 @@
     jump() { jumpQueued = true; jumpQueueTimer = 0.12; },
     reload() { startReload(); },
     inspect() { startInspect(); },
-    gun() { switchWeapon(SETTINGS.loadout); },
+    gun() { if (ggKnife()) return; switchWeapon(SETTINGS.loadout); },
     knife() { switchWeapon("knife"); },
-    swap(e, wheel) { switchWeapon((wheel ? vm.pending || vm.current : vm.current) === "knife" ? SETTINGS.loadout : "knife"); },
+    swap(e, wheel) { if (ggKnife()) return; switchWeapon((wheel ? vm.pending || vm.current : vm.current) === "knife" ? SETTINGS.loadout : "knife"); },
     fire() { mouseHeld = true; attackPressed = true; },
     aim() {
       if (currentWeapon().isMelee) { throwKnife(); return; }
@@ -5791,12 +5791,14 @@
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };
   const KNIFE_SWING_DMG = 55, KNIFE_THROW_DMG = 100;
+  const GG_ORDER = ["ar", "ak", "shotgun", "pistol", "rifle"];   // gun game: five guns, then the knife (level 6)
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
   // (the deathmatch spawn points, SPAWNS, come from the map)
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
   function modeName() {
     if (net.sub === "dm" && net.range) return "Shooting range";
+    if (net.sub === "dm" && net.gungame) return "Gun game";
     if (net.sub === "dm" && net.koth) return net.teams ? "Team King of the Hill" : "King of the Hill";
     return net.sub === "dm" && net.teams ? "Team Deathmatch" : SUB_NAMES[net.sub];
   }
@@ -5841,6 +5843,7 @@
     map: "arena", pendingMap: "arena",
     teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
     rules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false }, pendingRules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false },   // the host's match rules
+    gungame: false, pendingGun: false,   // gun game: every kill swaps your gun; a kill with the knife at the end wins
     range: false, pendingRange: false,   // the shooting range: dummies that stand still and never shoot back (practice only)
     koth: false, pendingKoth: false, hs: [0, -1], teamHill: [0, 0],   // King of the Hill: who holds the hill (0 empty, 1 held, 2 contested; who), and each team's time on it
     phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
@@ -5889,6 +5892,7 @@
     koth: "A hill with a ring on top. Stand alone on it to score a point a second; with someone else on it, nobody scores. First to the score wins (the first-to number times 5). Kills only clear the hill. It always plays on the map with a hill.",
     tkoth: "King of the Hill with two teams: your team scores while only your team is on the hill. Kills only clear the hill.",
     range: "Stationary dummies stand at set distances and never shoot back. Every hit shows its damage, they heal fast and come back after a kill, and the corner shows what your gun does. Practice only.",
+    gungame: "Everyone starts with the same gun and every kill gives you the next one: assault rifle, AK, shotgun, Deagle, sniper, then the knife. A kill with the knife wins. Get knifed and you drop a level.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
@@ -5907,6 +5911,7 @@
     net.pendingTeams = value === "tdm" || value === "tkoth";
     net.pendingKoth = value === "koth" || value === "tkoth";
     net.pendingRange = value === "range";
+    net.pendingGun = value === "gungame";
     net.pendingLimit = Math.max(0, Math.min(parseInt(limit, 10) || 0, 999));
   }
 
@@ -5962,7 +5967,7 @@
 
   function makePlayerRecord(id, name, color) {
     return {
-      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, hill: 0, heads: 0, dmg: 0, best: 0, streak: 0, bstreak: 0, alive: true,
+      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, hill: 0, gg: 0, heads: 0, dmg: 0, best: 0, streak: 0, bstreak: 0, alive: true,
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
       hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
@@ -6194,7 +6199,7 @@
       const e = {
         id: String(raw.id).slice(0, 64), name: String(raw.name).replace(/[^\w \-]/g, "").slice(0, 14) || "Player",
         color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
-        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
+        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), gg: Math.max(0, Math.min(num(raw.gg), 9)), heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
         hp: Math.max(0, Math.min(Number.isFinite(raw.hp) ? raw.hp : 100, 100)),
         team: raw.team === 0 || raw.team === 1 ? raw.team : -1,
       };
@@ -6203,7 +6208,7 @@
       if (!p) { p = makePlayerRecord(e.id, e.name, e.color); net.players.set(e.id, p); }
       const recolored = p.color !== e.color;
       p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths; p.hp = e.hp; p.team = e.team;
-      if (net.role !== "host") { p.hill = e.hill; p.heads = e.heads; p.dmg = e.dmg; p.best = e.best; p.bstreak = e.bstreak; }
+      if (net.role !== "host") { p.hill = e.hill; p.gg = e.gg; p.heads = e.heads; p.dmg = e.dmg; p.best = e.best; p.bstreak = e.bstreak; }
       if (recolored && p.mesh && e.id !== net.id) disposeAvatar(p);   // a new team colour: the model is rebuilt below
       if (e.id !== net.id) {
         if (net.role === "client") p.alive = e.alive;
@@ -6218,6 +6223,7 @@
     }
     mpRefreshRoomUI();
     mpRefreshScoreboard();
+    ggSync();
   }
 
   // damage numbers: what you just did to someone, floating up from them (white for the body, gold and bigger for the
@@ -6571,7 +6577,7 @@
 
   // ---------------- host logic ----------------
   function boardList() {
-    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, heads: p.heads, dmg: Math.round(p.dmg), best: p.best, bstreak: p.bstreak, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
+    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, gg: p.gg, heads: p.heads, dmg: Math.round(p.dmg), best: p.best, bstreak: p.bstreak, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
   }
   function hostSendRaw(m) { for (const c of net.conns.values()) if (c.open) c.send(m); }
   function hostBroadcast(m) { hostSendRaw(m); applyEvent(m); }
@@ -6624,11 +6630,12 @@
     net.teams = net.sub === "dm" && net.pendingTeams;
     net.koth = net.sub === "dm" && net.pendingKoth;
     net.range = net.sub === "dm" && net.pendingRange;
+    net.gungame = net.sub === "dm" && net.pendingGun;
     net.rules = cleanRules(net.pendingRules);
     applyRulePhysics();
     net.hs = [0, -1]; net.teamHill = [0, 0];
     updateHillVis();
-    net.limit = net.sub === "dm" && !net.range ? net.pendingLimit : 0;
+    net.limit = net.sub === "dm" && !net.range && !net.gungame ? net.pendingLimit : 0;
     let slot = 0;
     for (const q of net.players.values()) {   // teams: you with the first half of the bots in practice, otherwise alternating as people joined
       const was = q.color;
@@ -6640,7 +6647,7 @@
     net.phase = "play";
     net.left = net.range ? 3599 : ROUND_SECONDS;
     net.resultsLeft = 0;
-    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.heads = 0; p.dmg = 0; p.best = 0; p.streak = 0; p.bstreak = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
+    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.gg = 0; p.heads = 0; p.dmg = 0; p.best = 0; p.streak = 0; p.bstreak = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
     if (net.sub === "race") for (const t of targets) { respawnTarget(t); t.userData.respawnTimer = 1.1; }
     hostBroadcast(roundMsg(true));
     for (const p of net.players.values()) hostRespawn(p);
@@ -6748,8 +6755,15 @@
     p.kills++; p.score += pts;
     if (info.head) p.heads++;
     p.best = Math.max(p.best, pts); p.streak++; p.bstreak = Math.max(p.bstreak, p.streak); v.streak = 0;
+    let ggWin = false;
+    if (net.gungame) {
+      if (info.knife && v.gg > 0) v.gg--;   // knifed: back a level
+      if (p.gg >= GG_ORDER.length) ggWin = !!info.knife && !p.bot;   // on the knife: a knife kill wins (the bots can't, they have no knife)
+      else { p.gg++; ggBotGun(p); }
+    }
     hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
     hostBroadcastBoard();
+    if (ggWin && net.phase === "play") hostEndRound();
     if (net.limit && !net.koth && net.phase === "play" && (net.teams ? teamKills(p.team) : p.kills) >= net.limit) hostEndRound();   // the kill limit is reached
   }
 
@@ -6941,9 +6955,15 @@
     return p;
   }
   // a fresh life: a gun picked at random, a full magazine, looking at the middle of the arena
+  // gun game: a bot uses the gun of its level (it has no knife, so it stays on the last gun)
+  function ggBotGun(p) {
+    if (!p.bot) return;
+    const g = GG_ORDER[Math.min(p.gg, GG_ORDER.length - 1)];
+    p.ai.gun = g; p.g = WEAPON_ORDER.indexOf(g); p.rl = 0; p.ai.ammo = WEAPONS[g].magSize; p.ai.reloadT = 0;
+  }
   function botReset(p, spawn) {
     const ai = p.ai;
-    ai.gun = GUNS[Math.floor(Math.random() * GUNS.length)];
+    ai.gun = net.gungame ? GG_ORDER[Math.min(p.gg, GG_ORDER.length - 1)] : GUNS[Math.floor(Math.random() * GUNS.length)];
     p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
     ai.ammo = WEAPONS[ai.gun].magSize; ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
     ai.aimYaw = p.yaw = net.range ? Math.PI : Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;   // (a dummy faces the firing line)
@@ -7366,6 +7386,7 @@
     { id: "tdm", name: "Team Deathmatch", short: "Blue against red" },
     { id: "koth", name: "King of the Hill", short: "Hold the hilltop alone", hill: true },
     { id: "tkoth", name: "Team King of the Hill", short: "Your team holds the hill", hill: true },
+    { id: "gungame", name: "Gun game", short: "Every kill swaps your gun; finish with the knife" },
     { id: "range", name: "Shooting range", short: "Dummies at set distances: every hit shows its damage", host: false },
   ];
   const modeById = (id) => MODES.find((m) => m.id === id) || MODES[1];
@@ -7393,13 +7414,13 @@
   function saveSetup() { try { localStorage.setItem(SETUP_KEY, JSON.stringify(setup)); } catch (e) { /* ignore */ } }
   const mapNameOf = (id) => (id === "random" ? "Random map" : MAPS[id] ? MAPS[id].name : "Arena");
   const hillMapId = () => MAP_ORDER.find((i) => MAPS[i].hill);
-  const limitText = (mode, limit) => (mode.id === "race" || mode.id === "range" ? "" : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
+  const limitText = (mode, limit) => (mode.id === "race" || mode.id === "range" || mode.id === "gungame" ? "" : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
   function refreshMpCards() {   // the two big buttons remind you what they will start
     const p = setup.practice, h = setup.host, pm = modeById(p.mode), hm = modeById(h.mode);
     document.getElementById("mp-card-practice-sub").textContent = pm.name + " \u00b7 " + mapNameOf(p.map) + " \u00b7 " + p.bots + " bot" + (p.bots === 1 ? "" : "s") + " (" + p.level + ")";
     document.getElementById("mp-card-host-sub").textContent = hm.name + " \u00b7 " + mapNameOf(h.map);
   }
-  function pendingModeValue() { return net.pendingRange ? "range" : net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
+  function pendingModeValue() { return net.pendingGun ? "gungame" : net.pendingRange ? "range" : net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
   function refreshLobbyLine() {   // in a hosted room: what the next round will be
     if (!mpEls.nextLine) return;
     const m = modeById(pendingModeValue());
@@ -7463,7 +7484,7 @@
     document.getElementById("ps-map-note").textContent = d.map === "random" ? "A different map each round." : MAPS[d.map].blurb;
     // the rules
     const limitRow = document.getElementById("ps-limit-row");
-    limitRow.hidden = mode.id === "race" || mode.id === "range";
+    limitRow.hidden = mode.id === "race" || mode.id === "range" || mode.id === "gungame";
     document.getElementById("ps-limit").value = String(d.limit);
     document.getElementById("ps-limit-unit").textContent = mode.hill ? "(times 5 seconds on the hill" + (d.limit ? ": " + d.limit * 5 + " s)" : ")") : "kills";
     document.getElementById("ps-bots-row").hidden = ps.kind !== "practice";
@@ -7550,6 +7571,7 @@
     setPropsEnabled(true);
     loadMap(resolveMapChoice(SETTINGS.map));   // back to the map picked in the menu
     applyRulePhysics();
+    ggRestore();
     for (const t of targets) respawnTarget(t);
     resetLocalRound();
     mpEls.tabs.forEach((t) => (t.disabled = false));
@@ -7724,6 +7746,7 @@
       if (ruleText(net.rules)) label += " \u00b7 " + ruleText(net.rules);
       if (net.sub === "dm" && net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
     }
+    if (net.sub === "dm" && net.gungame) { const me = localPlayer(); label = "Gun game · level " + (me ? Math.min(me.gg + 1, GG_ORDER.length + 1) : 1) + " / " + (GG_ORDER.length + 1) + (ruleText(net.rules) ? " · " + ruleText(net.rules) : ""); }
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
     mpEls.roomMode.textContent = modeName();
     updateKothBar();
@@ -7744,6 +7767,21 @@
     else if (id === "knife") html += "swing " + KNIFE_SWING_DMG + " \u00b7 throw " + KNIFE_THROW_DMG;
     rangeInfoEl.innerHTML = html;
   }
+
+  // gun game: your gun follows your level (the knife at the end); everything goes back when you leave
+  let ggApplied = "", ggSaved = null;
+  const ggKnife = () => net.active && net.gungame && ggApplied === "knife";
+  function ggSync() {
+    if (!net.active || !net.gungame) return;
+    const me = localPlayer();
+    if (!me) return;
+    const t = me.gg >= GG_ORDER.length ? "knife" : GG_ORDER[me.gg];
+    if (ggApplied === t) return;
+    ggApplied = t;
+    if (ggSaved === null) ggSaved = SETTINGS.loadout;
+    if (t === "knife") { switchWeapon("knife"); updateAmmoHud(); } else setLoadout(t);
+  }
+  function ggRestore() { ggApplied = ""; if (ggSaved) { const g = ggSaved; ggSaved = null; setLoadout(g); } }
 
   // King of the Hill: a bar across the top. Teams fill in from their own side towards the middle; alone, it is your own progress
   // with a tick for whoever is in front
@@ -7797,8 +7835,8 @@
     mpEls.board.hidden = !(results || lbHeld);
     if (mpEls.board.hidden) return;
     if (!net.active) { soloRecords(); return; }   // on your own there is no scoreboard: show your records for this map
-    const dm = net.sub === "dm", koth = dm && net.koth;
-    const rows = [...net.players.values()].sort(koth ? (a, b) => b.hill - a.hill || b.kills - a.kills : dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
+    const dm = net.sub === "dm", koth = dm && net.koth, ggm = dm && net.gungame;
+    const rows = [...net.players.values()].sort(ggm ? (a, b) => b.gg - a.gg || b.kills - a.kills : koth ? (a, b) => b.hill - a.hill || b.kills - a.kills : dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
     let title = modeName();
     if (koth && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + Math.floor(net.teamHill[0]) + " \u2013 " + Math.floor(net.teamHill[1]) + " " + TEAM_NAMES[1];
     else if (dm && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
@@ -7810,7 +7848,8 @@
     mpEls.boardTitle.textContent = title;
     // the columns depend on the mode: deathmatch shows the whole fight, King of the Hill leads with hill time
     const kd = (p) => (p.kills / Math.max(1, p.deaths)).toFixed(2), n = (v) => Math.round(v).toLocaleString();
-    const cols = koth ? [["Hill", (p) => Math.floor(p.hill)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")]]
+    const cols = ggm ? [["Level", (p) => Math.min(p.gg + 1, GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
+      : koth ? [["Hill", (p) => Math.floor(p.hill)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")]]
       : dm ? [["Score", (p) => n(p.score)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["HS", (p) => p.heads], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")], ["Streak", (p) => p.bstreak]]
       : [["Score", (p) => n(p.score)], ["Hits", (p) => p.kills]];
     mpEls.boardHead.innerHTML = "<th>#</th><th>Player</th>" + cols.map((c) => "<th>" + c[0] + "</th>").join("");
