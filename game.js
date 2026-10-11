@@ -152,11 +152,6 @@
     pointBlankMult: 0.4,
     standingStillSpeed: 2,      // moving slower than this when you fire, even mid-hop...
     standingStillMult: 0.75,    // ...scales the shot by this
-    shieldMult: 1.5,            // SHIELD BREAK: the hit after a shielded target's shield is gone
-    bonusTargetMult: 2,         // BONUS TARGET: gold, gone after bonusTargetSeconds
-    bonusTargetSeconds: 5,
-    popupMult: 1.6,             // POP-UP: a target that keeps ducking out of sight
-    popupVisible: 1.8, popupHidden: 2.2,
     portalScoreWindow: 2.5,     // PORTAL SHOT: a hit this soon after coming out of a portal
     portalMult: 1.3,
     stripScoreWindow: 2.5,      // STRIP SHOT: a hit this soon after a launch strip threw you
@@ -226,7 +221,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, trickFeed: true, specialTargets: true, attach: {}, padOn: true, padLook: 1, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, trickFeed: true, attach: {}, padOn: true, padLook: 1, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -1639,62 +1634,10 @@
     t.userData.knockT = -1;
   }
 
-  // Special targets: now and then a target comes back with a twist (single player only; the tutorial and online matches keep to plain ones)
-  //   shield: the first hit only breaks the shield, the next one scores (SHIELD BREAK)
-  //   bonus: gold, worth double, and gone after a few seconds (only one at a time)
-  //   popup: ducks out of sight for a couple of seconds, then comes back
-  function clearMod(t) {
-    const ud = t.userData;
-    if (ud.modMesh) {
-      t.remove(ud.modMesh);
-      ud.modMesh.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
-      ud.modMesh = null;
-    }
-    ud.mod = null; ud.shieldUp = false; ud.shieldBroken = false; ud.hidden = false;
-  }
-  function rollMod(t) {
-    clearMod(t);
-    const ud = t.userData;
-    if (net.active || tut.active || !SETTINGS.specialTargets || ud.type === "tiny") return;
-    const r = Math.random();
-    let mod = null;
-    if (r < 0.10) mod = "shield";
-    else if (r < 0.16 && !targets.some((x) => x !== t && x.userData.mod === "bonus")) mod = "bonus";
-    else if (r < 0.26) mod = "popup";
-    if (!mod) return;
-    ud.mod = mod;
-    const g = new THREE.Group();
-    const glow = (color, radius) => new THREE.Mesh(new THREE.TorusGeometry(radius, 0.1, 8, 40), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9, roughness: 0.4 }));
-    if (mod === "shield") {
-      g.add(glow(0x7fb2ff, 1.22));
-      const geo = new THREE.CircleGeometry(1.08, 32); geo.translate(0, 0, 0.08);
-      g.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x7fb2ff, transparent: true, opacity: 0.4, depthWrite: false })));
-      ud.shieldUp = true;
-    } else if (mod === "bonus") { g.add(glow(0xffd23c, 1.3)); ud.modT = CFG.bonusTargetSeconds; }
-    else { g.add(glow(0x4cd964, 1.2)); ud.modT = CFG.popupVisible; }
-    t.add(g);
-    ud.modMesh = g;
-  }
-  function updateMods(t, dt) {   // each frame, for a target that is up
-    const ud = t.userData;
-    if (!ud.mod || net.active) return;
-    if (ud.mod === "bonus") {
-      ud.modT -= dt;
-      ud.modMesh.scale.setScalar(0.75 + 0.25 * Math.max(0, ud.modT / CFG.bonusTargetSeconds) + Math.sin(elapsedTime * 8) * 0.05);
-      if (ud.modT <= 0) { ud.alive = false; t.visible = false; ud.respawnTimer = 0.4; clearMod(t); }
-    } else if (ud.mod === "popup") {
-      ud.modT -= dt;
-      if (ud.modT <= 0) { ud.hidden = !ud.hidden; ud.modT = ud.hidden ? CFG.popupHidden : CFG.popupVisible; t.visible = !ud.hidden; }
-    } else if (ud.mod === "shield" && ud.shieldUp) {
-      ud.modMesh.rotation.z += dt * 1.2;
-    }
-  }
-
   function respawnTarget(t) {
     resetTargetParts(t);
     t.userData.tclock = undefined;
     placeTarget(t);
-    rollMod(t);
     if (typeof recEvent === "function") recEvent({ type: "spawn", i: targets.indexOf(t), ty: t.userData.type, p: [r3(t.position.x), r3(t.position.y), r3(t.position.z)] });
     t.userData.alive = true;
     t.visible = true;
@@ -1755,8 +1698,6 @@
         if (ud.respawnTimer <= 0) { respawnTarget(t); if (net.role === "host") mpAnnounceSpawn(t); }
         continue;
       }
-      updateMods(t, dt);
-      if (!ud.alive) continue;   // (a bonus target that ran out of time)
       if (ud.type === "tiny" && !net.active) snitchStep(t, dt);
       else if (ud.motion) t.position.copy(targetPositionAt(ud, clock, _tgtPos));
       // face the player, with a gentle sway so they don't look pinned in place
@@ -5165,7 +5106,7 @@
     let bestDist = Infinity, best = null;
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
     for (const t of targets) {
-      if (!t.userData.alive || t.userData.hidden) continue;
+      if (!t.userData.alive) continue;
       const ox = t.position.x - o.x, oy = t.position.y - o.y, oz = t.position.z - o.z;
       const proj = ox * d.x + oy * d.y + oz * d.z;
       if (proj < 0 || proj > maxDist) continue;
@@ -5206,7 +5147,7 @@
   const trickSeen = new Set();   // the tricks landed so far this run (each new one adds to the shot)
   const COLLECTABLE = new Set(["AIR", "180\u00b0", "SPIN", "NO-SCOPE", "QUICKSCOPE", "FLICK", "SNAP FLICK", "SLIDING", "WALL BOUNCE", "GRAPPLE", "LAUNCHED", "RAMP LAUNCH",
     "MEGA LAUNCH", "REVERSE", "QUICK SWITCH", "PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "HANG TIME", "MICRO TARGET", "PINPOINT", "MOVING TARGET",
-    "LAST ROUND", "SHIELD BREAK", "BONUS TARGET", "POP-UP", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC"]);
+    "LAST ROUND", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC"]);
   const collectKey = (tag) => { const k = trickKey(tag); return k && /SPIN$/.test(k) ? "SPIN" : k; };
 
   // what the player is doing right now, for scoring. A thrown knife takes this
@@ -5331,9 +5272,6 @@
       else if (kind === "small") add("PINPOINT", CFG.smallTargetMult);
     }
     if (target.userData.moving && kind !== "tiny") add("MOVING TARGET", CFG.movingTargetMult);
-    if (target.userData.mod === "bonus") add("BONUS TARGET", CFG.bonusTargetMult);
-    else if (target.userData.mod === "popup") add("POP-UP", CFG.popupMult);
-    else if (target.userData.mod === "shield" && target.userData.shieldBroken) add("SHIELD BREAK", CFG.shieldMult);   // purple's MICRO covers its speed
 
     if (streak > 0) add("STREAK " + (streak + 1), Math.min(1 + streak * CFG.streakMultPer, CFG.streakMultMax));
 
@@ -5402,9 +5340,6 @@
       ["Penalties", [
         ["CLOSE", x(C.pointBlankMult) + " to x1", "Closer than " + C.distanceFrom + " m, harshest at " + C.pointBlankMin + " m. Knife swings are exempt."],
         ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. A pad or ramp flight you ran onto doesn't count."],
-        ["BONUS TARGET", x(C.bonusTargetMult), "A gold target that is gone after " + C.bonusTargetSeconds + " seconds (Special targets, in Settings > Targets)."],
-        ["SHIELD BREAK", x(C.shieldMult), "A blue-ringed target takes your first hit on its shield; the next one scores."],
-        ["POP-UP", x(C.popupMult), "A green-ringed target that keeps ducking out of sight."],
         ["PORTAL SHOT", x(C.portalMult), "A hit within " + C.portalScoreWindow + " s of coming out of a portal."],
         ["STRIP SHOT", x(C.stripMult), "A hit within " + C.stripScoreWindow + " s of a launch strip throwing you."],
         ["PLATFORM SHOT", x(C.platformMult), "A hit while riding a lift or the shuttle."],
@@ -5563,17 +5498,8 @@
 
   function scoreHit(target, dist, isKnife, ammoBefore, snap, thrown, weapon) {
     if (run.state === "done" || run.state === "countdown") return;   // a knife still in the air when time runs out
-    if (target.userData.mod === "shield" && target.userData.shieldUp && !net.active) {   // the shield takes it
-      target.userData.shieldUp = false; target.userData.shieldBroken = true;
-      if (target.userData.modMesh) target.userData.modMesh.visible = false;
-      playHitSound(0.6);
-      burst(target.position, 0x7fb2ff, 10);
-      flashCrosshair();
-      return;
-    }
     const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon);
     target.userData.alive = false;
-    if (target.userData.modMesh) target.userData.modMesh.visible = false;
     knockOutTarget(target);
     burst(target.position, new THREE.Color(TARGET_TYPES[target.userData.type].color).getHex(), target.userData.small ? 8 : 6);
     const pointsGained = awardPoints(res);

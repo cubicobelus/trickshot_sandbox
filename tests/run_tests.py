@@ -466,7 +466,7 @@ def test_scoring_extras(browser, base):
     page.click("#glossary-open")
     page.wait_for_timeout(150)
     text = page.evaluate("document.getElementById('glossary').textContent.toUpperCase()")
-    missing = [k for k in ("PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "NEW", "BONUS TARGET", "SHIELD BREAK", "POP-UP") if k not in text]
+    missing = [k for k in ("PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "NEW") if k not in text]
     check("the trickshot list includes the portal, strip, platform, zero-g, chain and new-trick bonuses", not missing, ", ".join(missing))
     page.keyboard.press("Escape")
     # a saved best shot (made up here) is enough for the card

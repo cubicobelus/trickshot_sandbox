@@ -64,7 +64,7 @@ The newer ones: PORTAL SHOT and STRIP SHOT (a hit soon after a portal or a launc
 The full list with every value is under **Trickshot list** in the menu.
 
 Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
-purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets. Now and then a target comes back with a twist (switch it off with **Special targets** there): a blue ring means a shield that takes your first hit (the next one scores SHIELD BREAK), a gold ring is a bonus target worth double that is gone after 5 seconds, and a green ring is a pop-up that keeps ducking out of sight.
+purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
 
 Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo and so on) are saved in your
 browser. **Settings > Crosshair** has ready-made presets you can fine-tune, and a hit-marker style (a crosshair flash, an X, a ring or none). **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
