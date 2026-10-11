@@ -26,11 +26,24 @@
   /* the trickshot list: a popup over everything */
   #glossary-open, #stats-open, #ach-open { margin-top: 10px; }
   #ach-count { color: #ffd24a; }
-  #glossary, #stats, #achievements, #settings-popup, #map-popup {
+  #glossary, #stats, #achievements, #settings-popup, #map-popup, #attach-popup {
     position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.7);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
-  #glossary[hidden], #stats[hidden], #achievements[hidden], #settings-popup[hidden], #map-popup[hidden] { display: none; }
+  #glossary[hidden], #stats[hidden], #achievements[hidden], #settings-popup[hidden], #map-popup[hidden], #attach-popup[hidden] { display: none; }
+  #attach-popup .g-panel { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+  #attach-open { margin-top: 8px; }
+  #attach-guns { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
+  #attach-guns button { padding: 5px 12px; border: 1px solid #44444c; border-radius: 6px; background: rgba(255,255,255,0.04); color: #ccc; font: inherit; font-size: 13px; cursor: pointer; }
+  #attach-guns button.active { border-color: #ffd24a; color: #ffd24a; background: rgba(255,210,74,0.12); }
+  .at-slot h3 { margin: 12px 0 6px; font-size: 12px; color: #ffd24a; text-transform: uppercase; letter-spacing: 1px; }
+  .at-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+  .at-opt { text-align: left; padding: 7px 10px; border-radius: 8px; border: 1px solid #44444c; background: rgba(255,255,255,0.04); color: #ddd; font: inherit; cursor: pointer; }
+  .at-opt b { display: block; font-size: 13px; color: #fff; }
+  .at-opt span { font-size: 11px; color: #9a9aa3; line-height: 1.35; display: block; }
+  .at-opt.active { border-color: #ffd24a; background: rgba(255,210,74,0.12); }
+  .at-opt.active b { color: #ffd24a; }
+  .at-opt.locked { opacity: 0.45; cursor: not-allowed; }
   #map-popup .g-panel { width: min(520px, 100%); text-align: center; }
   #map-big { display: block; width: min(440px, 58vh); height: min(440px, 58vh); margin: 8px auto; border-radius: 8px; border: 1px solid #44444c; }
   #map-popup.ingame { pointer-events: none; background: rgba(0,0,0,0.35); }

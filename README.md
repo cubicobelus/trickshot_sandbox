@@ -47,7 +47,7 @@ hit, with a **bullet cam** that rides the shot to the target. Press **P** while 
 hit (P again to carry on). Your best trickshot's replay is kept in your browser. **Save video** in the replay bar
 saves it as a .webm you can post anywhere, and **Save card** (also in the menu and on the results screen) makes a picture of your best shot: the map with the shot drawn on it, the points and every trick.
 
-**Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too.
+**Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too. **Attachments** (the button under the loadout) add scopes, a red dot, suppressors, brakes, grips, magazines, a choke or a laser to each gun. Every one is a trade (a suppressor is quiet but kicks a bit more, a high-zoom scope is slower to aim, an extended magazine reloads slower), and each unlocks once you have landed enough hits with that gun (15 to 120; a kill online counts as a hit). They show on your gun and on other players' guns.
 1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns
 score less per hit so trickshots stay king. Shots that land on a wall, platform or the floor leave bullet holes (switch them off in Settings > View).
 

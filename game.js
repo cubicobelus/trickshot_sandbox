@@ -226,7 +226,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, trickFeed: true, specialTargets: true, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, trickFeed: true, specialTargets: true, attach: {}, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -2826,7 +2826,7 @@
 
     const adsBlocked = vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.grappleOut > 0;
     const adsTarget = (vm.wantADS && w.canADS && !adsBlocked) ? 1 : 0;
-    const adsStep = dt / CFG.adsTime;
+    const adsStep = dt / (CFG.adsTime * (w.adsMult || 1));
     if (vm.adsProgress < adsTarget) vm.adsProgress = Math.min(vm.adsProgress + adsStep, 1);
     else if (vm.adsProgress > adsTarget) vm.adsProgress = Math.max(vm.adsProgress - adsStep, 0);
     const adsEased = easeInOut(vm.adsProgress);
@@ -2992,7 +2992,7 @@
     const speedNow = Math.hypot(player.velocity.x, player.velocity.z);
     const speedT = Math.max(0, Math.min((speedNow - CFG.groundMaxSpeed) / (CFG.maxSpeed - CFG.groundMaxSpeed), 1));
     const speedFov = SETTINGS.reduceMotion ? 0 : CFG.speedFovBoost * speedT * (1 - adsEased);
-    const adsFov = w.scope ? CFG.scopedFov : SETTINGS.fov * (w.adsZoom || 1);
+    const adsFov = w.scope ? CFG.scopedFov * (w.scopeFovMult || 1) : SETTINGS.fov * (w.adsZoom || 1);
     const targetFov = SETTINGS.fov + (adsFov - SETTINGS.fov) * adsEased + speedFov;
     if (Math.abs(camera.fov - targetFov) > 0.02) {
       camera.fov += (targetFov - camera.fov) * Math.min(dt * 12, 1);
@@ -3390,6 +3390,103 @@
 
   // ---- loadout: one gun plus the knife ----
   const GUNS = WEAPON_ORDER.filter((id) => WEAPONS[id].usesAmmo);
+
+  // ---- attachments: each gun has up to three slots; every option is a trade, and unlocks once you have landed `need` hits with that gun ----
+  // fx: ads (aim-down-sights time), spread (hip), spreadAds, recoil, mag (size), reload (time), flash, sound (how loud), scopeFov (>1 wider)
+  const ATTACH_SLOTS = {
+    optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip / magazine", barrel: "Barrel", mag: "Magazine", sights: "Sights",
+  };
+  const SUPPRESSOR = { id: "suppressor", name: "Suppressor", need: 30, fx: { flash: 0.2, sound: 0.45, recoil: 1.05 }, text: "Quieter, almost no flash; a touch more kick" };
+  const AT_REDDOT = { id: "reddot", name: "Red dot", need: 15, fx: { ads: 0.85, spreadAds: 0.8 }, text: "Aims down sights 15% faster, tighter when aimed" };
+  const AT_BRAKE = { id: "brake", name: "Muzzle brake", need: 80, fx: { recoil: 0.8, sound: 1.2 }, text: "20% less recoil, louder" };
+  const AT_GRIPS = [
+    { id: "vgrip", name: "Vertical grip", need: 45, fx: { recoil: 0.85 }, text: "15% less recoil" },
+    { id: "agrip", name: "Angled grip", need: 100, fx: { ads: 0.85, spread: 0.92 }, text: "Faster to aim, a little tighter from the hip" },
+    { id: "extmag", name: "Extended magazine", need: 60, fx: { mag: 1.5, reload: 1.15 }, text: "50% more rounds, slower reload" },
+    { id: "fastmag", name: "Fast magazine", need: 120, fx: { reload: 0.8 }, text: "Reloads 20% faster" },
+  ];
+  const ATTACHMENTS = {
+    rifle: {   // the sniper
+      optic: [{ id: "scope-low", name: "Low-zoom scope", need: 15, fx: { ads: 0.8, scopeFov: 1.4 }, text: "Scopes in 20% faster, a wider view (a quickscope's friend)" },
+        { id: "scope-high", name: "High-zoom scope", need: 60, fx: { ads: 1.25, scopeFov: 0.65 }, text: "A much closer view, but slower to scope in" }],
+      muzzle: [SUPPRESSOR, AT_BRAKE],
+      stock: [{ id: "stock-light", name: "Light stock", need: 45, fx: { ads: 0.9, recoil: 1.08 }, text: "Aims 10% faster, a little more kick" },
+        { id: "stock-heavy", name: "Heavy stock", need: 100, fx: { recoil: 0.85, ads: 1.1 }, text: "Steadier, slower to aim" }],
+    },
+    ar: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 80, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
+    ak: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 80, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
+    shotgun: {
+      barrel: [{ id: "choke", name: "Choke", need: 20, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
+        { id: "wide", name: "Wide barrel", need: 60, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" }],
+      mag: [{ id: "tube", name: "Extended tube", need: 50, fx: { mag: 1.34, reload: 1.1 }, text: "Two more shells, slower to reload" }],
+    },
+    pistol: {   // the Deagle
+      muzzle: [{ id: "comp", name: "Compensator", need: 20, fx: { recoil: 0.8 }, text: "20% less recoil" }, SUPPRESSOR],
+      sights: [{ id: "laser", name: "Laser", need: 40, fx: { spread: 0.75, spreadAds: 0.9 }, text: "A tighter spread from the hip" }],
+      mag: [{ id: "extmag", name: "Extended magazine", need: 70, fx: { mag: 1.3, reload: 1.1 }, text: "Two more rounds, slower reload" }],
+    },
+  };
+  // what a fitted attachment looks like: a few parts placed from the gun's muzzle (z, forward is negative) and the height of its barrel
+  const AT_STEEL = new THREE.MeshStandardMaterial({ color: 0x2b2f35, metalness: 0.7, roughness: 0.45 });
+  const AT_DOT = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+  function attachParts(ids, muzzleZ, muzzleY) {
+    const g = new THREE.Group();
+    const add = (geo, mat, x, y, z, rx) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx) m.rotation.x = rx; g.add(m); return m; };
+    const HP = Math.PI / 2, top = muzzleY + 0.075;
+    for (const id of ids) {
+      if (id === "suppressor") add(new THREE.CylinderGeometry(0.032, 0.032, 0.36, 12), AT_STEEL, 0, muzzleY, muzzleZ - 0.16, HP);
+      else if (id === "brake" || id === "comp") add(new THREE.BoxGeometry(0.075, 0.075, 0.11), AT_STEEL, 0, muzzleY, muzzleZ - 0.02);
+      else if (id === "choke") add(new THREE.CylinderGeometry(0.03, 0.036, 0.09, 12), AT_STEEL, 0, muzzleY, muzzleZ - 0.02, HP);
+      else if (id === "reddot") { add(new THREE.BoxGeometry(0.05, 0.035, 0.12), AT_STEEL, 0, top + 0.02, muzzleZ * 0.4); add(new THREE.BoxGeometry(0.018, 0.018, 0.004), AT_DOT, 0, top + 0.05, muzzleZ * 0.4 - 0.05); }
+      else if (id === "scope-low") add(new THREE.CylinderGeometry(0.036, 0.036, 0.3, 12), AT_STEEL, 0, top + 0.05, muzzleZ * 0.4, HP);
+      else if (id === "scope-high") { add(new THREE.CylinderGeometry(0.042, 0.042, 0.5, 12), AT_STEEL, 0, top + 0.055, muzzleZ * 0.4, HP); add(new THREE.CylinderGeometry(0.056, 0.056, 0.05, 12), AT_STEEL, 0, top + 0.055, muzzleZ * 0.4 - 0.27, HP); }
+      else if (id === "vgrip") add(new THREE.BoxGeometry(0.03, 0.11, 0.04), AT_STEEL, 0, muzzleY - 0.1, muzzleZ * 0.5);
+      else if (id === "agrip") add(new THREE.BoxGeometry(0.03, 0.05, 0.09), AT_STEEL, 0, muzzleY - 0.07, muzzleZ * 0.5, -0.5);
+      else if (id === "laser") { add(new THREE.BoxGeometry(0.03, 0.03, 0.07), AT_STEEL, 0, muzzleY - 0.05, muzzleZ * 0.7); add(new THREE.BoxGeometry(0.008, 0.008, 0.004), AT_DOT, 0, muzzleY - 0.05, muzzleZ * 0.7 - 0.04); }
+      else if (id === "stock-heavy") add(new THREE.BoxGeometry(0.07, 0.08, 0.14), AT_STEEL, 0, muzzleY - 0.01, 0.28);
+    }
+    return g;
+  }
+  const AV_MUZZLE = { rifle: [-1.0, 0.02], ar: [-0.88, 0.01], ak: [-0.9, 0.01], shotgun: [-1.0, 0.02], pistol: [-0.28, 0.02] };   // where each other-player gun ends (z, height)
+  const attachCode = () => { const ids = chosenAttachments(SETTINGS.loadout).map((o) => o.id); return ids.length ? SETTINGS.loadout + ":" + ids.join(",") : ""; };
+  const AT_CODE_OK = /^[a-z]{2,8}:[a-z0-9,\-]{1,50}$/;
+  function randomAttachCode(gun) {   // a bot's look: a few random attachments (they do not change how a bot shoots)
+    const ids = [];
+    for (const opts of Object.values(ATTACHMENTS[gun] || {})) if (Math.random() < 0.4) ids.push(opts[Math.floor(Math.random() * opts.length)].id);
+    return ids.length ? gun + ":" + ids.join(",") : "";
+  }
+  const WEAPON_BASE = {};   // what each gun is without attachments
+  for (const id of GUNS) {
+    const w = WEAPONS[id];
+    WEAPON_BASE[id] = { mag: w.magSize, spread: w.spread, spreadAds: w.spreadAds, recoil: w.recoil, kick: w.kick, flash: w.flashScale, reload: Object.assign({}, w.reload) };
+  }
+  const baseMag = (id) => (WEAPON_BASE[id] ? WEAPON_BASE[id].mag : WEAPONS[id].magSize);
+  const attachUnlocked = (gun, opt) => ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= opt.need;
+  function chosenAttachments(gun) {   // what is fitted (an option that is still locked, or unknown, is ignored)
+    const out = [], fitted = (SETTINGS.attach && SETTINGS.attach[gun]) || {};
+    for (const [slot, opts] of Object.entries(ATTACHMENTS[gun] || {})) {
+      const o = opts.find((x) => x.id === fitted[slot]);
+      if (o && attachUnlocked(gun, o)) out.push(o);
+    }
+    return out;
+  }
+  function applyAttachments() {
+    for (const id of GUNS) {
+      const w = WEAPONS[id], base = WEAPON_BASE[id], fx = { ads: 1, spread: 1, spreadAds: 1, recoil: 1, mag: 1, reload: 1, flash: 1, sound: 1, scopeFov: 1 };
+      for (const o of chosenAttachments(id)) for (const k of Object.keys(o.fx)) fx[k] *= o.fx[k];
+      w.magSize = Math.max(1, Math.round(base.mag * fx.mag));
+      w.spread = base.spread * fx.spread; w.spreadAds = base.spreadAds * fx.spreadAds;
+      w.recoil = base.recoil * fx.recoil; w.kick = base.kick * fx.recoil;
+      w.flashScale = base.flash * fx.flash;
+      for (const k of Object.keys(base.reload)) if (typeof base.reload[k] === "number") w.reload[k] = base.reload[k] * fx.reload;
+      w.adsMult = fx.ads; w.scopeFovMult = fx.scopeFov; w.soundMult = fx.sound;
+      if (w.ammo > w.magSize) w.ammo = w.magSize;
+      if (w.atGroup) { w.group.remove(w.atGroup); w.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.atGroup = null; }
+      const ids = chosenAttachments(id).map((o) => o.id);
+      if (ids.length && w.muzzle) { w.atGroup = attachParts(ids, w.muzzle.z, w.muzzle.y); w.group.add(w.atGroup); }
+    }
+    updateAmmoHud();
+  }
   const loadoutWeapons = () => [SETTINGS.loadout, "knife"];
   let hotbarSlots = {};
   const hotbarKey = (action) => (BINDS[action].find(Boolean) ? inputLabel(BINDS[action].find(Boolean), true) : "");
@@ -3561,6 +3658,13 @@
     if (typeof saved.unlimitedAmmo === "boolean") SETTINGS.unlimitedAmmo = saved.unlimitedAmmo;
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
+    if (saved.attach && typeof saved.attach === "object") {   // only what the catalogue has
+      for (const g of GUNS) {
+        const s = saved.attach[g];
+        if (!s || typeof s !== "object") continue;
+        for (const slot of Object.keys(ATTACHMENTS[g] || {})) if (typeof s[slot] === "string" && ATTACHMENTS[g][slot].some((o) => o.id === s[slot])) (SETTINGS.attach[g] = SETTINGS.attach[g] || {})[slot] = s[slot];
+      }
+    }
     if (["free", "sa60"].includes(saved.playMode)) SETTINGS.playMode = saved.playMode;
     if (typeof saved.map === "string" && (MAPS[saved.map] || saved.map === "random")) SETTINGS.map = saved.map;
     if (saved.binds && typeof saved.binds === "object") {
@@ -5471,7 +5575,7 @@
     const ammoBefore = w.ammo;
     if (ammoBefore >= w.magSize) w.lastRoundReady = true;   // LAST ROUND needs a full magazine emptied
     if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); }
-    playShotSound(w.sound);
+    playShotSound(w.sound, w.soundMult || 1);
     vm.recoil = w.recoil;
     vm.camKick = w.kick;
     vm.camKickYaw = Math.random() * 2 - 1;
@@ -5566,7 +5670,7 @@
     if (!net.active) {
       const gs = gunStat(vm.current);
       gs.shots++; stat("shots");
-      if (targetHits.size) { gs.hits++; stat("shotsHit"); }
+      if (targetHits.size) { gs.hits++; stat("shotsHit"); announceUnlocks(vm.current, gs.hits); }
     }
     if (ammoBefore === 1) w.lastRoundReady = false;
     w.lastFiredAt = elapsedTime;
@@ -5988,7 +6092,7 @@
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
       hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
       bot: false, ai: null,
-      g: 0, rl: 0, gr: 0, gh: null, swingT: 0, lastSwingAt: -1e9, lastRecv: nowMs(), ropeSet: null,
+      g: 0, rl: 0, at: "", atBuilt: "", gr: 0, gh: null, swingT: 0, lastSwingAt: -1e9, lastRecv: nowMs(), ropeSet: null,
       lastShot: null, lastShotAt: -1e9, lastThrowAt: -1e9, lastHitAt: -1e9, lastMeleeAt: -1e9, knivesUp: 0,   // for checking hit claims (host only)
     };
   }
@@ -6101,6 +6205,24 @@
 
   function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
+  // an avatar's attachments: parts added to the gun they belong to (the code is "gun:id,id")
+  function refreshAvatarAttachments(p) {
+    const ud = p.mesh && p.mesh.userData;
+    if (!ud) return;
+    p.atBuilt = p.at;
+    for (const id of GUNS) {
+      const g = ud.guns[id];
+      if (g && g.userData.atGroup) { g.remove(g.userData.atGroup); g.userData.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); g.userData.atGroup = null; }
+    }
+    if (!p.at) return;
+    const [gun, list] = p.at.split(":"), mz = AV_MUZZLE[gun], target = ud.guns[gun];
+    if (!target || !mz) return;
+    const known = new Set(Object.values(ATTACHMENTS[gun] || {}).flat().map((o) => o.id));
+    const ids = list.split(",").filter((x) => known.has(x));
+    if (!ids.length) return;
+    target.userData.atGroup = attachParts(ids, mz[0], mz[1]);
+    target.add(target.userData.atGroup);
+  }
   const _avStart = new THREE.Vector3(), _avPos = new THREE.Vector3(), _avDir = new THREE.Vector3();
   function updateAvatars(dt) {
     const k = 1 - Math.exp(-dt * 18);
@@ -6118,6 +6240,7 @@
         m.rotation.y += wrapAngle(p.yaw - m.rotation.y) * k;
       }
       m.userData.pivot.rotation.x = p.pitch;
+      if (p.atBuilt !== p.at) refreshAvatarAttachments(p);
       const squash = p.sl ? 0.62 : 1;
       m.scale.y += (squash - m.scale.y) * k;
       const ud = m.userData, gid = WEAPON_ORDER[p.g] || "rifle", grap = p.gr > 0;
@@ -6215,7 +6338,7 @@
       const e = {
         id: String(raw.id).slice(0, 64), name: String(raw.name).replace(/[^\w \-]/g, "").slice(0, 14) || "Player",
         color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
-        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), gg: Math.max(0, Math.min(num(raw.gg), 9)), caps: Math.max(0, Math.min(num(raw.caps), 99)), heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
+        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), gg: Math.max(0, Math.min(num(raw.gg), 9)), caps: Math.max(0, Math.min(num(raw.caps), 99)), at: typeof raw.at === "string" && AT_CODE_OK.test(raw.at) ? raw.at : "", heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
         hp: Math.max(0, Math.min(Number.isFinite(raw.hp) ? raw.hp : 100, 100)),
         team: raw.team === 0 || raw.team === 1 ? raw.team : -1,
       };
@@ -6224,7 +6347,7 @@
       if (!p) { p = makePlayerRecord(e.id, e.name, e.color); net.players.set(e.id, p); }
       const recolored = p.color !== e.color;
       p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths; p.hp = e.hp; p.team = e.team;
-      if (net.role !== "host") { p.hill = e.hill; p.gg = e.gg; p.caps = e.caps; p.heads = e.heads; p.dmg = e.dmg; p.best = e.best; p.bstreak = e.bstreak; }
+      if (net.role !== "host") { p.hill = e.hill; p.gg = e.gg; p.caps = e.caps; if (e.id !== net.id) p.at = e.at; p.heads = e.heads; p.dmg = e.dmg; p.best = e.best; p.bstreak = e.bstreak; }
       if (recolored && p.mesh && e.id !== net.id) disposeAvatar(p);   // a new team colour: the model is rebuilt below
       if (e.id !== net.id) {
         if (net.role === "client") p.alive = e.alive;
@@ -6533,6 +6656,7 @@
       }
 
       case "kill": {
+        if (m.k === net.id && WEAPONS[m.w] && WEAPONS[m.w].usesAmmo) { const kgs = gunStat(m.w); kgs.hits++; announceUnlocks(m.w, kgs.hits); }   // a kill online counts as a hit toward unlocks
         if (m.w === "zone") {   // caught outside the safe zone
           const zv = net.players.get(m.v);
           if (zv) { zv.alive = false; zv.hp = 0; }
@@ -6628,7 +6752,7 @@
 
   // ---------------- host logic ----------------
   function boardList() {
-    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, gg: p.gg, caps: p.caps, heads: p.heads, dmg: Math.round(p.dmg), best: p.best, bstreak: p.bstreak, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
+    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, gg: p.gg, caps: p.caps, at: p.at, heads: p.heads, dmg: Math.round(p.dmg), best: p.best, bstreak: p.bstreak, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
   }
   function hostSendRaw(m) { for (const c of net.conns.values()) if (c.open) c.send(m); }
   function hostBroadcast(m) { hostSendRaw(m); applyEvent(m); }
@@ -6834,6 +6958,7 @@
           p.x = m.x; p.y = m.y; p.z = m.z; p.yaw = m.yaw; p.pitch = m.pitch; p.w = m.w ? "knife" : "rifle"; p.sl = !!m.sl;
           p.g = Number.isInteger(m.g) && m.g >= 0 && m.g < WEAPON_ORDER.length ? m.g : 0;
           p.rl = m.rl ? 1 : 0;
+          p.at = typeof m.at === "string" && AT_CODE_OK.test(m.at) ? m.at : "";
           p.gr = m.gr === 2 ? 2 : m.gr === 1 ? 1 : 0;
           p.gh = p.gr === 2 ? vec3(m.gh, 1000) : null;
         }
@@ -6900,7 +7025,7 @@
       t: "st", x: r2(yawObject.position.x), y: r2(player.feetY), z: r2(yawObject.position.z),
       yaw: r2(yawObject.rotation.y * 100) / 100, pitch: r2(pitchObject.rotation.x * 100) / 100,
       w: vm.current === "knife" ? 1 : 0, sl: player.sliding ? 1 : 0,
-      g: WEAPON_ORDER.indexOf(vm.current), rl: reload.active ? 1 : 0,
+      g: WEAPON_ORDER.indexOf(vm.current), rl: reload.active ? 1 : 0, at: attachCode(),
       gr: player.hook ? 2 : player.grappleWant ? 1 : 0,
       gh: player.hook ? [r2(player.hook.pos.x), r2(player.hook.pos.y), r2(player.hook.pos.z)] : null,
     };
@@ -7088,13 +7213,14 @@
   function ggBotGun(p) {
     if (!p.bot) return;
     const g = GG_ORDER[Math.min(p.gg, GG_ORDER.length - 1)];
-    p.ai.gun = g; p.g = WEAPON_ORDER.indexOf(g); p.rl = 0; p.ai.ammo = WEAPONS[g].magSize; p.ai.reloadT = 0;
+    p.ai.gun = g; p.g = WEAPON_ORDER.indexOf(g); p.rl = 0; p.ai.ammo = baseMag(g); p.ai.reloadT = 0; p.at = randomAttachCode(g);
   }
   function botReset(p, spawn) {
     const ai = p.ai;
     ai.gun = net.gungame ? GG_ORDER[Math.min(p.gg, GG_ORDER.length - 1)] : GUNS[Math.floor(Math.random() * GUNS.length)];
     p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
-    ai.ammo = WEAPONS[ai.gun].magSize; ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
+    ai.ammo = baseMag(ai.gun); ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
+    p.at = randomAttachCode(ai.gun);
     ai.aimYaw = p.yaw = net.range ? Math.PI : Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;   // (a dummy faces the firing line)
     ai.vy = 0; ai.path = []; ai.pi = 0; ai.repath = 0; ai.climb = null; ai.perch = null; ai.perchWait = 6 + Math.random() * 14;
   }
@@ -7449,7 +7575,7 @@
     // reloading, then shooting
     if (ai.reloadT > 0) {
       ai.reloadT -= dt;
-      if (ai.reloadT <= 0) { ai.ammo = w.magSize; p.rl = 0; }
+      if (ai.reloadT <= 0) { ai.ammo = baseMag(g); p.rl = 0; }
       return;
     }
     ai.fireT -= dt;
@@ -8169,6 +8295,11 @@
   }
   function stat(key, n) { stats[key] += n === undefined ? 1 : n; statsDirty = true; }
   function statMax(key, v) { if (v > stats[key]) { stats[key] = v; statsDirty = true; } }
+  function announceUnlocks(gun, hits) {
+    for (const opts of Object.values(ATTACHMENTS[gun] || {})) for (const o of opts) {
+      if (o.need === hits) { achQueue.push({ name: "Unlocked: " + o.name, desc: WEAPONS[gun].name + " attachment" }); if (!achToastTimer) nextAchToast(); }
+    }
+  }
   function gunStat(id) { return stats.guns[id] || (stats.guns[id] = { shots: 0, hits: 0, points: 0 }); }
   // "FLICK 80° x1.40" -> "FLICK", "HANG TIME 1.4s x1.16" -> "HANG TIME"; spins keep their size; streaks are counted apart
   function trickKey(tag) {
@@ -8577,6 +8708,49 @@
     if (m.hill) { g.strokeStyle = "#ffd24a"; g.lineWidth = Math.max(1.5, k * 0.5); g.beginPath(); g.arc(px(m.hill.x), px(m.hill.z), Math.max(3, m.hill.r * k), 0, 7); g.stroke(); }
     g.strokeStyle = css(m.theme.skyHorizon); g.lineWidth = 2; g.strokeRect(1, 1, n - 2, n - 2);
   }
+  // ---- the attachments window ----
+  const attachPopupEl = document.getElementById("attach-popup");
+  let attachGun = SETTINGS.loadout;
+  function renderAttach() {
+    const gunsEl = document.getElementById("attach-guns"), slotsEl = document.getElementById("attach-slots");
+    gunsEl.textContent = ""; slotsEl.textContent = "";
+    for (const g of GUNS) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = WEAPONS[g].name; b.className = g === attachGun ? "active" : "";
+      b.addEventListener("click", () => { attachGun = g; renderAttach(); });
+      gunsEl.appendChild(b);
+    }
+    const hits = (stats.guns[attachGun] && stats.guns[attachGun].hits) || 0;
+    document.getElementById("attach-progress").textContent = WEAPONS[attachGun].name + ": " + hits + " hits so far. Land hits with a gun to unlock its attachments.";
+    const fitted = (SETTINGS.attach && SETTINGS.attach[attachGun]) || {};
+    for (const [slot, opts] of Object.entries(ATTACHMENTS[attachGun] || {})) {
+      const sec = document.createElement("div"); sec.className = "at-slot";
+      sec.innerHTML = "<h3>" + (ATTACH_SLOTS[slot] || slot) + "</h3>";
+      const grid = document.createElement("div"); grid.className = "at-opts";
+      const mk = (id, name, text, locked) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.dataset.opt = id; b.className = "at-opt" + ((fitted[slot] || "") === id ? " active" : "") + (locked ? " locked" : "");
+        b.innerHTML = "<b>" + name + "</b><span>" + text + "</span>";
+        b.addEventListener("click", () => {
+          if (locked) return;
+          SETTINGS.attach = SETTINGS.attach || {};
+          const cur = SETTINGS.attach[attachGun] = SETTINGS.attach[attachGun] || {};
+          if (id) cur[slot] = id; else delete cur[slot];
+          saveSettings(); applyAttachments(); renderAttach();
+        });
+        grid.appendChild(b);
+      };
+      mk("", "None", "Nothing fitted", false);
+      for (const o of opts) { const open = attachUnlocked(attachGun, o); mk(o.id, o.name, open ? o.text : "Locked: " + (o.need - hits) + " more hits", !open); }
+      sec.appendChild(grid); slotsEl.appendChild(sec);
+    }
+  }
+  function setAttachPopup(open) { if (open) { attachGun = SETTINGS.loadout; renderAttach(); } attachPopupEl.hidden = !open; }
+  document.getElementById("attach-open").addEventListener("click", (e) => { e.stopPropagation(); setAttachPopup(true); });
+  document.getElementById("attach-close").addEventListener("click", () => setAttachPopup(false));
+  attachPopupEl.addEventListener("click", (e) => { if (e.target === attachPopupEl) setAttachPopup(false); });
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !attachPopupEl.hidden) setAttachPopup(false); });
+
   // ---- the bigger map: from the menu, and held in a game ----
   const mapPopupEl = document.getElementById("map-popup"), mapBigEl = document.getElementById("map-big"), mapBigCtx = mapBigEl.getContext("2d");
   const mapBaseCache = {};
@@ -9511,6 +9685,7 @@
 
   player.lastYaw = yawObject.rotation.y;
   fitMuzzleFlash(currentWeapon());
+  applyAttachments();
   setLoadout(SETTINGS.loadout);   // last, once the reload and ammo state it touches exist
   // whatever depends on the level's shape is redone every time a map loads
   levelLoadedHook = function (opts) {

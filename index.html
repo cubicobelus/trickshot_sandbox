@@ -35,7 +35,8 @@
 
     <p id="touch-note" hidden>This game needs a keyboard and mouse. Open it on a computer to play.</p>
 
-    <div id="loadout"><span class="lo-label">Loadout</span></div>   <!-- gun buttons are built in game.js; shared by singleplayer and multiplayer -->
+    <div id="loadout"><span class="lo-label">Loadout</span></div>
+    <button type="button" class="btn small" id="attach-open" title="Add scopes, grips, suppressors and more to your guns: unlock them by landing hits with each gun">Attachments</button>   <!-- gun buttons are built in game.js; shared by singleplayer and multiplayer -->
 
     <div id="panel-solo">
       <div id="map-picker"><span class="lo-label">Map</span></div>   <!-- thumbnails are built in game.js -->
@@ -223,6 +224,16 @@
     <div class="g-head"><h2>Trickshots</h2><button type="button" class="g-close" id="glossary-close" aria-label="Close">&times;</button></div>
     <p class="g-note" id="glossary-note"></p>   <!-- filled in game.js from the scoring values -->
     <div id="glossary-list"></div>
+  </div>
+</div>
+
+<!-- attachments: pick what goes on each gun (unlocked by hitting targets and players with it) -->
+<div id="attach-popup" hidden>
+  <div class="g-panel" role="dialog" aria-label="Attachments">
+    <div class="g-head"><h2>Attachments</h2><button type="button" class="g-close" id="attach-close" aria-label="Close">&times;</button></div>
+    <div id="attach-guns"></div>
+    <p class="g-note" id="attach-progress"></p>
+    <div id="attach-slots"></div>
   </div>
 </div>
 

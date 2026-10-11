@@ -642,6 +642,38 @@ def test_play_setup(browser, base):
     page.close()
 
 
+def test_attachments(browser, base):
+    """Attachments: locked until you have landed hits with the gun, then fitted, saved, and they change the gun."""
+    import json
+    page, errors = open_page(browser, base + "/index.html")
+    page.click("#attach-open")
+    page.wait_for_timeout(150)
+    locked = page.eval_on_selector_all("#attach-slots .at-opt.locked", "els => els.length")
+    check("attachments start locked", locked >= 3, str(locked))
+    page.keyboard.press("Escape")
+    # pretend 200 hits with the AR, then fit the extended magazine
+    stats = {"since": "2026-01-01", "kinds": {}, "guns": {"ar": {"shots": 400, "hits": 200, "points": 0}}, "tricks": {}}
+    page.evaluate("(s) => localStorage.setItem('tsb-stats', JSON.stringify(s))", stats)
+    page.reload()
+    page.wait_for_timeout(300)
+    page.click('#loadout button[data-gun="ar"]')
+    page.click("#attach-open")
+    page.wait_for_timeout(150)
+    opt = page.query_selector('#attach-slots .at-opt[data-opt="extmag"]')
+    check("an attachment unlocks once the gun has enough hits", opt is not None and "locked" not in (opt.get_attribute("class") or ""))
+    page.click('#attach-slots .at-opt[data-opt="extmag"]')
+    active = page.evaluate("document.querySelector('#attach-slots .at-opt.active[data-opt=\"extmag\"]') !== null")
+    page.keyboard.press("Escape")
+    ammo = page.inner_text("#ammo-count")
+    check("a fitted attachment changes the gun (the extended magazine holds 45)", active and "45" in ammo, ammo)
+    page.reload()
+    page.wait_for_timeout(300)
+    ammo2 = page.inner_text("#ammo-count")
+    check("the fitted attachment is remembered", "45" in ammo2, ammo2)
+    check("attachments run without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_maps(browser, base):
     """Every map builds, shows up in the picker, and can be played with bots."""
     page, errors = open_page(browser, base + "/index.html")
@@ -737,7 +769,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_play_setup, test_maps, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_play_setup, test_attachments, test_maps, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:
