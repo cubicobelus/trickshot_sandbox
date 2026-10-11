@@ -5805,6 +5805,7 @@
   // (the deathmatch spawn points, SPAWNS, come from the map)
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
   function modeName() {
+    if (net.sub === "dm" && net.br) return "Battle royale";
     if (net.sub === "dm" && net.ctf) return "Capture the flag";
     if (net.sub === "dm" && net.range) return "Shooting range";
     if (net.sub === "dm" && net.gungame) return "Gun game";
@@ -5852,6 +5853,7 @@
     map: "arena", pendingMap: "arena",
     teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
     rules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false }, pendingRules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false },   // the host's match rules
+    br: false, pendingBr: false, zc: [0, 0],   // battle royale: one life, and a safe zone that closes in (its centre; its size comes from the round clock)
     ctf: false, pendingCtf: false, flags: [{ s: 0, x: 0, y: 0, z: 0, c: null, t: 0 }, { s: 0, x: 0, y: 0, z: 0, c: null, t: 0 }], caps: [0, 0],   // capture the flag: each flag (s: 0 home, 1 carried, 2 dropped; where; who has it; the drop timer) and the captures
     gungame: false, pendingGun: false,   // gun game: every kill swaps your gun; a kill with the knife at the end wins
     range: false, pendingRange: false,   // the shooting range: dummies that stand still and never shoot back (practice only)
@@ -5902,6 +5904,7 @@
     koth: "A hill with a ring on top. Stand alone on it to score a point a second; with someone else on it, nobody scores. First to the score wins (the first-to number times 5). Kills only clear the hill. It always plays on the map with a hill.",
     tkoth: "King of the Hill with two teams: your team scores while only your team is on the hill. Kills only clear the hill.",
     range: "Stationary dummies stand at set distances and never shoot back. Every hit shows its damage, they heal fast and come back after a kill, and the corner shows what your gun does. Practice only.",
+    br: "One life each. A safe circle closes in over the round and anyone outside it takes damage that gets worse; the last player standing wins. Kills still count, and there are no respawns.",
     ctf: "Two teams, a flag each. Touch their flag to pick it up and bring it back to your own flag while yours is home to score. Kill the carrier and it drops; touch your own dropped flag to send it home. First to the captures wins (the first-to number divided by 5).",
     gungame: "Everyone starts with the same gun and every kill gives you the next one: assault rifle, AK, shotgun, Deagle, sniper, then the knife. A kill with the knife wins. Get knifed and you drop a level.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
@@ -5923,6 +5926,7 @@
     net.pendingKoth = value === "koth" || value === "tkoth";
     net.pendingRange = value === "range";
     net.pendingCtf = value === "ctf";
+    net.pendingBr = value === "br";
     net.pendingGun = value === "gungame";
     net.pendingLimit = Math.max(0, Math.min(parseInt(limit, 10) || 0, 999));
   }
@@ -6405,6 +6409,8 @@
     net.sub = m.sub;
     net.teams = m.teams === true;
     net.koth = m.koth === true;
+    net.br = m.br === true;
+    if (Array.isArray(m.zc)) net.zc = [Number(m.zc[0]) || 0, Number(m.zc[1]) || 0];
     net.ctf = m.ctf === true;
     applyCtf(m);
     net.rules = cleanRules(m.rules);
@@ -6527,6 +6533,13 @@
       }
 
       case "kill": {
+        if (m.w === "zone") {   // caught outside the safe zone
+          const zv = net.players.get(m.v);
+          if (zv) { zv.alive = false; zv.hp = 0; }
+          feedLine("<b>" + esc(zv ? zv.name : "?") + "</b> was caught outside the zone");
+          if (m.v === net.id) { setLocalDead("the zone", null, ["You were caught outside the safe zone"]); lifeLogReset(); }
+          break;
+        }
         const k = net.players.get(m.k), v = net.players.get(m.v);
         if (v) { v.alive = false; v.hp = 0; }
         if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res, true); playPlayerHit(!!m.head); spawnDamageNumber(v, Math.max(0, Math.min(Number(m.dmg) || 0, 999)), !!m.head, true); }   // the kill pays out
@@ -6625,7 +6638,7 @@
   function hostBroadcastBoard() { hostBroadcast(hostBoardMsg()); }
   function roundMsg(fresh) {
     return {
-      t: "round", map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, ctf: net.ctf, fl: net.flags.map((f) => [f.s, f.x, f.y, f.z, f.c]), cp: net.caps, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
+      t: "round", map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, br: net.br, zc: net.zc, ctf: net.ctf, fl: net.flags.map((f) => [f.s, f.x, f.y, f.z, f.c]), cp: net.caps, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
       targets: net.sub === "race" ? targets.map(serializeTarget) : null, tt: mpTargetClock(),
     };
   }
@@ -6670,13 +6683,15 @@
     net.koth = net.sub === "dm" && net.pendingKoth;
     net.range = net.sub === "dm" && net.pendingRange;
     net.gungame = net.sub === "dm" && net.pendingGun;
+    net.br = net.sub === "dm" && net.pendingBr;
+    net.zc = net.br ? [(Math.random() * 2 - 1) * CFG.arenaHalfSize * 0.25, (Math.random() * 2 - 1) * CFG.arenaHalfSize * 0.25] : [0, 0];
     net.ctf = net.sub === "dm" && net.pendingCtf && !!currentMap.flags;
     ctfReset();
     net.rules = cleanRules(net.pendingRules);
     applyRulePhysics();
     net.hs = [0, -1]; net.teamHill = [0, 0];
     updateHillVis();
-    net.limit = net.sub === "dm" && !net.range && !net.gungame ? net.pendingLimit : 0;
+    net.limit = net.sub === "dm" && !net.range && !net.gungame && !net.br ? net.pendingLimit : 0;
     net.teams = net.teams || net.ctf;
     let slot = 0;
     for (const q of net.players.values()) {   // teams: you with the first half of the bots in practice, otherwise alternating as people joined
@@ -6793,7 +6808,7 @@
     if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
     v.hp = 0;
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
-    v.alive = false; v.deaths++; v.respawnAt = nowMs() + (rules.fastResp ? 1000 : net.range ? 1200 : RESPAWN_MS);
+    v.alive = false; v.deaths++; v.respawnAt = net.br ? Infinity : nowMs() + (rules.fastResp ? 1000 : net.range ? 1200 : RESPAWN_MS);
     p.kills++; p.score += pts;
     if (info.head) p.heads++;
     p.best = Math.max(p.best, pts); p.streak++; p.bstreak = Math.max(p.bstreak, p.streak); v.streak = 0;
@@ -6929,6 +6944,38 @@
     }
   }
 
+  // Battle royale: a circle that closes in on a timetable (the same on every computer: it reads the round clock)
+  // [starts at (s), shrinks for (s), to this fraction of the half-size, damage a second outside while it is the current stage]
+  const BR_STAGES = [[20, 25, 0.62, 5], [60, 25, 0.34, 9], [100, 25, 0.14, 15], [140, 20, 0.05, 24]];
+  function brZoneAt(t) {
+    const half = CFG.arenaHalfSize;
+    let prev = half * 1.45, dps = 3;
+    for (let i = 0; i < BR_STAGES.length; i++) {
+      const [start, dur, frac, d] = BR_STAGES[i], end = frac * half;
+      if (t < start) return { r: prev, dps, status: "wait", in: start - t, stage: i };
+      if (t < start + dur) return { r: prev + (end - prev) * (t - start) / dur, dps: d, status: "shrink", in: 0, stage: i };
+      prev = end; dps = d;
+    }
+    return { r: prev, dps, status: "final", in: 0, stage: BR_STAGES.length };
+  }
+  const brNow = () => brZoneAt(ROUND_SECONDS - (net.role === "host" ? net.left : leftNow()));
+  function hostBrTick(dt) {
+    if (net.phase !== "play") return;
+    const z = brNow(), now = nowMs();
+    for (const p of net.players.values()) {
+      if (!p.alive) continue;
+      if (Math.hypot(p.x - net.zc[0], p.z - net.zc[1]) <= z.r) { p.zoneAcc = 0; continue; }
+      p.hp -= z.dps * dt; p.lastDamageAt = now; p.zoneAcc = (p.zoneAcc || 0) + dt;
+      if (p.hp <= 0) {
+        p.hp = 0; p.alive = false; p.deaths++; p.respawnAt = Infinity;
+        hostBroadcast({ t: "kill", k: "", v: p.id, w: "zone", dmg: 0, pts: 0, tags: [], head: false, knife: false });
+        hostBroadcastBoard();
+      } else if (p.zoneAcc >= 0.5) { p.zoneAcc = 0; hostBroadcast({ t: "hp", id: p.id, hp: Math.round(p.hp), by: "zone", head: false, dmg: 0 }); }
+    }
+    const alive = [...net.players.values()].filter((p) => p.alive).length;
+    if (net.players.size >= 2 && alive <= 1) hostEndRound();   // the last one standing
+  }
+
   // King of the Hill: whoever is alone on the hilltop scores for as long as they are
   function hostHillTick(dt) {
     const h = currentMap && currentMap.hill;
@@ -6966,6 +7013,7 @@
       if (net.practice) for (let left = dt; left > 0; left -= 0.05) botsThink(Math.min(left, 0.05), now);
       if (net.koth) hostHillTick(dt);
       if (net.ctf) hostCtfTick(dt);
+      if (net.br) hostBrTick(dt);
       for (const p of net.players.values()) if (!p.alive && now >= p.respawnAt) hostRespawn(p);
       for (const p of net.players.values()) {   // slow healing, only once they've stayed out of the fight
         const regenDelay = net.range ? 1500 : REGEN_DELAY;
@@ -7283,6 +7331,12 @@
     const prefer = BOT_PREFER[g] || 18;
     // now and then a bot heads for a roof or deck to fight from up there (when the map has one)
     if (!navBlocked) navBuild();
+    if (net.br) {   // battle royale: get inside the circle (with a margin), then fight whoever is closest
+      const bz = brNow(), bd = Math.hypot(p.x - net.zc[0], p.z - net.zc[1]);
+      if (bd > bz.r - 5) { ai.perch = { x: net.zc[0], z: net.zc[1], l: 0 }; ai.perchT = 5; }
+      else if (ai.perch && ai.perch.brZone) ai.perch = null;
+      if (ai.perch) ai.perch.brZone = true;
+    }
     if (net.ctf && currentMap.flags) {   // capture the flag: carry it home, hunt the carrier, or go for their flag (half of them stay near their own)
       const myT = p.team, enemyT = 1 - myT, fMine = net.flags[myT], fTheirs = net.flags[enemyT];
       let goal = null;
@@ -7477,6 +7531,7 @@
     { id: "tdm", name: "Team Deathmatch", short: "Blue against red" },
     { id: "koth", name: "King of the Hill", short: "Hold the hilltop alone", hill: true },
     { id: "tkoth", name: "Team King of the Hill", short: "Your team holds the hill", hill: true },
+    { id: "br", name: "Battle royale", short: "One life, a closing zone, last one standing" },
     { id: "ctf", name: "Capture the flag", short: "Take their flag home", flags: true },
     { id: "gungame", name: "Gun game", short: "Every kill swaps your gun; finish with the knife" },
     { id: "range", name: "Shooting range", short: "Dummies at set distances: every hit shows its damage", host: false },
@@ -7506,13 +7561,13 @@
   function saveSetup() { try { localStorage.setItem(SETUP_KEY, JSON.stringify(setup)); } catch (e) { /* ignore */ } }
   const mapNameOf = (id) => (id === "random" ? "Random map" : MAPS[id] ? MAPS[id].name : "Arena");
   const hillMapId = () => MAP_ORDER.find((i) => MAPS[i].hill);
-  const limitText = (mode, limit) => (mode.id === "race" || mode.id === "range" || mode.id === "gungame" ? "" : mode.flags ? (limit ? "first to " + Math.max(1, Math.round(limit / 5)) + " capture" + (Math.max(1, Math.round(limit / 5)) === 1 ? "" : "s") : "no limit") : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
+  const limitText = (mode, limit) => (mode.id === "race" || mode.id === "range" || mode.id === "gungame" || mode.id === "br" ? "" : mode.flags ? (limit ? "first to " + Math.max(1, Math.round(limit / 5)) + " capture" + (Math.max(1, Math.round(limit / 5)) === 1 ? "" : "s") : "no limit") : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
   function refreshMpCards() {   // the two big buttons remind you what they will start
     const p = setup.practice, h = setup.host, pm = modeById(p.mode), hm = modeById(h.mode);
     document.getElementById("mp-card-practice-sub").textContent = pm.name + " \u00b7 " + mapNameOf(p.map) + " \u00b7 " + p.bots + " bot" + (p.bots === 1 ? "" : "s") + " (" + p.level + ")";
     document.getElementById("mp-card-host-sub").textContent = hm.name + " \u00b7 " + mapNameOf(h.map);
   }
-  function pendingModeValue() { return net.pendingCtf ? "ctf" : net.pendingGun ? "gungame" : net.pendingRange ? "range" : net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
+  function pendingModeValue() { return net.pendingBr ? "br" : net.pendingCtf ? "ctf" : net.pendingGun ? "gungame" : net.pendingRange ? "range" : net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
   function refreshLobbyLine() {   // in a hosted room: what the next round will be
     if (!mpEls.nextLine) return;
     const m = modeById(pendingModeValue());
@@ -7577,7 +7632,7 @@
     document.getElementById("ps-map-note").textContent = d.map === "random" ? "A different map each round." : MAPS[d.map].blurb;
     // the rules
     const limitRow = document.getElementById("ps-limit-row");
-    limitRow.hidden = mode.id === "race" || mode.id === "range" || mode.id === "gungame";
+    limitRow.hidden = mode.id === "race" || mode.id === "range" || mode.id === "gungame" || mode.id === "br";
     document.getElementById("ps-limit").value = String(d.limit);
     document.getElementById("ps-limit-unit").textContent = mode.flags ? "(divided by 5: " + (d.limit ? Math.max(1, Math.round(d.limit / 5)) + " capture" + (Math.max(1, Math.round(d.limit / 5)) === 1 ? "" : "s") + ")" : "no limit)") : mode.hill ? "(times 5 seconds on the hill" + (d.limit ? ": " + d.limit * 5 + " s)" : ")") : "kills";
     document.getElementById("ps-bots-row").hidden = ps.kind !== "practice";
@@ -7654,7 +7709,7 @@
     try { if (net.hostConn) net.hostConn.close(); } catch (e) { /* ignore */ }
     try { if (net.peer) net.peer.destroy(); } catch (e) { /* ignore */ }
     net.peer = null; net.hostConn = null; net.id = null; net.role = null; net.active = false; net.practice = false;
-    net.koth = net.ctf = net.gungame = net.range = false;   // (a new room must not start out as the last one's mode)
+    net.koth = net.ctf = net.gungame = net.range = net.br = false;   // (a new room must not start out as the last one's mode)
   }
 
   function mpLeave(message) {
@@ -7667,6 +7722,7 @@
     applyRulePhysics();
     ggRestore();
     ctfDispose();
+    brDispose();
     for (const t of targets) respawnTarget(t);
     resetLocalRound();
     mpEls.tabs.forEach((t) => (t.disabled = false));
@@ -7841,6 +7897,7 @@
       if (ruleText(net.rules)) label += " \u00b7 " + ruleText(net.rules);
       if (net.sub === "dm" && net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
     }
+    if (net.sub === "dm" && net.br) label = "Battle royale" + (ruleText(net.rules) ? " \u00b7 " + ruleText(net.rules) : "");
     if (net.sub === "dm" && net.ctf) label = "Capture the flag \u00b7 " + (net.limit ? "first to " + ctfNeed() : "no limit") + (ruleText(net.rules) ? " \u00b7 " + ruleText(net.rules) : "");
     if (net.sub === "dm" && net.gungame) { const me = localPlayer(); label = "Gun game · level " + (me ? Math.min(me.gg + 1, GG_ORDER.length + 1) : 1) + " / " + (GG_ORDER.length + 1) + (ruleText(net.rules) ? " · " + ruleText(net.rules) : ""); }
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
@@ -7922,13 +7979,47 @@
     }
   }
 
+  // the safe zone in the world: a red wall of light on the edge, and a ring on the ground
+  let brWall = null;
+  function brDispose() { if (!brWall) return; scene.remove(brWall); brWall.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); brWall = null; }
+  function updateBrZone() {
+    const on = net.active && net.br && net.phase === "play";
+    if (!on) { if (brWall) brWall.visible = false; return; }
+    if (!brWall) {
+      brWall = new THREE.Group();
+      const wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 40, 64, 1, true), new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      wall.position.y = 20;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 8, 96), new THREE.MeshBasicMaterial({ color: 0xff6a5e }));
+      ring.rotation.x = Math.PI / 2; ring.position.y = 0.3;
+      brWall.add(wall, ring);
+      scene.add(brWall);
+    }
+    const z = brNow();
+    brWall.visible = true;
+    brWall.position.set(net.zc[0], 0, net.zc[1]);
+    brWall.scale.set(z.r, 1, z.r);
+    brWall.children[1].scale.y = brWall.children[1].scale.z = 1;   // (the ring keeps its thickness: scale only stretches x and z)
+  }
+
   // King of the Hill: a bar across the top. Teams fill in from their own side towards the middle; alone, it is your own progress
   // with a tick for whoever is in front
   const kothBarEl = document.getElementById("koth-bar");
   function updateKothBar() {
-    const on = net.active && (net.koth || net.ctf) && net.sub === "dm" && net.phase === "play";
+    const on = net.active && (net.koth || net.ctf || net.br) && net.sub === "dm" && net.phase === "play";
     kothBarEl.hidden = !on;
     if (!on) return;
+    if (net.br) {   // battle royale: who is left, and what the zone is doing
+      const z = brNow(), me = localPlayer(), alive = [...net.players.values()].filter((p) => p.alive).length;
+      const fa = kothBarEl.querySelector(".kb-a"), fb = kothBarEl.querySelector(".kb-b"), mk = kothBarEl.querySelector(".kb-mark");
+      fa.style.background = "#ff6a5e"; fa.style.width = Math.min(1, Math.max(0, 1 - z.r / (CFG.arenaHalfSize * 1.45))) * 100 + "%"; fb.style.width = "0"; mk.style.display = "none";
+      const outside = me && me.alive && Math.hypot(yawObject.position.x - net.zc[0], yawObject.position.z - net.zc[1]) > z.r;
+      document.getElementById("kb-left").textContent = alive + " alive";
+      document.getElementById("kb-right").textContent = "zone " + Math.round(z.r) + " m";
+      const mid = document.getElementById("kb-mid");
+      mid.textContent = outside ? "Outside the zone: get in!" : z.status === "wait" ? "Zone closes in " + Math.ceil(z.in) + " s" : z.status === "shrink" ? "The zone is closing" : "Final circle";
+      mid.style.color = outside ? "#ff6a5e" : "#e6e6e6";
+      return;
+    }
     if (net.ctf) {   // capture the flag: the captures, and what the flags are doing
       const need = ctfNeed(), fa = kothBarEl.querySelector(".kb-a"), fb = kothBarEl.querySelector(".kb-b"), mk = kothBarEl.querySelector(".kb-mark");
       fa.style.background = "#" + TEAM_COLORS[0].toString(16).padStart(6, "0"); fb.style.background = "#" + TEAM_COLORS[1].toString(16).padStart(6, "0");
@@ -7993,7 +8084,7 @@
     if (mpEls.board.hidden) return;
     if (!net.active) { soloRecords(); return; }   // on your own there is no scoreboard: show your records for this map
     const dm = net.sub === "dm", koth = dm && net.koth, ggm = dm && net.gungame;
-    const rows = [...net.players.values()].sort(dm && net.ctf ? (a, b) => b.caps - a.caps || b.kills - a.kills : ggm ? (a, b) => b.gg - a.gg || b.kills - a.kills : koth ? (a, b) => b.hill - a.hill || b.kills - a.kills : dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
+    const rows = [...net.players.values()].sort(dm && net.br ? (a, b) => (b.alive ? 1 : 0) - (a.alive ? 1 : 0) || b.kills - a.kills || b.dmg - a.dmg : dm && net.ctf ? (a, b) => b.caps - a.caps || b.kills - a.kills : ggm ? (a, b) => b.gg - a.gg || b.kills - a.kills : koth ? (a, b) => b.hill - a.hill || b.kills - a.kills : dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
     let title = modeName();
     if (dm && net.ctf) title += " \u00b7 " + TEAM_NAMES[0] + " " + net.caps[0] + " \u2013 " + net.caps[1] + " " + TEAM_NAMES[1];
     else if (koth && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + Math.floor(net.teamHill[0]) + " \u2013 " + Math.floor(net.teamHill[1]) + " " + TEAM_NAMES[1];
@@ -8007,7 +8098,8 @@
     mpEls.boardTitle.textContent = title;
     // the columns depend on the mode: deathmatch shows the whole fight, King of the Hill leads with hill time
     const kd = (p) => (p.kills / Math.max(1, p.deaths)).toFixed(2), n = (v) => Math.round(v).toLocaleString();
-    const cols = dm && net.ctf ? [["Caps", (p) => p.caps], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
+    const cols = dm && net.br ? [["Status", (p) => (p.alive ? "alive" : "out")], ["Kills", (p) => p.kills], ["Dmg", (p) => n(p.dmg)]]
+      : dm && net.ctf ? [["Caps", (p) => p.caps], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
       : ggm ? [["Level", (p) => Math.min(p.gg + 1, GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
       : koth ? [["Hill", (p) => Math.floor(p.hill)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")]]
       : dm ? [["Score", (p) => n(p.score)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["HS", (p) => p.heads], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")], ["Streak", (p) => p.bstreak]]
@@ -8027,6 +8119,7 @@
     updateSpectate(dt);
     updateDamageNumbers(dt);
     updateCtfFlags(elapsedTime);
+    updateBrZone();
     // time on the hill (alone, or with only your team) counts toward an achievement
     const me = localPlayer();
     if (net.koth && net.phase === "play" && me && net.hs[0] === 1 && net.hs[1] === (net.teams ? me.team : net.id)) stat("hillTime", dt);
@@ -8505,6 +8598,10 @@
   }
   function drawMapMarkers(m) {   // you, and your teammates in a team mode (never the other side)
     const k = mapBigEl.width / (m.half * 2), px = (v) => (v + m.half) * k;
+    if (net.active && net.br) {   // the safe zone
+      mapBigCtx.strokeStyle = "#ff6a5e"; mapBigCtx.lineWidth = 3;
+      mapBigCtx.beginPath(); mapBigCtx.arc(px(net.zc[0]), px(net.zc[1]), brNow().r * k, 0, 7); mapBigCtx.stroke();
+    }
     const me = localPlayer();
     if (net.active && net.teams && me) {
       for (const p of net.players.values()) {
