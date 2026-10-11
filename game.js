@@ -960,6 +960,11 @@
       water.rotation.x = -Math.PI / 2; water.scale.y = 0.7;
       water.position.set(d[1], FLOOR_Y + 0.04, d[2]);
       levelGroup.add(water);
+    } else if (kind === "river") {   // ["river", x, z, width, length]: shallow water you can wade through
+      const water = new THREE.Mesh(new THREE.PlaneGeometry(d[3], d[4]), new THREE.MeshStandardMaterial({ color: 0x3a7ea8, transparent: true, opacity: 0.8, roughness: 0.15, metalness: 0.2 }));
+      water.rotation.x = -Math.PI / 2;
+      water.position.set(d[1], FLOOR_Y + 0.04, d[2]);
+      levelGroup.add(water);
     } else if (kind === "sign") {   // ["sign", x, z, "text", direction it faces (1 = +x, -1 = -x)]: a distance board
       const c = document.createElement("canvas"); c.width = 256; c.height = 128;
       const g = c.getContext("2d");
@@ -1135,7 +1140,7 @@
   });
 
   // Summit: a wooded valley around a stepped hill. The hill is where King of the Hill is played
-  const plateau = (cx, cz, w, d, top) => ({ wall: [cx, (top - 0.5) / 2, cz, w, top - 0.5, d, "rock"], deck: [cx, top - 0.25, cz, w, d, "meadow", true] });
+  const plateau = (cx, cz, w, d, top, topKind) => ({ wall: [cx, (top - 0.5) / 2, cz, w, top - 0.5, d, "rock"], deck: [cx, top - 0.25, cz, w, d, topKind || "meadow", true] });
   const SUMMIT_TIERS = [plateau(0, 0, 44, 44, 3), plateau(0, 0, 26, 26, 6), plateau(0, 0, 10, 10, 9)];
   const summitDecor = [];
   {
@@ -1177,6 +1182,28 @@
     hill: { x: 0, z: 0, y: 9, r: 3.6 },
     spawns: [[-40, -40], [40, -40], [-40, 40], [40, 40], [-41, 0], [41, 0], [0, -41], [0, 41], [-30, -38], [30, 38], [-38, 30], [38, -30]],
     playerSpawn: [0, 41],
+  });
+
+  // Canyon: a desert canyon with a river down the middle, a base at each end, and ledges up both sides
+  const CANYON_LEDGES = [plateau(-40, -29, 16, 34, 7, "dirt"), plateau(-40, 29, 16, 34, 7, "dirt"), plateau(40, -29, 16, 34, 7, "dirt"), plateau(40, 29, 16, 34, 7, "dirt"),
+    plateau(0, -40, 26, 10, 3, "dirt"), plateau(0, 40, 26, 10, 3, "dirt")];
+  const CANYON_BOULDERS = [[-20, -30, 4.5], [18, -34, 5], [-24, -10, 6], [22, -8, 5.5], [-18, 12, 5], [20, 14, 6.5], [-22, 32, 4.5], [16, 30, 5], [-12, -2, 3], [12, 2, 3.2], [-30, 6, 4], [30, -4, 4.2]];
+  defineMap({
+    id: "canyon", name: "Canyon", blurb: "A desert canyon with a river down the middle: long sight lines, a base at each end, ledges up both sides (take the ramps or the mega pads) and two bridges.",
+    half: 50, floor: "dirt", wallH: 24, targetMaxY: 12, boundary: "rock", rampSurface: "dirt",
+    theme: { skyTop: 0x6aa4da, skyHorizon: 0xf3dcb4, fog: [75, 230], sunDir: [-35, 50, 25], sunColor: 0xfff0d0, sunIntensity: 1.05, hemi: [0xf5e6d0, 0x8a6a4a, 0.6],
+      surfaces: { dirt: "#c9a46b", rock: "#b8714a", concrete: "#b8714a", deck: "#a8814f" } },
+    walls: CANYON_LEDGES.map((t) => t.wall).concat([wallAt(-18, -8, 3, 3, 9, "rock"), wallAt(18, 8, 3, 3, 9, "rock"), wallAt(-12, 18, 3, 3, 7, "rock"), wallAt(12, -18, 3, 3, 7, "rock")]),
+    decks: CANYON_LEDGES.map((t) => t.deck).concat([[0, 2.25, -25, 12, 6, "dirt", true], [0, 2.25, 25, 12, 6, "dirt", true]]),
+    ramps: [
+      [-26, -22, "x", 5, 12, 6.75, -1], [-26, 22, "x", 5, 12, 6.75, -1], [26, -22, "x", 5, 12, 6.75, 1], [26, 22, "x", 5, 12, 6.75, 1],   // up to the ledges
+      [-9.5, -25, "x", 6, 7, 2.25, 1], [9.5, -25, "x", 6, 7, 2.25, -1], [-9.5, 25, "x", 6, 7, 2.25, 1], [9.5, 25, "x", 6, 7, 2.25, -1],   // up to the bridges
+      [0, -31.5, "z", 6, 7, 2.75, -1], [0, 31.5, "z", 6, 7, 2.75, 1],   // up to the bases
+    ],
+    pads: [[-28, 0, "mega"], [28, 0, "mega"], [-12, -36, "normal"], [12, 36, "normal"]],
+    decor: CANYON_BOULDERS.map((b) => ["boulder", b[0], b[1], b[2]]).concat([["river", 0, 0, 8, 68]]),
+    spawns: [[-22, -44], [22, -44], [-22, 44], [22, 44], [-40, 0], [40, 0], [-18, -2], [18, 2], [-27, -15], [27, 15], [-27, 15], [27, -15]],
+    playerSpawn: [-16, 44],
   });
 
   // Rooftops: a street canyon between two rows of buildings at three heights, with ladders, ramps, bridges and pads between the levels
