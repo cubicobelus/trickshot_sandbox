@@ -2013,9 +2013,11 @@
   for (let i = 0; i < 9; i++) addPart(rifleGroup, new THREE.BoxGeometry(0.05, 0.006, 0.012), metalDark, 0, 0.073, -0.21 + i * 0.045);
   addPart(rifleGroup, new THREE.CylinderGeometry(0.026, 0.028, 0.05, 12), metalMid, 0, 0.02, 0.255, HALF_PI, 0, 0);
   // stock: wood with a raised cheek rest and a rubber butt pad
-  addPart(rifleGroup, new THREE.BoxGeometry(0.08, 0.10, 0.34), woodStock, 0, -0.01, 0.36);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.07, 0.06, 0.20), woodStock, 0, -0.07, 0.42, -0.12, 0, 0);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.055, 0.04, 0.18), woodStock, 0, 0.07, 0.30);
+  const rifleStock = new THREE.Group();   // the light stock attachment swaps it for a skeleton frame
+  rifleGroup.add(rifleStock);
+  addPart(rifleStock, new THREE.BoxGeometry(0.08, 0.10, 0.34), woodStock, 0, -0.01, 0.36);
+  addPart(rifleStock, new THREE.BoxGeometry(0.07, 0.06, 0.20), woodStock, 0, -0.07, 0.42, -0.12, 0, 0);
+  addPart(rifleStock, new THREE.BoxGeometry(0.055, 0.04, 0.18), woodStock, 0, 0.07, 0.30);
   addPart(rifleGroup, new THREE.BoxGeometry(0.085, 0.15, 0.03), gripMat, 0, -0.03, 0.54);
   // pistol grip, trigger guard and trigger
   addPart(rifleGroup, new THREE.BoxGeometry(0.05, 0.13, 0.055), gripMat, 0, -0.11, 0.19, 0.32, 0, 0);
@@ -3396,20 +3398,21 @@
   const AT_DOT_RISE = 0.034;   // a red dot's window centre sits this far above the rail it is clamped to
   // per gun (the viewmodel, and AV_MOUNT for the other-player models; forward is -z):
   //   muzzle [z where a muzzle device starts, barrel height, barrel radius, suppressor length]
-  //   optic [z, rail top]; under [z, fore-end bottom]; butt [z of the butt's back face, centre height, height]; tube [z of the tube's end, height, radius]
+  //   optic [z, rail top]; under [z, fore-end bottom]; butt [z of the butt's back face, centre height, height, stock length]; tube [z of the tube's end, height, radius]
+  //   mag: where a magazine's bottom is, in the magazine's own space (the parts ride along with it through a reload) [height, z, tilt, width, depth]
   const AT_MOUNT = {
-    rifle: { muzzle: [-1.035, 0.005, 0.034, 0.34], butt: [0.555, -0.03, 0.15] },
-    ar: { muzzle: [-0.64, 0.015, 0.015, 0.26], optic: [-0.03, 0.062], under: [-0.3, -0.016] },
-    ak: { muzzle: [-0.545, 0, 0.014, 0.24], optic: [0.04, 0.047], under: [-0.23, -0.032] },
+    rifle: { muzzle: [-1.035, 0.005, 0.034, 0.34], butt: [0.555, -0.03, 0.15, 0.32] },
+    ar: { muzzle: [-0.64, 0.015, 0.015, 0.26], optic: [-0.03, 0.062], under: [-0.3, -0.016], mag: [-0.075, 0, 0, 0.03, 0.065] },
+    ak: { muzzle: [-0.545, 0, 0.014, 0.24], optic: [0.04, 0.047], under: [-0.23, -0.032], mag: [-0.158, -0.058, 0.55, 0.028, 0.055] },
     shotgun: { muzzle: [-0.75, 0.022, 0.016, 0.2], tube: [-0.671, -0.018, 0.0145] },
-    pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024] },
+    pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024], mag: [-0.06, 0, 0, 0.03, 0.045] },
   };
   const AV_MOUNT = {
-    rifle: { muzzle: [-1.0, 0.01, 0.022, 0.32], butt: [0.3, -0.02, 0.1] },
-    ar: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425] },
-    ak: { muzzle: [-0.76, 0, 0.018, 0.24], optic: [-0.05, 0.0425], under: [-0.55, -0.035] },
+    rifle: { muzzle: [-1.0, 0.01, 0.022, 0.32], butt: [0.3, -0.02, 0.1, 0.2] },   // (these models have no separate magazine, so mag is in the gun's space)
+    ar: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425], mag: [-0.24, -0.2, 0, 0.03, 0.05] },
+    ak: { muzzle: [-0.76, 0, 0.018, 0.24], optic: [-0.05, 0.0425], under: [-0.55, -0.035], mag: [-0.253, -0.188, 0.35, 0.03, 0.05] },
     shotgun: { muzzle: [-0.975, 0.02, 0.03, 0.2], tube: [-0.75, -0.03, 0.035] },
-    pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05] },
+    pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
   };
   function attachParts(ids, M) {
     const g = new THREE.Group();
@@ -3440,12 +3443,29 @@
         add(new THREE.BoxGeometry(0.026, 0.022, 0.06), AT_STEEL, 0, M.under[1] - 0.011, M.under[0]);
         add(new THREE.CylinderGeometry(0.004, 0.004, 0.002, 8), AT_DOT, 0, M.under[1] - 0.011, M.under[0] - 0.031, HP);
       } else if (id === "stock-heavy" && M.butt) add(new THREE.BoxGeometry(0.09, M.butt[2] * 1.05, 0.05), AT_RUBBER, 0, M.butt[1], M.butt[0] + 0.02);
+      else if (id === "stock-light" && M.butt) {   // a skeleton frame in place of the wooden stock: top bar, lower strut, upright
+        const [zBack, yc, h, len] = M.butt, zb = zBack - 0.03;
+        add(new THREE.BoxGeometry(0.035, 0.025, len), AT_STEEL, 0, yc + h / 2 - 0.0125, zb - len / 2);
+        add(new THREE.BoxGeometry(0.03, 0.022, len * 0.8), AT_STEEL, 0, yc - h / 2 + 0.011, zb - len * 0.4);
+        add(new THREE.BoxGeometry(0.05, h * 0.95, 0.03), AT_STEEL, 0, yc, zb - 0.015);
+      }
       else if (id === "tube" && M.tube) {   // the magazine tube runs on past its old end
         const [z, y, r] = M.tube;
         add(new THREE.CylinderGeometry(r, r, 0.08, 12), AT_STEEL, 0, y, z - 0.04, HP);
         add(new THREE.CylinderGeometry(r * 1.1, r * 1.1, 0.02, 12), AT_STEEL, 0, y, z - 0.09, HP);
       }
     }
+    return g;
+  }
+  // extended and fast magazines, built at the magazine's bottom (M.mag), tilted with it
+  function magParts(ids, M) {
+    if (!M.mag) return null;
+    const [y, z, tilt, w, d] = M.mag, g = new THREE.Group();
+    g.position.set(0, y, z); g.rotation.x = tilt;
+    const add = (geo, mat, py) => { const m = new THREE.Mesh(geo, mat); m.position.y = py; g.add(m); };
+    if (ids.includes("extmag")) { add(new THREE.BoxGeometry(w, 0.06, d), AT_STEEL, -0.03); add(new THREE.BoxGeometry(w + 0.006, 0.012, d + 0.008), AT_STEEL, -0.064); }   // the extra length and a base plate
+    else if (ids.includes("fastmag")) add(new THREE.BoxGeometry(0.012, 0.026, 0.004), AT_RUBBER, -0.013);   // a pull tab
+    else return null;
     return g;
   }
   const attachCode = () => { const ids = chosenAttachments(SETTINGS.loadout).map((o) => o.id); return ids.length ? SETTINGS.loadout + ":" + ids.join(",") : ""; };
@@ -3485,12 +3505,16 @@
       if (w.atGroup) { w.group.remove(w.atGroup); w.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.atGroup = null; }
       const ids = chosenAttachments(id).map((o) => o.id), has = (x) => ids.includes(x);
       if (ids.length && AT_MOUNT[id]) { w.atGroup = attachParts(ids, AT_MOUNT[id]); w.group.add(w.atGroup); }
+      if (w.magAt) { w.magAt.parent.remove(w.magAt); w.magAt.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.magAt = null; }
+      const mp = w.mag && magParts(ids, AT_MOUNT[id]);
+      if (mp) { w.magAt = mp; w.mag.add(mp); }
       w.adsPos.y = base.adsY;
       if (id === "rifle") {   // the sniper: iron sights, unless a scope is fitted
         const scoped = has("scope-low") || has("scope-high");
         w.scope = scoped; rifleScope.visible = scoped; rifleIrons.visible = !scoped;
         rifleScope.scale.set(has("scope-high") ? 1.12 : 1, has("scope-high") ? 1.12 : 1, has("scope-high") ? 1.3 : 1);
         rifleBrake.visible = !has("suppressor") && !has("brake");
+        rifleStock.visible = !has("stock-light");
         if (scoped) w.adsPos.y = w.scopeAdsY;
       }
       if (AT_MOUNT[id].optic && has("reddot")) w.adsPos.y = -(AT_MOUNT[id].optic[1] + AT_DOT_RISE);   // look through the dot
@@ -6168,7 +6192,7 @@
     const HP = Math.PI / 2;
     if (id === "rifle") {            // sniper: long barrel, wooden stock, and a scope when one is fitted
       P(B(0.07, 0.09, 0.55), dark, 0, 0, -0.15); P(B(0.04, 0.04, 0.6), steel, 0, 0.01, -0.7);
-      g.userData.scope = P(new THREE.CylinderGeometry(0.035, 0.035, 0.34, 10), steel, 0, 0.1, -0.25, HP); P(B(0.06, 0.1, 0.2), wood, 0, -0.02, 0.2);
+      g.userData.scope = P(new THREE.CylinderGeometry(0.035, 0.035, 0.34, 10), steel, 0, 0.1, -0.25, HP); g.userData.stock = P(B(0.06, 0.1, 0.2), wood, 0, -0.02, 0.2);
       g.userData.scope.visible = false;   // only with a scope fitted
     } else if (id === "ar") {        // rifle: short and black
       P(B(0.065, 0.085, 0.7), dark, 0, 0, -0.3); P(B(0.025, 0.025, 0.25), steel, 0, 0.005, -0.75);
@@ -6251,6 +6275,7 @@
       if (g && g.userData.atGroup) { g.remove(g.userData.atGroup); g.userData.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); g.userData.atGroup = null; }
     }
     if (ud.guns.rifle.userData.scope) ud.guns.rifle.userData.scope.visible = false;
+    if (ud.guns.rifle.userData.stock) ud.guns.rifle.userData.stock.visible = true;
     if (!p.at) return;
     const [gun, list] = p.at.split(":"), mount = AV_MOUNT[gun], target = ud.guns[gun];
     if (!target || !mount) return;
@@ -6258,7 +6283,10 @@
     const ids = list.split(",").filter((x) => known.has(x));
     if (!ids.length) return;
     if (gun === "rifle" && target.userData.scope) target.userData.scope.visible = ids.includes("scope-low") || ids.includes("scope-high");
+    if (gun === "rifle" && target.userData.stock) target.userData.stock.visible = !ids.includes("stock-light");
     target.userData.atGroup = attachParts(ids, mount);
+    const mp = magParts(ids, mount);
+    if (mp) target.userData.atGroup.add(mp);
     target.add(target.userData.atGroup);
   }
   const _avStart = new THREE.Vector3(), _avPos = new THREE.Vector3(), _avDir = new THREE.Vector3();
