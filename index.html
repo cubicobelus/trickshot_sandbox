@@ -66,37 +66,12 @@
           <label for="mp-name">Name</label>
           <input type="text" id="mp-name" maxlength="14" placeholder="Player" autocomplete="off">
         </div>
-        <div class="mp-cols">
-          <div class="mp-box">
-            <h3>Host a room</h3>
-            <div class="check-row">
-              <label><input type="radio" name="mp-sub" value="race" checked>Score Race</label>
-              <label><input type="radio" name="mp-sub" value="dm">Deathmatch</label>
-              <label><input type="radio" name="mp-sub" value="tdm">Team Deathmatch</label>
-              <label><input type="radio" name="mp-sub" value="koth">King of the Hill</label>
-              <label><input type="radio" name="mp-sub" value="tkoth">Team King of the Hill</label>
-            </div>
-            <label class="mp-limit">Map <select id="mp-host-map"></select></label>
-            <label class="mp-limit">First to <select id="mp-host-limit"><option value="5">5</option><option value="10">10</option><option value="15" selected>15</option><option value="25">25</option><option value="50">50</option><option value="0">no limit</option></select> kills (deathmatch modes; King of the Hill: times 5 seconds on the hill)</label>
-            <p class="mp-hint" id="mp-sub-hint"></p>
-            <button type="button" class="btn" id="mp-host-btn">Create room</button>
-          </div>
-          <div class="mp-box">
-            <h3>Join a room</h3>
-            <input type="text" id="mp-code" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false">
-            <button type="button" class="btn" id="mp-join-btn">Join</button>
-          </div>
-          <div class="mp-box">
-            <h3>Practice vs bots</h3>
-            <div class="check-row">
-              <label>Bots <select id="bot-count"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
-              <label>Map <select id="bot-map"></select></label>
-              <label>Mode <select id="bot-mode"><option value="dm">Deathmatch</option><option value="tdm">Team Deathmatch</option><option value="koth">King of the Hill</option><option value="tkoth">Team King of the Hill</option></select></label>
-              <label>First to <select id="bot-limit"><option value="5">5</option><option value="10">10</option><option value="15" selected>15</option><option value="25">25</option><option value="50">50</option><option value="0">no limit</option></select></label>
-              <label>Level <select id="bot-level"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></label>
-            </div>
-            <p class="mp-hint">Deathmatch against AI players, offline, with the same health and damage as online. Esc pauses it.</p>
-            <button type="button" class="btn" id="bot-start-btn">Start practice</button>
+        <div class="mp-cards">
+          <button type="button" class="mp-card" id="mp-card-practice"><b>Practice vs bots</b><span id="mp-card-practice-sub">Play a match offline against AI players</span></button>
+          <button type="button" class="mp-card" id="mp-card-host"><b>Host a room</b><span id="mp-card-host-sub">Start a room and share the code</span></button>
+          <div class="mp-card mp-join">
+            <b>Join a room</b>
+            <div class="mp-join-row"><input type="text" id="mp-code" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="mp-join-btn">Join</button></div>
           </div>
         </div>
         <p class="mp-status" id="mp-status"></p>
@@ -106,9 +81,8 @@
         <div class="mp-codebar">Room code <b id="mp-room-code">-----</b>
           <button type="button" class="btn small" id="mp-copy-btn">Copy</button></div>
         <div class="mp-modeline">Mode: <b id="mp-room-mode"></b>
-          <span id="mp-host-mode" hidden>&nbsp;&middot; next round: <select id="mp-next-map"></select>
-            <select id="mp-next-sub"><option value="race">Score Race</option><option value="dm">Deathmatch</option><option value="tdm">Team Deathmatch</option><option value="koth">King of the Hill</option><option value="tkoth">Team King of the Hill</option></select>
-            first to <select id="mp-next-limit"><option value="5">5</option><option value="10">10</option><option value="15">15</option><option value="25">25</option><option value="50">50</option><option value="0">no limit</option></select></span>
+          <button type="button" class="btn small" id="mp-room-settings" hidden>Round settings&hellip;</button>
+          <div class="mp-next" id="mp-next-line"></div>
         </div>
         <ul id="mp-players"></ul>
         <div class="start" id="mp-play-btn">Click to play</div>
@@ -258,6 +232,30 @@
     <p class="g-note" id="map-popup-note"></p>
     <canvas id="map-big" width="440" height="440"></canvas>
     <p class="g-note" id="map-popup-legend"></p>
+  </div>
+</div>
+
+<!-- the setup window for a practice match, a hosted room, and the next round of a room -->
+<div id="play-setup" hidden>
+  <div class="g-panel setup-panel" role="dialog" aria-label="Game setup">
+    <div class="g-head"><h2 id="ps-title">Practice vs bots</h2><button type="button" class="g-close" id="ps-close" aria-label="Close">&times;</button></div>
+    <h3 class="ps-h">Mode</h3>
+    <div id="ps-modes" class="ps-cards"></div>
+    <p class="g-note" id="ps-mode-desc"></p>
+    <h3 class="ps-h">Map</h3>
+    <div class="ps-maprow">
+      <div id="ps-maps"></div>
+      <div class="ps-preview"><canvas id="ps-preview" width="200" height="200"></canvas><b id="ps-map-name"></b><span id="ps-map-note"></span></div>
+    </div>
+    <details id="ps-rules">
+      <summary>Rules <span id="ps-rules-sum"></span></summary>
+      <div class="ps-rules-body">
+        <label id="ps-limit-row">First to <select id="ps-limit"><option value="5">5</option><option value="10">10</option><option value="15">15</option><option value="25">25</option><option value="50">50</option><option value="0">no limit</option></select> <span id="ps-limit-unit"></span></label>
+        <label id="ps-bots-row">Bots <select id="ps-bots"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+        <label id="ps-level-row">Bot level <select id="ps-level"><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
+      </div>
+    </details>
+    <div class="start ps-go" id="ps-go">Start</div>
   </div>
 </div>
 

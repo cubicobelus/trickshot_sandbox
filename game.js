@@ -5662,20 +5662,16 @@
     room: document.getElementById("mp-room"),
     name: document.getElementById("mp-name"),
     code: document.getElementById("mp-code"),
-    hostBtn: document.getElementById("mp-host-btn"),
+    hostBtn: document.getElementById("mp-card-host"),
+    practiceBtn: document.getElementById("mp-card-practice"),
     joinBtn: document.getElementById("mp-join-btn"),
     status: document.getElementById("mp-status"),
-    subHint: document.getElementById("mp-sub-hint"),
     roomCode: document.getElementById("mp-room-code"),
     roomMode: document.getElementById("mp-room-mode"),
-    hostMode: document.getElementById("mp-host-mode"),
-    nextSub: document.getElementById("mp-next-sub"), nextLimit: document.getElementById("mp-next-limit"), hostLimit: document.getElementById("mp-host-limit"),
-    hostMap: document.getElementById("mp-host-map"), nextMap: document.getElementById("mp-next-map"), botMap: document.getElementById("bot-map"),
-    botMode: document.getElementById("bot-mode"), botLimit: document.getElementById("bot-limit"),
+    settingsBtn: document.getElementById("mp-room-settings"), nextLine: document.getElementById("mp-next-line"),
     players: document.getElementById("mp-players"),
     playBtn: document.getElementById("mp-play-btn"),
     leaveBtn: document.getElementById("mp-leave-btn"),
-    botStart: document.getElementById("bot-start-btn"), botCount: document.getElementById("bot-count"), botLevel: document.getElementById("bot-level"),
     copyBtn: document.getElementById("mp-copy-btn"),
     timer: document.getElementById("mp-timer"),
     timerVal: document.getElementById("mp-timer-val"),
@@ -5697,7 +5693,6 @@
     tkoth: "King of the Hill with two teams: your team scores while only your team is on the hill. Kills only clear the hill.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
-  function selectedSub() { return document.querySelector('input[name="mp-sub"]:checked').value; }
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
   function chooseMap(id) { net.pendingMap = id === "random" || MAPS[id] ? id : "arena"; }
   function chooseMode(value, limit) {
@@ -5706,9 +5701,6 @@
     net.pendingKoth = value === "koth" || value === "tkoth";
     net.pendingLimit = Math.max(0, Math.min(parseInt(limit, 10) || 0, 999));
   }
-  function refreshSubHint() { mpEls.subHint.textContent = SUB_HINTS[selectedSub()]; }
-  document.querySelectorAll('input[name="mp-sub"]').forEach((r) => r.addEventListener("change", refreshSubHint));
-  refreshSubHint();
 
   try { mpEls.name.value = localStorage.getItem("tsb-name") || ""; } catch (e) { /* storage can be blocked */ }
   function myName() {
@@ -7110,17 +7102,146 @@
   }
 
   function mpBots() {
-    const count = Math.max(1, Math.min(parseInt(mpEls.botCount.value, 10) || 3, MAX_PLAYERS - 1));
-    const level = mpEls.botLevel.value;
-    chooseMode(mpEls.botMode.value, mpEls.botLimit.value); chooseMap(mpEls.botMap.value); net.id = "you"; net.practice = true; net.botCount = count;
+    const count = Math.max(1, Math.min(setup.practice.bots, MAX_PLAYERS - 1));
+    const level = setup.practice.level;
+    chooseMode(setup.practice.mode, setup.practice.limit); chooseMap(setup.practice.map); net.id = "you"; net.practice = true; net.botCount = count;
     mpEnter("host", "BOTS");
     net.lastTick = nowMs();
     for (let i = 0; i < count; i++) addBot(i, level).botIndex = i;
     mpEls.roomCode.textContent = "Practice";
-    mpEls.copyBtn.hidden = true; mpEls.hostMode.hidden = true;
+    mpEls.copyBtn.hidden = true; mpEls.settingsBtn.hidden = true;
     hostStartRound();
     mpRefreshRoomUI();
   }
+
+  // ======================================================================
+  // PLAY SETUP: the window for starting a practice match or a room (and for changing the next round of a room).
+  // The modes are a list: a new mode only needs an entry here (and its rules in the host code), not a new menu.
+  // ======================================================================
+  const SETUP_KEY = "tsb-mp-setup";
+  const MODES = [
+    { id: "race", name: "Score Race", short: "Everyone shoots the same targets", practice: false },
+    { id: "dm", name: "Deathmatch", short: "Free for all, first to the kill limit" },
+    { id: "tdm", name: "Team Deathmatch", short: "Blue against red" },
+    { id: "koth", name: "King of the Hill", short: "Hold the hilltop alone", hill: true },
+    { id: "tkoth", name: "Team King of the Hill", short: "Your team holds the hill", hill: true },
+  ];
+  const modeById = (id) => MODES.find((m) => m.id === id) || MODES[1];
+  const LIMITS = [5, 10, 15, 25, 50, 0];
+  const BOT_LEVEL_IDS = ["easy", "medium", "hard"];
+  const setup = { practice: { mode: "dm", map: "arena", limit: 15, bots: 3, level: "medium" }, host: { mode: "dm", map: "arena", limit: 15 } };
+  (function loadSetup() {   // the last choices come back (each value is checked, so a damaged save can't break the menu)
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(SETUP_KEY)); } catch (e) { /* none saved */ }
+    if (!saved || typeof saved !== "object") return;
+    for (const kind of ["practice", "host"]) {
+      const s = saved[kind], d = setup[kind];
+      if (!s || typeof s !== "object") continue;
+      if (MODES.some((m) => m.id === s.mode) && !(kind === "practice" && s.mode === "race")) d.mode = s.mode;
+      if (s.map === "random" || MAPS[s.map]) d.map = s.map;
+      if (LIMITS.includes(s.limit)) d.limit = s.limit;
+      if (kind === "practice") {
+        if (Number.isInteger(s.bots) && s.bots >= 1 && s.bots <= 5) d.bots = s.bots;
+        if (BOT_LEVEL_IDS.includes(s.level)) d.level = s.level;
+      }
+    }
+  })();
+  function saveSetup() { try { localStorage.setItem(SETUP_KEY, JSON.stringify(setup)); } catch (e) { /* ignore */ } }
+  const mapNameOf = (id) => (id === "random" ? "Random map" : MAPS[id] ? MAPS[id].name : "Arena");
+  const hillMapId = () => MAP_ORDER.find((i) => MAPS[i].hill);
+  const limitText = (mode, limit) => (mode.id === "race" ? "" : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
+  function refreshMpCards() {   // the two big buttons remind you what they will start
+    const p = setup.practice, h = setup.host, pm = modeById(p.mode), hm = modeById(h.mode);
+    document.getElementById("mp-card-practice-sub").textContent = pm.name + " \u00b7 " + mapNameOf(p.map) + " \u00b7 " + p.bots + " bot" + (p.bots === 1 ? "" : "s") + " (" + p.level + ")";
+    document.getElementById("mp-card-host-sub").textContent = hm.name + " \u00b7 " + mapNameOf(h.map);
+  }
+  function pendingModeValue() { return net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
+  function refreshLobbyLine() {   // in a hosted room: what the next round will be
+    if (!mpEls.nextLine) return;
+    const m = modeById(pendingModeValue());
+    const lt = limitText(m, net.pendingLimit);
+    mpEls.nextLine.textContent = net.role === "host" && !net.practice ? "Next round: " + m.name + " \u00b7 " + mapNameOf(net.pendingMap) + (lt ? " \u00b7 " + lt : "") : "";
+  }
+
+  const psEl = document.getElementById("play-setup");
+  let ps = null;   // { kind: "practice" | "host" | "room", draft }
+  const isKothMode = (id) => !!modeById(id).hill;
+  function fixHillMap() {   // King of the Hill is only played where there is a hill
+    const d = ps.draft;
+    if (isKothMode(d.mode) && !(MAPS[d.map] && MAPS[d.map].hill)) d.map = hillMapId() || d.map;
+  }
+  function openSetup(kind) {
+    const base = kind === "practice" ? setup.practice : kind === "host" ? setup.host : { mode: pendingModeValue(), map: net.pendingMap, limit: net.pendingLimit };
+    ps = { kind, draft: Object.assign({}, base) };
+    if (kind === "practice" && ps.draft.mode === "race") ps.draft.mode = "dm";
+    fixHillMap();
+    renderSetup();
+    psEl.hidden = false;
+  }
+  function closeSetup() { psEl.hidden = true; ps = null; }
+  function renderSetup() {
+    const d = ps.draft, mode = modeById(d.mode);
+    document.getElementById("ps-title").textContent = ps.kind === "practice" ? "Practice vs bots" : ps.kind === "host" ? "Host a room" : "Next round";
+    // the modes
+    const modesEl = document.getElementById("ps-modes");
+    modesEl.textContent = "";
+    for (const m of MODES) {
+      if (ps.kind === "practice" && m.practice === false) continue;   // a score race needs real people
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "ps-card" + (m.id === d.mode ? " active" : ""); b.dataset.mode = m.id;
+      b.innerHTML = "<b>" + m.name + "</b><span>" + m.short + "</span>";
+      b.addEventListener("click", () => { d.mode = m.id; fixHillMap(); renderSetup(); });
+      modesEl.appendChild(b);
+    }
+    document.getElementById("ps-mode-desc").textContent = SUB_HINTS[d.mode] || "";
+    // the maps
+    const mapsEl = document.getElementById("ps-maps");
+    mapsEl.textContent = "";
+    for (const id of MAP_ORDER.concat(["random"])) {
+      const b = document.createElement("button");
+      const off = isKothMode(d.mode) && !(MAPS[id] && MAPS[id].hill);
+      b.type = "button"; b.dataset.map = id; b.className = (id === d.map ? "active" : "") + (off ? " off" : "");
+      const c = document.createElement("canvas"); c.width = c.height = 64;
+      if (id === "random") { const g = c.getContext("2d"); g.fillStyle = "#1c1d22"; g.fillRect(0, 0, 64, 64); g.fillStyle = "#ffd24a"; g.font = "bold 36px sans-serif"; g.textAlign = "center"; g.fillText("?", 32, 46); }
+      else drawMapThumb(c, MAPS[id]);
+      b.appendChild(c); b.appendChild(document.createTextNode(id === "random" ? "Random" : MAPS[id].name));
+      b.addEventListener("click", () => { if (off) return; d.map = id; renderSetup(); });
+      mapsEl.appendChild(b);
+    }
+    const pv = document.getElementById("ps-preview"), pg = pv.getContext("2d");
+    if (d.map === "random") { pg.fillStyle = "#1c1d22"; pg.fillRect(0, 0, 200, 200); pg.fillStyle = "#ffd24a"; pg.font = "bold 90px sans-serif"; pg.textAlign = "center"; pg.fillText("?", 100, 130); }
+    else drawMapThumb(pv, MAPS[d.map]);
+    document.getElementById("ps-map-name").textContent = mapNameOf(d.map);
+    document.getElementById("ps-map-note").textContent = d.map === "random" ? "A different map each round." : MAPS[d.map].blurb;
+    // the rules
+    const limitRow = document.getElementById("ps-limit-row");
+    limitRow.hidden = mode.id === "race";
+    document.getElementById("ps-limit").value = String(d.limit);
+    document.getElementById("ps-limit-unit").textContent = mode.hill ? "(times 5 seconds on the hill" + (d.limit ? ": " + d.limit * 5 + " s)" : ")") : "kills";
+    document.getElementById("ps-bots-row").hidden = document.getElementById("ps-level-row").hidden = ps.kind !== "practice";
+    if (ps.kind === "practice") { document.getElementById("ps-bots").value = String(d.bots); document.getElementById("ps-level").value = d.level; }
+    const sum = [limitText(mode, d.limit)];
+    if (ps.kind === "practice") sum.push(d.bots + " bot" + (d.bots === 1 ? "" : "s"), d.level);
+    document.getElementById("ps-rules-sum").textContent = sum.filter(Boolean).join(" \u00b7 ");
+    document.getElementById("ps-go").textContent = ps.kind === "practice" ? "Start practice" : ps.kind === "host" ? "Create room" : "Use for the next round";
+  }
+  document.getElementById("ps-limit").addEventListener("change", (e) => { if (ps) { ps.draft.limit = parseInt(e.target.value, 10); renderSetup(); } });
+  document.getElementById("ps-bots").addEventListener("change", (e) => { if (ps) { ps.draft.bots = parseInt(e.target.value, 10); renderSetup(); } });
+  document.getElementById("ps-level").addEventListener("change", (e) => { if (ps) { ps.draft.level = e.target.value; renderSetup(); } });
+  document.getElementById("ps-go").addEventListener("click", () => {
+    if (!ps) return;
+    const d = ps.draft, kind = ps.kind;
+    if (kind === "practice") { Object.assign(setup.practice, d); saveSetup(); closeSetup(); refreshMpCards(); mpBots(); }
+    else if (kind === "host") { Object.assign(setup.host, { mode: d.mode, map: d.map, limit: d.limit }); saveSetup(); closeSetup(); refreshMpCards(); mpHost(); }
+    else { chooseMode(d.mode, d.limit); chooseMap(d.map); closeSetup(); refreshLobbyLine(); }
+  });
+  document.getElementById("ps-close").addEventListener("click", closeSetup);
+  psEl.addEventListener("click", (e) => { if (e.target === psEl) closeSetup(); });
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !psEl.hidden) closeSetup(); });
+  mpEls.practiceBtn.addEventListener("click", () => openSetup("practice"));
+  mpEls.hostBtn.addEventListener("click", () => { if (typeof Peer === "undefined") { mpStatus("Multiplayer library failed to load (check your connection)."); return; } openSetup("host"); });
+  mpEls.settingsBtn.addEventListener("click", () => openSetup("room"));
+  refreshMpCards();
 
   // ---------------- connecting ----------------
   function randomCode() {
@@ -7144,9 +7265,9 @@
     mpEls.room.hidden = false;
     mpEls.timer.hidden = false;
     mpEls.roomCode.textContent = code;
-    mpEls.hostMode.hidden = role !== "host";
+    mpEls.settingsBtn.hidden = role !== "host";
     mpEls.copyBtn.hidden = false;
-    mpEls.nextSub.value = net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; mpEls.nextLimit.value = String(net.pendingLimit); mpEls.nextMap.value = net.pendingMap;
+    refreshLobbyLine();
     mpStatus("");
     mpRefreshRoomUI();
     mpRefreshHud();
@@ -7187,8 +7308,8 @@
     if (typeof Peer === "undefined") { mpStatus("Multiplayer library failed to load (check your connection)."); return; }
     setConnectBusy(true);
     mpStatus("Creating room…", true);
-    chooseMode(selectedSub(), mpEls.hostLimit.value);
-    chooseMap(mpEls.hostMap.value);
+    chooseMode(setup.host.mode, setup.host.limit);
+    chooseMap(setup.host.map);
     let attempts = 0, opened = false;
 
     const open = () => {
@@ -7290,15 +7411,10 @@
   }
   function mpTeardownPending(peer) { try { peer.destroy(); } catch (e) { /* ignore */ } net.peer = null; net.hostConn = null; }
 
-  mpEls.hostBtn.addEventListener("click", mpHost);
-  mpEls.botStart.addEventListener("click", mpBots);
   mpEls.joinBtn.addEventListener("click", mpJoin);
   mpEls.code.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") mpJoin(); });
   mpEls.name.addEventListener("keydown", (e) => e.stopPropagation());
   mpEls.leaveBtn.addEventListener("click", () => mpLeave(""));
-  mpEls.nextSub.addEventListener("change", () => chooseMode(mpEls.nextSub.value, mpEls.nextLimit.value));
-  mpEls.nextLimit.addEventListener("change", () => chooseMode(mpEls.nextSub.value, mpEls.nextLimit.value));
-  mpEls.nextMap.addEventListener("change", () => chooseMap(mpEls.nextMap.value));
   mpEls.copyBtn.addEventListener("click", () => {
     const link = /^https?:/.test(location.protocol) ? location.origin + location.pathname + "?room=" + net.code : net.code;
     const done = () => { mpEls.copyBtn.textContent = "Copied"; setTimeout(() => (mpEls.copyBtn.textContent = "Copy"), 1200); };
@@ -7986,9 +8102,6 @@
     loadMap(resolveMapChoice(id));
     refreshModeUI();
     refreshMapUI();
-  }
-  for (const sel of [document.getElementById("mp-host-map"), document.getElementById("bot-map"), document.getElementById("mp-next-map")]) {
-    for (const id of MAP_ORDER.concat(["random"])) { const o = document.createElement("option"); o.value = id; o.textContent = id === "random" ? "Random" : MAPS[id].name; sel.appendChild(o); }
   }
 
   // ---- the mode buttons in the menu ----

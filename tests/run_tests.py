@@ -363,14 +363,31 @@ def test_erase(browser, base):
     page.close()
 
 
+def start_practice(page, mode=None, map_id=None, bots=None, level=None, limit=None):
+    """Open the practice window (from the Multiplayer tab), set what's asked, and press Start."""
+    page.click("#mp-card-practice")
+    page.wait_for_timeout(100)
+    if mode:
+        page.click(f'#ps-modes .ps-card[data-mode="{mode}"]')
+    if map_id:
+        page.click(f'#ps-maps button[data-map="{map_id}"]')
+    if bots or level or limit is not None:
+        page.evaluate("document.getElementById('ps-rules').open = true")
+        if bots:
+            page.select_option("#ps-bots", str(bots))
+        if level:
+            page.select_option("#ps-level", level)
+        if limit is not None:
+            page.select_option("#ps-limit", str(limit))
+    page.click("#ps-go")
+
+
 def test_bots(browser, base):
     """Practice vs bots: an offline deathmatch room with AI players."""
     page, errors = open_page(browser, base + "/index.html")
     page.click('#mode-tabs .tab[data-mode="mp"]')
     check("the loadout picker shows on the Multiplayer tab too", page.is_visible("#loadout"))
-    page.select_option("#bot-count", "2")
-    page.select_option("#bot-level", "hard")
-    page.click("#bot-start-btn")
+    start_practice(page, bots=2, level="hard")
     page.wait_for_timeout(300)
     names = page.eval_on_selector_all("#mp-players li", "els => els.map(e => e.textContent)")
     check("practice starts a room with you and the bots", len(names) == 3 and sum("BOT" in n for n in names) == 2 and any("YOU" in n for n in names), "; ".join(names))
@@ -385,10 +402,7 @@ def test_bots(browser, base):
     page.wait_for_timeout(200)
     check("leaving practice returns to the multiplayer menu", page.is_visible("#mp-connect") and page.is_hidden("#mp-room"))
     # team deathmatch against bots, first to 5
-    page.select_option("#bot-count", "3")
-    page.select_option("#bot-mode", "tdm")
-    page.select_option("#bot-limit", "5")
-    page.click("#bot-start-btn")
+    start_practice(page, mode="tdm", bots=3, limit=5)
     page.wait_for_timeout(300)
     page.click("#mp-play-btn")
     step(page, 120)
@@ -514,6 +528,48 @@ def test_access_and_backup(browser, base):
     page.close()
 
 
+def test_play_setup(browser, base):
+    """The multiplayer menu: three big choices, a setup window for practice and hosting, and the last choices remembered."""
+    page, errors = open_page(browser, base + "/index.html")
+    page.click('#mode-tabs .tab[data-mode="mp"]')
+    check("the multiplayer menu shows Practice, Host and Join", page.is_visible("#mp-card-practice") and page.is_visible("#mp-card-host") and page.is_visible("#mp-join-btn"))
+    page.click("#mp-card-practice")
+    page.wait_for_timeout(100)
+    modes = page.eval_on_selector_all("#ps-modes .ps-card", "els => els.map(e => e.dataset.mode)")
+    check("the practice window lists the modes (no score race: it needs real people)", modes == ["dm", "tdm", "koth", "tkoth"], ", ".join(modes))
+    page.click('#ps-modes .ps-card[data-mode="koth"]')
+    active_map = page.evaluate("document.querySelector('#ps-maps button.active').dataset.map")
+    off = page.eval_on_selector_all("#ps-maps button.off", "els => els.map(e => e.dataset.map)")
+    check("King of the Hill picks the hill map and switches the others off", active_map == "summit" and "arena" in off and "summit" not in off, f"{active_map} / {len(off)} off")
+    page.evaluate("document.getElementById('ps-rules').open = true")
+    page.select_option("#ps-bots", "4")
+    page.select_option("#ps-level", "easy")
+    summary = page.inner_text("#ps-rules-sum")
+    check("the rules line sums up the choices", "4 bots" in summary and "easy" in summary.lower(), summary)
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(100)
+    check("Esc closes the setup window", page.is_hidden("#play-setup"))
+    # start one, then see that the choices come back after a reload
+    start_practice(page, mode="tdm", map_id="foundry", bots=4, level="easy", limit=5)
+    page.wait_for_timeout(300)
+    names = page.eval_on_selector_all("#mp-players li", "els => els.map(e => e.textContent)")
+    check("Start practice makes a room with the bots", len(names) == 5, str(len(names)))
+    page.click("#mp-leave-btn")
+    page.reload()
+    page.wait_for_timeout(300)
+    page.click('#mode-tabs .tab[data-mode="mp"]')
+    sub = page.inner_text("#mp-card-practice-sub")
+    check("the last practice choices are remembered", "Team Deathmatch" in sub and "Foundry" in sub and "4 bots" in sub, sub)
+    page.click("#mp-card-host")
+    page.wait_for_timeout(100)
+    modes = page.eval_on_selector_all("#ps-modes .ps-card", "els => els.map(e => e.dataset.mode)")
+    title = page.inner_text("#ps-title")
+    check("the host window offers every mode, including the score race", "race" in modes and len(modes) == 5 and title.lower() == "host a room", f"{title} {modes}")
+    page.keyboard.press("Escape")
+    check("the setup windows run without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_maps(browser, base):
     """Every map builds, shows up in the picker, and can be played with bots."""
     page, errors = open_page(browser, base + "/index.html")
@@ -532,9 +588,7 @@ def test_maps(browser, base):
         check(f"{mid}: picking it and playing runs without errors", page.eval_on_selector(f'#map-picker button[data-map="{mid}"]', "e => e.classList.contains('active')") and not errors, "; ".join(errors[:2]))
     page.click('#mode-tabs .tab[data-mode="mp"]')
     for mid in ids:
-        page.select_option("#bot-map", mid)
-        page.select_option("#bot-count", "3")
-        page.click("#bot-start-btn")
+        start_practice(page, mode="dm", map_id=mid, bots=3)
         page.wait_for_timeout(250)
         page.click("#mp-play-btn")
         step(page, 200)
@@ -544,9 +598,7 @@ def test_maps(browser, base):
         page.wait_for_timeout(150)
         check(f"{mid}: a practice match with bots runs without errors", not errors, "; ".join(errors[:2]))
     # King of the Hill always plays on a map with a hill, whatever map was picked
-    page.select_option("#bot-map", "arena")
-    page.select_option("#bot-mode", "koth")
-    page.click("#bot-start-btn")
+    start_practice(page, mode="koth", map_id="arena")   # (the arena is switched off for this mode, so the hill map stays picked)
     page.wait_for_timeout(250)
     page.click("#mp-play-btn")
     step(page, 200)
@@ -613,7 +665,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_maps, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_play_setup, test_maps, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:
