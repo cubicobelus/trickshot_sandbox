@@ -141,6 +141,7 @@
     pointBlankMult: 0.4,
     standingStillSpeed: 2,      // moving slower than this when you fire, even mid-hop...
     standingStillMult: 0.75,    // ...scales the shot by this
+    unrealisticMult: 0.5,       // Realistic shooting turned off (every shot lands exactly where you aim): the shot is worth this much
     // the purple target keeps away from you, like a snitch
     snitchRange: 12,            // starts running when you're this close
     snitchFlee: 7,              // how far it can pull away from its path
@@ -4818,6 +4819,7 @@
     if (streak > 0) add("STREAK " + (streak + 1), Math.min(1 + streak * CFG.streakMultPer, CFG.streakMultMax));
 
     if (still) add("STANDING STILL", CFG.standingStillMult);
+    if (!SETTINGS.realisticShooting) add("UNREALISTIC", CFG.unrealisticMult);   // perfect accuracy is worth less
     // spraying: a shot that follows the last one at the gun's full-auto rate (before this shot's recoil is added)
     if (weapon && weapon.auto && !isKnife) {
       const inSpray = elapsedTime - vm.lastShotAt < Math.max(weapon.fireRate * 1.8, 0.25);
@@ -4875,6 +4877,7 @@
       ["Penalties", [
         ["CLOSE", x(C.pointBlankMult) + " to x1", "Closer than " + C.distanceFrom + " m, harshest at " + C.pointBlankMin + " m. Knife swings are exempt."],
         ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. A pad or ramp flight you ran onto doesn't count."],
+        ["UNREALISTIC", x(C.unrealisticMult), "Realistic shooting is turned off in Settings > Gameplay, so every shot lands exactly where you aim."],
         ["SPRAY", x(C.sprayMults[1]) + " / " + x(C.sprayMults[2]), "Rifle and AK: the 2nd shot of a full-auto spray, then every shot after. Tap-firing doesn't count."],
       ], true],
       ["Your gun's share (the sniper scores in full)", GUNS.filter((id) => WEAPONS[id].scoreScale < 1).map((id) =>

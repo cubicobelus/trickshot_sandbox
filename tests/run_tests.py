@@ -140,10 +140,19 @@ def test_game(browser, base):
     opened = page.evaluate("!document.getElementById('glossary').hidden")
     rows = page.evaluate("document.querySelectorAll('.g-row').length")
     started = page.evaluate("!!window.__pl")
+    has_unrealistic = page.evaluate("document.getElementById('glossary').textContent.toUpperCase().includes('UNREALISTIC')")
     page.keyboard.press("Escape")
     page.wait_for_timeout(100)
     closed = page.evaluate("document.getElementById('glossary').hidden")
     check("trickshot list opens, lists the tricks, closes with Esc", opened and rows > 20 and closed and not started, f"{rows} rows")
+    check("the trickshot list includes the UNREALISTIC penalty", has_unrealistic)
+    # perfect accuracy is worth half: the penalty is in the list, and it only applies with Realistic shooting off
+    page.click("#glossary-open")
+    page.wait_for_timeout(150)
+    listed = "UNREALISTIC" in page.inner_text("#glossary").upper()
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(100)
+    check("trickshot list includes the UNREALISTIC penalty", listed)
 
     # settings: every tab opens, a change survives a reload, reset restores it
     tabs = page.eval_on_selector_all(".stab", "els => els.map(e => e.dataset.tab)")

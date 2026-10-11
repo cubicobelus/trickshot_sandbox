@@ -69,7 +69,7 @@ Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo an
 browser. **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
 Call of Duty, so the same hand movement turns you the same amount here. **Settings > View > Graphics** trades looks for speed
 (Auto steps down by itself if the game runs slow), and **Show FPS** puts a frame counter in the corner. **Realistic shooting** (Settings > Gameplay; on by default in every mode) makes shots spread the faster you move, up to 10 u/s, and more in the air. Standing still is
-perfectly accurate, crouching tames recoil, and the sniper has a little spread when it isn't scoped.
+perfectly accurate, crouching tames recoil, and the sniper has a little spread when it isn't scoped. Turn it off for perfectly accurate shots, but every shot is then worth half (an UNREALISTIC x0.50 penalty).
 
 ## Multiplayer
 
