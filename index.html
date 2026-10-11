@@ -242,6 +242,16 @@
   </div>
 </div>
 
+<!-- a bigger map: opens from the menu when you click the map that is already selected, and in a game while you hold M -->
+<div id="map-popup" hidden>
+  <div class="g-panel" role="dialog" aria-label="Map">
+    <div class="g-head"><h2 id="map-popup-title">Map</h2><button type="button" class="g-close" id="map-popup-close" aria-label="Close">&times;</button></div>
+    <p class="g-note" id="map-popup-note"></p>
+    <canvas id="map-big" width="440" height="440"></canvas>
+    <p class="g-note" id="map-popup-legend"></p>
+  </div>
+</div>
+
 <!-- settings, a popup over the menu so the menu itself fits on one screen -->
 <div id="settings-popup" hidden>
   <div class="g-panel" role="dialog" aria-label="Settings">

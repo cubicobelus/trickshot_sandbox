@@ -220,6 +220,7 @@
     ["inspect", "Inspect weapon", ["KeyF"]], ["gun", "Switch to gun", ["Digit1"]],
     ["knife", "Switch to knife", ["Digit2"]], ["swap", "Swap gun / knife", ["KeyQ", "Wheel"]],
     ["replay", "Watch last hit", ["KeyP"]], ["grapple", "Grappling hook", ["KeyE"]],
+    ["map", "Show map (hold)", ["KeyM"]],
   ];
   const ACTION_IDS = ACTIONS.map((a) => a[0]);
   const ACTION_NAMES = Object.fromEntries(ACTIONS.map((a) => [a[0], a[1]]));
@@ -7660,13 +7661,80 @@
     for (const b of m.buildings || []) box(b[0], b[1], b[2], b[3], b[4] > 8 ? "#d8dbe0" : "#aab0b8");
     for (const d of m.decks) box(d[0], d[2], d[3], d[4], "rgba(190,200,215,0.55)");
     for (const r of m.ramps) box(r[0], r[1], r[2] === "x" ? r[4] : r[3], r[2] === "x" ? r[3] : r[4], "#e3b53a");
-    for (const w of m.walls) box(w[0], w[2], w[3], w[5], w[4] < 2 ? "rgba(235,235,240,0.5)" : "#e8e8ec");
+    for (const w of m.walls.slice().sort((p, q) => p[4] - q[4])) { const l = 150 + Math.min(w[4], 12) * 8; box(w[0], w[2], w[3], w[5], w[4] < 2 ? "rgba(235,235,240,0.5)" : "rgb(" + l + "," + l + "," + l + ")"); }   // taller walls are lighter, so tiers read
     for (const b of m.boosts || []) { g.save(); g.translate(px(b[0]), px(b[1])); g.rotate(Math.atan2(b[3], b[2])); g.fillStyle = "#ffb42a"; g.fillRect(-b[5] * k / 2, -Math.max(1, b[4] * k / 2), b[5] * k, Math.max(2, b[4] * k)); g.restore(); }
     for (const a of m.movers || []) box(a[0], a[2], a[3], a[4], "rgba(255,255,255,0.7)");
     for (const p of m.pads) { g.fillStyle = p[2] === "mega" ? "#d23cff" : "#1bd6c8"; g.beginPath(); g.arc(px(p[0]), px(p[1]), Math.max(2, 1.4 * k), 0, 7); g.fill(); }
     for (const a of m.portals || []) { g.fillStyle = "#2f9bff"; g.beginPath(); g.arc(px(a[0]), px(a[1]), Math.max(2, 1.6 * k), 0, 7); g.fill(); g.fillStyle = "#ff8a2a"; g.beginPath(); g.arc(px(a[4]), px(a[5]), Math.max(2, 1.6 * k), 0, 7); g.fill(); }
+    for (const l of m.ladders || []) { g.fillStyle = "#c7a548"; g.fillRect(px(l[0]) - Math.max(1, k * 0.5), px(l[1]) - Math.max(1, k * 0.5), Math.max(2, k), Math.max(2, k)); }
+    for (const d of m.decor || []) {   // trees, boulders and ponds on the nature map
+      if (d[0] === "tree") { g.fillStyle = "rgba(40,110,50,0.9)"; g.beginPath(); g.arc(px(d[1]), px(d[2]), Math.max(1.2, k * 1.1 * (d[3] || 1)), 0, 7); g.fill(); }
+      else if (d[0] === "boulder") { g.fillStyle = "#b9b4a8"; g.beginPath(); g.arc(px(d[1]), px(d[2]), Math.max(1.2, k * (d[3] || 2) * 0.5), 0, 7); g.fill(); }
+      else if (d[0] === "pond") { g.fillStyle = "#3d7fa6"; g.beginPath(); g.ellipse(px(d[1]), px(d[2]), d[3] * k, d[3] * 0.7 * k, 0, 0, 7); g.fill(); }
+    }
+    if (m.hill) { g.strokeStyle = "#ffd24a"; g.lineWidth = Math.max(1.5, k * 0.5); g.beginPath(); g.arc(px(m.hill.x), px(m.hill.z), Math.max(3, m.hill.r * k), 0, 7); g.stroke(); }
     g.strokeStyle = css(m.theme.skyHorizon); g.lineWidth = 2; g.strokeRect(1, 1, n - 2, n - 2);
   }
+  // ---- the bigger map: from the menu, and held in a game ----
+  const mapPopupEl = document.getElementById("map-popup"), mapBigEl = document.getElementById("map-big"), mapBigCtx = mapBigEl.getContext("2d");
+  const mapBaseCache = {};
+  let mapPopupLive = false;
+  function mapBaseFor(id) {
+    if (!mapBaseCache[id]) { const c = document.createElement("canvas"); c.width = c.height = mapBigEl.width; drawMapThumb(c, MAPS[id]); mapBaseCache[id] = c; }
+    return mapBaseCache[id];
+  }
+  function mapLegend(m) {
+    const bits = [];
+    if (m.ramps.length) bits.push("yellow: ramps");
+    if (m.pads.length) bits.push("teal and purple: jump pads");
+    if ((m.ladders || []).length) bits.push("tan squares: ladders");
+    if ((m.portals || []).length) bits.push("blue and orange: portals");
+    if ((m.boosts || []).length) bits.push("orange strips: launch strips");
+    if ((m.movers || []).length) bits.push("white: lifts and the shuttle");
+    if (m.hill) bits.push("gold ring: the hill");
+    return bits.join(" · ");
+  }
+  function drawMapMarkers(m) {   // you, and your teammates in a team mode (never the other side)
+    const k = mapBigEl.width / (m.half * 2), px = (v) => (v + m.half) * k;
+    const me = localPlayer();
+    if (net.active && net.teams && me) {
+      for (const p of net.players.values()) {
+        if (p === me || !p.alive || p.team !== me.team) continue;
+        mapBigCtx.fillStyle = "#" + TEAM_COLORS[p.team].toString(16).padStart(6, "0");
+        mapBigCtx.beginPath(); mapBigCtx.arc(px(p.x), px(p.z), 5, 0, 7); mapBigCtx.fill();
+      }
+    }
+    mapBigCtx.save();
+    mapBigCtx.translate(px(yawObject.position.x), px(yawObject.position.z));
+    mapBigCtx.rotate(Math.atan2(-Math.cos(yawObject.rotation.y), -Math.sin(yawObject.rotation.y)));   // the way you face
+    mapBigCtx.fillStyle = "#22d3ee"; mapBigCtx.strokeStyle = "#fff"; mapBigCtx.lineWidth = 1.5;
+    mapBigCtx.beginPath(); mapBigCtx.moveTo(10, 0); mapBigCtx.lineTo(-7, 6); mapBigCtx.lineTo(-4, 0); mapBigCtx.lineTo(-7, -6); mapBigCtx.closePath();
+    mapBigCtx.fill(); mapBigCtx.stroke();
+    mapBigCtx.restore();
+  }
+  function showMapPopup(id, live) {
+    const m = MAPS[id];
+    if (!m) return;
+    mapBigCtx.drawImage(mapBaseFor(id), 0, 0);
+    if (live) drawMapMarkers(m);
+    if (!live || mapPopupEl.hidden) {
+      document.getElementById("map-popup-title").textContent = m.name;
+      document.getElementById("map-popup-note").textContent = live ? "" : m.blurb;
+      document.getElementById("map-popup-legend").textContent = mapLegend(m) + (live ? " · cyan arrow: you" : "");
+    }
+    mapPopupEl.classList.toggle("ingame", !!live);
+    mapPopupEl.hidden = false;
+    mapPopupLive = !!live;
+  }
+  function hideMapPopup() { mapPopupEl.hidden = true; mapPopupLive = false; }
+  function updateMapPopup() {   // hold the map key in a game to see where you are
+    const want = pointerLocked && !replay.active && !localDead && held("map") && !!currentMap;
+    if (want) showMapPopup(currentMap.id, true);
+    else if (mapPopupLive) hideMapPopup();
+  }
+  document.getElementById("map-popup-close").addEventListener("click", hideMapPopup);
+  mapPopupEl.addEventListener("click", (e) => { if (e.target === mapPopupEl && !mapPopupLive) hideMapPopup(); });
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !mapPopupEl.hidden && !mapPopupLive) hideMapPopup(); });
   const mapPickerEl = document.getElementById("map-picker");
   for (const id of MAP_ORDER) {
     const b = document.createElement("button");
@@ -7674,7 +7742,7 @@
     const c = document.createElement("canvas"); c.width = c.height = 64;
     drawMapThumb(c, MAPS[id]);
     b.appendChild(c); b.appendChild(document.createTextNode(MAPS[id].name));
-    b.addEventListener("click", (e) => { e.stopPropagation(); setMap(id); });
+    b.addEventListener("click", (e) => { e.stopPropagation(); if (id === SETTINGS.map) showMapPopup(id, false); else setMap(id); });   // click the chosen map again for a bigger look
     mapPickerEl.appendChild(b);
   }
   {   // the Random choice, last in the row
@@ -8412,12 +8480,14 @@
 
     if (net.active) mpFrame(realDt);
 
+    if (!pointerLocked && mapPopupLive) hideMapPopup();   // the menu opened while the map was held
     // in a room the world keeps running while the menu is up, so everyone else's view stays correct
     if (pointerLocked || net.active) {
       if ((player.hook || player.grappleWant) && (!pointerLocked || localDead || run.state === "countdown")) releaseHook(0);
       updateMovers();
       if (pointerLocked && !localDead && run.state !== "countdown") updatePlayer(dt);
       achSummitCheck();
+      updateMapPopup();
       updateProps(dt);
       updateParticles(dt);
       updateTracers(dt);
