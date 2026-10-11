@@ -654,7 +654,7 @@
   const bounceBoxes = [];    // the subset you can wall-bounce off: actual walls and pillars
   const levelGroup = new THREE.Group();   // everything a map builds lives here, so changing map is: empty it and build again
   scene.add(levelGroup);
-  const movers = [], portals = [], boosts = [];   // moving platforms, portal ends, boost strips
+  const movers = [], portals = [], boosts = [], gates = [];   // moving platforms, portal ends, boost strips
   const ladders = [];        // { x, z, nx, nz, y0, y1 }: where it meets the wall, which way it faces (the side you climb from), bottom and top
   let levelPalette = {};     // this map's surface colours
   let levelLoadedHook = null;
@@ -681,6 +681,7 @@
     wallBoxes.push(box);
     bounceBoxes.push(box);
     if (stand) { mesh.userData = { topY: y + h / 2, halfW: w / 2, halfD: d / 2, cx: x, cz: z, wall: true }; groundMeshes.push(mesh); }
+    return mesh;
   }
 
   // ---- ladders: one plane painted with rails and rungs (cut out with alphaTest) a hair off the wall ----
@@ -727,6 +728,24 @@
     }
     if (onAny && !player.onMover) noteTrick("lift", "RIDING");
     player.onMover = onAny;
+  }
+
+  // ---- sliding gates: a solid wall that slides in and out of a gap on the shared clock, so the way through opens and closes ----
+  function addGate(a) {   // [x, z, w, d, h, axis, range, speed, phase, surface]
+    const mesh = addWall(a[0], a[4] / 2, a[1], a[2], a[4], a[3], a[9] || "deck");
+    const box = wallBoxes[wallBoxes.length - 1];
+    box.gate = true;   // (bots plan as if it were open)
+    gates.push({ mesh, box, base: new THREE.Vector3(a[0], a[4] / 2, a[1]), axis: a[5], range: a[6], speed: a[7], phase: a[8] || 0 });
+  }
+  function updateGates() {
+    if (!gates.length) return;
+    const clock = net.active ? mpTargetClock() : elapsedTime;
+    for (const g of gates) {
+      const off = Math.sin(clock * g.speed + g.phase) * g.range;
+      g.mesh.position.set(g.base.x + (g.axis === "x" ? off : 0), g.base.y, g.base.z + (g.axis === "z" ? off : 0));
+      g.mesh.updateMatrixWorld(true);
+      g.box.setFromObject(g.mesh);
+    }
   }
 
   // ---- portals: walk into one end and come out of the other, still going the way you were (keeps your speed) ----
@@ -1062,7 +1081,7 @@
 
   // Foundry: a long central hall with crates, side lanes through gaps in the walls, and a raised gallery at each end
   defineMap({
-    id: "foundry", name: "Foundry", blurb: "A steel works, symmetric for team play: a long hall of crates, side lanes, and a raised gallery at each end.",
+    id: "foundry", name: "Foundry", blurb: "A steel works, symmetric for team play: a long hall of crates with sliding gates, side lanes, and a raised gallery at each end.",
     half: 35, floor: "slab", wallH: 9, targetMaxY: 7,
     theme: { skyTop: 0x5f6d7d, skyHorizon: 0xb9c3cc, fog: [30, 105], sunDir: [-25, 45, -30], sunColor: 0xe8eef5, sunIntensity: 0.85, hemi: [0xcfd8e2, 0x4a4f55, 0.7],
       surfaces: { slab: "#4f565e", concrete: "#8b949d", brick: "#9b5a3d", deck: "#6b747d" } },
@@ -1082,6 +1101,8 @@
     ramps: [[-10, -28, "x", 4, 6, 2.4, 1], [10, -28, "x", 4, 6, 2.4, -1], [-10, 28, "x", 4, 6, 2.4, 1], [10, 28, "x", 4, 6, 2.4, -1]],
     pads: [[-28, 0, "normal"], [28, 0, "normal"]],
     boosts: [[0, -18, 0, 1, 3.5, 3.5], [0, 18, 0, -1, 3.5, 3.5]],
+    // sliding gates in the four gaps of the hall: they slide into the wall to open and back to close
+    gates: [[-9, 7, 1.2, 4, 6, "z", 4, 0.5, 0, "deck"], [-9, -7, 1.2, 4, 6, "z", 4, 0.5, 3.14, "deck"], [9, 7, 1.2, 4, 6, "z", 4, 0.5, 1.57, "deck"], [9, -7, 1.2, 4, 6, "z", 4, 0.5, 4.71, "deck"]],
     spawns: [[-30, -22], [30, -22], [-30, 22], [30, 22], [-28, 0], [28, 0], [-15, -24], [15, -24], [-15, 24], [15, 24], [0, -23], [0, 23]],
     playerSpawn: [0, 22],
   });
@@ -1282,7 +1303,7 @@
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((mt) => { if (mt.map) mt.map.dispose(); mt.dispose(); });
     });
     levelGroup.clear();
-    groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0; ladders.length = 0; movers.length = 0; portals.length = 0; boosts.length = 0;
+    groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0; ladders.length = 0; movers.length = 0; portals.length = 0; boosts.length = 0; gates.length = 0;
     currentMap = m;
     CFG.arenaHalfSize = m.half;
     Object.assign(CFG, BASE_PHYS, m.physics || {});   // some maps change gravity or friction
@@ -1317,6 +1338,7 @@
     hillVis = null;
     if (m.hill) buildHill(m.hill);
     for (const a of m.movers || []) addMover(a);
+    for (const a of m.gates || []) addGate(a);
     for (const a of m.portals || []) addPortalPair(a);
     for (const a of m.boosts || []) addBoost(a);
     SPAWNS = m.spawns;
@@ -6930,7 +6952,7 @@
       }
     };
     for (const lv of navLv) {
-      for (const b of wallBoxes) if (lv.h < b.max.y - CFG.stepHeight && lv.h + CFG.playerHeight > b.min.y) block(lv.blocked, b.min.x, b.max.x, b.min.z, b.max.z);
+      for (const b of wallBoxes) if (!b.gate && lv.h < b.max.y - CFG.stepHeight && lv.h + CFG.playerHeight > b.min.y) block(lv.blocked, b.min.x, b.max.x, b.min.z, b.max.z);
       for (const r of ramps) block(lv.blocked, r.cx - r.halfW, r.cx + r.halfW, r.cz - r.halfD, r.cz + r.halfD, 0);   // the ramp itself (its side rails are boxes, padded as usual)
     }
     navBlocked = navLv.length ? navLv[0].blocked : new Uint8Array(NN);   // the floor, for the code that only cares about the floor
@@ -8206,6 +8228,7 @@
     for (const w of m.walls.slice().sort((p, q) => p[4] - q[4])) { const l = 150 + Math.min(w[4], 12) * 8; box(w[0], w[2], w[3], w[5], w[4] < 2 ? "rgba(235,235,240,0.5)" : "rgb(" + l + "," + l + "," + l + ")"); }   // taller walls are lighter, so tiers read
     for (const b of m.boosts || []) { g.save(); g.translate(px(b[0]), px(b[1])); g.rotate(Math.atan2(b[3], b[2])); g.fillStyle = "#ffb42a"; g.fillRect(-b[5] * k / 2, -Math.max(1, b[4] * k / 2), b[5] * k, Math.max(2, b[4] * k)); g.restore(); }
     for (const a of m.movers || []) box(a[0], a[2], a[3], a[4], "rgba(255,255,255,0.7)");
+    for (const a of m.gates || []) box(a[0], a[1], a[2], a[3], "#ffb42a");
     for (const p of m.pads) { g.fillStyle = p[2] === "mega" ? "#d23cff" : "#1bd6c8"; g.beginPath(); g.arc(px(p[0]), px(p[1]), Math.max(2, 1.4 * k), 0, 7); g.fill(); }
     for (const a of m.portals || []) { g.fillStyle = "#2f9bff"; g.beginPath(); g.arc(px(a[0]), px(a[1]), Math.max(2, 1.6 * k), 0, 7); g.fill(); g.fillStyle = "#ff8a2a"; g.beginPath(); g.arc(px(a[4]), px(a[5]), Math.max(2, 1.6 * k), 0, 7); g.fill(); }
     for (const l of m.ladders || []) { g.fillStyle = "#c7a548"; g.fillRect(px(l[0]) - Math.max(1, k * 0.5), px(l[1]) - Math.max(1, k * 0.5), Math.max(2, k), Math.max(2, k)); }
@@ -9078,6 +9101,7 @@
     if (pointerLocked || net.active) {
       if ((player.hook || player.grappleWant) && (!pointerLocked || localDead || run.state === "countdown")) releaseHook(0);
       updateMovers();
+      updateGates();
       if (pointerLocked && !localDead && run.state !== "countdown") updatePlayer(dt);
       achSummitCheck();
       updateMapPopup();
