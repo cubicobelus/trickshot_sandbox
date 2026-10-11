@@ -1075,6 +1075,7 @@
 
   // The original arena: built for trickshots (bounce corridors, kicker ramps, pads and a sniper tower)
   defineMap({
+    flags: [[-34, 0, 0.25], [34, 0, 0.25]],
     id: "arena", name: "Arena", blurb: "The trickshot arena: bounce corridors, kicker ramps, jump pads and a sniper tower.",
     half: 40, floor: "grass", wallH: 12, targetMaxY: 9.5,
     theme: { skyTop: 0x3f7dc6, skyHorizon: 0xcfe2ee, fog: [45, 140], sunDir: [30, 50, 20], sunColor: 0xfff0d8, sunIntensity: 1.05, hemi: [0xdbe9ff, 0x56663f, 0.62], surfaces: {} },
@@ -1096,6 +1097,7 @@
 
   // Courtyard: close quarters. A ring of walls with four gates round a small court, a lane all the way round outside it
   defineMap({
+    flags: [[-20, 0, 0.25], [20, 0, 0.25]],
     id: "courtyard", name: "Courtyard", blurb: "Close quarters at dusk: a ring of walls with four gates, a lane round the outside. Great with shotguns and Deagles.",
     half: 25, floor: "grass", wallH: 8, targetMaxY: 6.5,
     theme: { skyTop: 0x3c4a8c, skyHorizon: 0xf0b58a, fog: [26, 90], sunDir: [-40, 16, 30], sunColor: 0xffc99a, sunIntensity: 1.0, hemi: [0xffd9b8, 0x6a5a44, 0.55],
@@ -1123,6 +1125,7 @@
 
   // Foundry: a long central hall with crates, side lanes through gaps in the walls, and a raised gallery at each end
   defineMap({
+    flags: [[0, -28, 2.65], [0, 28, 2.65]],
     id: "foundry", name: "Foundry", blurb: "A steel works, symmetric for team play: a long hall of crates with sliding gates, side lanes, and a raised gallery at each end.",
     half: 35, floor: "slab", wallH: 9, targetMaxY: 7,
     theme: { skyTop: 0x5f6d7d, skyHorizon: 0xb9c3cc, fog: [30, 105], sunDir: [-25, 45, -30], sunColor: 0xe8eef5, sunIntensity: 0.85, hemi: [0xcfd8e2, 0x4a4f55, 0.7],
@@ -1151,6 +1154,7 @@
 
   // Moonbase: low gravity, black sky, two portal pairs and boost strips
   defineMap({
+    flags: [[-38, -30, 0.25], [38, 30, 0.25]],
     id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals.",
     half: 45, floor: "moon", wallH: 18, targetMaxY: 18, physics: { gravity: 8.5 },
     theme: { skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x33405c, 0x14151a, 0.38],
@@ -1170,6 +1174,7 @@
 
   // Ice Lake: slippery. Everything you do carries on; steering is slow
   defineMap({
+    flags: [[-32, 0, 0.25], [32, 0, 0.25]],
     id: "icelake", name: "Ice Lake", blurb: "A frozen lake where nothing stops: slides never end and turning is slow. Ice pillars, snowbanks, an iceberg with a ramp up.",
     half: 40, floor: "ice", wallH: 7, targetMaxY: 9, physics: { friction: 0.7, momentumFriction: 0.25, groundAccel: 3.2, slideFriction: 0.22 },
     theme: { skyTop: 0x5f9bd6, skyHorizon: 0xe4f1fb, fog: [50, 170], sunDir: [20, 45, -35], sunColor: 0xfff6e6, sunIntensity: 1.0, hemi: [0xe6f3ff, 0x9fb4c4, 0.8],
@@ -1221,6 +1226,7 @@
     }
   }
   defineMap({
+    flags: [[0, -18, 3], [0, 18, 3]],
     id: "summit", name: "Summit", blurb: "A wooded valley round a stepped hill with a lookout on top: trails and ramps up three tiers, ladders up the last cliff, boulders and trees for cover. The home of King of the Hill.",
     half: 45, floor: "grass", wallH: 12, targetMaxY: 14, boundary: "rock", rampSurface: "dirt",
     theme: { skyTop: 0x4a93e0, skyHorizon: 0xe3edf3, fog: [75, 230], sunDir: [40, 60, -20], sunColor: 0xfff1d6, sunIntensity: 0.95, hemi: [0xdfe9f5, 0x4c5f33, 0.5],
@@ -1252,6 +1258,7 @@
     plateau(0, -40, 26, 10, 3, "dirt"), plateau(0, 40, 26, 10, 3, "dirt")];
   const CANYON_BOULDERS = [[-20, -30, 4.5], [18, -34, 5], [-24, -10, 6], [22, -8, 5.5], [-18, 12, 5], [20, 14, 6.5], [-22, 32, 4.5], [16, 30, 5], [-12, -2, 3], [12, 2, 3.2], [-30, 6, 4], [30, -4, 4.2]];
   defineMap({
+    flags: [[0, -40, 3], [0, 40, 3]],
     id: "canyon", name: "Canyon", blurb: "A desert canyon with a river down the middle: long sight lines, a base at each end, ledges up both sides (take the ramps or the mega pads) and two bridges.",
     half: 50, floor: "dirt", wallH: 24, targetMaxY: 12, boundary: "rock", rampSurface: "dirt",
     theme: { skyTop: 0x6aa4da, skyHorizon: 0xf3dcb4, fog: [75, 230], sunDir: [-35, 50, 25], sunColor: 0xfff0d0, sunIntensity: 1.05, hemi: [0xf5e6d0, 0x8a6a4a, 0.6],
@@ -1272,6 +1279,7 @@
   // Rooftops: a street canyon between two rows of buildings at three heights, with ladders, ramps, bridges and pads between the levels
   const roofBox = (x, z, top, w, d, h) => [x, top + h / 2, z, w, h, d, "deck"];   // a crate or vent standing on a roof
   defineMap({
+    flags: [[-13.5, 0, 10], [13.5, 0, 10]],
     id: "rooftops", name: "Rooftops", blurb: "Three levels: a street canyon, rooftops at 6.5 and 10 m, climbed by ladders, ramps and lifts, linked by bridges and a shuttle. Hold forward at a ladder to climb.",
     half: 34, floor: "slab", wallH: 14, targetMaxY: 13,
     theme: { skyTop: 0x4f86d4, skyHorizon: 0xf1e2c8, fog: [55, 170], sunDir: [35, 40, -25], sunColor: 0xfff3dc, sunIntensity: 1.1, hemi: [0xe6f0ff, 0x6d6f73, 0.6],
@@ -5797,6 +5805,7 @@
   // (the deathmatch spawn points, SPAWNS, come from the map)
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
   function modeName() {
+    if (net.sub === "dm" && net.ctf) return "Capture the flag";
     if (net.sub === "dm" && net.range) return "Shooting range";
     if (net.sub === "dm" && net.gungame) return "Gun game";
     if (net.sub === "dm" && net.koth) return net.teams ? "Team King of the Hill" : "King of the Hill";
@@ -5843,6 +5852,7 @@
     map: "arena", pendingMap: "arena",
     teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
     rules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false }, pendingRules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false },   // the host's match rules
+    ctf: false, pendingCtf: false, flags: [{ s: 0, x: 0, y: 0, z: 0, c: null, t: 0 }, { s: 0, x: 0, y: 0, z: 0, c: null, t: 0 }], caps: [0, 0],   // capture the flag: each flag (s: 0 home, 1 carried, 2 dropped; where; who has it; the drop timer) and the captures
     gungame: false, pendingGun: false,   // gun game: every kill swaps your gun; a kill with the knife at the end wins
     range: false, pendingRange: false,   // the shooting range: dummies that stand still and never shoot back (practice only)
     koth: false, pendingKoth: false, hs: [0, -1], teamHill: [0, 0],   // King of the Hill: who holds the hill (0 empty, 1 held, 2 contested; who), and each team's time on it
@@ -5892,6 +5902,7 @@
     koth: "A hill with a ring on top. Stand alone on it to score a point a second; with someone else on it, nobody scores. First to the score wins (the first-to number times 5). Kills only clear the hill. It always plays on the map with a hill.",
     tkoth: "King of the Hill with two teams: your team scores while only your team is on the hill. Kills only clear the hill.",
     range: "Stationary dummies stand at set distances and never shoot back. Every hit shows its damage, they heal fast and come back after a kill, and the corner shows what your gun does. Practice only.",
+    ctf: "Two teams, a flag each. Touch their flag to pick it up and bring it back to your own flag while yours is home to score. Kill the carrier and it drops; touch your own dropped flag to send it home. First to the captures wins (the first-to number divided by 5).",
     gungame: "Everyone starts with the same gun and every kill gives you the next one: assault rifle, AK, shotgun, Deagle, sniper, then the knife. A kill with the knife wins. Get knifed and you drop a level.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
@@ -5908,9 +5919,10 @@
   function chooseMap(id) { net.pendingMap = id === "random" || MAPS[id] ? id : "arena"; }
   function chooseMode(value, limit) {
     net.pendingSub = value === "race" ? "race" : "dm";
-    net.pendingTeams = value === "tdm" || value === "tkoth";
+    net.pendingTeams = value === "tdm" || value === "tkoth" || value === "ctf";
     net.pendingKoth = value === "koth" || value === "tkoth";
     net.pendingRange = value === "range";
+    net.pendingCtf = value === "ctf";
     net.pendingGun = value === "gungame";
     net.pendingLimit = Math.max(0, Math.min(parseInt(limit, 10) || 0, 999));
   }
@@ -5967,7 +5979,7 @@
 
   function makePlayerRecord(id, name, color) {
     return {
-      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, hill: 0, gg: 0, heads: 0, dmg: 0, best: 0, streak: 0, bstreak: 0, alive: true,
+      id, name, color, baseColor: color, team: -1, botIndex: -1, score: 0, kills: 0, deaths: 0, hill: 0, gg: 0, caps: 0, heads: 0, dmg: 0, best: 0, streak: 0, bstreak: 0, alive: true,
       x: 0, y: 0.25, z: 0, yaw: 0, pitch: 0, w: "rifle", sl: false,
       respawnAt: 0, protectUntil: 0, mesh: null, snap: true,
       hp: 100, lastDamageAt: -1e9, lastFireAt: -1e9,
@@ -6199,7 +6211,7 @@
       const e = {
         id: String(raw.id).slice(0, 64), name: String(raw.name).replace(/[^\w \-]/g, "").slice(0, 14) || "Player",
         color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
-        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), gg: Math.max(0, Math.min(num(raw.gg), 9)), heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
+        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), gg: Math.max(0, Math.min(num(raw.gg), 9)), caps: Math.max(0, Math.min(num(raw.caps), 99)), heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
         hp: Math.max(0, Math.min(Number.isFinite(raw.hp) ? raw.hp : 100, 100)),
         team: raw.team === 0 || raw.team === 1 ? raw.team : -1,
       };
@@ -6208,7 +6220,7 @@
       if (!p) { p = makePlayerRecord(e.id, e.name, e.color); net.players.set(e.id, p); }
       const recolored = p.color !== e.color;
       p.name = e.name; p.color = e.color; p.score = e.score; p.kills = e.kills; p.deaths = e.deaths; p.hp = e.hp; p.team = e.team;
-      if (net.role !== "host") { p.hill = e.hill; p.gg = e.gg; p.heads = e.heads; p.dmg = e.dmg; p.best = e.best; p.bstreak = e.bstreak; }
+      if (net.role !== "host") { p.hill = e.hill; p.gg = e.gg; p.caps = e.caps; p.heads = e.heads; p.dmg = e.dmg; p.best = e.best; p.bstreak = e.bstreak; }
       if (recolored && p.mesh && e.id !== net.id) disposeAvatar(p);   // a new team colour: the model is rebuilt below
       if (e.id !== net.id) {
         if (net.role === "client") p.alive = e.alive;
@@ -6376,11 +6388,25 @@
     net.teamHill = [Math.max(0, Number(th[0]) || 0), Math.max(0, Number(th[1]) || 0)];
     updateHillVis();
   }
+  // the flag state from a round or board message (a host keeps its own)
+  function applyCtf(m) {
+    if (net.role === "host") return;
+    if (Array.isArray(m.fl)) {
+      for (const t of [0, 1]) {
+        const a = m.fl[t];
+        if (!Array.isArray(a)) continue;
+        net.flags[t] = { s: a[0] === 1 || a[0] === 2 ? a[0] : 0, x: Number(a[1]) || 0, y: Number(a[2]) || 0, z: Number(a[3]) || 0, c: typeof a[4] === "string" ? a[4].slice(0, 64) : null, t: 0 };
+      }
+    }
+    if (Array.isArray(m.cp)) net.caps = [Math.max(0, Number(m.cp[0]) || 0), Math.max(0, Number(m.cp[1]) || 0)];
+  }
   function applyRound(m) {
     if (typeof m.map === "string" && MAPS[m.map]) { net.map = m.map; loadMap(m.map); }   // build the host's map first
     net.sub = m.sub;
     net.teams = m.teams === true;
     net.koth = m.koth === true;
+    net.ctf = m.ctf === true;
+    applyCtf(m);
     net.rules = cleanRules(m.rules);
     applyRulePhysics();
     applyHill(m);
@@ -6409,6 +6435,7 @@
         net.ttSynced = true;
         if (net.role === "client") net.sub = m.sub;
         applyHill(m);
+        applyCtf(m);
         syncPlayers(m.p);
         mpRefreshHud();
         break;
@@ -6513,6 +6540,17 @@
         break;
       }
 
+      case "ctf": {   // a flag was taken, dropped, returned or captured
+        if (typeof m.e !== "string") break;
+        const who = net.players.get(m.id), nm = who ? esc(who.name) : "someone", team = m.tm === 0 || m.tm === 1 ? m.tm : 0;
+        const flagName = TEAM_NAMES[team] + " flag";
+        const text = m.e === "pick" ? "<b>" + nm + "</b> took the " + flagName : m.e === "drop" ? "The " + flagName + " was dropped" :
+          m.e === "return" ? "The " + flagName + " is back" + (who ? " (<b>" + nm + "</b>)" : "") : m.e === "cap" ? "<b>" + nm + "</b> captured the " + flagName + "!" : "";
+        if (text) feedLine(text);
+        if (m.e === "cap" || m.e === "pick") playHitSound(m.e === "cap" ? 1.8 : 1.2);
+        break;
+      }
+
       case "respawn": {
         const p = net.players.get(m.id);
         if (!Array.isArray(m.pos) || !Number.isFinite(m.pos[0]) || !Number.isFinite(m.pos[1])) break;
@@ -6577,17 +6615,17 @@
 
   // ---------------- host logic ----------------
   function boardList() {
-    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, gg: p.gg, heads: p.heads, dmg: Math.round(p.dmg), best: p.best, bstreak: p.bstreak, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
+    return [...net.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, kills: p.kills, deaths: p.deaths, hill: Math.round(p.hill * 10) / 10, gg: p.gg, caps: p.caps, heads: p.heads, dmg: Math.round(p.dmg), best: p.best, bstreak: p.bstreak, alive: p.alive, hp: Math.round(p.hp), team: p.team }));
   }
   function hostSendRaw(m) { for (const c of net.conns.values()) if (c.open) c.send(m); }
   function hostBroadcast(m) { hostSendRaw(m); applyEvent(m); }
   function hostBoardMsg() {
-    return { t: "board", p: boardList(), sub: net.sub, left: net.left, phase: net.phase, rl: net.resultsLeft, tt: mpTargetClock(), hs: net.hs, th: [Math.round(net.teamHill[0] * 10) / 10, Math.round(net.teamHill[1] * 10) / 10] };
+    return { t: "board", p: boardList(), sub: net.sub, left: net.left, phase: net.phase, rl: net.resultsLeft, tt: mpTargetClock(), fl: net.flags.map((f) => [f.s, Math.round(f.x * 100) / 100, Math.round(f.y * 100) / 100, Math.round(f.z * 100) / 100, f.c]), cp: net.caps, hs: net.hs, th: [Math.round(net.teamHill[0] * 10) / 10, Math.round(net.teamHill[1] * 10) / 10] };
   }
   function hostBroadcastBoard() { hostBroadcast(hostBoardMsg()); }
   function roundMsg(fresh) {
     return {
-      t: "round", map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
+      t: "round", map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, ctf: net.ctf, fl: net.flags.map((f) => [f.s, f.x, f.y, f.z, f.c]), cp: net.caps, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
       targets: net.sub === "race" ? targets.map(serializeTarget) : null, tt: mpTargetClock(),
     };
   }
@@ -6624,6 +6662,7 @@
     let mapId = net.pendingMap === "random" ? pickRandomMap(currentMap.id) : MAPS[net.pendingMap] ? net.pendingMap : "arena";
     if (net.pendingKoth && net.pendingSub !== "race" && !MAPS[mapId].hill) mapId = MAP_ORDER.find((i) => MAPS[i].hill) || mapId;   // King of the Hill needs a hill
     if (net.pendingRange) mapId = "range";   // and the range is its own map
+    if (net.pendingCtf && net.pendingSub !== "race" && !MAPS[mapId].flags) mapId = MAP_ORDER.find((i) => MAPS[i].flags) || mapId;   // capture the flag needs flag bases
     net.map = mapId;
     loadMap(net.map);   // (does nothing if it is already the map)
     net.sub = net.pendingSub;
@@ -6631,11 +6670,14 @@
     net.koth = net.sub === "dm" && net.pendingKoth;
     net.range = net.sub === "dm" && net.pendingRange;
     net.gungame = net.sub === "dm" && net.pendingGun;
+    net.ctf = net.sub === "dm" && net.pendingCtf && !!currentMap.flags;
+    ctfReset();
     net.rules = cleanRules(net.pendingRules);
     applyRulePhysics();
     net.hs = [0, -1]; net.teamHill = [0, 0];
     updateHillVis();
     net.limit = net.sub === "dm" && !net.range && !net.gungame ? net.pendingLimit : 0;
+    net.teams = net.teams || net.ctf;
     let slot = 0;
     for (const q of net.players.values()) {   // teams: you with the first half of the bots in practice, otherwise alternating as people joined
       const was = q.color;
@@ -6647,7 +6689,7 @@
     net.phase = "play";
     net.left = net.range ? 3599 : ROUND_SECONDS;
     net.resultsLeft = 0;
-    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.gg = 0; p.heads = 0; p.dmg = 0; p.best = 0; p.streak = 0; p.bstreak = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
+    for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.gg = 0; p.caps = 0; p.heads = 0; p.dmg = 0; p.best = 0; p.streak = 0; p.bstreak = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
     if (net.sub === "race") for (const t of targets) { respawnTarget(t); t.userData.respawnTimer = 1.1; }
     hostBroadcast(roundMsg(true));
     for (const p of net.players.values()) hostRespawn(p);
@@ -6764,7 +6806,7 @@
     hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
     hostBroadcastBoard();
     if (ggWin && net.phase === "play") hostEndRound();
-    if (net.limit && !net.koth && net.phase === "play" && (net.teams ? teamKills(p.team) : p.kills) >= net.limit) hostEndRound();   // the kill limit is reached
+    if (net.limit && !net.koth && !net.ctf && net.phase === "play" && (net.teams ? teamKills(p.team) : p.kills) >= net.limit) hostEndRound();   // the kill limit is reached
   }
 
   function hostHandle(fromId, m) {
@@ -6849,6 +6891,44 @@
     };
   }
 
+  // Capture the flag. Each map has `flags: [[x, z, y], [x, z, y]]`: the bases of team 0 and team 1. A flag is home (0), carried (1) or dropped (2).
+  const CTF_PICKUP = 1.7, CTF_DROP_SECONDS = 15;
+  function ctfBase(t) { const b = currentMap && currentMap.flags && currentMap.flags[t]; return b ? { x: b[0], z: b[1], y: b[2] === undefined ? FLOOR_Y : b[2] } : { x: 0, z: 0, y: FLOOR_Y }; }
+  function ctfSendHome(t) { const b = ctfBase(t), f = net.flags[t]; f.s = 0; f.x = b.x; f.y = b.y; f.z = b.z; f.c = null; f.t = 0; }
+  function ctfReset() { net.caps = [0, 0]; ctfSendHome(0); ctfSendHome(1); for (const p of net.players.values()) p.caps = 0; }
+  const ctfNeed = () => Math.max(1, Math.round(net.limit / 5)) || 3;
+  function hostCtfTick(dt) {
+    if (!currentMap || !currentMap.flags) return;
+    for (const t of [0, 1]) {
+      const f = net.flags[t];
+      if (f.s === 1) {   // carried: it goes where its carrier goes, and drops if they die or leave
+        const c = net.players.get(f.c);
+        if (!c || !c.alive) { f.s = 2; f.t = CTF_DROP_SECONDS; if (c) { f.x = c.x; f.y = c.y; f.z = c.z; } hostBroadcast({ t: "ctf", e: "drop", id: f.c, tm: t }); f.c = null; }
+        else { f.x = c.x; f.y = c.y; f.z = c.z; }
+      } else {
+        if (f.s === 2) { f.t -= dt; if (f.t <= 0) { ctfSendHome(t); hostBroadcast({ t: "ctf", e: "return", id: null, tm: t }); continue; } }
+        for (const p of net.players.values()) {
+          if (!p.alive || Math.hypot(p.x - f.x, p.z - f.z) > CTF_PICKUP || Math.abs(p.y - f.y) > 2.4) continue;
+          if (p.team === t) { if (f.s === 2) { ctfSendHome(t); hostBroadcast({ t: "ctf", e: "return", id: p.id, tm: t }); } }   // your own dropped flag goes home when you touch it
+          else { f.s = 1; f.c = p.id; hostBroadcast({ t: "ctf", e: "pick", id: p.id, tm: t }); break; }
+        }
+      }
+    }
+    // a carrier who is back at their own base, with their own flag home, scores
+    for (const t of [0, 1]) {
+      const f = net.flags[t];
+      if (f.s !== 1) continue;
+      const c = net.players.get(f.c), own = 1 - t, base = ctfBase(own);
+      if (!c || !c.alive || net.flags[own].s !== 0) continue;
+      if (Math.hypot(c.x - base.x, c.z - base.z) > CTF_PICKUP + 0.6 || Math.abs(c.y - base.y) > 2.4) continue;
+      net.caps[own]++; c.caps++; c.score += 0;
+      ctfSendHome(t);
+      hostBroadcast({ t: "ctf", e: "cap", id: c.id, tm: t });
+      hostBroadcastBoard();
+      if (net.limit > 0 && net.caps[own] >= ctfNeed()) hostEndRound();
+    }
+  }
+
   // King of the Hill: whoever is alone on the hilltop scores for as long as they are
   function hostHillTick(dt) {
     const h = currentMap && currentMap.hill;
@@ -6885,6 +6965,7 @@
     if (net.phase === "play" && net.sub === "dm") {
       if (net.practice) for (let left = dt; left > 0; left -= 0.05) botsThink(Math.min(left, 0.05), now);
       if (net.koth) hostHillTick(dt);
+      if (net.ctf) hostCtfTick(dt);
       for (const p of net.players.values()) if (!p.alive && now >= p.respawnAt) hostRespawn(p);
       for (const p of net.players.values()) {   // slow healing, only once they've stayed out of the fight
         const regenDelay = net.range ? 1500 : REGEN_DELAY;
@@ -7202,6 +7283,16 @@
     const prefer = BOT_PREFER[g] || 18;
     // now and then a bot heads for a roof or deck to fight from up there (when the map has one)
     if (!navBlocked) navBuild();
+    if (net.ctf && currentMap.flags) {   // capture the flag: carry it home, hunt the carrier, or go for their flag (half of them stay near their own)
+      const myT = p.team, enemyT = 1 - myT, fMine = net.flags[myT], fTheirs = net.flags[enemyT];
+      let goal = null;
+      if (fTheirs.s === 1 && fTheirs.c === p.id) { const b = ctfBase(myT); goal = [b.x, b.z, b.y]; }
+      else if (fMine.s === 1) { goal = [fMine.x, fMine.z, fMine.y]; }
+      else if (fMine.s === 2) { goal = [fMine.x, fMine.z, fMine.y]; }
+      else if (p.botIndex % 2 === 0 || fTheirs.s === 2) { goal = [fTheirs.x, fTheirs.z, fTheirs.y]; }
+      else { const b = ctfBase(myT); goal = [b.x, b.z, b.y]; }
+      ai.perch = { x: goal[0], z: goal[1], l: navLevelFor(goal[2]) }; ai.perchT = 5;
+    }
     if (net.koth && currentMap.hill) { const hh = currentMap.hill; ai.perch = { x: hh.x, z: hh.z, l: navLevelFor(hh.y) }; ai.perchT = 5; }   // King of the Hill: they all want the hill
     if (navLv.length > 1) {
       if (ai.perch) { ai.perchT -= dt; if (ai.perchT <= 0) { ai.perch = null; ai.perchWait = rnd(15, 35); } }
@@ -7217,7 +7308,7 @@
     const perchD = ai.perch ? Math.hypot(ai.perch.x - p.x, ai.perch.z - p.z) : 0;
     const perching = !!ai.perch && perchD > 2.5 && !(los && dist < 14);
     const kothHill = net.koth && currentMap.hill ? currentMap.hill : null;
-    const holding = !!ai.perch && perchD <= (kothHill ? kothHill.r * 1.1 : 2.5);   // up there: stay and shoot what it sees
+    const holding = !!ai.perch && perchD <= (kothHill ? kothHill.r * 1.1 : net.ctf ? 1.2 : 2.5);   // up there: stay and shoot what it sees
     const navigating = perching || (!holding && (!los || dist > prefer + 4 || Math.abs(tgt.y - p.y) > 2.2));   // also when the target is on another level
     ai.repath -= dt;
     const myLv = navLevelFor(p.y);
@@ -7386,6 +7477,7 @@
     { id: "tdm", name: "Team Deathmatch", short: "Blue against red" },
     { id: "koth", name: "King of the Hill", short: "Hold the hilltop alone", hill: true },
     { id: "tkoth", name: "Team King of the Hill", short: "Your team holds the hill", hill: true },
+    { id: "ctf", name: "Capture the flag", short: "Take their flag home", flags: true },
     { id: "gungame", name: "Gun game", short: "Every kill swaps your gun; finish with the knife" },
     { id: "range", name: "Shooting range", short: "Dummies at set distances: every hit shows its damage", host: false },
   ];
@@ -7414,13 +7506,13 @@
   function saveSetup() { try { localStorage.setItem(SETUP_KEY, JSON.stringify(setup)); } catch (e) { /* ignore */ } }
   const mapNameOf = (id) => (id === "random" ? "Random map" : MAPS[id] ? MAPS[id].name : "Arena");
   const hillMapId = () => MAP_ORDER.find((i) => MAPS[i].hill);
-  const limitText = (mode, limit) => (mode.id === "race" || mode.id === "range" || mode.id === "gungame" ? "" : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
+  const limitText = (mode, limit) => (mode.id === "race" || mode.id === "range" || mode.id === "gungame" ? "" : mode.flags ? (limit ? "first to " + Math.max(1, Math.round(limit / 5)) + " capture" + (Math.max(1, Math.round(limit / 5)) === 1 ? "" : "s") : "no limit") : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
   function refreshMpCards() {   // the two big buttons remind you what they will start
     const p = setup.practice, h = setup.host, pm = modeById(p.mode), hm = modeById(h.mode);
     document.getElementById("mp-card-practice-sub").textContent = pm.name + " \u00b7 " + mapNameOf(p.map) + " \u00b7 " + p.bots + " bot" + (p.bots === 1 ? "" : "s") + " (" + p.level + ")";
     document.getElementById("mp-card-host-sub").textContent = hm.name + " \u00b7 " + mapNameOf(h.map);
   }
-  function pendingModeValue() { return net.pendingGun ? "gungame" : net.pendingRange ? "range" : net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
+  function pendingModeValue() { return net.pendingCtf ? "ctf" : net.pendingGun ? "gungame" : net.pendingRange ? "range" : net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
   function refreshLobbyLine() {   // in a hosted room: what the next round will be
     if (!mpEls.nextLine) return;
     const m = modeById(pendingModeValue());
@@ -7433,6 +7525,7 @@
   const isKothMode = (id) => !!modeById(id).hill;
   function fixHillMap() {   // King of the Hill is only played where there is a hill, and the range on the range
     const d = ps.draft;
+    if (d.mode === "ctf" && !(MAPS[d.map] && MAPS[d.map].flags)) { d.map = MAP_ORDER.find((i) => MAPS[i].flags) || d.map; return; }
     if (d.mode === "range") { d.map = "range"; return; }
     if (d.map === "range") d.map = "arena";
     if (isKothMode(d.mode) && !(MAPS[d.map] && MAPS[d.map].hill)) d.map = hillMapId() || d.map;
@@ -7468,7 +7561,7 @@
     for (const id of MAP_ORDER.concat(["random"])) {
       if (id === "range" && mode.id !== "range") continue;   // the range is only for the range mode
       const b = document.createElement("button");
-      const off = (isKothMode(d.mode) && !(MAPS[id] && MAPS[id].hill)) || (mode.id === "range" && id !== "range");
+      const off = (isKothMode(d.mode) && !(MAPS[id] && MAPS[id].hill)) || (mode.id === "range" && id !== "range") || (mode.id === "ctf" && !(MAPS[id] && MAPS[id].flags));
       b.type = "button"; b.dataset.map = id; b.className = (id === d.map ? "active" : "") + (off ? " off" : "");
       const c = document.createElement("canvas"); c.width = c.height = 64;
       if (id === "random") { const g = c.getContext("2d"); g.fillStyle = "#1c1d22"; g.fillRect(0, 0, 64, 64); g.fillStyle = "#ffd24a"; g.font = "bold 36px sans-serif"; g.textAlign = "center"; g.fillText("?", 32, 46); }
@@ -7486,7 +7579,7 @@
     const limitRow = document.getElementById("ps-limit-row");
     limitRow.hidden = mode.id === "race" || mode.id === "range" || mode.id === "gungame";
     document.getElementById("ps-limit").value = String(d.limit);
-    document.getElementById("ps-limit-unit").textContent = mode.hill ? "(times 5 seconds on the hill" + (d.limit ? ": " + d.limit * 5 + " s)" : ")") : "kills";
+    document.getElementById("ps-limit-unit").textContent = mode.flags ? "(divided by 5: " + (d.limit ? Math.max(1, Math.round(d.limit / 5)) + " capture" + (Math.max(1, Math.round(d.limit / 5)) === 1 ? "" : "s") + ")" : "no limit)") : mode.hill ? "(times 5 seconds on the hill" + (d.limit ? ": " + d.limit * 5 + " s)" : ")") : "kills";
     document.getElementById("ps-bots-row").hidden = ps.kind !== "practice";
     document.getElementById("ps-level-row").hidden = ps.kind !== "practice" || mode.id === "range";
     document.getElementById("ps-bots-label").textContent = mode.id === "range" ? "Dummies" : "Bots";
@@ -7561,6 +7654,7 @@
     try { if (net.hostConn) net.hostConn.close(); } catch (e) { /* ignore */ }
     try { if (net.peer) net.peer.destroy(); } catch (e) { /* ignore */ }
     net.peer = null; net.hostConn = null; net.id = null; net.role = null; net.active = false; net.practice = false;
+    net.koth = net.ctf = net.gungame = net.range = false;   // (a new room must not start out as the last one's mode)
   }
 
   function mpLeave(message) {
@@ -7572,6 +7666,7 @@
     loadMap(resolveMapChoice(SETTINGS.map));   // back to the map picked in the menu
     applyRulePhysics();
     ggRestore();
+    ctfDispose();
     for (const t of targets) respawnTarget(t);
     resetLocalRound();
     mpEls.tabs.forEach((t) => (t.disabled = false));
@@ -7746,6 +7841,7 @@
       if (ruleText(net.rules)) label += " \u00b7 " + ruleText(net.rules);
       if (net.sub === "dm" && net.teams) label += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
     }
+    if (net.sub === "dm" && net.ctf) label = "Capture the flag \u00b7 " + (net.limit ? "first to " + ctfNeed() : "no limit") + (ruleText(net.rules) ? " \u00b7 " + ruleText(net.rules) : "");
     if (net.sub === "dm" && net.gungame) { const me = localPlayer(); label = "Gun game · level " + (me ? Math.min(me.gg + 1, GG_ORDER.length + 1) : 1) + " / " + (GG_ORDER.length + 1) + (ruleText(net.rules) ? " · " + ruleText(net.rules) : ""); }
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
     mpEls.roomMode.textContent = modeName();
@@ -7783,13 +7879,74 @@
   }
   function ggRestore() { ggApplied = ""; if (ggSaved) { const g = ggSaved; ggSaved = null; setLoadout(g); } }
 
+  // the flags in the world: a pole with a cloth in the team colour, on its base, or on the shoulders of whoever has it
+  let ctfObjs = null;
+  function ctfDispose() { if (!ctfObjs) return; for (const g of ctfObjs) { scene.remove(g); g.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); } ctfObjs = null; }
+  function ctfBuild() {
+    ctfDispose();
+    ctfObjs = [0, 1].map((t) => {
+      const g = new THREE.Group(), color = TEAM_COLORS[t];
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 8), new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.5, roughness: 0.4 }));
+      pole.position.y = 1.3;
+      const cloth = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.7), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+      cloth.position.set(0.55, 2.2, 0);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.08, 8, 36), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
+      ring.rotation.x = Math.PI / 2; ring.position.y = 0.06;
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 14, 20, 1, true), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      beam.position.y = 7;
+      g.add(pole, cloth, ring, beam);
+      g.userData = { cloth, ring, beam };
+      scene.add(g);
+      return g;
+    });
+  }
+  function updateCtfFlags(t) {
+    const on = net.active && net.ctf && net.phase === "play" && currentMap && currentMap.flags;
+    if (!on) { if (ctfObjs) for (const g of ctfObjs) g.visible = false; return; }
+    if (!ctfObjs || ctfObjs[0].userData.cloth.material.color.getHex() !== TEAM_COLORS[0] || ctfObjs[1].userData.cloth.material.color.getHex() !== TEAM_COLORS[1]) ctfBuild();
+    for (const tm of [0, 1]) {
+      const g = ctfObjs[tm], f = net.flags[tm], base = ctfBase(tm);
+      g.visible = true;
+      let x = f.x, y = f.y, z = f.z, carried = false;
+      if (f.s === 1) {
+        const c = net.players.get(f.c);
+        if (c && c.id === net.id) { x = yawObject.position.x; z = yawObject.position.z; y = player.feetY; carried = true; }
+        else if (c && c.mesh) { x = c.mesh.position.x; y = c.mesh.position.y; z = c.mesh.position.z; carried = true; }
+      }
+      g.position.set(x, y + (carried ? 0.9 : 0), z);
+      g.userData.cloth.rotation.y = Math.sin(t * 3 + tm) * 0.35;
+      g.userData.beam.visible = !carried || f.c === net.id;
+      g.userData.ring.visible = !carried;
+      g.scale.setScalar(carried ? 0.6 : 1);
+      if (f.s === 0) g.position.set(base.x, base.y, base.z);
+    }
+  }
+
   // King of the Hill: a bar across the top. Teams fill in from their own side towards the middle; alone, it is your own progress
   // with a tick for whoever is in front
   const kothBarEl = document.getElementById("koth-bar");
   function updateKothBar() {
-    const on = net.active && net.koth && net.sub === "dm" && net.phase === "play";
+    const on = net.active && (net.koth || net.ctf) && net.sub === "dm" && net.phase === "play";
     kothBarEl.hidden = !on;
     if (!on) return;
+    if (net.ctf) {   // capture the flag: the captures, and what the flags are doing
+      const need = ctfNeed(), fa = kothBarEl.querySelector(".kb-a"), fb = kothBarEl.querySelector(".kb-b"), mk = kothBarEl.querySelector(".kb-mark");
+      fa.style.background = "#" + TEAM_COLORS[0].toString(16).padStart(6, "0"); fb.style.background = "#" + TEAM_COLORS[1].toString(16).padStart(6, "0");
+      fa.style.width = Math.min(net.caps[0] / need, 1) * 50 + "%"; fb.style.width = Math.min(net.caps[1] / need, 1) * 50 + "%"; mk.style.left = "50%"; mk.style.display = "block";
+      const me = localPlayer(), mine = me && me.team >= 0 ? me.team : 0, enemy = 1 - mine, f1 = net.flags[mine], f2 = net.flags[enemy];
+      let msg = "";
+      if (f2.s === 1 && f2.c === net.id) msg = "You have the flag: get it home";
+      else if (f1.s === 1) msg = "Your flag is taken";
+      else if (f2.s === 1) msg = "Your team has their flag";
+      else if (f2.s === 2) msg = "Their flag is down";
+      else if (f1.s === 2) msg = "Your flag is down: touch it";
+      else msg = "Take their flag";
+      document.getElementById("kb-left").textContent = TEAM_NAMES[0] + " " + net.caps[0];
+      document.getElementById("kb-right").textContent = net.caps[1] + " " + TEAM_NAMES[1];
+      const mid = document.getElementById("kb-mid"); mid.textContent = msg; mid.style.color = f1.s === 1 ? "#ff6a5e" : f2.s === 1 ? "#7cfc00" : "#e6e6e6";
+      return;
+    }
+    kothBarEl.querySelector(".kb-mark").style.display = "";
     const need = net.limit > 0 ? net.limit * 5 : ROUND_SECONDS, me = localPlayer();
     const fillA = kothBarEl.querySelector(".kb-a"), fillB = kothBarEl.querySelector(".kb-b"), mark = kothBarEl.querySelector(".kb-mark");
     const left = document.getElementById("kb-left"), mid = document.getElementById("kb-mid"), right = document.getElementById("kb-right");
@@ -7836,19 +7993,22 @@
     if (mpEls.board.hidden) return;
     if (!net.active) { soloRecords(); return; }   // on your own there is no scoreboard: show your records for this map
     const dm = net.sub === "dm", koth = dm && net.koth, ggm = dm && net.gungame;
-    const rows = [...net.players.values()].sort(ggm ? (a, b) => b.gg - a.gg || b.kills - a.kills : koth ? (a, b) => b.hill - a.hill || b.kills - a.kills : dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
+    const rows = [...net.players.values()].sort(dm && net.ctf ? (a, b) => b.caps - a.caps || b.kills - a.kills : ggm ? (a, b) => b.gg - a.gg || b.kills - a.kills : koth ? (a, b) => b.hill - a.hill || b.kills - a.kills : dm ? (a, b) => b.kills - a.kills || b.score - a.score : (a, b) => b.score - a.score || b.kills - a.kills);
     let title = modeName();
-    if (koth && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + Math.floor(net.teamHill[0]) + " \u2013 " + Math.floor(net.teamHill[1]) + " " + TEAM_NAMES[1];
+    if (dm && net.ctf) title += " \u00b7 " + TEAM_NAMES[0] + " " + net.caps[0] + " \u2013 " + net.caps[1] + " " + TEAM_NAMES[1];
+    else if (koth && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + Math.floor(net.teamHill[0]) + " \u2013 " + Math.floor(net.teamHill[1]) + " " + TEAM_NAMES[1];
     else if (dm && net.teams) title += " \u00b7 " + TEAM_NAMES[0] + " " + teamKills(0) + " \u2013 " + teamKills(1) + " " + TEAM_NAMES[1];
     if (results && rows.length) {
-      if (koth && net.teams) { const a = net.teamHill[0], b = net.teamHill[1]; title = Math.floor(a) === Math.floor(b) ? "Round over \u2014 a draw" : "Round over \u2014 " + TEAM_NAMES[a > b ? 0 : 1] + " team holds the hill, " + Math.floor(Math.max(a, b)) + " to " + Math.floor(Math.min(a, b)); }
+      if (dm && net.ctf) { const a = net.caps[0], b = net.caps[1]; title = a === b ? "Round over \u2014 a draw, " + a + " each" : "Round over \u2014 " + TEAM_NAMES[a > b ? 0 : 1] + " team wins, " + Math.max(a, b) + " to " + Math.min(a, b); }
+      else if (koth && net.teams) { const a = net.teamHill[0], b = net.teamHill[1]; title = Math.floor(a) === Math.floor(b) ? "Round over \u2014 a draw" : "Round over \u2014 " + TEAM_NAMES[a > b ? 0 : 1] + " team holds the hill, " + Math.floor(Math.max(a, b)) + " to " + Math.floor(Math.min(a, b)); }
       else if (dm && net.teams) { const a = teamKills(0), b = teamKills(1); title = a === b ? "Round over \u2014 a draw, " + a + " each" : "Round over \u2014 " + TEAM_NAMES[a > b ? 0 : 1] + " team wins, " + Math.max(a, b) + " to " + Math.min(a, b); }
       else title = "Round over \u2014 " + rows[0].name + " wins";
     }
     mpEls.boardTitle.textContent = title;
     // the columns depend on the mode: deathmatch shows the whole fight, King of the Hill leads with hill time
     const kd = (p) => (p.kills / Math.max(1, p.deaths)).toFixed(2), n = (v) => Math.round(v).toLocaleString();
-    const cols = ggm ? [["Level", (p) => Math.min(p.gg + 1, GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
+    const cols = dm && net.ctf ? [["Caps", (p) => p.caps], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
+      : ggm ? [["Level", (p) => Math.min(p.gg + 1, GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
       : koth ? [["Hill", (p) => Math.floor(p.hill)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")]]
       : dm ? [["Score", (p) => n(p.score)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["HS", (p) => p.heads], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")], ["Streak", (p) => p.bstreak]]
       : [["Score", (p) => n(p.score)], ["Hits", (p) => p.kills]];
@@ -7866,6 +8026,7 @@
     updateAvatars(dt);
     updateSpectate(dt);
     updateDamageNumbers(dt);
+    updateCtfFlags(elapsedTime);
     // time on the hill (alone, or with only your team) counts toward an achievement
     const me = localPlayer();
     if (net.koth && net.phase === "play" && me && net.hs[0] === 1 && net.hs[1] === (net.teams ? me.team : net.id)) stat("hillTime", dt);
