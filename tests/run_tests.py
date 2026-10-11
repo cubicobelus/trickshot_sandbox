@@ -444,6 +444,34 @@ def test_crosshair(browser, base):
     page.close()
 
 
+def test_scoring_extras(browser, base):
+    """The newer tricks are listed, and the best-shot card saves as a PNG."""
+    page, errors = open_page(browser, base + "/index.html")
+    page.click("#glossary-open")
+    page.wait_for_timeout(150)
+    text = page.evaluate("document.getElementById('glossary').textContent.toUpperCase()")
+    missing = [k for k in ("PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "NEW") if k not in text]
+    check("the trickshot list includes the portal, strip, platform, zero-g, chain and new-trick bonuses", not missing, ", ".join(missing))
+    page.keyboard.press("Escape")
+    # a saved best shot (made up here) is enough for the card
+    clip = {"v": 1, "map": "summit", "snap": [], "hitT": 1, "meta": {"points": 1234, "mult": 12.3, "tags": ["AIR x1.40", "SLIDING x1.30", "LONG SHOT x1.55"],
+            "pens": ["STANDING STILL x0.75"], "dist": 55},
+            "frames": [{"t": 0, "c": [0, 2, 30, 0, 0, 0, 1, 78, 0], "w": "ar"}, {"t": 2, "c": [0, 2, 30, 0, 0, 0, 1, 78, 0], "w": "ar"}],
+            "events": [{"type": "hit", "t": 1, "i": 0, "o": [0, 2, 30], "p": [10, 2, -20], "knife": False}]}
+    page.evaluate("(c) => localStorage.setItem('tsb-best-replay', JSON.stringify(c))", clip)
+    page.reload()
+    page.wait_for_timeout(300)
+    check("a best shot shows the Save card button", page.is_visible("#card-best"))
+    with page.expect_download() as dl:
+        page.click("#card-best")
+    d = dl.value
+    path = d.path()
+    size = os.path.getsize(path) if path else 0
+    check("the best-shot card downloads as a PNG", d.suggested_filename.endswith(".png") and size > 3000, f"{d.suggested_filename} {size} bytes")
+    check("scoring extras run without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_maps(browser, base):
     """Every map builds, shows up in the picker, and can be played with bots."""
     page, errors = open_page(browser, base + "/index.html")
@@ -543,7 +571,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_maps, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_maps, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:

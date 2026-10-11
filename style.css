@@ -290,6 +290,11 @@
   }
   #streak span { color: #7CFC00; font-weight: bold; font-size: 18px; }
 
+  /* the live trick feed: what you are pulling off right now, down the left */
+  #trick-feed { position: absolute; left: 18px; top: 36%; pointer-events: none; display: flex; flex-direction: column; gap: 3px; z-index: 12; }
+  #trick-feed .tf { font-size: 13px; font-weight: bold; letter-spacing: 1px; color: #ffe9a8; text-shadow: 0 1px 3px #000; animation: tf-fade 2.4s ease-out forwards; }
+  #trick-feed #trick-chain { font-size: 15px; color: #ffd24a; min-height: 18px; }
+  @keyframes tf-fade { 0% { opacity: 0; transform: translateX(-8px); } 8% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
   #bonus-tags {
     color: #ff9d3b; text-align: right;
     font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.35); padding: 5px 10px;

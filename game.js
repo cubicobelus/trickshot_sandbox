@@ -141,6 +141,19 @@
     pointBlankMult: 0.4,
     standingStillSpeed: 2,      // moving slower than this when you fire, even mid-hop...
     standingStillMult: 0.75,    // ...scales the shot by this
+    portalScoreWindow: 2.5,     // PORTAL SHOT: a hit this soon after coming out of a portal
+    portalMult: 1.3,
+    stripScoreWindow: 2.5,      // STRIP SHOT: a hit this soon after a launch strip threw you
+    stripMult: 1.3,
+    platformMult: 1.2,          // PLATFORM SHOT: a hit while riding a lift or the shuttle
+    zeroGMult: 1.3,             // ZERO-G: a hit after this long in the air (real seconds) on a low-gravity map
+    zeroGAirTime: 3,
+    zeroGMaxGravity: 15,
+    chainWindow: 5,             // CHAIN: different movement tricks (slide, wall bounce, grapple, pad, ramp, portal, strip, lift) within this many seconds
+    chainMultPer: 0.15,         // x1.15 for 2 different tricks, x1.30 for 3...
+    chainMultMax: 1.6,
+    newTrickMultPer: 0.1,       // NEW: each trick you have not landed yet this run adds this...
+    newTrickMultMax: 1.5,       // ...up to this
     unrealisticMult: 0.5,       // Realistic shooting turned off (every shot lands exactly where you aim): the shot is worth this much
     // the purple target keeps away from you, like a snitch
     snitchRange: 12,            // starts running when you're this close
@@ -195,7 +208,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, trickFeed: true, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -694,6 +707,7 @@
       mv.box.setFromObject(mv.mesh);
       if (riding) { onAny = true; yawObject.position.x += nx - ox; yawObject.position.z += nz - oz; yawObject.position.y += ny - oy; player.feetY += ny - oy; }
     }
+    if (onAny && !player.onMover) noteTrick("lift", "RIDING");
     player.onMover = onAny;
   }
 
@@ -729,7 +743,7 @@
       yawObject.position.x = Q.x + Q.nx * 1.05; yawObject.position.z = Q.z + Q.nz * 1.05;
       yawObject.rotation.y += phi; player.lastYaw = yawObject.rotation.y;
       player.velocity.x = vx * c + vz * sn; player.velocity.z = vz * c - vx * sn;
-      player.portalCool = 0.6; player.lastPortalAt = elapsedTime; stat("portals");
+      player.portalCool = 0.6; player.lastPortalAt = elapsedTime; stat("portals"); noteTrick("portal", "PORTAL");
       releaseHook(0);
       burst(_gStart.set(Q.x, FLOOR_Y + 1.5, Q.z), 0xffb070, 10);
       playSfx("jumpPad", 0.5, 1.5, 0.2, "volMove");
@@ -765,6 +779,7 @@
       player.velocity.x = b.dx * CFG.maxSpeed; player.velocity.z = b.dz * CFG.maxSpeed;   // instantly at top speed, whatever you were doing
       player.velocity.y = b.pop;
       player.onGround = false; player.sliding = false; player.launch = "pad"; player.groundRise = 0;
+      noteTrick("strip", "LAUNCH STRIP");
       player.boostCool = 0.5; player.lastBoostAt = elapsedTime;
       playSfx("jumpPad", 0.6, 1.4, 0.1, "volMove");
       return;
@@ -4026,6 +4041,7 @@
     ropeMesh.visible = hookHead.visible = false;
     if (!had) return;
     player.lastGrappleAt = elapsedTime;
+    noteTrick("grapple", "GRAPPLE");
     player.grappleCooldown = player.grappleCooldownMax = cooldown === undefined ? CFG.grappleCooldown : cooldown;
     playSfx("slide", 0.3, 1.8, 0.1, "volMove");
   }
@@ -4273,6 +4289,7 @@
     player.wallBounceCooldown = CFG.wallBounceCooldown;
     player.wallContactTime = -1;
     player.lastWallBounceAt = elapsedTime;
+    noteTrick("bounce", perfect ? "PERFECT BOUNCE" : "WALL BOUNCE");
     player.wallImpactSpeed = 0;
     player.launch = null;   // rising off the bounce isn't a pad launch (WALL BOUNCE pays for it)
 
@@ -4354,6 +4371,7 @@
     const canStartSlide = player.onGround && wantsCrouch && !player.sliding &&
                           player.slideCooldown <= 0 && horizSpeed > CFG.slideMinSpeed;
     if (canStartSlide) {
+      noteTrick("slide", "SLIDE");
       player.sliding = true;
       player.slideTimer = CFG.slideDuration;
       player.slideCooldown = CFG.slideDuration + CFG.slideCooldown;
@@ -4478,6 +4496,7 @@
           if (Math.hypot(yawObject.position.x - pad.x, yawObject.position.z - pad.z) < pad.r && Math.abs(player.feetY - pad.y) < 0.35) {
             player.velocity.y = pad.power;
             player.launch = pad.power > CFG.jumpPadPower + 1 ? "mega" : "pad";
+            noteTrick("launch", pad.power > CFG.jumpPadPower + 1 ? "MEGA PAD" : "JUMP PAD");
             const run = Math.hypot(player.velocity.x, player.velocity.z);
             player.launchRun = run;   // bouncing in place on a pad still counts as standing still
             if (run > 1) {
@@ -4593,7 +4612,7 @@
       // running off the top of a ramp: the lift it was giving you becomes a launch
       if (player.onGround && player.groundRise > 0 && player.velocity.y <= 0) {
         player.velocity.y = player.groundRise;
-        if (player.groundRise > 2) { player.launch = "ramp"; player.launchRun = Math.hypot(player.velocity.x, player.velocity.z); }
+        if (player.groundRise > 2) { player.launch = "ramp"; player.launchRun = Math.hypot(player.velocity.x, player.velocity.z); noteTrick("launch", "RAMP LAUNCH"); }
       }
       player.groundRise = 0;
       player.onGround = false;
@@ -4740,6 +4759,38 @@
     return { target: best, dist: bestDist };
   }
 
+  // ---- tricks as they happen: the live feed, and the CHAIN count (different tricks within a few seconds) ----
+  const trickLog = [];
+  const trickFeedEl = document.getElementById("trick-feed"), trickChainEl = document.getElementById("trick-chain");
+  function chainCount() {
+    const now = elapsedTime;
+    while (trickLog.length && now - trickLog[0].t > CFG.chainWindow) trickLog.shift();
+    return new Set(trickLog.map((e) => e.type)).size;
+  }
+  function noteTrick(type, label) {
+    const last = trickLog.slice().reverse().find((e) => e.type === type);
+    if (last && elapsedTime - last.t < 0.5) return;   // the same trick twice in a flash is one trick
+    trickLog.push({ type, t: elapsedTime });
+    if (!SETTINGS.trickFeed || !pointerLocked) return;
+    const line = document.createElement("div");
+    line.className = "tf"; line.textContent = label;
+    trickFeedEl.appendChild(line);
+    while (trickFeedEl.children.length > 5) trickFeedEl.removeChild(trickFeedEl.children[1]);   // (child 0 is the chain line)
+    setTimeout(() => line.remove(), 2400);
+  }
+  let lastChainShown = 0;
+  function updateTrickFeed() {
+    const n = SETTINGS.trickFeed ? chainCount() : 0;
+    if (n === lastChainShown) return;
+    lastChainShown = n;
+    trickChainEl.textContent = n >= 2 ? "CHAIN x" + n : "";
+  }
+  const trickSeen = new Set();   // the tricks landed so far this run (each new one adds to the shot)
+  const COLLECTABLE = new Set(["AIR", "180\u00b0", "SPIN", "NO-SCOPE", "QUICKSCOPE", "FLICK", "SNAP FLICK", "SLIDING", "WALL BOUNCE", "GRAPPLE", "LAUNCHED", "RAMP LAUNCH",
+    "MEGA LAUNCH", "REVERSE", "QUICK SWITCH", "PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "HANG TIME", "MICRO TARGET", "PINPOINT", "MOVING TARGET",
+    "LAST ROUND", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC"]);
+  const collectKey = (tag) => { const k = trickKey(tag); return k && /SPIN$/.test(k) ? "SPIN" : k; };
+
   // what the player is doing right now, for scoring. A thrown knife takes this
   // snapshot when it leaves the hand, so the trick you threw it during is what counts.
   // flying fast away from where you're aiming, having turned round since takeoff: shooting back
@@ -4775,6 +4826,11 @@
       sliding: player.sliding,
       wallRide: elapsedTime - player.lastWallBounceAt <= CFG.wallRideScoreWindow,
       grapple: elapsedTime - player.lastGrappleAt <= CFG.grappleScoreWindow,
+      portal: elapsedTime - player.lastPortalAt <= CFG.portalScoreWindow,
+      strip: elapsedTime - player.lastBoostAt <= CFG.stripScoreWindow,
+      onMover: player.onMover,
+      zeroG: !player.onGround && CFG.gravity <= CFG.zeroGMaxGravity && elapsedTime - player.groundedAt >= CFG.zeroGAirTime,
+      chain: chainCount(),
       airTime: player.onGround ? 0 : (elapsedTime - player.groundedAt) * Math.sqrt(CFG.gravity / BASE_PHYS.gravity),   // low gravity doesn't make hang time cheap
       airId: player.groundedAt,   // the same for every shot in one jump
       launch: !player.onGround && player.velocity.y > 0 ? player.launch : null,
@@ -4843,6 +4899,11 @@
     if (st.sliding) add("SLIDING", CFG.slideMult);
     if (st.wallRide) add("WALL BOUNCE", CFG.wallRideMult);
     if (st.grapple) add("GRAPPLE", CFG.grappleMult);
+    if (st.portal) add("PORTAL SHOT", CFG.portalMult);
+    if (st.strip) add("STRIP SHOT", CFG.stripMult);
+    if (st.onMover) add("PLATFORM SHOT", CFG.platformMult);
+    if (st.zeroG) add("ZERO-G", CFG.zeroGMult);
+    if (st.chain >= 2) add("CHAIN " + st.chain, Math.min(1 + (st.chain - 1) * CFG.chainMultPer, CFG.chainMultMax));
 
     // target size: precision a knife swing at arm's length doesn't need
     const kind = target.userData.type;
@@ -4854,6 +4915,12 @@
 
     if (streak > 0) add("STREAK " + (streak + 1), Math.min(1 + streak * CFG.streakMultPer, CFG.streakMultMax));
 
+    {   // the first time this run for each trick: a bonus for variety
+      const fresh = [];
+      for (const t of tags) { const k = collectKey(t); if (k && COLLECTABLE.has(k) && !trickSeen.has(k) && !fresh.includes(k)) fresh.push(k); }
+      for (const k of fresh) trickSeen.add(k);
+      if (fresh.length) add("NEW " + fresh.length, Math.min(1 + fresh.length * CFG.newTrickMultPer, CFG.newTrickMultMax));
+    }
     if (still) add("STANDING STILL", CFG.standingStillMult);
     if (!SETTINGS.realisticShooting) add("UNREALISTIC", CFG.unrealisticMult);   // perfect accuracy is worth less
     // spraying: a shot that follows the last one at the gun's full-auto rate (before this shot's recoil is added)
@@ -4913,6 +4980,12 @@
       ["Penalties", [
         ["CLOSE", x(C.pointBlankMult) + " to x1", "Closer than " + C.distanceFrom + " m, harshest at " + C.pointBlankMin + " m. Knife swings are exempt."],
         ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. A pad or ramp flight you ran onto doesn't count."],
+        ["PORTAL SHOT", x(C.portalMult), "A hit within " + C.portalScoreWindow + " s of coming out of a portal."],
+        ["STRIP SHOT", x(C.stripMult), "A hit within " + C.stripScoreWindow + " s of a launch strip throwing you."],
+        ["PLATFORM SHOT", x(C.platformMult), "A hit while riding a lift or the shuttle."],
+        ["ZERO-G", x(C.zeroGMult), "A hit after " + C.zeroGAirTime + " s in the air on a low-gravity map."],
+        ["CHAIN", x(1 + C.chainMultPer) + " to " + x(C.chainMultMax), "Different movement tricks (slide, wall bounce, grapple, pad or ramp launch, portal, launch strip, lift) within " + C.chainWindow + " s: +" + C.chainMultPer + "x for each one after the first."],
+        ["NEW", "+" + C.newTrickMultPer + "x each, up to " + x(C.newTrickMultMax), "The first time in a run you land a trick you haven't landed yet this run. Variety pays."],
         ["UNREALISTIC", x(C.unrealisticMult), "Realistic shooting is turned off in Settings > Gameplay, so every shot lands exactly where you aim."],
         ["SPRAY", x(C.sprayMults[1]) + " / " + x(C.sprayMults[2]), "Rifle and AK: the 2nd shot of a full-auto spray, then every shot after. Tap-firing doesn't count."],
       ], true],
@@ -5975,6 +6048,7 @@
   }
 
   function resetLocalRound() {
+    trickSeen.clear(); trickLog.length = 0;
     localDead = false;
     endSpectate();
     mpEls.dead.hidden = true;
@@ -7590,6 +7664,7 @@
       shots: 0, shotsHit: 0, hits: 0, best: null, bestClip: null });
     score = 0; scoreEl.textContent = 0;
     streak = 0; streakEl.textContent = 0;
+    trickSeen.clear(); trickLog.length = 0;
     if (SETTINGS.map === "random") loadMap(pickRandomMap(currentMap.id));   // Random: a new map for every run
     teleportLocal(PLAYER_SPAWN.x, PLAYER_SPAWN.z);
     cancelReload(); refillAmmo(); updateAmmoHud();
@@ -8384,8 +8459,59 @@
     else if (replay.from === "game" && actionsFor(normalizeInput(e.code)).includes("replay")) stopReplay();
   });
 
+  // ---- the best-shot card: a picture of the shot to keep or share (a PNG): the map with the shot drawn on it, the points and the tricks ----
+  function shotCardCanvas(clip) {
+    const W = 920, H = 500, c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d"), meta = clip.meta || {}, m = MAPS[clip.map] || MAPS.arena;
+    const bg = g.createLinearGradient(0, 0, W, H); bg.addColorStop(0, "#15161a"); bg.addColorStop(1, "#24252c");
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "#ffd24a"; g.lineWidth = 3; g.strokeRect(6, 6, W - 12, H - 12);
+    const S = 380, mx = 36, my = 72;
+    const mc = document.createElement("canvas"); mc.width = mc.height = S;
+    drawMapThumb(mc, m);
+    g.drawImage(mc, mx, my);
+    const hit = (clip.events || []).find((e) => e.type === "hit");
+    const k = S / (m.half * 2), px = (v) => mx + (v + m.half) * k, pz = (v) => my + (v + m.half) * k;
+    if (hit && hit.o && hit.p) {   // where you were, where it landed
+      g.setLineDash([6, 5]); g.strokeStyle = "#ffd24a"; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(px(hit.o[0]), pz(hit.o[2])); g.lineTo(px(hit.p[0]), pz(hit.p[2])); g.stroke(); g.setLineDash([]);
+      g.fillStyle = "#22d3ee"; g.beginPath(); g.arc(px(hit.o[0]), pz(hit.o[2]), 6, 0, 7); g.fill();
+      g.strokeStyle = "#ff3b3b"; g.lineWidth = 3; g.beginPath(); g.arc(px(hit.p[0]), pz(hit.p[2]), 8, 0, 7); g.stroke();
+    }
+    const font = (px2, bold) => (bold ? "bold " : "") + px2 + "px Segoe UI, Arial, sans-serif";
+    g.textAlign = "left"; g.textBaseline = "alphabetic";
+    g.fillStyle = "#ffd24a"; g.font = font(20, true); g.fillText("TRICKSHOT SANDBOX", mx, 48);
+    const X = 480;
+    g.fillStyle = "#fff"; g.font = font(70, true); g.fillText(Math.round(meta.points || 0).toLocaleString(), X, 140);
+    g.fillStyle = "#9a9aa3"; g.font = font(20, false); g.fillText("points", X, 168);
+    g.fillStyle = "#ffd24a"; g.font = font(34, true);
+    g.fillText((meta.mult ? meta.mult.toFixed(1) : "1.0") + "x" + (Number.isFinite(meta.dist) ? "   " + Math.round(meta.dist) + " m" : ""), X, 216);
+    const lines = (meta.tags || []).map((t) => [t, "#ffe9a8"]).concat((meta.pens || []).map((t) => [t, "#ff6a5e"]));
+    g.font = font(17, true);
+    lines.slice(0, 16).forEach(([t, col], i) => { g.fillStyle = col; g.fillText(t, X + (i % 2) * 215, 254 + Math.floor(i / 2) * 26); });
+    const f = (clip.frames || []).find((fr) => fr.t >= clip.hitT) || (clip.frames || [])[0];
+    const gun = f && WEAPONS[f.w] ? WEAPONS[f.w].name : f && f.w === "knife" ? "Knife" : "";
+    g.fillStyle = "#9a9aa3"; g.font = font(16, false);
+    g.fillText(m.name + (gun ? "  \u00b7  " + gun : "") + "  \u00b7  " + new Date().toISOString().slice(0, 10), mx, H - 22);
+    g.textAlign = "right"; g.fillText("cubicobelus.github.io/trickshot_sandbox", W - 36, H - 22);
+    return c;
+  }
+  function saveShotCard(clip) {
+    if (!clip) return;
+    shotCardCanvas(clip).toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = "trickshot-" + Math.round((clip.meta && clip.meta.points) || 0) + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, "image/png");
+  }
+
   // ---- the buttons that start one ----
   function refreshReplayButtons() {
+    document.getElementById("card-best").hidden = !bestClip;
+    document.getElementById("r-card").hidden = !run.bestClip;
     const best = document.getElementById("watch-best"), last = document.getElementById("watch-last");
     best.hidden = !bestClip; last.hidden = !lastClip;
     document.getElementById("r-watch").hidden = !run.bestClip;
@@ -8511,6 +8637,9 @@
     replayNoteTimer = setTimeout(() => { el.hidden = true; }, 4000);
   }
   document.getElementById("rp-video").addEventListener("click", (e) => { e.currentTarget.blur(); saveReplayVideo(); });
+  document.getElementById("rp-card").addEventListener("click", (e) => { e.currentTarget.blur(); saveShotCard(replay.clip); });
+  document.getElementById("card-best").addEventListener("click", (e) => { e.stopPropagation(); saveShotCard(bestClip); });
+  document.getElementById("r-card").addEventListener("click", (e) => { e.stopPropagation(); saveShotCard(run.bestClip); });
   // ======================================================================
   // MAIN LOOP
   // ======================================================================
@@ -8540,6 +8669,7 @@
       if (pointerLocked && !localDead && run.state !== "countdown") updatePlayer(dt);
       achSummitCheck();
       updateMapPopup();
+      updateTrickFeed();
       updateProps(dt);
       updateParticles(dt);
       updateTracers(dt);

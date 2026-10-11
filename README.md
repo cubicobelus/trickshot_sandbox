@@ -45,7 +45,7 @@ the game has saved and starts you over.
 **Watch best shot** on a Score Attack results screen) play it back from your view, slowing down around the
 hit, with a **bullet cam** that rides the shot to the target. Press **P** while playing to watch your last
 hit (P again to carry on). Your best trickshot's replay is kept in your browser. **Save video** in the replay bar
-saves it as a .webm you can post anywhere.
+saves it as a .webm you can post anywhere, and **Save card** (also in the menu and on the results screen) makes a picture of your best shot: the map with the shot drawn on it, the points and every trick.
 
 **Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too.
 1 is the gun, 2 the knife. The sniper's no-scope and quickscope bonuses are its own, and the other guns
@@ -60,6 +60,7 @@ further, the more), no-scopes, quickscopes, flicks, quick switches, launches off
 backwards mid-flight, several hits in one jump, last-round shots, sliding, wall bounces, small and moving
 targets and streaks all stack. Two things scale a shot down: firing from close in (under 15 m, down to x0.4 at
 3 m; knife swings are exempt) and standing still (moving under 2 u/s when you fire, even if you hop in place).
+The newer ones: PORTAL SHOT and STRIP SHOT (a hit soon after a portal or a launch strip), PLATFORM SHOT (riding a lift), ZERO-G (long hang time on a low-gravity map), CHAIN (different movement tricks within 5 seconds: slide, wall bounce, grapple, pad or ramp launch, portal, strip, lift), and NEW (the first time in a run you land each trick, so variety pays). A **live trick feed** down the left shows the tricks and your chain as you pull them off (Settings > View turns it off).
 The full list with every value is under **Trickshot list** in the menu.
 
 Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
