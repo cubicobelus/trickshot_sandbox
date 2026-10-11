@@ -546,6 +546,8 @@
   }
   #dead-screen div { font-size: 44px; font-weight: bold; letter-spacing: 4px; text-shadow: 0 0 14px #000; }
   #dead-screen small { font-size: 16px; margin-top: 6px; color: #ddd; }
+  #dead-screen #dead-recap { font-size: 13px; font-weight: normal; letter-spacing: 0.5px; text-shadow: 0 1px 3px #000; margin-top: 8px; line-height: 1.6; color: #ffe9a8; }
+  #dead-screen #dead-recap:empty { display: none; }
 
   #scoreboard {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 25;

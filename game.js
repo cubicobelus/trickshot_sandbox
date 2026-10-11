@@ -6110,7 +6110,23 @@
   }
   const _specTo = new THREE.Vector3();
 
-  function setLocalDead(by, killerId) {
+  // what happened in this life, for the recap when you die: damage you did to each player, damage and hits you took from each
+  const lifeLog = { dealt: new Map(), taken: new Map(), hits: new Map() };
+  function lifeLogReset() { lifeLog.dealt.clear(); lifeLog.taken.clear(); lifeLog.hits.clear(); }
+  function deathRecap(k, m) {
+    const lines = [];
+    const gun = WEAPONS[m.w] ? WEAPONS[m.w].name : m.knife ? "Knife" : "";
+    let dist = null;
+    if (k) dist = Math.hypot(k.x - yawObject.position.x, k.z - yawObject.position.z);
+    lines.push((gun ? gun : "A hit") + (m.head && !m.knife ? " (headshot)" : "") + (dist !== null ? " from " + Math.round(dist) + " m" : ""));
+    const took = lifeLog.taken.get(m.k) || 0, hits = (lifeLog.hits.get(m.k) || 0) + 1;   // (the killing hit is the last one)
+    if (hits > 1) lines.push("They hit you " + hits + " times for " + Math.round(took + (Number(m.dmg) || 0)) + " in all");
+    const dealt = lifeLog.dealt.get(m.k) || 0;
+    lines.push(dealt > 0 ? "You hit them for " + Math.round(dealt) : "You didn't land a hit on them");
+    if (k && k.alive && k.hp > 0) lines.push("They have " + Math.round(k.hp) + " health left");
+    return lines;
+  }
+  function setLocalDead(by, killerId, recapLines) {
     localDead = true;
     spec = { id: killerId || null };
     player.velocity.set(0, 0, 0);
@@ -6119,6 +6135,7 @@
     cancelReload();
     streak = 0; streakEl.textContent = 0;
     mpEls.deadBy.textContent = by ? "by " + by : "";
+    document.getElementById("dead-recap").innerHTML = (recapLines || []).map((l) => "<div>" + esc(l) + "</div>").join("");
     mpEls.dead.hidden = false;
   }
 
@@ -6136,6 +6153,7 @@
 
   function resetLocalRound() {
     trickSeen.clear(); trickLog.length = 0;
+    lifeLogReset();
     localDead = false;
     endSpectate();
     mpEls.dead.hidden = true;
@@ -6266,10 +6284,11 @@
       case "hp": {
         const p = net.players.get(m.id);
         const hp = Math.max(0, Math.min(Number(m.hp) || 0, 100));
-        if (m.by === net.id) spawnDamageNumber(p, Math.max(0, Math.min(Number(m.dmg) || 0, 999)), !!m.head, false);
+        if (m.by === net.id) { spawnDamageNumber(p, Math.max(0, Math.min(Number(m.dmg) || 0, 999)), !!m.head, false); lifeLog.dealt.set(m.id, (lifeLog.dealt.get(m.id) || 0) + (Number(m.dmg) || 0)); }
         if (p) {
           const lost = Math.max(0, p.hp - hp);
           p.hp = hp;
+          if (m.id === net.id) { lifeLog.taken.set(String(m.by), (lifeLog.taken.get(String(m.by)) || 0) + lost); lifeLog.hits.set(String(m.by), (lifeLog.hits.get(String(m.by)) || 0) + 1); }
           if (m.id === net.id) showDamage(String(m.by), lost);
         }
         if (m.by === net.id) { flashCrosshair(); playPlayerHit(!!m.head); }   // your hit landed
@@ -6284,7 +6303,8 @@
         const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
         feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + ((Object.prototype.hasOwnProperty.call(KILL_VERBS, m.w) ? KILL_VERBS[m.w] : m.knife ? "knifed" : "shot") + (m.head && !m.knife ? " (headshot)" : "")) +
           " <b>" + esc(v ? v.name : "?") + "</b><i>+" + (Number(m.pts) || 0) + (tags ? " " + esc(tags) : "") + "</i>");
-        if (m.v === net.id) setLocalDead(k ? k.name : "", m.k);
+        if (m.k === net.id) lifeLog.dealt.delete(m.v);
+        if (m.v === net.id) { setLocalDead(k ? k.name : "", m.k, deathRecap(k, m)); lifeLogReset(); }
         else if (m.k !== net.id) { playPlayerHit(!!m.head, 0.5); if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8); }
         break;
       }
@@ -6295,6 +6315,7 @@
         if (p) { p.alive = true; p.hp = 100; p.x = m.pos[0]; p.y = 0.25; p.z = m.pos[1]; p.snap = true; }
         if (m.id === net.id) {
           localDead = false;
+          lifeLogReset();
           endSpectate();
           mpEls.dead.hidden = true;
           teleportLocal(m.pos[0], m.pos[1]);
