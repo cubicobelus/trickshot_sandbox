@@ -2,7 +2,7 @@
 
 Setup (once):   pip install playwright      then   python -m playwright install chromium
 Run:            python tests/run_tests.py   (from the repo folder; the full suite takes a while)
-                python tests/run_tests.py --list | --quick | --small | --only bots,maps
+                python tests/run_tests.py --list | --quick | --small | --only bots,maps | --browser firefox|webkit
 
 It serves the repo on a local port (127.0.0.1 only), opens the game and the sound lab, and checks the things
 that most often break: the page loads without errors, every loadout fires and reloads, weapon switching,
@@ -38,8 +38,10 @@ window.__step = (n, ms) => new Promise((res) => { let i = 0; (function f() { if 
 window.__played = 0;
 window.__noFullscreen = true;   // fullscreen would resize the test browser
 window.__noForceTutorial = true;   // a first visit would otherwise start the tutorial on the first click to play
-const __start = AudioBufferSourceNode.prototype.start;
-AudioBufferSourceNode.prototype.start = function (...a) { if (this.buffer) window.__played++; return __start.apply(this, a); };
+if (typeof AudioBufferSourceNode !== 'undefined') {   // (Playwright's WebKit on Windows has no Web Audio at all)
+  const __start = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (...a) { if (this.buffer) window.__played++; return __start.apply(this, a); };
+}
 """
 GPU_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required"]
 
@@ -56,6 +58,9 @@ def serve():
 
 
 def launch(p):
+    engine = os.environ.get("TSB_ENGINE", "chromium")
+    if engine in ("firefox", "webkit"):   # Playwright's own build (python -m playwright install firefox webkit)
+        return getattr(p, engine).launch(headless=True)
     # use an installed Edge or Chrome if there is one, else Playwright's own Chromium
     for channel in (os.environ.get("TSB_BROWSER"), "msedge", "chrome", None):
         try:
@@ -1013,6 +1018,7 @@ def main():
     parser = argparse.ArgumentParser(description="Smoke tests for Trickshot Sandbox.")
     parser.add_argument("--only", help="run just these tests, comma separated (see --list), e.g. --only bots,maps")
     parser.add_argument("--quick", action="store_true", help="run the fast set (for before a push); implies --small")
+    parser.add_argument("--browser", choices=["chromium", "firefox", "webkit"], help="the browser engine to test in (default chromium: Edge, Chrome or Playwright's own)")
     parser.add_argument("--small", action="store_true", help="draw the test pages at 800x450 (much faster; same as TSB_VIEW=800x450)")
     parser.add_argument("--list", action="store_true", help="list the tests and exit")
     args = parser.parse_args()
@@ -1020,6 +1026,8 @@ def main():
         for name, t in NAMES.items():
             print(f"{name:20}" + (" [quick] " if name in QUICK else "         ") + ((t.__doc__ or "").strip().splitlines() or [""])[0])
         return
+    if args.browser:
+        os.environ["TSB_ENGINE"] = args.browser
     if (args.small or args.quick) and not os.environ.get("TSB_VIEW"):
         os.environ["TSB_VIEW"] = "800x450"
     chosen = list(NAMES)

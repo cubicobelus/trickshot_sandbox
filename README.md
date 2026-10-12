@@ -45,7 +45,7 @@ the game has saved and starts you over.
 **Watch best shot** on a Score Attack results screen) play it back from your view, slowing down around the
 hit, with a **bullet cam** that rides the shot to the target. Press **P** while playing to watch your last
 hit (P again to carry on). Your best trickshot's replay is kept in your browser. **Save video** in the replay bar
-saves it as a .webm you can post anywhere, and **Save card** (also in the menu and on the results screen) makes a picture of your best shot: the map with the shot drawn on it, the points and every trick.
+saves it as a video you can post anywhere (.webm, or .mp4 in Safari), and **Save card** (also in the menu and on the results screen) makes a picture of your best shot: the map with the shot drawn on it, the points and every trick.
 
 **Loadout:** pick one gun in the menu (sniper, rifle, AK, shotgun or Deagle); you always carry the knife too. **Attachments** (the button under the loadout) add scopes, a red dot, suppressors, brakes, grips, magazines, a choke or a laser to each gun. Every one is a trade (a suppressor is quiet but kicks a bit more, a high-zoom scope is slower to aim, an extended magazine reloads slower), and each unlocks once you have landed enough hits with that gun (10 to 80; a kill online counts as a hit). They show on your gun and on other players' guns.
 1 is the gun, 2 the knife. The sniper comes with iron sights; fit a low- or high-zoom scope from Attachments. Its no-scope (a hit from the hip) and quickscope (a hit just after aiming in) bonuses are its own, and the other guns
@@ -110,6 +110,8 @@ To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `g
 - `tools/sound-lab.html` — test bench for every sound in the game, played the way the game plays it,
   with sliders to try changes, plus the synthesized sniper shots kept for reference
   ([open it](https://cubicobelus.github.io/trickshot_sandbox/tools/sound-lab.html))
+
+**Browsers:** built and tested in Chrome and Edge, and the test suite also passes in Firefox. Safari's engine (WebKit) runs it in the tests too, but Safari itself and sound there have not been tried. Keyboard lock (so Ctrl+W can't close the tab) is Chrome and Edge only; everything else works without it, and the game keeps running silently if a browser refuses sound.
 
 **Running it:** open `index.html` in a browser to play your local copy and refresh after editing. Tuning knobs (movement,
 scoring, accuracy, the grapple) are in the `CFG` object at the top of `game.js`.

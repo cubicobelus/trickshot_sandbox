@@ -3049,7 +3049,13 @@
     return curve;
   }
 
+  // Sound is optional: a browser, an extension or a privacy setting can refuse Web Audio, and then the game still runs, silently.
+  let audioFailed = false;
   function initAudio() {
+    if (audioFailed) return;
+    try { initAudioNow(); } catch (e) { audioFailed = true; audioCtx = null; masterGain = null; }
+  }
+  function initAudioNow() {
     if (audioCtx) { if (audioCtx.state === "suspended") audioCtx.resume(); return; }
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -5517,7 +5523,7 @@
       "Window: " + window.innerWidth + "x" + window.innerHeight + " at " + (window.devicePixelRatio || 1) + "x",
       "Graphics: " + SETTINGS.quality + (SETTINGS.quality === "auto" ? " (now " + gfxLevel + ")" : "") + ", about " + lastFps + " fps, field of view " + SETTINGS.fov,
       "Map: " + (currentMap ? currentMap.id : "?") + ", " + (net.active ? modeName() : "single player (" + SETTINGS.playMode + ")") + (net.practice ? " with " + net.botCount + " bots" : ""),
-      "Saving: " + storage + ", gamepad: " + (navigator.getGamepads && Array.from(navigator.getGamepads()).some(Boolean) ? "connected" : "none"),
+      "Sound: " + (audioFailed ? "unavailable in this browser" : audioCtx ? "on" : "not started yet") + ", saving: " + storage + ", gamepad: " + (navigator.getGamepads && Array.from(navigator.getGamepads()).some(Boolean) ? "connected" : "none"),
       "Errors: " + (problems.length ? "" : "none"),
     ];
     for (const p of problems) lines.push("  - " + p.msg + (p.where ? " (" + p.where + ")" : "") + (p.n > 1 ? " x" + p.n : ""));
@@ -9822,16 +9828,17 @@
       masterGain.connect(audioOut);
       for (const tr of audioOut.stream.getAudioTracks()) stream.addTrack(tr);
     }
-    const type = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+    const type = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t)) || "";   // (Safari records mp4)
     const chunks = [];
     const mr = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 6000000 } : undefined);
     mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     mr.onstop = () => {
       if (audioOut) { try { masterGain.disconnect(audioOut); } catch (e) { /* already gone */ } }
-      downloadBlob(new Blob(chunks, { type: "video/webm" }), clipName(replay.clip, ".webm"));
+      const mime = mr.mimeType || type || "video/webm", ext = /mp4/.test(mime) ? ".mp4" : ".webm";   // name the file for what the browser really recorded
+      downloadBlob(new Blob(chunks, { type: mime }), clipName(replay.clip, ext));
       videoRec = null;
       replayEl.classList.remove("recording");
-      flashReplayNote("Saved as a video (.webm).");
+      flashReplayNote("Saved as a video (" + ext + ").");
     };
     videoRec = mr;
     replayEl.classList.add("recording");
