@@ -365,10 +365,10 @@
   .slot.active .name { color: #ffd24a; }
 
   /* loadout picker in the menu */
-  #loadout { display: flex; align-items: center; gap: 8px; margin: 12px 0 2px; flex-wrap: wrap; justify-content: center; }
+  #loadout { display: flex; align-items: center; gap: 6px; margin: 12px 0 2px; flex-wrap: wrap; justify-content: center; }
   #loadout .lo-label { font-size: 12px; color: #ffd24a; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
   #loadout button {
-    width: 98px; padding: 5px 6px 4px; border-radius: 6px; cursor: pointer;
+    width: 76px; padding: 5px 4px 4px; border-radius: 6px; cursor: pointer;   /* seven guns fit on one row */
     background: rgba(255,255,255,0.04); border: 1px solid #44444c; color: #aaa; font: bold 11px 'Segoe UI', Arial, sans-serif; letter-spacing: 0.6px;
   }
   #loadout button svg { height: 22px; width: auto; display: block; margin: 0 auto 2px; }

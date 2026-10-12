@@ -125,7 +125,7 @@ def test_game(browser, base):
           not page.is_visible("#watch-best") and not page.is_visible("#watch-last"))
     check("three.js loads from lib/", page.evaluate("typeof THREE !== 'undefined' && THREE.REVISION === '128'"))
     guns = page.eval_on_selector_all("#loadout button", "els => els.map(e => e.dataset.gun)")
-    check("loadout menu lists five guns", len(guns) == 5, ", ".join(guns))
+    check("loadout menu lists seven guns, the new ones last", len(guns) == 7 and guns[-2:] == ["smg", "dmr"], ", ".join(guns))
 
     for gun in guns:
         page.click(f"#loadout button[data-gun={gun}]")
@@ -680,7 +680,7 @@ def test_play_setup(browser, base):
     page.click("#mp-play-btn")
     step(page, 60)
     gg_label = page.inner_text("#mp-timer-mode").lower()
-    check("gun game shows your level in the timer", "gun game" in gg_label and "level 1 / 6" in gg_label, gg_label)
+    check("gun game shows your level in the timer", "gun game" in gg_label and "level 1 / 8" in gg_label, gg_label)
     page.evaluate("__unlock()")
     step(page, 3)
     page.click("#mp-leave-btn")
@@ -894,6 +894,51 @@ def test_problem_report(browser, base):
     page.close()
 
 
+GUNS_JS = """() => {
+  const D = window.__dbg, out = { problems: [], facts: {} };
+  const bad = (m) => out.problems.push(m);
+  const oldOrder = ["rifle", "ar", "ak", "shotgun", "pistol", "knife"];
+  // a gun travels over the network as its place in this list: the original six must not move, new guns go after them
+  if (JSON.stringify(D.WEAPON_ORDER.slice(0, 6)) !== JSON.stringify(oldOrder)) bad("the first six places in WEAPON_ORDER changed: " + D.WEAPON_ORDER.slice(0, 6).join(","));
+  out.facts.order = D.WEAPON_ORDER.join(",");
+  for (const id of D.GUNS) {
+    const w = D.WEAPONS[id];
+    if (!D.DAMAGE[id]) bad(id + " has no damage numbers");
+    if (!D.WEAPON_ICONS[id]) bad(id + " has no hotbar icon");
+    if (!D.ATTACHMENTS[id]) bad(id + " has no attachments");
+    if (!w.sound || !(w.sound.rate > 0) || !(w.sound.length > 0)) bad(id + " has no usable sound profile");
+    if (!(w.fireRate > 0) || !(w.magSize > 0) || !w.group || !w.muzzle) bad(id + " is missing fire rate, magazine, model or muzzle");
+    if (w.action !== "pump" && (w.mag === undefined || w.magRestY === undefined)) bad(id + " has no magazine part for the reload");   // (the pump shotgun loads shells instead)
+    if (!D.GG_ORDER.includes(id)) bad(id + " is not on the gun game ladder");
+  }
+  const dm = (g, d, head) => D.hostDamage({ x: 0, z: 0 }, { x: d, z: 0 }, { head: !!head, n: 1, h: head ? 1 : 0 }, g);
+  out.facts.smg = [dm("smg", 5), dm("smg", 12), dm("smg", 23.5), dm("smg", 35), dm("smg", 80), dm("smg", 5, true), dm("smg", 80, true)];
+  out.facts.dmr = [dm("dmr", 5), dm("dmr", 80), dm("dmr", 5, true)];
+  out.facts.ggLen = D.GG_ORDER.length;
+  return out;
+}"""
+
+
+def test_guns(browser, base):
+    """Every gun is complete (damage, icon, sound, attachments, model, gun game), the original six keep their network order, and the SMG's damage fades with distance."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html")
+        res = page.evaluate(GUNS_JS)
+        f = res["facts"]
+        check("the original six guns keep their places in the network order, new guns come after", not [x for x in res["problems"] if "WEAPON_ORDER" in x], f["order"])
+        check("every gun has damage, an icon, attachments, a sound, a model, a magazine and a place in gun game", not [x for x in res["problems"] if "WEAPON_ORDER" not in x], "; ".join(res["problems"][:4]))
+        check("the SMG hits for 20 up close, fades from 12 m to half by 35 m, and stays at half beyond", f["smg"][:2] == [20, 20] and abs(f["smg"][2] - 15) < 0.5 and f["smg"][3] == 10 and f["smg"][4] == 10, str(f["smg"]))
+        check("the SMG's head hit is 30 and fades the same way", f["smg"][5] == 30 and f["smg"][6] == 15, str(f["smg"][5:]))
+        check("the DMR does 60 to the body (two to kill) and 100 to the head at any range", f["dmr"] == [60, 60, 100], str(f["dmr"]))
+        check("gun game now has seven guns before the knife", f["ggLen"] == 7, str(f["ggLen"]))
+        check("the gun checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def debug_site():
     """A throw-away copy of the game with a window.__dbg hook added just before the last `animate();`, so a test can look at the
     level data from inside. The repo itself is never touched. Returns (server, base, folder); delete the folder when done."""
@@ -905,6 +950,7 @@ def debug_site():
     with open(path, encoding="utf-8", newline="") as fh:
         src = fh.read().replace("\r\n", "\n")
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
+            "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1008,10 +1054,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_guns, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "guns", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 
