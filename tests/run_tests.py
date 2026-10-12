@@ -655,7 +655,7 @@ def test_attachments(browser, base):
     page.wait_for_timeout(150)
     locked = page.eval_on_selector_all("#attach-slots .at-opt.locked", "els => els.length")
     opts_n = page.eval_on_selector_all("#attach-slots .at-opt", "els => els.length")
-    check("the attachments window lists the options (all open for now: see UNLOCK_ALL_ATTACHMENTS)", opts_n >= 6, f"{opts_n} options, {locked} locked")
+    check("the attachments window lists the options, the dearer ones locked until you land more hits with the gun", opts_n >= 6 and locked > 0, f"{opts_n} options, {locked} locked")
     page.keyboard.press("Escape")
     # pretend 200 hits with the AR, then fit the extended magazine
     stats = {"since": "2026-01-01", "kinds": {}, "guns": {"ar": {"shots": 400, "hits": 200, "points": 0}}, "tricks": {}}

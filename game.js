@@ -3358,34 +3358,34 @@
   const ATTACH_SLOTS = {
     optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip / magazine", barrel: "Barrel", mag: "Magazine", sights: "Sights",
   };
-  const SUPPRESSOR = { id: "suppressor", name: "Suppressor", need: 30, fx: { flash: 0.2, sound: 0.45, recoil: 1.05 }, text: "Quieter, almost no flash; a touch more kick" };
-  const AT_REDDOT = { id: "reddot", name: "Red dot", need: 15, fx: { ads: 0.85, spreadAds: 0.8 }, text: "Aims down sights 15% faster, tighter when aimed" };
-  const AT_BRAKE = { id: "brake", name: "Muzzle brake", need: 80, fx: { recoil: 0.8, sound: 1.2 }, text: "20% less recoil, louder" };
+  const SUPPRESSOR = { id: "suppressor", name: "Suppressor", need: 20, fx: { flash: 0.2, sound: 0.45, recoil: 1.05 }, text: "Quieter, almost no flash; a touch more kick" };
+  const AT_REDDOT = { id: "reddot", name: "Red dot", need: 10, fx: { ads: 0.85, spreadAds: 0.8 }, text: "Aims down sights 15% faster, tighter when aimed" };
+  const AT_BRAKE = { id: "brake", name: "Muzzle brake", need: 55, fx: { recoil: 0.8, sound: 1.2 }, text: "20% less recoil, louder" };
   const AT_GRIPS = [
-    { id: "vgrip", name: "Vertical grip", need: 45, fx: { recoil: 0.85 }, text: "15% less recoil" },
-    { id: "agrip", name: "Angled grip", need: 100, fx: { ads: 0.85, spread: 0.92 }, text: "Faster to aim, a little tighter from the hip" },
-    { id: "extmag", name: "Extended magazine", need: 60, fx: { mag: 1.5, reload: 1.15 }, text: "50% more rounds, slower reload" },
-    { id: "fastmag", name: "Fast magazine", need: 120, fx: { reload: 0.8 }, text: "Reloads 20% faster" },
+    { id: "vgrip", name: "Vertical grip", need: 30, fx: { recoil: 0.85 }, text: "15% less recoil" },
+    { id: "agrip", name: "Angled grip", need: 65, fx: { ads: 0.85, spread: 0.92 }, text: "Faster to aim, a little tighter from the hip" },
+    { id: "extmag", name: "Extended magazine", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "50% more rounds, slower reload" },
+    { id: "fastmag", name: "Fast magazine", need: 80, fx: { reload: 0.8 }, text: "Reloads 20% faster" },
   ];
   const ATTACHMENTS = {
     rifle: {   // the sniper
-      optic: [{ id: "scope-low", name: "Low-zoom scope", need: 15, fx: { ads: 0.8, scopeFov: 1.4 }, text: "Scopes in 20% faster, a wider view (a quickscope's friend)" },
-        { id: "scope-high", name: "High-zoom scope", need: 60, fx: { ads: 1.25, scopeFov: 0.65 }, text: "A much closer view, but slower to scope in" }],
+      optic: [{ id: "scope-low", name: "Low-zoom scope", need: 10, fx: { ads: 0.8, scopeFov: 1.4 }, text: "Scopes in 20% faster, a wider view (a quickscope's friend)" },
+        { id: "scope-high", name: "High-zoom scope", need: 40, fx: { ads: 1.25, scopeFov: 0.65 }, text: "A much closer view, but slower to scope in" }],
       muzzle: [SUPPRESSOR, AT_BRAKE],
-      stock: [{ id: "stock-light", name: "Light stock", need: 45, fx: { ads: 0.9, recoil: 1.08 }, text: "Aims 10% faster, a little more kick" },
-        { id: "stock-heavy", name: "Heavy stock", need: 100, fx: { recoil: 0.85, ads: 1.1 }, text: "Steadier, slower to aim" }],
+      stock: [{ id: "stock-light", name: "Light stock", need: 30, fx: { ads: 0.9, recoil: 1.08 }, text: "Aims 10% faster, a little more kick" },
+        { id: "stock-heavy", name: "Heavy stock", need: 65, fx: { recoil: 0.85, ads: 1.1 }, text: "Steadier, slower to aim" }],
     },
-    ar: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 80, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
-    ak: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 80, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
+    ar: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
+    ak: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
     shotgun: {
-      barrel: [{ id: "choke", name: "Choke", need: 20, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
-        { id: "wide", name: "Wide barrel", need: 60, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" }],
-      mag: [{ id: "tube", name: "Extended tube", need: 50, fx: { mag: 1.34, reload: 1.1 }, text: "Two more shells, slower to reload" }],
+      barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
+        { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" }],
+      mag: [{ id: "tube", name: "Extended tube", need: 35, fx: { mag: 1.34, reload: 1.1 }, text: "Two more shells, slower to reload" }],
     },
     pistol: {   // the Deagle
-      muzzle: [{ id: "comp", name: "Compensator", need: 20, fx: { recoil: 0.8 }, text: "20% less recoil" }, SUPPRESSOR],
-      sights: [{ id: "laser", name: "Laser", need: 40, fx: { spread: 0.75, spreadAds: 0.9 }, text: "A tighter spread from the hip" }],
-      mag: [{ id: "extmag", name: "Extended magazine", need: 70, fx: { mag: 1.3, reload: 1.1 }, text: "Two more rounds, slower reload" }],
+      muzzle: [{ id: "comp", name: "Compensator", need: 15, fx: { recoil: 0.8 }, text: "20% less recoil" }, SUPPRESSOR],
+      sights: [{ id: "laser", name: "Laser", need: 25, fx: { spread: 0.75, spreadAds: 0.9 }, text: "A tighter spread from the hip" }],
+      mag: [{ id: "extmag", name: "Extended magazine", need: 45, fx: { mag: 1.3, reload: 1.1 }, text: "Two more rounds, slower reload" }],
     },
   };
   // what a fitted attachment looks like, built from where each gun's parts really are (see AT_MOUNT)
@@ -3479,7 +3479,7 @@
     WEAPON_BASE[id] = { mag: w.magSize, spread: w.spread, spreadAds: w.spreadAds, recoil: w.recoil, kick: w.kick, flash: w.flashScale, reload: Object.assign({}, w.reload), adsY: w.adsPos.y };
   }
   const baseMag = (id) => (WEAPON_BASE[id] ? WEAPON_BASE[id].mag : WEAPONS[id].magSize);
-  const UNLOCK_ALL_ATTACHMENTS = true;   // TEMPORARY, while Ethan tests them: every attachment is open. Set to false to bring the hit-count unlocks back.
+  const UNLOCK_ALL_ATTACHMENTS = false;   // true opens every attachment (for testing); false unlocks each by hits landed with its gun
   const attachUnlocked = (gun, opt) => UNLOCK_ALL_ATTACHMENTS || ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= opt.need;
   function chosenAttachments(gun) {   // what is fitted (an option that is still locked, or unknown, is ignored)
     const out = [], fitted = (SETTINGS.attach && SETTINGS.attach[gun]) || {};
