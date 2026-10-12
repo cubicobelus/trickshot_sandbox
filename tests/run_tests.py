@@ -845,6 +845,37 @@ def test_sound_lab(browser, base):
     page.close()
 
 
+def test_problem_report(browser, base):
+    """The version shows in Settings, Copy debug info builds a readable report, and an error the game throws shows a bar and goes in the report."""
+    page, errors = open_page(browser, base + "/index.html")
+    click_tab(page, "other")
+    about = page.inner_text("#about-line")
+    check("Settings shows the game version", about.startswith("Trickshot Sandbox v20") and "three.js r" in about, about)
+    check("no error bar before anything goes wrong", page.is_hidden("#problem-bar"))
+    page.click("#debug-copy")
+    page.wait_for_timeout(200)
+    report = page.input_value("#debug-info")
+    check("Copy debug info fills the box with the version, browser, graphics and map", "Trickshot Sandbox v20" in report and "Browser:" in report and "Graphics:" in report and "Map:" in report and "Errors: none" in report, report[:120])
+    check("the report has nothing personal in it (no name, no saved data)", "tsb-" not in report and "localStorage" not in report)
+    page.evaluate("window.__boom = () => { throw new Error('boom test'); }; setTimeout(window.__boom, 0)")   # (one place, so repeats count together)
+    page.wait_for_timeout(700)
+    shown = page.is_visible("#problem-bar")
+    msg = page.inner_text("#problem-msg") if shown else ""
+    check("an error the game throws shows the bar with its message", shown and "boom test" in msg and "Copy debug info" in msg, msg)
+    page.evaluate("for (let i = 0; i < 3; i++) setTimeout(window.__boom, 0)")
+    page.wait_for_timeout(1500)
+    msg2 = page.inner_text("#problem-msg")
+    check("the same error repeating is counted, not shown again and again", "(4 errors)" in msg2, msg2)
+    page.click("#debug-copy")
+    page.wait_for_timeout(200)
+    report2 = page.input_value("#debug-info")
+    check("the report lists the error and how often it happened", "boom test" in report2 and "x4" in report2 and "Errors: none" not in report2, report2[-160:])
+    page.click("#problem-close")
+    check("the bar can be dismissed", page.is_hidden("#problem-bar"))
+    check("only the errors this test threw were raised", errors and all("boom test" in e for e in errors), "; ".join(errors[:3]))
+    page.close()
+
+
 def debug_site():
     """A throw-away copy of the game with a window.__dbg hook added just before the last `animate();`, so a test can look at the
     level data from inside. The repo itself is never touched. Returns (server, base, folder); delete the folder when done."""
@@ -959,10 +990,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

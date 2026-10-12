@@ -10,6 +10,33 @@
     }
   } catch (e) { /* storage blocked: nothing to wipe */ }
 
+  // ---- problems: anything the game throws is kept (the last few, with how often) and shown in a small bar, so a bug never passes
+  // silently and a player can copy what happened. A repeating error (one thrown every frame) is counted, not shown again and again. ----
+  const GAME_VERSION = "2026.10.12";   // bump with each push, so a report says which build it came from
+  const problems = [];   // newest last: { msg, where, n }
+  let problemTimer = 0, problemDismissed = false;
+  function renderProblems() {
+    problemTimer = 0;
+    const bar = document.getElementById("problem-bar");
+    if (!bar || !problems.length || problemDismissed) return;
+    const last = problems[problems.length - 1], total = problems.reduce((a, p) => a + p.n, 0);
+    document.getElementById("problem-msg").textContent = "Something went wrong: " + last.msg.slice(0, 140) + (total > 1 ? " (" + total + " errors)" : "") +
+      ". Esc, then Settings > Gameplay > Copy debug info.";
+    bar.hidden = false;
+  }
+  function noteProblem(msg, where) {
+    msg = String(msg || "unknown error").slice(0, 300);
+    const known = problems.find((p) => p.msg === msg && p.where === where);
+    if (known) known.n++;
+    else { problems.push({ msg, where, n: 1 }); if (problems.length > 5) problems.shift(); problemDismissed = false; }
+    if (!problemTimer) problemTimer = setTimeout(renderProblems, known ? 1000 : 150);   // (a burst is drawn once, not every frame)
+  }
+  window.addEventListener("error", (e) => {
+    if (!e.message) return;   // (a failed image or script load is not an error event on the window)
+    noteProblem(e.message, (e.filename || "").split("/").pop() + ":" + (e.lineno || 0) + ":" + (e.colno || 0));
+  });
+  window.addEventListener("unhandledrejection", (e) => noteProblem("Unhandled promise: " + ((e.reason && e.reason.message) || e.reason), ""));
+
   // "Import from a file" does the same: it leaves the checked data in sessionStorage and reloads, and it is written here.
   try {
     const pending = sessionStorage.getItem("tsb-import");
@@ -365,13 +392,13 @@
   }
   // the optional frame counter: frames per second, frame time, and the level in use
   const fpsEl = document.getElementById("fps");
-  let fpsTime = 0, fpsFrames = 0;
+  let fpsTime = 0, fpsFrames = 0, lastFps = 0;
   function updateFps(realDt) {
     fpsEl.hidden = !SETTINGS.showFps;
-    if (!SETTINGS.showFps) return;
-    fpsTime += realDt; fpsFrames++;
+    fpsTime += realDt; fpsFrames++;   // (kept even with the counter hidden: the debug info quotes it)
     if (fpsTime < 0.5) return;
-    fpsEl.textContent = Math.round(fpsFrames / fpsTime) + " fps · " + (fpsTime / fpsFrames * 1000).toFixed(1) + " ms · " +
+    lastFps = Math.round(fpsFrames / fpsTime);
+    if (SETTINGS.showFps) fpsEl.textContent = lastFps + " fps · " + (fpsTime / fpsFrames * 1000).toFixed(1) + " ms · " +
       gfxLevel + (SETTINGS.quality === "auto" ? " (auto)" : "");
     fpsTime = 0; fpsFrames = 0;
   }
@@ -5477,6 +5504,39 @@
     }
     return Object.keys(clean).length ? clean : "The file has none of the game's saved data in it.";
   }
+  // ---- About and help: the version, and a text a player can copy and send when something looks wrong ----
+  const aboutLine = document.getElementById("about-line");
+  if (aboutLine) aboutLine.textContent = "Trickshot Sandbox v" + GAME_VERSION + " \u00b7 three.js r" + THREE.REVISION;
+  function debugInfo() {
+    let storage = "yes";
+    try { localStorage.setItem("tsb-probe", "1"); localStorage.removeItem("tsb-probe"); } catch (e) { storage = "blocked"; }
+    const lines = [
+      "Trickshot Sandbox v" + GAME_VERSION + " (three.js r" + THREE.REVISION + ")",
+      "Page: " + location.origin + location.pathname,
+      "Browser: " + navigator.userAgent,
+      "Window: " + window.innerWidth + "x" + window.innerHeight + " at " + (window.devicePixelRatio || 1) + "x",
+      "Graphics: " + SETTINGS.quality + (SETTINGS.quality === "auto" ? " (now " + gfxLevel + ")" : "") + ", about " + lastFps + " fps, field of view " + SETTINGS.fov,
+      "Map: " + (currentMap ? currentMap.id : "?") + ", " + (net.active ? modeName() : "single player (" + SETTINGS.playMode + ")") + (net.practice ? " with " + net.botCount + " bots" : ""),
+      "Saving: " + storage + ", gamepad: " + (navigator.getGamepads && Array.from(navigator.getGamepads()).some(Boolean) ? "connected" : "none"),
+      "Errors: " + (problems.length ? "" : "none"),
+    ];
+    for (const p of problems) lines.push("  - " + p.msg + (p.where ? " (" + p.where + ")" : "") + (p.n > 1 ? " x" + p.n : ""));
+    return lines.join("\n");
+  }
+  function copyText(text, done) {
+    const fallback = () => { try { const t = document.getElementById("debug-info"); t.hidden = false; t.value = text; t.select(); done(document.execCommand && document.execCommand("copy")); } catch (e) { done(false); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done(true), fallback); else fallback();
+  }
+  document.getElementById("debug-copy").addEventListener("click", (e) => {
+    const text = debugInfo(), box = document.getElementById("debug-info"), btn = e.currentTarget;
+    box.value = text; box.hidden = false;
+    copyText(text, (ok) => { btn.textContent = ok ? "Copied" : "Copy it from the box"; setTimeout(() => { btn.textContent = "Copy debug info"; }, 2000); });
+  });
+  document.getElementById("problem-copy").addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    copyText(debugInfo(), (ok) => { btn.textContent = ok ? "Copied" : "Copy failed"; setTimeout(() => { btn.textContent = "Copy details"; }, 2000); });
+  });
+  document.getElementById("problem-close").addEventListener("click", () => { problemDismissed = true; document.getElementById("problem-bar").hidden = true; });
   document.getElementById("data-export").addEventListener("click", exportData);
   document.getElementById("data-import").addEventListener("click", () => document.getElementById("data-import-file").click());
   document.getElementById("data-import-file").addEventListener("change", async (e) => {

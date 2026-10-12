@@ -115,13 +115,22 @@ To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `g
 scoring, accuracy, the grapple) are in the `CFG` object at the top of `game.js`.
 
 **Tests:** they drive the real page in a headless browser and check the loadouts, weapon switching, the trickshot
-list, settings, controls, the grapple, the tutorial, a full Score Attack run and every sound in the sound lab.
+list, settings, controls, the grapple, the tutorial, a full Score Attack run, every map (that every jump pad, spawn, flag base,
+ladder and portal stands in the open and can be reached), and every sound in the sound lab.
 
 ```
 pip install playwright
 python -m playwright install chromium
-python tests/run_tests.py
+python tests/run_tests.py                  # everything (about half an hour)
+python tests/run_tests.py --quick          # the fast set, about 5 minutes
+python tests/run_tests.py --only bots,maps # just these (see --list)
 ```
+
+`--small` (also set by `--quick`) draws the test pages smaller, which is much faster; `TSB_VIEW=800x450` does the same.
+
+**Reports:** if the game hits an error it shows a small red bar, and **Settings > Gameplay > Copy debug info** copies the game
+version, browser, graphics level, map and mode and the last errors (nothing personal). Bump `GAME_VERSION` at the top of
+`game.js` when you push a change, so a report says which build it came from.
 
 </details>
 

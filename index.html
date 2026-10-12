@@ -530,11 +530,22 @@
         <p class="set-hint" id="data-import-note"></p>
         <button type="button" class="btn small danger" id="data-import-apply" hidden>Replace my data with this file</button>
         <button type="button" class="btn small danger" id="erase-all">Erase all data&hellip;</button>
+        <p class="set-hint" id="about-line"></p>
+        <button type="button" class="btn small" id="debug-copy">Copy debug info</button>
+        <p class="set-hint">If something looks broken, copy this and send it along: the game version, your browser, graphics level, map and mode, and the last errors. Nothing personal is in it.</p>
+        <textarea id="debug-info" rows="7" readonly hidden aria-label="Debug info"></textarea>
       </div>
 
       <button type="button" class="btn small" id="settings-reset">Reset settings (not controls)</button>
     </div>
   </div>
+</div>
+
+<!-- problems the game hits show here, above the menu and the HUD alike -->
+<div id="problem-bar" role="alert" hidden>
+  <span id="problem-msg"></span>
+  <button type="button" id="problem-copy">Copy details</button>
+  <button type="button" id="problem-close" aria-label="Dismiss">&times;</button>
 </div>
 
 <!-- three.js r128 (MIT), kept in lib/ so the game needs no outside server; it's the official cdnjs file,

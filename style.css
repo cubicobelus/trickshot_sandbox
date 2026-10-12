@@ -479,6 +479,15 @@
   #replay-note { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); background: rgba(15,15,20,0.85);
     border: 1px solid #ffd24a; color: #ffe9a8; padding: 6px 14px; border-radius: 6px; font-size: 13px; }
   #replay-note[hidden] { display: none; }
+  #problem-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 80; max-width: min(720px, calc(100vw - 32px));
+    display: flex; align-items: center; gap: 10px; background: rgba(40,12,12,0.94); border: 1px solid #ff5a4f; color: #ffd6d2;
+    padding: 8px 12px; border-radius: 8px; font-size: 12.5px; }
+  #problem-bar[hidden] { display: none; }
+  #problem-msg { overflow-wrap: anywhere; }
+  #problem-bar button { background: #2a1a1a; border: 1px solid #ff8f86; color: #ffd6d2; border-radius: 5px; padding: 3px 9px; cursor: pointer; font: inherit; }
+  #problem-bar button:hover { background: #4a2626; }
+  #debug-info { width: 100%; box-sizing: border-box; margin-top: 6px; background: #14141a; color: #cfd0d6; border: 1px solid #34343e; border-radius: 6px;
+    font: 11.5px/1.4 Consolas, monospace; padding: 6px 8px; resize: vertical; }
   .rp-rec { display: none; position: absolute; top: 16px; left: 50%; transform: translateX(-50%); color: #ff5a4f; font-weight: bold; font-size: 13px; }
   #replay.recording .rp-rec { display: block; }
   #replay.recording .rp-bar { display: none; }   /* the bar isn't in the video anyway; hide it while recording */
