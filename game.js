@@ -2089,6 +2089,12 @@
     if (!m) m = magDropPool.reduce((a, b) => (a.age > b.age ? a : b));   // recycle the oldest
     m.active = true; m.age = 0; m.bounces = 0; m.resting = false;
     m.mesh.geometry = w.dropGeo || magMeshNow.geometry;   // a curved mag built from parts drops as one block
+    while (m.mesh.children.length) m.mesh.remove(m.mesh.children[0]);   // the last drop's extra parts (shared geometry: nothing to free)
+    if (w.magAt) {   // an extended magazine or pull tab falls with it
+      const extra = w.magAt.clone();
+      if (w.dropGeo) { extra.position.set(0, -w.dropGeo.parameters.height / 2, 0); extra.rotation.set(0, 0, 0); }   // under the single block
+      m.mesh.add(extra);
+    }
     magMeshNow.getWorldPosition(m.mesh.position);
     magMeshNow.getWorldQuaternion(_magDropQuat);
     m.mesh.quaternion.copy(_magDropQuat);
