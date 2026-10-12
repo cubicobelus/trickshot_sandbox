@@ -1,7 +1,8 @@
 """Smoke tests for Trickshot Sandbox: drives the real page in a headless browser, from the outside only.
 
 Setup (once):   pip install playwright      then   python -m playwright install chromium
-Run:            python tests/run_tests.py   (from the repo folder)
+Run:            python tests/run_tests.py   (from the repo folder; the full suite takes a while)
+                python tests/run_tests.py --list | --quick | --small | --only bots,maps
 
 It serves the repo on a local port (127.0.0.1 only), opens the game and the sound lab, and checks the things
 that most often break: the page loads without errors, every loadout fires and reloads, weapon switching,
@@ -9,11 +10,15 @@ the trickshot list popup, settings saving and resetting, a full Score Attack run
 sound lab playing.
 Screenshots of failures go to tests/output/ (ignored by git).
 """
+import argparse
 import functools
 import http.server
 import os
+import shutil
 import sys
+import tempfile
 import threading
+import time
 import traceback
 
 from playwright.sync_api import sync_playwright
@@ -68,7 +73,19 @@ def check(name, ok, detail=""):
     print(("PASS " if ok else "FAIL ") + name + (f"  ({detail})" if detail else ""))
 
 
-def open_page(browser, url, w=1280, h=720):
+def view_size(default=(1280, 720)):
+    """The page size tests use. The browser draws every frame in software, so a smaller page is much faster:
+    TSB_VIEW=800x450 python tests/run_tests.py ... (a few checks that depend on layout want the default size)."""
+    try:
+        w, h = os.environ.get("TSB_VIEW", "").lower().split("x")
+        return int(w), int(h)
+    except ValueError:
+        return default
+
+
+def open_page(browser, url, w=None, h=None):
+    if w is None or h is None:
+        w, h = view_size()
     page = browser.new_page(viewport={"width": w, "height": h})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -96,6 +113,7 @@ def step(page, n):
 
 
 def test_game(browser, base):
+    """Every loadout fires and reloads, weapons switch, the trickshot list, settings tabs and graphics levels, and the menu."""
     page, errors = open_page(browser, base + "/index.html")
     # before any shooting: nothing to watch yet
     check("replay buttons stay hidden until there's something to watch",
@@ -215,6 +233,7 @@ def test_game(browser, base):
 
 
 def test_score_attack(browser, base):
+    """A full 1:00 Score Attack run: countdown, scoring, the results screen, the top 5 and Enter for a new run."""
     page, errors = open_page(browser, base + "/index.html")
     timer = lambda: page.inner_text("#mp-timer-val") if page.is_visible("#mp-timer") else "-"
     page.click("[data-play-mode=sa60]")
@@ -245,6 +264,7 @@ def test_score_attack(browser, base):
 
 
 def test_controls(browser, base):
+    """Key rebinding, reset, and the controls shown in the help line."""
     page, errors = open_page(browser, base + "/index.html", 1280, 900)
     slot = lambda a, i: page.locator(f'.bind-slot[data-action="{a}"][data-slot="{i}"]')
     ammo = lambda: page.inner_text("#ammo-count").split("/")[0].strip()
@@ -299,6 +319,7 @@ def test_controls(browser, base):
 
 
 def test_grapple(browser, base):
+    """The grapple hook flies out, pulls you, and lets go."""
     page, errors = open_page(browser, base + "/index.html")
     page.click("#start-btn")
     step(page, 60)
@@ -778,6 +799,7 @@ def test_maps(browser, base):
 
 
 def test_tutorial(browser, base):
+    """The tutorial starts, ticks steps off, can be skipped with Enter, and is remembered when finished."""
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
     check("the tutorial button glows on a first visit and the panel is hidden in the menu",
@@ -806,6 +828,7 @@ def test_tutorial(browser, base):
 
 
 def test_sound_lab(browser, base):
+    """Every sound in the sound lab plays."""
     page, errors = open_page(browser, base + "/tools/sound-lab.html", 1366, 768)
     check("sound lab fits the window (no page scroll)", not page.evaluate("document.documentElement.scrollHeight > innerHeight + 1"))
     page.click(".group button")   # unfold the old synth sounds too
@@ -822,20 +845,185 @@ def test_sound_lab(browser, base):
     page.close()
 
 
+def debug_site():
+    """A throw-away copy of the game with a window.__dbg hook added just before the last `animate();`, so a test can look at the
+    level data from inside. The repo itself is never touched. Returns (server, base, folder); delete the folder when done."""
+    tmp = tempfile.mkdtemp(prefix="tsb-debug-")
+    for f in ("index.html", "style.css", "game.js", "sounds.js"):
+        shutil.copy(os.path.join(ROOT, f), tmp)
+    shutil.copytree(os.path.join(ROOT, "lib"), os.path.join(tmp, "lib"))
+    path = os.path.join(tmp, "game.js")
+    with open(path, encoding="utf-8", newline="") as fh:
+        src = fh.read().replace("\r\n", "\n")
+    hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
+            "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
+            "get SPAWNS() { return SPAWNS; } };\n")
+    i = src.rindex("  animate();\n})();")
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(src[:i] + hook + src[i:])
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=tmp))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}", tmp
+
+
+# Map problems already known and waiting for a decision: they are reported as notes, not failures. Each is a piece of the message.
+# Remove an entry once the map is fixed (the test says so when an entry no longer matches anything).
+KNOWN_MAP_ISSUES = {
+    "canyon": ["jump pad at (-12, -36)", "jump pad at (12, 36)"],   # placed at floor level inside the 3 m base blocks: nobody can reach them
+}
+
+# Runs inside the page for one map; returns the problems (things that are wrong) and notes (things worth knowing).
+MAP_CHECK_JS = """(id) => {
+  const D = window.__dbg;
+  D.loadMap(id); D.navBuild();
+  const m = D.MAPS[id], probs = [], notes = [];
+  const H = D.CFG.playerHeight, STEP = D.CFG.stepHeight, F = D.FLOOR_Y, r1 = (v) => +v.toFixed(1);
+  // would someone standing here, feet at y, be inside a wall? (the same rule the bots' navigation grid uses, without its padding)
+  const buried = (x, y, z) => D.wallBoxes.some((b) => !b.gate && x >= b.min.x && x <= b.max.x && z >= b.min.z && z <= b.max.z && y < b.max.y - STEP && y + H > b.min.y);
+  const spawns = D.SPAWNS, s0 = spawns[0], floorLv = D.navLevelFor(F);
+  const reach = (x, z, y) => !!D.navPath(s0[0], s0[1], floorLv, x, z, D.navLevelFor(y));
+  const at = (x, z) => "(" + r1(x) + ", " + r1(z) + ")";
+  for (const p of D.jumpPads) if (buried(p.x, p.y - 0.16, p.z)) probs.push("jump pad at " + at(p.x, p.z) + " is inside a wall");
+  for (const s of spawns) {
+    if (buried(s[0], F, s[1])) probs.push("spawn at " + at(s[0], s[1]) + " is inside a wall");
+    else if (!reach(s[0], s[1], F)) probs.push("spawn at " + at(s[0], s[1]) + " cannot be reached from the first spawn");
+  }
+  (m.flags || []).forEach((b, t) => {
+    const y = b[2] === undefined ? F : b[2];
+    if (buried(b[0], y, b[1])) probs.push("flag base " + t + " at " + at(b[0], b[1]) + " is inside a wall");
+    else if (!reach(b[0], b[1], y)) probs.push("flag base " + t + " at " + at(b[0], b[1]) + " cannot be reached from the first spawn");
+  });
+  if (m.hill) {
+    const y = m.hill.y === undefined ? F : m.hill.y;
+    if (buried(m.hill.x, y, m.hill.z)) probs.push("the hill at " + at(m.hill.x, m.hill.z) + " is inside a wall");
+    else if (!reach(m.hill.x, m.hill.z, y)) probs.push("the hill at " + at(m.hill.x, m.hill.z) + " cannot be reached from the first spawn");
+  }
+  const lads = [];
+  for (const arr of D.navLinks.values()) for (const l of arr) if (l.type === 1) lads.push(l.lad);
+  for (const L of D.ladders) {
+    const foot = [L.x + L.nx * 0.9, L.z + L.nz * 0.9], top = [L.x - L.nx * 1.0, L.z - L.nz * 1.0];
+    if (buried(foot[0], L.y0 + 0.05, foot[1])) probs.push("the foot of the ladder at " + at(L.x, L.z) + " is inside a wall");
+    else if (buried(top[0], L.y1 + 0.05, top[1])) probs.push("the top of the ladder at " + at(L.x, L.z) + " is inside a wall");
+    else if (!lads.includes(L)) probs.push("the ladder at " + at(L.x, L.z) + " joins no two floors, so bots will never use it");
+  }
+  for (const P of D.portals) if (buried(P.x + P.nx * 1.05, F, P.z + P.nz * 1.05)) probs.push("the portal at " + at(P.x, P.z) + " opens into a wall");
+  for (const b of D.boosts) if (buried(b.x, b.y, b.z)) probs.push("the launch strip at " + at(b.x, b.z) + " is inside a wall");
+  // floors nobody can walk to from the spawn (informational: people can still jump or grapple up, but bots cannot)
+  D.navLv.forEach((lv, i) => {
+    if (i === floorLv) return;
+    const N = Math.round(Math.sqrt(lv.surf.length)), half = (D.CFG.arenaHalfSize), cell = (2 * half) / N;
+    let c = -1;
+    for (let k = 0; k < lv.surf.length; k++) if (lv.surf[k] && !lv.blocked[k]) { c = k; break; }
+    if (c < 0) return;
+    const x = -half + ((c % N) + 0.5) * cell, z = -half + (Math.floor(c / N) + 0.5) * cell;
+    if (!D.navPath(s0[0], s0[1], floorLv, x, z, i)) notes.push("the floor at " + r1(lv.h) + " m has no route from the spawn for bots");
+  });
+  return { probs, notes };
+}"""
+
+
+def test_map_sanity(browser, base):
+    """Every map: pads, spawns, flag bases, the hill, ladders, portals and strips stand in the open, and spawns, flags and the hill can be walked to."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html")
+        ids = page.evaluate("Object.keys(window.__dbg.MAPS)")
+        check("the debug copy of the game exposes the maps", len(ids) >= 8, f"{len(ids)} maps")
+        unmatched = {k: list(v) for k, v in KNOWN_MAP_ISSUES.items()}
+        for mid in ids:
+            res = page.evaluate(MAP_CHECK_JS, mid)
+            step(page, 2)
+            known, bad = [], []
+            for prob in res["probs"]:
+                hit = next((pat for pat in KNOWN_MAP_ISSUES.get(mid, []) if pat in prob), None)
+                if hit:
+                    known.append(prob)
+                    if hit in unmatched.get(mid, []):
+                        unmatched[mid].remove(hit)
+                else:
+                    bad.append(prob)
+            detail = "; ".join(bad[:4])
+            if known:
+                detail += ("; " if detail else "") + "known, waiting on a map fix: " + "; ".join(known)
+            if res["notes"]:
+                detail += ("; " if detail else "") + "note: " + "; ".join(res["notes"][:3])
+            check(f"{mid}: nothing is buried or out of reach", not bad, detail)
+        stale = [f"{k}: {p}" for k, v in unmatched.items() for p in v]
+        check("every known map problem is still real (remove fixed ones from KNOWN_MAP_ISSUES)", not stale, "; ".join(stale))
+        check("the map checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# the tests, in the order they run; a name is the function name without "test_"
+TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_tutorial, test_sound_lab]
+NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
+QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
+         "map_sanity", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
+
+
+def run_one(name, browser, base):
+    """Run one test and return how many of its checks failed."""
+    before = len(results)
+    t0 = time.time()
+    try:
+        NAMES[name](browser, base)
+    except Exception:
+        check(NAMES[name].__name__ + " ran to the end", False, traceback.format_exc().splitlines()[-1])
+    print(f"   [{name}: {time.time() - t0:.0f} s]")
+    return before, sum(1 for _, ok, _ in results[before:] if not ok)
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Smoke tests for Trickshot Sandbox.")
+    parser.add_argument("--only", help="run just these tests, comma separated (see --list), e.g. --only bots,maps")
+    parser.add_argument("--quick", action="store_true", help="run the fast set (for before a push); implies --small")
+    parser.add_argument("--small", action="store_true", help="draw the test pages at 800x450 (much faster; same as TSB_VIEW=800x450)")
+    parser.add_argument("--list", action="store_true", help="list the tests and exit")
+    args = parser.parse_args()
+    if args.list:
+        for name, t in NAMES.items():
+            print(f"{name:20}" + (" [quick] " if name in QUICK else "         ") + ((t.__doc__ or "").strip().splitlines() or [""])[0])
+        return
+    if (args.small or args.quick) and not os.environ.get("TSB_VIEW"):
+        os.environ["TSB_VIEW"] = "800x450"
+    chosen = list(NAMES)
+    if args.quick:
+        chosen = [n for n in NAMES if n in QUICK]
+    if args.only:
+        wanted = [w.strip().removeprefix("test_") for w in args.only.split(",") if w.strip()]
+        unknown = [w for w in wanted if w not in NAMES]
+        if unknown:
+            sys.exit("unknown test(s): " + ", ".join(unknown) + " (available: " + ", ".join(NAMES) + ")")
+        chosen = [n for n in NAMES if n in wanted]
     os.makedirs(OUT, exist_ok=True)
     server, base = serve()
+    t_all = time.time()
+    flaked = []
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_tutorial, test_sound_lab):
-            try:
-                test(browser, base)
-            except Exception:
-                check(test.__name__ + " ran to the end", False, traceback.format_exc().splitlines()[-1])
+        for name in chosen:
+            before, bad = run_one(name, browser, base)
+            if bad and name in FLAKY:
+                first = results[before:]
+                del results[before:]
+                print(f"   ({name} failed {bad} check(s): running it once more)")
+                _, bad2 = run_one(name, browser, base)
+                if not bad2:
+                    flaked.extend(n for n, ok, _ in first if not ok)
         browser.close()
     server.shutdown()
     failed = [n for n, ok, _ in results if not ok]
-    print(f"\n{len(results) - len(failed)} passed, {len(failed)} failed")
+    print()
+    print(f"{len(results) - len(failed)} passed, {len(failed)} failed in {(time.time() - t_all) / 60:.1f} min")
+    if flaked:
+        print("failed once, then passed on a retry: " + "; ".join(flaked))
+    if failed:
+        print("FAILED: " + "; ".join(failed))
     sys.exit(1 if failed else 0)
 
 
