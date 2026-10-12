@@ -468,6 +468,7 @@ def test_scoring_extras(browser, base):
     text = page.evaluate("document.getElementById('glossary').textContent.toUpperCase()")
     missing = [k for k in ("PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "NEW") if k not in text]
     check("the trickshot list includes the portal, strip, platform, zero-g, chain and new-trick bonuses", not missing, ", ".join(missing))
+    check("a no-scope is a sniper hit from the hip (the sniper has iron sights unless a scope is fitted)", "SNIPER, FIRED FROM THE HIP" in text)
     page.keyboard.press("Escape")
     # a saved best shot (made up here) is enough for the card
     clip = {"v": 1, "map": "summit", "snap": [], "hitT": 1, "meta": {"points": 1234, "mult": 12.3, "tags": ["AIR x1.40", "SLIDING x1.30", "LONG SHOT x1.55"],
@@ -543,6 +544,10 @@ def test_play_setup(browser, base):
     active_map = page.evaluate("document.querySelector('#ps-maps button.active').dataset.map")
     off = page.eval_on_selector_all("#ps-maps button.off", "els => els.map(e => e.dataset.map)")
     check("King of the Hill picks the hill map and switches the others off", active_map == "summit" and "arena" in off and "summit" not in off, f"{active_map} / {len(off)} off")
+    page.click('#ps-modes .ps-card[data-mode="ctf"]')
+    off = page.eval_on_selector_all("#ps-maps button.off", "els => els.map(e => e.dataset.map)")
+    check("capture the flag switches off the maps without flag bases (Moonbase, Rooftops)", {"moonbase", "rooftops"} <= set(off) and "courtyard" not in off and "canyon" not in off, ", ".join(off))
+    page.click('#ps-modes .ps-card[data-mode="koth"]')
     page.evaluate("document.getElementById('ps-rules').open = true")
     page.select_option("#ps-bots", "4")
     page.select_option("#ps-level", "easy")
