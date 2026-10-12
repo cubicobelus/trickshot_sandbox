@@ -37,7 +37,7 @@ score as much as you can; Esc pauses the clock, and your top 5 runs are kept in 
 
 **Stats:** the Stats button in the menu shows your lifetime numbers: play time, accuracy, records (longest
 shot, highest multiplier, top speed...), each gun, targets by colour, movement, and how often you've landed
-each trick. **Achievements** (also in the menu) are goals to chase, from your first hit to a 720 no-scope
+each trick. Every map keeps its own records, on your own and in practice: your best trickshot and longest streak there (a new best on a map shows ★ MAP BEST). Hold L in a game to see them next to that map's Score Attack top 5, or open Stats for the list by map. **Achievements** (also in the menu) are goals to chase, from your first hit to a 720 no-scope
 or a 100x shot, plus ones for the map features (portals, launch strips, lifts, ladders, the Summit hilltop) and King of the Hill. Both are kept in your browser. **Settings > Gameplay** can also **export your data** to a file and import it back (to move browsers or keep a backup), and **Settings > Accessibility** has Reduce motion, a high-contrast HUD, a HUD size slider and arrows that show where other players' shots come from; **Settings > View > Colorblind-friendly colours** recolours the targets, the red team (it turns orange) and the hill ring. **Settings > Gameplay > Erase all data** wipes everything
 the game has saved and starts you over.
 

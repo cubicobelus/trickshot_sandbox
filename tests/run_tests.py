@@ -531,6 +531,28 @@ def test_access_and_backup(browser, base):
     page.close()
 
 
+def test_map_records(browser, base):
+    """Each map keeps its own best trickshot and longest streak: they load, show in Stats, and a bad entry is ignored."""
+    page, errors = open_page(browser, base + "/index.html")
+    rec = {"canyon": {"shot": {"points": 4321, "mult": 7.5, "tags": ["AIR"], "pens": [], "dist": 60}, "streak": 9},
+           "nowhere": {"shot": {"points": 99999, "mult": 9, "tags": [], "pens": []}, "streak": 50},
+           "summit": {"shot": {"points": "lots", "mult": 2, "tags": []}, "streak": 4}}
+    page.evaluate("(r) => localStorage.setItem('tsb-map-records', JSON.stringify(r))", rec)
+    page.reload()
+    page.wait_for_timeout(300)
+    page.click("#stats-open")
+    page.wait_for_timeout(150)
+    text = page.evaluate("document.getElementById('stats-list').textContent")
+    check("Stats lists the records by map", "Records by map" in text and "Canyon" in text and ("4,321" in text or "4321" in text) and "longest streak 9" in text, text[:200])
+    check("a record for a map that doesn't exist is ignored", "99,999" not in text and "99999" not in text and "nowhere" not in text.lower())
+    check("a record with a bad number keeps only what is valid (Summit: the streak, no shot)", "longest streak 4" in text)
+    page.keyboard.press("Escape")
+    exported = page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('tsb-')).includes('tsb-map-records')")
+    check("the map records are saved with the rest of the game's data", exported)
+    check("map records run without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_play_setup(browser, base):
     """The multiplayer menu: three big choices, a setup window for practice and hosting, and the last choices remembered."""
     page, errors = open_page(browser, base + "/index.html")
@@ -805,7 +827,7 @@ def main():
     server, base = serve()
     with sync_playwright() as p:
         browser = launch(p)
-        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_play_setup, test_attachments, test_gamepad, test_maps, test_tutorial, test_sound_lab):
+        for test in (test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras, test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_tutorial, test_sound_lab):
             try:
                 test(browser, base)
             except Exception:

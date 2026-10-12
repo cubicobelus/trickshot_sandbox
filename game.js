@@ -5035,6 +5035,30 @@
   function saveBestShot() {
     try { localStorage.setItem(BEST_KEY, JSON.stringify(bestShot)); } catch (e) { /* ignore */ }
   }
+  // personal records for each map: the best trickshot and the longest streak you have had there. Only on your own and in practice
+  // (a shared room has other people's hits in it). A map that no longer exists is dropped when it loads.
+  const MAP_REC_KEY = "tsb-map-records";
+  let mapRecs = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(MAP_REC_KEY));
+    const strs = (a) => (Array.isArray(a) ? a.filter((t) => typeof t === "string").slice(0, 12).map((t) => t.slice(0, 40)) : []);
+    if (raw && typeof raw === "object") {
+      for (const id of Object.keys(raw)) {
+        const r = raw[id], sh = r && r.shot;
+        if (!MAPS[id] || !r || typeof r !== "object") continue;
+        mapRecs[id] = {
+          shot: sh && Number.isFinite(sh.points) && sh.points > 0 && Number.isFinite(sh.mult)
+            ? { points: sh.points, mult: sh.mult, tags: strs(sh.tags), pens: strs(sh.pens), dist: Number.isFinite(sh.dist) ? sh.dist : undefined } : null,
+          streak: Number.isFinite(r.streak) && r.streak > 0 ? Math.floor(r.streak) : 0,
+        };
+      }
+    }
+  } catch (e) { /* storage blocked or empty */ }
+  function saveMapRecs() {
+    try { localStorage.setItem(MAP_REC_KEY, JSON.stringify(mapRecs)); } catch (e) { /* ignore */ }
+  }
+  const mapRecsOn = () => !!currentMap && (!net.active || net.practice);
+  const mapRecFor = (id) => mapRecs[id] || (mapRecs[id] = { shot: null, streak: 0 });
   function showBestShot(isNew) {
     bestEl.hidden = bestShot.points <= 0;
     document.getElementById("best-val").textContent = bestShot.points;
@@ -5422,7 +5446,7 @@
   document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
   // Back up and restore: everything the game keeps in this browser as one file. An imported file is checked key by key and
   // value by value before it replaces anything (and the game's own loaders check again when it starts).
-  const DATA_JSON_KEYS = ["tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-score-attack"];
+  const DATA_JSON_KEYS = ["tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-score-attack", "tsb-map-records"];
   const DATA_KEYS = DATA_JSON_KEYS.concat(["tsb-tutorial", "tsb-name", "tsb-settings-seen"]);
   const importNoteEl = document.getElementById("data-import-note"), importApplyEl = document.getElementById("data-import-apply");
   let importClean = null;
@@ -5500,12 +5524,24 @@
     scoreEl.textContent = score;
     streak++;
     streakEl.textContent = streak;
+    let mapBest = false;   // beat an earlier best on this map (the first shot on a map is not announced)
+    if (mapRecsOn()) {
+      const mr = mapRecFor(currentMap.id);
+      let changed = false;
+      if (streak > mr.streak) { mr.streak = streak; changed = true; }
+      if (pointsGained > (mr.shot ? mr.shot.points : 0)) {
+        mapBest = !!mr.shot;
+        mr.shot = { points: pointsGained, mult: res.mult, tags: res.tags.slice(), pens: (res.pens || []).slice(), dist: res.dist };
+        changed = true;
+      }
+      if (changed) saveMapRecs();
+    }
 
     showBonusTags(res.mult, res.tags, res.pens || [], res.dist);
     flashCrosshair();
     hitStopTimer = SETTINGS.reduceMotion ? 0 : CFG.hitStopTime;
     if (!silent) playHitSound(Math.min(1 + (res.mult - 1) * 0.16, 2.4));
-    showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x");
+    showFeed("+" + pointsGained + "  " + res.mult.toFixed(2) + "x" + (mapBest ? "  \u2605 MAP BEST" : ""));
     statHit(res, pointsGained);
     tutHit(res);
     lastAward = { best: pointsGained > bestShot.points, runBest: false };
@@ -8415,7 +8451,11 @@
     mpEls.boardBody.innerHTML = tops.length
       ? tops.map((e, i) => "<tr><td>" + (i + 1) + "</td><td>" + esc(e.gun || "") + " \u00b7 " + esc(e.date || "") + "</td><td>" + Math.round(e.score).toLocaleString() + "</td><td>" + (e.hits || 0) + "</td><td>" + Math.round((e.acc || 0) * 100) + "%</td></tr>").join("")
       : '<tr><td></td><td>No Score Attack runs on this map yet</td><td></td><td></td><td></td></tr>';
-    mpEls.boardFoot.textContent = bestShot.points ? "Best trickshot: " + bestShot.points.toLocaleString() + " points (" + bestShot.mult.toFixed(2) + "x)" : "";
+    const mr = currentMap && mapRecs[currentMap.id], parts = [];
+    if (mr && mr.shot) parts.push("Best trickshot here: " + mr.shot.points.toLocaleString() + " points (" + mr.shot.mult.toFixed(2) + "x)");
+    if (mr && mr.streak) parts.push("longest streak here: " + mr.streak);
+    if (bestShot.points) parts.push("overall best: " + bestShot.points.toLocaleString() + " points (" + bestShot.mult.toFixed(2) + "x)");
+    mpEls.boardFoot.textContent = parts.join(" \u00b7 ");
   }
 
   function mpRefreshScoreboard() {
@@ -8565,6 +8605,10 @@
         ["Biggest combo", S.bestCombo ? S.bestCombo + " hits" : "-", "hits in one jump"],
         ["Top speed", S.topSpeed.toFixed(1) + " u/s", ""],
       ]],
+      ["Records by map", MAP_ORDER.concat(Object.keys(MAPS).filter((id) => !MAP_ORDER.includes(id))).filter((id) => mapRecs[id] && (mapRecs[id].shot || mapRecs[id].streak)).map((id) => {
+        const r = mapRecs[id];
+        return [MAPS[id].name, r.shot ? num(r.shot.points) + " pts" : "-", (r.shot ? r.shot.mult.toFixed(2) + "x" + (Number.isFinite(r.shot.dist) ? " - " + Math.round(r.shot.dist) + " m" : "") + ", " : "") + "longest streak " + r.streak];
+      })],
       ["Targets", [["red", "normal"], ["orange", "moving"], ["blue", "small"], ["purple", "tiny"]].map(([c, k]) =>
         [c[0].toUpperCase() + c.slice(1), num(S.kinds[k] || 0), ""])],
       ["Guns", GUNS.map((id) => {
