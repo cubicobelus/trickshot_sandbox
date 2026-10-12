@@ -9222,7 +9222,7 @@
   // Most are read from the stats counters (so they notice the real thing, however it happened).
   // ======================================================================
   const TUT_KEY = "tsb-tutorial";
-  const tut = { active: false, step: 0, base: null, look: 0, doneTimer: 0, lastHit: null };
+  const tut = { active: false, step: 0, base: null, look: 0, doneTimer: 0, lastHit: null, sawMap: false, sawBoard: false };
   const tutDelta = (k) => stats[k] - tut.base[k];
   const keyOf = (a) => bindLabel(a);
   const either = (a, b) => [a, b].map(keyOf).filter((l) => l !== "unbound").join(" or ") || "unbound";
@@ -9240,6 +9240,7 @@
     { title: "Wall bounce", text: () => "Run at a wall, jump, and press " + keyOf("jump") + " again as you reach it. Right on time is a perfect bounce.", done: () => tutDelta("wallBounces") >= 1 },
     { title: "Grapple", text: () => "Aim at a wall, the floor or a target and tap " + keyOf("grapple") + ". A hook flies out and zips you there. Tap " + keyOf("grapple") + " or " + keyOf("jump") + " to let go and keep your speed.", done: () => tutDelta("grapples") >= 1 },
     { title: "Knife", text: () => "Press " + either("knife", "swap") + " for the knife, then " + keyOf("aim") + " to throw it. " + either("gun", "swap") + " takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
+    { title: "Map and records", text: () => "Hold " + keyOf("map") + " to see the map and where you are, and " + keyOf("leaderboard") + " for your records on this map.", done: () => tut.sawMap && tut.sawBoard },
     { title: "Trickshot", text: "Put it together: land a 3x shot. Jump, spin, hit from far away...", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
   ];
   const tutEl = document.getElementById("tutorial");
@@ -9254,7 +9255,7 @@
   }
   function tutBegin() {
     tut.base = Object.assign({}, stats);
-    tut.look = 0; tut.lastHit = null;
+    tut.look = 0; tut.lastHit = null; tut.sawMap = false; tut.sawBoard = false;
     renderTutorial();
   }
   function endTutorial(finished) {
@@ -9279,11 +9280,11 @@
     if (tut.step >= TUT_STEPS.length) {
       document.getElementById("tut-count").textContent = "Tutorial complete";
       document.getElementById("tut-title").textContent = "You're ready";
-      document.getElementById("tut-text").textContent = "The Trickshot list in the menu has every trick and its value. Try Score Attack next.";
+      document.getElementById("tut-text").textContent = "Next: Score Attack is a 1:00 run for a high score. Attachments (in the menu) add scopes and more as you land hits.\nMultiplayer > Practice has bots and modes: hill, flag, gun game, battle royale.\nMoonbase has portals, Foundry launch strips, Rooftops lifts and ladders. The Trickshot list shows every trick.";
       document.getElementById("tut-fill").style.width = "100%";
       tutEl.classList.add("done");
       tut.active = false;
-      setTimeout(() => endTutorial(true), 6000);
+      setTimeout(() => endTutorial(true), 15000);   // (a longer card to read)
       try { localStorage.setItem(TUT_KEY, "done"); } catch (e) { /* ignore */ }
       refreshTutorialUI();
       return;
@@ -9293,6 +9294,7 @@
   // every frame of play
   function updateTutorial(dt) {
     if (!tut.active) return;
+    if (pointerLocked) { if (held("map")) tut.sawMap = true; if (held("leaderboard")) tut.sawBoard = true; }   // (the map and records step)
     if (tut.doneTimer > 0) {   // a short tick-off moment before the next step
       tut.doneTimer -= dt;
       if (tut.doneTimer <= 0) tutNext();

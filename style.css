@@ -446,7 +446,7 @@
   .tut-skip { text-transform: none; letter-spacing: 0; }
   .tut-title { font-size: 19px; font-weight: bold; color: #ffd24a; margin-top: 2px; }
   #tutorial.done .tut-title::before { content: "\2713  "; color: #ffd24a; }
-  .tut-text { font-size: 13.5px; color: #e8e8ea; margin-top: 2px; }
+  .tut-text { font-size: 13.5px; color: #e8e8ea; margin-top: 2px; white-space: pre-line; }
   .tut-track { height: 4px; background: #2f2f37; border-radius: 2px; margin-top: 8px; overflow: hidden; }
   #tut-fill { height: 100%; width: 0; background: #ffd24a; transition: width 0.4s; }
 

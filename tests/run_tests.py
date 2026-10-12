@@ -818,12 +818,25 @@ def test_tutorial(browser, base):
         step(page, 1)
     step(page, 90)
     check("turning the view completes the look-around step", page.inner_text("#tut-title") == "Move", page.inner_text("#tut-title"))
+    for _ in range(30):   # skip ahead to the map and records step
+        if page.inner_text("#tut-title") == "Map and records":
+            break
+        page.keyboard.press("Enter")
+        step(page, 12)
+    check("the tutorial has a step for the map and records keys", page.inner_text("#tut-title") == "Map and records", page.inner_text("#tut-title"))
+    page.keyboard.down("m"); step(page, 20)
+    page.keyboard.down("l"); step(page, 20)
+    page.keyboard.up("m"); page.keyboard.up("l")
+    step(page, 120)
+    check("holding the map and records keys ticks that step off", page.inner_text("#tut-title") == "Trickshot", page.inner_text("#tut-title"))
     for _ in range(40):   # Enter skips whatever is left
         if "complete" in page.inner_text("#tut-count").lower():
             break
         page.keyboard.press("Enter")
         step(page, 12)
     check("Enter skips steps through to the end", "complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    ends = page.inner_text("#tut-text")
+    check("the last card points at what to try next (Score Attack, attachments, practice, maps)", all(k in ends for k in ("Score Attack", "Attachments", "Practice", "Moonbase")), ends[:120])
     page.evaluate("__unlock()")
     step(page, 5)
     done = page.evaluate("localStorage.getItem('tsb-tutorial')") == "done" and page.inner_text("#tutorial-btn") == "Tutorial"
