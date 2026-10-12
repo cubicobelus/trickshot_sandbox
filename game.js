@@ -7274,6 +7274,22 @@
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
   BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
   const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14 };   // the distance each gun likes to fight at
+  // What a mode asks of its bots, on top of their level (L3). Hill bots defend the hill harder: on it they react and aim a fifth better.
+  // Battle royale bots are more cautious: they get well inside the circle early, hang back from fights, and fall back when hurt.
+  const BOT_MODE = { koth: { holdReact: 0.8, holdErr: 0.8 }, br: { margin: 12, prefer: 1.3, retreatHp: 45 } };
+  // A light personality (L4), only in the modes where it fits: a deathmatch, a team deathmatch, a battle royale. Most bots have none. Each
+  // one nudges a few numbers a little (prefer: how far it likes to fight, err: aim error, perch: how often it goes up high, retreat: backs
+  // off from a fight below this health). Where everyone wants the same thing (the hill, the flag, a gun ladder, the range) there are none.
+  const BOT_TRAITS = {
+    rusher: { prefer: 0.65, speed: 1.05, hop: 1.6 },
+    marksman: { prefer: 1.45, speed: 0.96, err: 0.85, perch: 0.5 },
+    careful: { react: 0.9, retreat: 40 },
+  };
+  function botTraitFor(p) {
+    if (net.range || net.koth || net.ctf || net.gungame || net.sub === "race") return null;
+    const pool = net.br ? ["careful", "careful", null, "rusher"] : ["rusher", "marksman", "careful", null, null];
+    return pool[Math.max(0, p.botIndex) % pool.length];
+  }
   const BOT_RELOAD = 2.3;
   const _botRay = new THREE.Ray(), _botHit = new THREE.Vector3(), _botPos = new THREE.Vector3(), _botFrom = new THREE.Vector3();
   const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
@@ -7303,7 +7319,9 @@
     p.at = randomAttachCode(ai.gun);
     ai.aimYaw = p.yaw = net.range ? Math.PI : Math.atan2(spawn[0], spawn[1]); ai.aimPitch = p.pitch = 0;   // (a dummy faces the firing line)
     ai.vy = 0; ai.path = []; ai.pi = 0; ai.repath = 0; ai.climb = null; ai.perch = null; ai.perchWait = 6 + Math.random() * 14;
+    ai.lift = null; ai.boost = null; ai.seen = null;
   }
+  function botUse(ai, what) { ai.uses = ai.uses || {}; ai.uses[what] = (ai.uses[what] || 0) + 1; }   // (a count for testing: which shortcuts it took on purpose)
 
   function botLineClear(ax, ay, az, bx, by, bz) {
     _botRay.origin.set(ax, ay, az);
@@ -7334,7 +7352,7 @@
       if (!hs.includes(h)) hs.push(h);
     }
     hs.sort((x, y) => x - y);
-    navLv = hs.map((h) => ({ h, surf: new Uint8Array(NN), blocked: new Uint8Array(NN).fill(1) }));
+    navLv = hs.map((h) => ({ h, surf: new Uint8Array(NN), blocked: new Uint8Array(NN).fill(1), strip: new Uint8Array(NN) }));
     for (const g of groundMeshes) {
       if (!isFloorish(g)) continue;
       const ud = g.userData, lv = navLv.find((l) => Math.abs(l.h - ud.topY) < 0.03);
@@ -7355,6 +7373,15 @@
       for (const r of ramps) block(lv.blocked, r.cx - r.halfW, r.cx + r.halfW, r.cz - r.halfD, r.cz + r.halfD, 0);   // the ramp itself (its side rails are boxes, padded as usual)
     }
     navBlocked = navLv.length ? navLv[0].blocked : new Uint8Array(NN);   // the floor, for the code that only cares about the floor
+    // launch strips: a cell on one remembers which (1-based), so a route that runs along it counts as quicker
+    for (let k = 0; k < boosts.length; k++) {
+      const b = boosts[k], lv = navLv.find((l) => Math.abs(l.h - b.y) < 0.3);
+      if (!lv) continue;
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+        const x = cellC(i) - b.x, z = cellC(j) - b.z;
+        if (Math.abs(x * b.dx + z * b.dz) <= b.l / 2 && Math.abs(-x * b.dz + z * b.dx) <= b.w / 2) lv.strip[j * N + i] = k + 1;
+      }
+    }
 
     // links between levels
     navLinks = new Map();
@@ -7389,6 +7416,42 @@
       const cost = (L.y1 - L.y0) * 1.5 + 2;
       link(nb, { to: nt, cost, type: 1, lad: L, up: true, px: base[0], pz: base[1] });
       link(nt, { to: nb, cost, type: 1, lad: L, up: false, px: land[0], pz: land[1] });
+    }
+    // portals (on the floor): from the cells in front of one end to the cells in front of the other
+    for (const P of portals) {
+      const Q = P.pair, l = levelAt(FLOOR_Y), fr = [P.x + P.nx * 1.6, P.z + P.nz * 1.6], ex = [Q.x + Q.nx * 1.6, Q.z + Q.nz * 1.6];
+      const a = nodeNear(l, fr[0], fr[1], 3), b = nodeNear(l, ex[0], ex[1], 3);
+      if (a >= 0 && b >= 0) link(a, { to: b, cost: 3, type: 3, pts: [fr, [P.x, P.z]], portal: P });
+    }
+    // jump pads: from the pad to the nearest spot on each higher level a bot could steer onto before it comes back down
+    for (const pad of jumpPads) {
+      const l0 = levelAt(pad.y - 0.16);
+      if (l0 < 0 || navLv[l0].blocked[navCell(pad.z) * N + navCell(pad.x)]) continue;   // (one buried in a wall can't be reached)
+      const from = nodeNear(l0, pad.x, pad.z, 1);
+      if (from < 0) continue;
+      for (let l = l0 + 1; l < navLv.length; l++) {
+        const dh = navLv[l].h + 0.3 - pad.y, disc = pad.power * pad.power - 2 * CFG.gravity * dh;
+        if (dh <= 0 || disc < 0) continue;
+        const reach = BOT_LEVELS.easy.speed * ((pad.power + Math.sqrt(disc)) / CFG.gravity) * 0.8;   // the slowest bot, with a margin
+        let best = -1, bestD = Infinity;
+        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+          if (navLv[l].blocked[j * N + i]) continue;
+          const d = Math.hypot(cellC(i) - pad.x, cellC(j) - pad.z);
+          if (d >= 1.5 && d <= reach && d < bestD) { bestD = d; best = l * NN + j * N + i; }
+        }
+        if (best >= 0) link(from, { to: best, cost: 4 + bestD * 0.5, type: 4, pts: [[pad.x, pad.z]], pad });
+      }
+    }
+    // lifts (platforms that go up and down): wait beside it, ride it, step off at the other end
+    for (const mv of movers) {
+      if (mv.axis !== "y") continue;
+      const lo = levelAt(mv.base.y - mv.range + 0.25), hi = levelAt(mv.base.y + mv.range + 0.25);
+      if (lo < 0 || hi <= lo) continue;
+      const a = nodeNear(lo, mv.base.x, mv.base.z, 4), b = nodeNear(hi, mv.base.x, mv.base.z, 4);
+      if (a < 0 || b < 0) continue;
+      const cost = (navLv[hi].h - navLv[lo].h) * 1.5 + 8;   // (it may have to wait for it)
+      link(a, { to: b, cost, type: 5, lift: mv, fromL: lo, toL: hi });
+      link(b, { to: a, cost, type: 5, lift: mv, fromL: hi, toL: lo });
     }
     // dropping off the edge of a roof or deck onto a lower level
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -7433,7 +7496,8 @@
     }
     return true;
   }
-  // a route as points [x, z, level, kind, link]: kind 0 walk, 1 a point to reach exactly (the far end of a ramp or a drop), 2 the foot of a ladder
+  // a route as points [x, z, level, kind, link]: kind 0 walk, 1 a point to reach exactly (the far end of a ramp or a drop, a portal, a pad),
+  // 2 the foot of a ladder, 3 the spot beside a lift, 4 a portal (left only by going through it)
   function navPath(sx, sz, sl, gx, gz, gl) {
     if (!navBlocked) navBuild();
     const N = NAV_N, NN = N * N, total = NN * navLv.length;
@@ -7492,7 +7556,10 @@
         const ni = ci + di, nj = cj + dj;
         if (!navFree(ni, nj, cl)) continue;
         if (di && dj && (!navFree(ci + di, cj, cl) || !navFree(ci, cj + dj, cl))) continue;   // no cutting a corner
-        relax(cl * NN + ni + nj * N, g[cur] + (di && dj ? 1.414 : 1), null);
+        let step = di && dj ? 1.414 : 1;
+        const sk = navLv[cl].strip[nj * N + ni];
+        if (sk && (di * boosts[sk - 1].dx + dj * boosts[sk - 1].dz) / step > 0.7) step *= 0.35;   // along a launch strip: it throws you down it
+        relax(cl * NN + ni + nj * N, g[cur] + step, null);
       }
       const links = navLinks.get(cur);
       if (links) for (const lk of links) relax(lk.to, g[cur] + lk.cost, lk);
@@ -7506,6 +7573,8 @@
       const lk = via.get(n), l = (n / NN) | 0, c = n - l * NN;
       if (lk && lk.type === 1) out.push([lk.px, lk.pz, (from[n] / NN) | 0, 2, lk]);
       else if (lk && lk.pre) out.push([lk.pre[0], lk.pre[1], (from[n] / NN) | 0, 1]);
+      else if (lk && lk.pts) lk.pts.forEach((q, k) => out.push([q[0], q[1], (from[n] / NN) | 0, lk.portal && k === lk.pts.length - 1 ? 4 : 1, lk]));   // a portal's mouth, the portal itself (done once through it), or a pad, reached exactly
+      else if (lk && lk.type === 5) { const fc = from[n] - lk.fromL * NN; out.push([-navHalf + ((fc % N) + 0.5) * NAV_CELL, -navHalf + (((fc / N) | 0) + 0.5) * NAV_CELL, lk.fromL, 3, lk]); }   // beside a lift: wait for it there
       out.push([-navHalf + ((c % N) + 0.5) * NAV_CELL, -navHalf + (((c / N) | 0) + 0.5) * NAV_CELL, l, lk ? 1 : 0]);
     }
     return out;
@@ -7525,8 +7594,25 @@
       if (score < bestScore) { bestScore = score; dist = d; tgt = q; }
     }
     if (!tgt) return;
+    // how this bot differs from its level right now: its personality, and what the mode asks of it
+    if (ai.trait === undefined) ai.trait = botTraitFor(p);
+    const T = ai.trait ? BOT_TRAITS[ai.trait] : null;
+    let reactK = (T && T.react) || 1, errK = (T && T.err) || 1, preferK = (T && T.prefer) || 1, retreatHp = (T && T.retreat) || 0;
+    const perchK = (T && T.perch) || 1;
+    ai.speedK = (T && T.speed) || 1; ai.hopK = (T && T.hop) || 1;
+    if (net.koth && currentMap.hill && Math.hypot(p.x - currentMap.hill.x, p.z - currentMap.hill.z) < currentMap.hill.r * 1.1) { reactK *= BOT_MODE.koth.holdReact; errK *= BOT_MODE.koth.holdErr; }
+    if (net.br) { preferK *= BOT_MODE.br.prefer; retreatHp = Math.max(retreatHp, BOT_MODE.br.retreatHp); }
+    ai.reactK = reactK; ai.errK = errK;
     const dx = tgt.x - p.x, dz = tgt.z - p.z, eyeY = p.y + 1.6, aimY = tgt.y + 1.15;
     const los = botLineClear(p.x, eyeY, p.z, tgt.x, aimY, tgt.z);
+    // what it knows: where it last saw the target, or heard it fire. Out of sight it goes there, not straight to where the target
+    // really is; once that trail is cold (it got there and found nobody, or a while passed) it goes back to hunting
+    if (!ai.seen || ai.seen.id !== tgt.id) ai.seen = { id: tgt.id, x: tgt.x, y: tgt.y, z: tgt.z, t: now, reachedAt: 0 };
+    const sn = ai.seen;
+    if (los || (now - tgt.lastFireAt < 1500 && dist < 45)) { sn.x = tgt.x; sn.y = tgt.y; sn.z = tgt.z; sn.t = now; sn.reachedAt = 0; }
+    else if (!sn.reachedAt && Math.hypot(sn.x - p.x, sn.z - p.z) < 2 && Math.abs(sn.y - p.y) < 2) sn.reachedAt = now;
+    const cold = now - sn.t > 9000 || (sn.reachedAt && now - sn.reachedAt > 2500);
+    const goX = los || cold ? tgt.x : sn.x, goZ = los || cold ? tgt.z : sn.z, goY = los || cold ? tgt.y : sn.y;
     const range = w.range || 140;
     ai.seeT = los && dist < range ? ai.seeT + dt : 0;
     // how fast the target is moving (what makes it hard to hit), smoothed
@@ -7534,12 +7620,12 @@
     ai.tspd += (Math.min(inst, 30) - ai.tspd) * 0.15; ai.tx = tgt.x; ai.tz = tgt.z;
 
     // far or out of sight: follow a route round the walls to the target (re-planned a bit more than once a second)
-    const prefer = BOT_PREFER[g] || 18;
+    const prefer = (BOT_PREFER[g] || 18) * preferK;
     // now and then a bot heads for a roof or deck to fight from up there (when the map has one)
     if (!navBlocked) navBuild();
     if (net.br) {   // battle royale: get inside the circle (with a margin), then fight whoever is closest
       const bz = brNow(), bd = Math.hypot(p.x - net.zc[0], p.z - net.zc[1]);
-      if (bd > bz.r - 5) { ai.perch = { x: net.zc[0], z: net.zc[1], l: 0 }; ai.perchT = 5; }
+      if (bd > bz.r - BOT_MODE.br.margin) { ai.perch = { x: net.zc[0], z: net.zc[1], l: 0 }; ai.perchT = 5; }
       else if (ai.perch && ai.perch.brZone) ai.perch = null;
       if (ai.perch) ai.perch.brZone = true;
     }
@@ -7555,41 +7641,61 @@
     }
     if (net.koth && currentMap.hill) { const hh = currentMap.hill; ai.perch = { x: hh.x, z: hh.z, l: navLevelFor(hh.y) }; ai.perchT = 5; }   // King of the Hill: they all want the hill
     if (navLv.length > 1) {
-      if (ai.perch) { ai.perchT -= dt; if (ai.perchT <= 0) { ai.perch = null; ai.perchWait = rnd(15, 35); } }
+      if (ai.perch) { ai.perchT -= dt; if (ai.perchT <= 0) { ai.perch = null; ai.perchWait = rnd(15, 35) * perchK; } }
       else if ((ai.perchWait -= dt) <= 0) {
-        ai.perchWait = rnd(15, 35);
+        ai.perchWait = rnd(15, 35) * perchK;
         const pl = 1 + Math.floor(Math.random() * (navLv.length - 1)), lv = navLv[pl];
-        for (let k = 0; k < 40; k++) {
+        let pick = null;   // somewhere it can stand, an edge that looks out over the level below if it finds one
+        for (let k = 0; k < 60; k++) {
           const i = Math.floor(Math.random() * NAV_N), j = Math.floor(Math.random() * NAV_N);
-          if (lv.surf[j * NAV_N + i] && !lv.blocked[j * NAV_N + i]) { ai.perch = { x: -navHalf + (i + 0.5) * NAV_CELL, z: -navHalf + (j + 0.5) * NAV_CELL, l: pl }; ai.perchT = rnd(20, 35); ai.repath = 0; break; }
+          if (!lv.surf[j * NAV_N + i] || lv.blocked[j * NAV_N + i]) continue;
+          const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([di, dj]) => { const a = i + di * 2, b = j + dj * 2; return a < 0 || b < 0 || a >= NAV_N || b >= NAV_N || !lv.surf[b * NAV_N + a]; });
+          if (!pick || edge) pick = [i, j];
+          if (edge) break;
         }
+        if (pick) { ai.perch = { x: -navHalf + (pick[0] + 0.5) * NAV_CELL, z: -navHalf + (pick[1] + 0.5) * NAV_CELL, l: pl }; ai.perchT = rnd(20, 35); ai.repath = 0; }
       }
     }
     const perchD = ai.perch ? Math.hypot(ai.perch.x - p.x, ai.perch.z - p.z) : 0;
     const perching = !!ai.perch && perchD > 2.5 && !(los && dist < 14);
     const kothHill = net.koth && currentMap.hill ? currentMap.hill : null;
     const holding = !!ai.perch && perchD <= (kothHill ? kothHill.r * 1.1 : net.ctf ? 1.2 : 2.5);   // up there: stay and shoot what it sees
-    const navigating = perching || (!holding && (!los || dist > prefer + 4 || Math.abs(tgt.y - p.y) > 2.2));   // also when the target is on another level
+    const retreating = retreatHp > 0 && p.hp < retreatHp && los && dist < 45;   // hurt and in a fight: back off rather than push
+    const navigating = !!ai.lift || perching || (!holding && !retreating && (!los || dist > prefer + 4 || Math.abs(tgt.y - p.y) > 2.2));   // also when the target is on another level
     ai.repath -= dt;
     const myLv = navLevelFor(p.y);
     // halfway up a ramp or in the air it keeps to the route it has, so it does not turn round on the slope
     const between = ai.vy !== 0 || Math.abs(p.y - navLv[myLv].h) > 0.3;
     ai.betweenT = between ? (ai.betweenT || 0) + dt : 0;
-    if (navigating && ai.repath <= 0 && !ai.climb && (!between || ai.betweenT > 5)) { const route = perching ? navPath(p.x, p.z, myLv, ai.perch.x, ai.perch.z, ai.perch.l) : navPath(p.x, p.z, myLv, tgt.x, tgt.z, navLevelFor(tgt.y));
-      if (perching && !route) { ai.perch = null; ai.perchWait = rnd(15, 35); }   // no way up there
+    if (navigating && ai.repath <= 0 && !ai.climb && !ai.lift && (!between || ai.betweenT > 5)) { const route = perching ? navPath(p.x, p.z, myLv, ai.perch.x, ai.perch.z, ai.perch.l) : navPath(p.x, p.z, myLv, goX, goZ, navLevelFor(goY));
+      if (perching && !route) { ai.perch = null; ai.perchWait = rnd(15, 35) * perchK; }   // no way up there
       ai.path = route || []; ai.pi = 0; ai.repath = rnd(0.6, 0.9); }
-    let wx = tgt.x, wz = tgt.z;   // where it is heading right now
+    let wx = goX, wz = goZ, stay = false;   // where it is heading right now (stay: stand still, waiting for or riding a lift)
     if (navigating && ai.path.length && !ai.climb) {
       const P = ai.path;
-      while (ai.pi < P.length - 1 && P[ai.pi][3] !== 2 && Math.hypot(P[ai.pi][0] - p.x, P[ai.pi][1] - p.z) < (P[ai.pi][3] ? 0.7 : 1.3)) ai.pi++;
+      while (ai.pi < P.length - 1 && P[ai.pi][3] < 2 && Math.hypot(P[ai.pi][0] - p.x, P[ai.pi][1] - p.z) < (P[ai.pi][3] ? 0.7 : 1.3)) ai.pi++;
       while (ai.pi < P.length - 1 && P[ai.pi][3] === 0 && P[ai.pi + 1][3] === 0 && P[ai.pi + 1][2] === myLv &&
         navClear(p.x, p.z, P[ai.pi + 1][0], P[ai.pi + 1][1], myLv)) ai.pi++;   // cut the corners
       const pt = P[ai.pi];
       wx = pt[0]; wz = pt[1];
+      if (pt[3] === 3 && !ai.lift && Math.hypot(pt[0] - p.x, pt[1] - p.z) < 0.9) ai.lift = { lk: pt[4], phase: 0, t: 0 };   // beside a lift
       if (pt[3] === 2 && Math.hypot(pt[0] - p.x, pt[1] - p.z) < 0.6 && Math.abs(p.y - navLv[pt[2]].h) < 1) {   // at the foot of a ladder: start climbing
         const lk = pt[4], L = lk.lad;
         ai.climb = lk.up ? { lad: L, dir: 1, toY: L.y1, ex: L.x - L.nx * 1.0, ez: L.z - L.nz * 1.0 } : { lad: L, dir: -1, toY: L.y0, ex: L.x + L.nx * 0.9, ez: L.z + L.nz * 0.9 };
       }
+    }
+    if (ai.lift) {   // a lift: wait beside it until it is level with this floor, step on, ride it, step off at the other end (it still fights)
+      const lf = ai.lift, ud = lf.lk.lift.mesh.userData, top = ud.topY, fromH = navLv[lf.lk.fromL].h, toH = navLv[lf.lk.toL].h;
+      const onIt = Math.abs(p.x - ud.cx) < ud.halfW - 0.2 && Math.abs(p.z - ud.cz) < ud.halfD - 0.2 && Math.abs(p.y - top) < 0.4;
+      lf.t += dt;
+      if (lf.phase === 0) { stay = true; if (Math.abs(top - fromH) < 0.35) lf.phase = 1; }
+      if (lf.phase === 1) { wx = ud.cx; wz = ud.cz; stay = false; if (onIt) lf.phase = 2; else if (Math.abs(top - fromH) > 0.6) lf.phase = 0; }   // (missed it: wait again)
+      if (lf.phase === 2) {
+        wx = ud.cx; wz = ud.cz; stay = Math.hypot(ud.cx - p.x, ud.cz - p.z) < 0.4;
+        if (Math.abs(top - toH) < 0.3) { ai.lift = null; ai.pi = Math.min(ai.pi + 1, ai.path.length - 1); ai.repath = 0.6; botUse(ai, "lift"); stay = false; }
+        else if (!onIt && p.y < top - 1) { ai.lift = null; ai.path = []; ai.repath = 0; }   // fell off
+      }
+      if (ai.lift && lf.t > 25) { ai.lift = null; ai.path = []; ai.repath = 0; }   // never came: plan again
     }
     if (ai.climb) {   // on a ladder: nothing else until it gets to the other end
       const c = ai.climb, L = c.lad;
@@ -7615,32 +7721,61 @@
     ai.strafeT -= dt;
     if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? 1 : -1; ai.strafeT = rnd(0.6, 1.8); }
     let mx = 0, mz = 0;
-    const along = navigating ? 1 : kothHill && holding ? 0 : dist < prefer - 4 ? -0.8 : 0;   // (on the hill it does not back away: that walks it off the edge)
+    const along = navigating ? 1 : retreating ? -1 : (kothHill || ai.perch) && holding ? 0 : dist < prefer - 4 ? -0.8 : 0;   // (on the hill or a perch it does not back away: that walks it off the edge)
     const hx = wx - p.x, hz = wz - p.z, hl = Math.hypot(hx, hz) || 1;   // toward the next point on the route
     if (along > 0) { mx += hx / hl; mz += hz / hl; } else { mx += fx * along; mz += fz * along; }
-    const side = !navigating ? 0.9 : los ? 0.4 : 0;
+    const side = !navigating ? (holding && ai.perch && !kothHill ? 0.4 : 0.9) : los ? 0.4 : 0;
     mx += fz * ai.strafe * side; mz += -fx * ai.strafe * side;
     if (kothHill && holding && !navigating) {   // on the hill it strafes and fights, and drifts back to the middle if it wanders to the rim
       const hx2 = kothHill.x - p.x, hz2 = kothHill.z - p.z, hd2 = Math.hypot(hx2, hz2) || 1;
       const pull = Math.max(0, (hd2 - kothHill.r * 0.55) / (kothHill.r * 0.55)) * 2.2;
       mx = mx * 0.6 + (hx2 / hd2) * pull; mz = mz * 0.6 + (hz2 / hd2) * pull;
     }
+    if (stay) { mx = 0; mz = 0; }
     const ml = Math.hypot(mx, mz) || 1;
-    const speed = L.speed * (ai.burstLeft > 0 ? 0.75 : 1);
+    const speed = L.speed * ai.speedK * (ai.burstLeft > 0 ? 0.75 : 1);
     _botFrom.set(p.x, p.y, p.z);
     _botPos.set(p.x + (mx / ml) * speed * dt, p.y, p.z + (mz / ml) * speed * dt);
+    if (ai.boost) {   // thrown down a launch strip: a burst of speed that fades
+      const k = ai.boost.t / 0.8;
+      _botPos.x += ai.boost.dx * 13 * k * dt; _botPos.z += ai.boost.dz * 13 * k * dt;
+      if ((ai.boost.t -= dt) <= 0) ai.boost = null;
+    }
     resolveWalls(_botPos, p.y, _botFrom); resolveWalls(_botPos, p.y, _botFrom);
     const B = CFG.arenaHalfSize - 0.8;
     _botPos.x = Math.max(-B, Math.min(B, _botPos.x)); _botPos.z = Math.max(-B, Math.min(B, _botPos.z));
     const moved = Math.hypot(_botPos.x - p.x, _botPos.z - p.z);
     p.x = _botPos.x; p.z = _botPos.z; p.sl = false;
+    if (portals.length && (ai.portalCool = (ai.portalCool || 0) - dt) <= 0) for (const P of portals) {   // walked into a portal: out of the other end
+      const ox = p.x - P.x, oz = p.z - P.z;
+      if (Math.abs(ox * P.nx + oz * P.nz) > 0.55 || Math.abs(-ox * P.nz + oz * P.nx) > 1.05 || p.y > FLOOR_Y + 2.6) continue;
+      if ((mx * P.nx + mz * P.nz) / ml > -0.3) continue;   // only when heading into it
+      const Q = P.pair;
+      p.x = Q.x + Q.nx * 1.05; p.z = Q.z + Q.nz * 1.05; p.snap = true; ai.portalCool = 0.6;
+      const at = ai.path[ai.pi];
+      if (at && at[4] && at[4].portal === P) { ai.pi = Math.min(ai.pi + 1, ai.path.length - 1); botUse(ai, "portal"); }
+      ai.repath = Math.min(ai.repath, 0.4);
+      break;
+    }
     // vertical: it stands on whatever is under it (the floor, a ramp, a roof), a jump pad it runs over throws it up, and in a fight
     // it hops now and then while strafing. Walking off an edge is a fall.
     const gy = currentGroundY(p.x, p.z, p.y + CFG.stepHeight);
     if (ai.vy <= 0 && p.y <= gy + 0.35) {
       p.y = gy; ai.vy = 0;
-      for (const pad of jumpPads) if (Math.hypot(p.x - pad.x, p.z - pad.z) < pad.r && Math.abs(p.y - pad.y) < 0.4) { ai.vy = pad.power; break; }
-      if (!ai.vy && los && dist < 40 && Math.random() < dt * (L.hop || 0)) ai.vy = CFG.jumpSpeed;
+      for (const pad of jumpPads) if (Math.hypot(p.x - pad.x, p.z - pad.z) < pad.r && Math.abs(p.y - pad.y) < 0.4) {
+        ai.vy = pad.power;
+        const at = ai.path[ai.pi], was = ai.path[ai.pi - 1];
+        if (at && at[4] && at[4].pad === pad) { ai.pi = Math.min(ai.pi + 1, ai.path.length - 1); botUse(ai, "pad"); }   // meant to: on to where it lands
+        else if (was && was[4] && was[4].pad === pad) botUse(ai, "pad");
+        break;
+      }
+      if ((ai.boostCool = (ai.boostCool || 0) - dt) <= 0) for (const b of boosts) {
+        const ox = p.x - b.x, oz = p.z - b.z;
+        if (Math.abs(ox * b.dx + oz * b.dz) > b.l / 2 || Math.abs(-ox * b.dz + oz * b.dx) > b.w / 2 || Math.abs(p.y - b.y) > 0.6) continue;
+        ai.boost = { dx: b.dx, dz: b.dz, t: 0.8 }; ai.vy = Math.max(ai.vy, b.pop); ai.boostCool = 0.6; botUse(ai, "strip");
+        break;
+      }
+      if (!ai.vy && los && dist < 40 && Math.random() < dt * (L.hop || 0) * ai.hopK) ai.vy = CFG.jumpSpeed;
     }
     if (ai.vy > 0 || p.y > gy + 0.35) {
       ai.vy -= CFG.gravity * dt;
@@ -7660,7 +7795,7 @@
     }
     ai.fireT -= dt;
     const aimErr = Math.abs(wrapAngle(wantYaw - ai.aimYaw)) + Math.abs(wantPitch - ai.aimPitch);
-    if (ai.seeT > L.react && aimErr < 0.1 && ai.fireT <= 0 && nowMs() >= tgt.protectUntil) botFire(p, tgt, dist, now);
+    if (ai.seeT > L.react * ai.reactK && aimErr < 0.1 && ai.fireT <= 0 && nowMs() >= tgt.protectUntil) botFire(p, tgt, dist, now);
   }
 
   // where a shot aimed at `y` (height above the target's feet) really goes: an error angle in both directions,
@@ -7692,7 +7827,7 @@
 
     // aim error: worse against a moving target and the longer an automatic keeps firing
     const burstK = w.auto ? 1 + 0.12 * Math.min(ai.burstLeft === 0 ? 0 : (L.burst[1] - ai.burstLeft), 8) : 1;
-    const errRad = L.err * Math.PI / 180 * (1 + ai.tspd / 8) * burstK * (g === "rifle" ? 0.55 : 1);
+    const errRad = L.err * (ai.errK || 1) * Math.PI / 180 * (1 + ai.tspd / 8) * burstK * (g === "rifle" ? 0.55 : 1);
     let n = 0, h = 0;
     if (g === "shotgun") {
       for (let i = 0; i < DAMAGE.shotgun.pellets; i++) {
