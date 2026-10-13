@@ -44,6 +44,17 @@
   #attach-canvas:active { cursor: grabbing; }
   #attach-name { margin-top: 8px; font-size: 18px; font-weight: bold; letter-spacing: 1.5px; color: #ffd24a; text-align: center; }
   #attach-view .g-note { text-align: center; margin: 4px 0 0; }
+  #attach-stats { margin-top: 10px; }
+  .as-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .as-tiles div { padding: 7px 4px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid #2f2f37; text-align: center; }
+  .as-tiles b { display: block; font-size: 17px; color: #fff; }
+  .as-tiles div:first-child b { color: #ffd24a; }
+  .as-tiles span { font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: #8b8b94; }
+  .as-next { margin-top: 10px; font-size: 12px; color: #b9b9c2; text-align: center; }
+  .as-next span, .as-next em { display: block; }
+  .as-next strong { color: #ffd24a; font-weight: 600; }
+  .as-next .at-bar { margin: 6px 0 4px; }
+  .as-next em { font-size: 10.5px; font-style: normal; color: #8b8b94; }
   .at-slot:first-child h3 { margin-top: 0; }
   .at-slot h3 { margin: 14px 0 6px; font-size: 12px; color: #ffd24a; text-transform: uppercase; letter-spacing: 1px; }
   .at-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }

@@ -2064,26 +2064,45 @@
   // folded bipod, legs tucked along the barrel
   addPart(rifleGroup, new THREE.CylinderGeometry(0.034, 0.034, 0.03, 12), metalDark, 0, 0.0, -0.62, HALF_PI, 0, 0);
   // scope: tube, objective bell, eyepiece, turrets and mounts. It is an attachment: hidden until
-  // a scope is fitted (the high-zoom one stretches it), and the iron sights below fold away under it
+  // a scope is fitted (the low-zoom and high-zoom scopes are different models), and the iron sights below fold away under it
   const rifleScope = new THREE.Group();
   rifleScope.position.set(0, 0.12, -0.05);
   rifleScope.visible = false;
   rifleGroup.add(rifleScope);
-  addPart(rifleScope, new THREE.CylinderGeometry(0.034, 0.034, 0.38, 16), metalDark, 0, 0, 0, HALF_PI, 0, 0);
-  addPart(rifleScope, new THREE.CylinderGeometry(0.052, 0.034, 0.09, 16), metalDark, 0, 0, -0.235, HALF_PI, 0, 0);
-  addPart(rifleScope, new THREE.CylinderGeometry(0.054, 0.054, 0.025, 16), metalDark, 0, 0, -0.29, HALF_PI, 0, 0);
-  addPart(rifleScope, new THREE.CylinderGeometry(0.034, 0.042, 0.06, 16), metalDark, 0, 0, 0.215, HALF_PI, 0, 0);
-  addPart(rifleScope, new THREE.CylinderGeometry(0.019, 0.019, 0.032, 12), metalMid, 0, 0.045, 0.01);
-  addPart(rifleScope, new THREE.CylinderGeometry(0.019, 0.019, 0.032, 12), metalMid, 0.045, 0, 0.01, 0, 0, HALF_PI);
-  addPart(rifleScope, new THREE.CylinderGeometry(0.044, 0.044, 0.07, 16), metalMid, 0, 0, 0.01, HALF_PI, 0, 0);
-  addPart(rifleScope, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0, -0.09);
-  addPart(rifleScope, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0, 0.12);
-  addPart(rifleScope, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, -0.035, -0.09);
-  addPart(rifleScope, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, -0.035, 0.12);
-  // lenses: dark coated glass with a faint glint
-  addPart(rifleScope, new THREE.CircleGeometry(0.048, 20), scopeGlass, 0, 0, -0.303);
-  addPart(rifleScope, new THREE.CircleGeometry(0.012, 10), glintMat, -0.016, 0.017, -0.304);
-  addPart(rifleScope, new THREE.CircleGeometry(0.038, 20), scopeGlass, 0, 0, 0.246, 0, Math.PI, 0);
+  // low zoom: a short, slim fixed-power scope with one turret. Both end at the same eyepiece, so aiming lines up
+  const scopeLow = new THREE.Group();
+  rifleScope.add(scopeLow);
+  addPart(scopeLow, new THREE.CylinderGeometry(0.028, 0.028, 0.32, 16), metalDark, 0, 0, 0.04, HALF_PI, 0, 0);          // tube
+  addPart(scopeLow, new THREE.CylinderGeometry(0.028, 0.04, 0.05, 16), metalDark, 0, 0, -0.145, HALF_PI, 0, 0);         // objective, flaring to the front
+  addPart(scopeLow, new THREE.CylinderGeometry(0.036, 0.028, 0.046, 16), metalDark, 0, 0, 0.223, HALF_PI, 0, 0);        // eyepiece
+  addPart(scopeLow, new THREE.CylinderGeometry(0.034, 0.034, 0.07, 16), metalMid, 0, 0, 0.01, HALF_PI, 0, 0);           // turret housing
+  addPart(scopeLow, new THREE.CylinderGeometry(0.016, 0.016, 0.028, 12), metalMid, 0, 0.038, 0.01);                      // elevation turret
+  for (const z of [-0.05, 0.1]) {
+    addPart(scopeLow, new THREE.TorusGeometry(0.033, 0.009, 8, 16), metalDark, 0, 0, z);
+    addPart(scopeLow, new THREE.BoxGeometry(0.028, 0.06, 0.028), metalDark, 0, -0.04, z);
+  }
+  addPart(scopeLow, new THREE.CircleGeometry(0.036, 20), scopeGlass, 0, 0, -0.1715);
+  addPart(scopeLow, new THREE.CircleGeometry(0.026, 20), scopeGlass, 0, 0, 0.2465, 0, Math.PI, 0);
+  // high zoom: long, with a big flared objective and sunshade, tall turrets on top and the side, and a parallax wheel
+  const scopeHigh = new THREE.Group();
+  rifleScope.add(scopeHigh);
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.034, 0.034, 0.4, 16), metalDark, 0, 0, 0, HALF_PI, 0, 0);              // tube
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.034, 0.056, 0.11, 16), metalDark, 0, 0, -0.255, HALF_PI, 0, 0);        // objective bell
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.06, 0.06, 0.07, 16, 1, true), metalDark, 0, 0, -0.33, HALF_PI, 0, 0);  // sunshade (open at both ends)
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.034, 0.042, 0.06, 16), metalDark, 0, 0, 0.215, HALF_PI, 0, 0);        // eyepiece
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.044, 0.044, 0.07, 16), metalMid, 0, 0, 0.01, HALF_PI, 0, 0);          // turret housing
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.02, 0.02, 0.04, 12), metalMid, 0, 0.056, -0.01);                       // elevation turret
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.025, 0.025, 0.012, 12), metalDark, 0, 0.08, -0.01);                    // its cap
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.02, 0.02, 0.04, 12), metalMid, 0.056, 0, -0.01, 0, 0, HALF_PI);        // windage turret
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.025, 0.025, 0.012, 12), metalDark, 0.08, 0, -0.01, 0, 0, HALF_PI);
+  addPart(scopeHigh, new THREE.CylinderGeometry(0.026, 0.026, 0.014, 12), metalMid, -0.05, 0, -0.17, 0, 0, HALF_PI);     // parallax wheel
+  for (const z of [-0.1, 0.14]) {
+    addPart(scopeHigh, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0, z);
+    addPart(scopeHigh, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, -0.035, z);
+  }
+  addPart(scopeHigh, new THREE.CircleGeometry(0.052, 20), scopeGlass, 0, 0, -0.3615);
+  addPart(scopeHigh, new THREE.CircleGeometry(0.012, 10), glintMat, -0.016, 0.017, -0.3625);
+  addPart(scopeHigh, new THREE.CircleGeometry(0.038, 20), scopeGlass, 0, 0, 0.246, 0, Math.PI, 0);
   // iron sights: a hooded front post near the muzzle and a notched rear on the receiver; aiming
   // puts the post's tip level with the top of the notch
   const rifleIrons = new THREE.Group();
@@ -3555,6 +3574,12 @@
     dmr: { muzzle: [-1.1, 0.005, 0.014, 0.26], optic: [-0.1, 0.0425], under: [-0.6, -0.0425], mag: [-0.19, -0.15, 0, 0.03, 0.05] },
     pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
   };
+  // a laser's beam: thick and bright by the gun, thinner and fainter further out until it is gone (the materials are shared)
+  const AT_BEAM_SEGS = 14, AT_BEAM_LEN = 0.55;
+  const AT_BEAM = [];
+  for (let i = 0; i <= AT_BEAM_SEGS; i++) { const t = i / AT_BEAM_SEGS; AT_BEAM.push({ r: 0.003 * (1 - t * 0.85), a: 0.9 * Math.pow(1 - t, 1.4) + 0.03 }); }
+  const beamMat = (opacity) => new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+  const AT_BEAM_MATS = AT_BEAM.map((b) => ({ core: beamMat(b.a), glow: beamMat(b.a * 0.22) }));
   function attachParts(ids, M) {
     const g = new THREE.Group();
     const add = (geo, mat, x, y, z, rx) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx) m.rotation.x = rx; g.add(m); return m; };
@@ -3583,6 +3608,14 @@
       else if (id === "laser" && M.under) {   // a box under the frame, the red lens facing forward
         add(new THREE.BoxGeometry(0.026, 0.022, 0.06), AT_STEEL, 0, M.under[1] - 0.011, M.under[0]);
         add(new THREE.CylinderGeometry(0.004, 0.004, 0.002, 8), AT_DOT, 0, M.under[1] - 0.011, M.under[0] - 0.031, HP);
+        const by = M.under[1] - 0.011, bz = M.under[0] - 0.032, sl = AT_BEAM_LEN / AT_BEAM_SEGS;
+        for (let k = 0; k < AT_BEAM_SEGS; k++) {   // the beam, a run of short cones that thin out
+          const a = AT_BEAM[k], b = AT_BEAM[k + 1];
+          for (const [mat, grow] of [[AT_BEAM_MATS[k].core, 1], [AT_BEAM_MATS[k].glow, 3.5]]) {
+            const seg = add(new THREE.CylinderGeometry(a.r * grow, b.r * grow, sl, 8, 1, true), mat, 0, by, bz - (k + 0.5) * sl, HP);
+            if (k >= 3) seg.userData.noFit = true;   // the preview frames the gun and the start of the beam, not all of it
+          }
+        }
       } else if (id === "stock-heavy" && M.butt) add(new THREE.BoxGeometry(0.09, M.butt[2] * 1.05, 0.05), AT_RUBBER, 0, M.butt[1], M.butt[0] + 0.02);
       else if (id === "stock-light" && M.butt) {   // a skeleton frame in place of the wooden stock: top bar, lower strut, upright
         const [zBack, yc, h, len] = M.butt, zb = zBack - 0.03;
@@ -3653,7 +3686,7 @@
       if (id === "rifle") {   // the sniper: iron sights, unless a scope is fitted
         const scoped = has("scope-low") || has("scope-high");
         w.scope = scoped; rifleScope.visible = scoped; rifleIrons.visible = !scoped;
-        rifleScope.scale.set(has("scope-high") ? 1.12 : 1, has("scope-high") ? 1.12 : 1, has("scope-high") ? 1.3 : 1);
+        scopeLow.visible = has("scope-low"); scopeHigh.visible = has("scope-high");
         rifleBrake.visible = !has("suppressor") && !has("brake");
         rifleStock.visible = !has("stock-light");
         if (scoped) w.adsPos.y = w.scopeAdsY;
@@ -6534,7 +6567,11 @@
     const known = new Set(Object.values(ATTACHMENTS[gun] || {}).flat().map((o) => o.id));
     const ids = list.split(",").filter((x) => known.has(x));
     if (!ids.length) return;
-    if (gun === "rifle" && target.userData.scope) target.userData.scope.visible = ids.includes("scope-low") || ids.includes("scope-high");
+    if (gun === "rifle" && target.userData.scope) {
+      const hi = ids.includes("scope-high");
+      target.userData.scope.visible = hi || ids.includes("scope-low");
+      target.userData.scope.scale.set(hi ? 1.2 : 0.85, hi ? 1.45 : 0.7, hi ? 1.2 : 0.85);   // the low-zoom scope is short and slim, the high-zoom one long and wide
+    }
     if (gun === "rifle" && target.userData.stock) target.userData.stock.visible = !ids.includes("stock-light");
     target.userData.atGroup = attachParts(ids, mount);
     const mp = magParts(ids, mount);
@@ -9235,20 +9272,9 @@
     const copy = w.group.clone(true);
     muzzleFlash.visible = flashWas;
     copy.visible = true; copy.position.set(0, 0, 0); copy.rotation.set(0, 0, 0); copy.scale.set(1, 1, 1);
-    const M = AT_MOUNT[attachGun];
-    if (M && M.under && chosenAttachments(attachGun).some((o) => o.id === "laser")) {   // a laser shows its beam here (not in the game)
-      const len = 0.3, y = M.under[1] - 0.011, z = M.under[0] - 0.031, red = 0xff3b30;
-      const beam = (r, opacity) => {
-        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), new THREE.MeshBasicMaterial({ color: red, transparent: opacity < 1, opacity, depthWrite: false, blending: opacity < 1 ? THREE.AdditiveBlending : THREE.NormalBlending }));
-        m.rotation.x = Math.PI / 2; m.position.set(0, y, z - len / 2); copy.add(m);
-      };
-      beam(0.0013, 1); beam(0.0055, 0.22);
-      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.006, 8, 8), new THREE.MeshBasicMaterial({ color: red, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
-      tip.position.set(0, y, z - len); copy.add(tip);
-    }
     copy.updateMatrixWorld(true);
     const box = new THREE.Box3();
-    copy.traverse((o) => { if (o.isMesh && apVisible(o, copy)) box.union(new THREE.Box3().setFromObject(o)); });
+    copy.traverse((o) => { if (o.isMesh && !o.userData.noFit && apVisible(o, copy)) box.union(new THREE.Box3().setFromObject(o)); });
     box.getCenter(AP.center); box.getSize(AP.size);
     copy.position.copy(AP.center).multiplyScalar(-1);
     const holder = new THREE.Group(); holder.add(copy);
@@ -9285,6 +9311,18 @@
     AP.renderer.render(AP.scene, AP.camera);
     AP.raf = requestAnimationFrame(apFrame);
   }
+  function renderAttachStats() {
+    const g = stats.guns[attachGun] || { shots: 0, hits: 0, points: 0 }, box = document.getElementById("attach-stats");
+    const n = (v) => Math.round(v).toLocaleString();
+    const tiles = [["Accuracy", g.shots ? Math.round(g.hits / g.shots * 100) + "%" : "-"], ["Hits", n(g.hits)], ["Shots", n(g.shots)], ["Points", n(g.points)]];
+    const all = Object.values(ATTACHMENTS[attachGun] || {}).flat(), locked = all.filter((o) => !attachUnlocked(attachGun, o)).sort((x, y) => x.need - y.need);
+    const next = locked[0];
+    box.innerHTML = '<div class="as-tiles">' + tiles.map(([k, v]) => "<div><b>" + v + "</b><span>" + k + "</span></div>").join("") + "</div>" +
+      '<div class="as-next">' + (next
+        ? "<span>Next unlock: <strong>" + next.name + "</strong> at " + next.need + " hits</span><i class=\"at-bar\"><u style=\"width:" + Math.round(Math.min(1, g.hits / next.need) * 100) + '%"></u></i>'
+        : "<span>Every attachment unlocked</span>") +
+      "<em>" + (all.length - locked.length) + " of " + all.length + " attachments unlocked</em></div>";
+  }
   function renderAttach() {
     const gunsEl = document.getElementById("attach-guns"), slotsEl = document.getElementById("attach-slots");
     gunsEl.textContent = ""; slotsEl.textContent = "";
@@ -9297,7 +9335,7 @@
     }
     const hits = (stats.guns[attachGun] && stats.guns[attachGun].hits) || 0;
     document.getElementById("attach-name").textContent = WEAPONS[attachGun].name;
-    document.getElementById("attach-progress").textContent = hits + " hits landed with this gun. Land more to unlock the rest.";
+    renderAttachStats();
     const fitted = (SETTINGS.attach && SETTINGS.attach[attachGun]) || {};
     for (const [slot, opts] of Object.entries(ATTACHMENTS[attachGun] || {})) {
       const sec = document.createElement("div"); sec.className = "at-slot";
