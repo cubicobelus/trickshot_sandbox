@@ -137,7 +137,7 @@ def test_game(browser, base):
     check("the menu shows three favourite guns and a More button", quick == ["rifle", "ar", "shotgun"] and page.is_visible("#loadout-more"), ", ".join(quick))
     page.click("#loadout-more")
     guns = page.eval_on_selector_all("#loadout-popup button[data-gun]", "els => els.map(e => e.dataset.gun)")
-    check("the More popup lists all seven guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr"]), ", ".join(guns))
+    check("the More popup lists all nine guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr", "burst", "lmg"]), ", ".join(guns))
     page.click("#loadout-popup button[data-gun=dmr]")
     check("picking from More closes it, keeps the gun in the row and selects it",
           not page.is_visible("#loadout-popup") and page.is_visible("#loadout button.active[data-gun=dmr]"))
@@ -154,6 +154,10 @@ def test_game(browser, base):
         ammo_after = page.inner_text("#ammo-count")
         slots = page.eval_on_selector_all("#hotbar .slot", "els => els.map(e => e.textContent)")
         check(f"{gun}: fires (ammo {ammo_before.split('/')[0].strip()} -> {ammo_after.split('/')[0].strip()})", ammo_before != ammo_after)
+        if gun == "burst":
+            step(page, 20)
+            left = page.inner_text("#ammo-count").split("/")[0].strip()
+            check("the burst rifle fires three rounds from one pull", left == "27", f"{left} of 30 left")
         check(f"{gun}: hotbar shows the gun and the knife", len(slots) == 2 and "KNIFE" in slots[1], " | ".join(slots))
         page.keyboard.press("KeyR")
         step(page, 220)
@@ -695,7 +699,7 @@ def test_play_setup(browser, base):
     page.click("#mp-play-btn")
     step(page, 60)
     gg_label = page.inner_text("#mp-timer-mode").lower()
-    check("gun game shows your level in the timer", "gun game" in gg_label and "level 1 / 8" in gg_label, gg_label)
+    check("gun game shows your level in the timer", "gun game" in gg_label and "level 1 / 10" in gg_label, gg_label)
     page.evaluate("__unlock()")
     step(page, 3)
     page.click("#mp-leave-btn")
@@ -952,6 +956,8 @@ GUNS_JS = """() => {
   const dm = (g, d, head) => D.hostDamage({ x: 0, z: 0 }, { x: d, z: 0 }, { head: !!head, n: 1, h: head ? 1 : 0 }, g);
   out.facts.smg = [dm("smg", 5), dm("smg", 12), dm("smg", 23.5), dm("smg", 35), dm("smg", 80), dm("smg", 5, true), dm("smg", 80, true)];
   out.facts.dmr = [dm("dmr", 5), dm("dmr", 80), dm("dmr", 5, true)];
+  out.facts.lmg = [D.WEAPONS.lmg.magSize, dm("lmg", 5), dm("lmg", 5, true)];
+  out.facts.burst = [D.WEAPONS.burst.burst, dm("burst", 5), dm("burst", 5, true)];
   out.facts.ggLen = D.GG_ORDER.length;
   return out;
 }"""
@@ -969,7 +975,8 @@ def test_guns(browser, base):
         check("the SMG hits for 20 up close, fades from 12 m to half by 35 m, and stays at half beyond", f["smg"][:2] == [20, 20] and abs(f["smg"][2] - 15) < 0.5 and f["smg"][3] == 10 and f["smg"][4] == 10, str(f["smg"]))
         check("the SMG's head hit is 30 and fades the same way", f["smg"][5] == 30 and f["smg"][6] == 15, str(f["smg"][5:]))
         check("the DMR does 60 to the body (two to kill) and 100 to the head at any range", f["dmr"] == [60, 60, 100], str(f["dmr"]))
-        check("gun game now has seven guns before the knife", f["ggLen"] == 7, str(f["ggLen"]))
+        check("gun game has nine guns before the knife", f["ggLen"] == 9, str(f["ggLen"]))
+        check("the LMG holds 100 rounds and the burst rifle fires three rounds a pull", f["lmg"] == [100, 24, 34] and f["burst"] == [3, 28, 42], str(f["lmg"]) + " " + str(f["burst"]))
         check("the gun checks run without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:

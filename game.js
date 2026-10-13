@@ -2425,7 +2425,54 @@
   addPart(dmrGroup, new THREE.BoxGeometry(0.05, 0.085, 0.03), gripMat, 0, -0.01, 0.47);                  // butt pad
   const dmrMag = addPart(dmrGroup, new THREE.BoxGeometry(0.034, 0.12, 0.075), metalDark, 0, -0.09, -0.02, 0.1, 0, 0);
 
-  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup];
+  // ---- burst rifle: a slim carbine with a short vented handguard and a big flash hider; one pull fires three rounds ----
+  // sights: the rear ring and the front post both sit 0.078 above the bore (see adsPos)
+  const burstGroup = new THREE.Group();
+  addPart(burstGroup, new THREE.BoxGeometry(0.052, 0.066, 0.34), metalDark, 0, 0.018, 0);                // receiver
+  addPart(burstGroup, new THREE.BoxGeometry(0.034, 0.012, 0.36), metalMid, 0, 0.057, -0.01);             // top rail
+  addPart(burstGroup, new THREE.BoxGeometry(0.056, 0.056, 0.22), polymerMat, 0, 0.014, -0.28);           // handguard
+  for (let i = 0; i < 4; i++) addPart(burstGroup, new THREE.BoxGeometry(0.06, 0.008, 0.012), metalDark, 0, 0.014, -0.22 - i * 0.04);   // vent slots
+  addPart(burstGroup, new THREE.CylinderGeometry(0.0105, 0.0105, 0.2, 10), metalDark, 0, 0.014, -0.49, HALF_PI, 0, 0);   // barrel
+  addPart(burstGroup, new THREE.CylinderGeometry(0.0155, 0.0155, 0.07, 10), metalDark, 0, 0.014, -0.625, HALF_PI, 0, 0);  // flash hider
+  addPart(burstGroup, new THREE.CylinderGeometry(0.018, 0.018, 0.012, 10), metalMid, 0, 0.014, -0.6, HALF_PI, 0, 0);      // its ring
+  addPart(burstGroup, new THREE.BoxGeometry(0.022, 0.026, 0.04), metalDark, 0, 0.0275, -0.46);           // gas block
+  addPart(burstGroup, new THREE.BoxGeometry(0.006, 0.04, 0.008), metalDark, 0, 0.058, -0.46);            // front sight post
+  const burstRear = new THREE.Group();   // folds away under a red dot
+  burstGroup.add(burstRear);
+  addPart(burstRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.0645, 0.10);               // rear sight base
+  addPart(burstRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.078, 0.10);         // rear sight ring
+  addPart(burstGroup, new THREE.BoxGeometry(0.004, 0.012, 0.03), accentMat, 0.027, 0.03, 0.0);           // the burst selector
+  addPart(burstGroup, new THREE.BoxGeometry(0.036, 0.1, 0.042), gripMat, 0, -0.075, 0.12, 0.3, 0, 0);    // pistol grip
+  addPart(burstGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
+  addPart(burstGroup, new THREE.BoxGeometry(0.02, 0.012, 0.03), metalMid, 0.03, 0.04, 0.12);             // charging handle
+  addPart(burstGroup, new THREE.CylinderGeometry(0.016, 0.016, 0.2, 10), metalDark, 0, 0.012, 0.27, HALF_PI, 0, 0);   // buffer tube
+  addPart(burstGroup, new THREE.BoxGeometry(0.045, 0.08, 0.14), polymerMat, 0, -0.012, 0.37);            // stock
+  const burstMag = addPart(burstGroup, new THREE.BoxGeometry(0.03, 0.15, 0.066), metalDark, 0, -0.085, -0.02, 0.15, 0, 0);
+
+  // ---- LMG: a heavy receiver, a long shrouded barrel, a folded bipod and a big box magazine for 100 rounds ----
+  // sights: the rear ring and the front post both sit 0.088 above the bore
+  const lmgGroup = new THREE.Group();
+  addPart(lmgGroup, new THREE.BoxGeometry(0.062, 0.082, 0.46), metalDark, 0, 0.014, 0);                  // receiver
+  addPart(lmgGroup, new THREE.BoxGeometry(0.05, 0.012, 0.4), metalMid, 0, 0.061, -0.02);                 // top cover
+  addPart(lmgGroup, new THREE.BoxGeometry(0.066, 0.066, 0.34), polymerMat, 0, 0.012, -0.40);             // heat shroud
+  for (let i = 0; i < 6; i++) addPart(lmgGroup, new THREE.BoxGeometry(0.07, 0.008, 0.012), metalDark, 0, 0.012, -0.28 - i * 0.045);   // vent slots
+  addPart(lmgGroup, new THREE.CylinderGeometry(0.0125, 0.0125, 0.22, 10), metalDark, 0, 0.012, -0.68, HALF_PI, 0, 0);   // barrel
+  addPart(lmgGroup, new THREE.CylinderGeometry(0.0185, 0.0185, 0.07, 10), metalDark, 0, 0.012, -0.825, HALF_PI, 0, 0);  // muzzle device
+  for (const sx of [-0.02, 0.02]) addPart(lmgGroup, new THREE.BoxGeometry(0.008, 0.012, 0.18), metalMid, sx, -0.0265, -0.45);   // folded bipod legs
+  addPart(lmgGroup, new THREE.BoxGeometry(0.03, 0.02, 0.04), metalDark, 0, 0.055, -0.5);                 // front sight base
+  addPart(lmgGroup, new THREE.BoxGeometry(0.006, 0.03, 0.008), metalDark, 0, 0.073, -0.5);               // front sight post
+  const lmgRear = new THREE.Group();   // folds away under a red dot
+  lmgGroup.add(lmgRear);
+  addPart(lmgRear, new THREE.BoxGeometry(0.03, 0.02, 0.03), metalDark, 0, 0.0735, 0.12);                // rear sight base
+  addPart(lmgRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.088, 0.12);           // rear sight ring
+  addPart(lmgGroup, new THREE.BoxGeometry(0.022, 0.014, 0.04), metalMid, 0.04, 0.03, 0.02);              // charging handle
+  addPart(lmgGroup, new THREE.BoxGeometry(0.04, 0.11, 0.046), gripMat, 0, -0.08, 0.15, 0.3, 0, 0);       // pistol grip
+  addPart(lmgGroup, new THREE.TorusGeometry(0.028, 0.005, 6, 12, Math.PI), metalDark, 0, -0.055, 0.075, 0, HALF_PI, Math.PI);   // trigger guard
+  addPart(lmgGroup, new THREE.BoxGeometry(0.05, 0.1, 0.22), polymerMat, 0, -0.005, 0.34);                // stock
+  addPart(lmgGroup, new THREE.BoxGeometry(0.052, 0.11, 0.02), gripMat, 0, -0.005, 0.46);                 // butt pad
+  const lmgMag = addPart(lmgGroup, new THREE.BoxGeometry(0.075, 0.13, 0.15), metalDark, 0, -0.085, 0);
+
+  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup];
   for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   // everything held sits under one root, so left-handed is a single mirror (three.js
   // flips face winding for negative scale, so the models still render correctly)
@@ -2690,9 +2737,61 @@
       },
       inspectDuration: 1.8, inspects: GUN_INSPECTS,
     },
+    burst: {
+      name: "BURST", group: burstGroup,
+      restPos: new THREE.Vector3(0.22, -0.25, -0.52), restRot: new THREE.Euler(0.03, -0.08, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.078, -0.30), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.68, fireRate: 0.42, burst: 3, burstGap: 0.055, auto: false, isMelee: false, usesAmmo: true,
+      magSize: 30, ammoLabel: "ROUNDS", pellets: 1, spread: 0.005, spreadAds: 0.0012, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
+      scoreScale: 0.8, recoil: 0.4, kick: 0.3, flashScale: 0.6, brake: false, smoke: 0.35,
+      action: "none", ejectOnShot: true, casing: "small",
+      muzzle: new THREE.Vector3(0, 0.014, -0.66), eject: new THREE.Vector3(0.03, 0.03, 0.0),
+      sound: { recording: "ar", rate: 0.9, lowcut: 90, length: 0.55, gain: 0.85 },
+      recoilKick: { up: 0.01, grow: 0.0015, side: 0.003, max: 0.09, recover: 7, hold: 0.12 },
+      mag: burstMag, magRestY: burstMag.position.y,
+      reload: {
+        time: 2.1, magOut: 0.2, magDrop: 0.36, magUp: 0.78, magSeat: 1.24, travel: 0.15, rise: 0.3, charge: 1.55,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.25, -0.07,  0.06,  0.12, 0.15, -0.60],
+          [0.88, -0.07,  0.04,  0.08, 0.15, -0.66],
+          [1.24, -0.07,  0.07,  0.14, 0.15, -0.56],
+          [1.46, -0.03,  0.02,  0.10, 0.05,  0.25],
+          [1.82, -0.03,  0.02,  0.10, 0.05,  0.25],
+          [2.10,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 1.8, inspects: GUN_INSPECTS,
+    },
+    lmg: {
+      name: "LMG", group: lmgGroup,
+      restPos: new THREE.Vector3(0.24, -0.27, -0.55), restRot: new THREE.Euler(0.03, -0.08, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.088, -0.32), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.75, adsBase: 1.6, fireRate: 0.085, auto: true, isMelee: false, usesAmmo: true,   // slow to aim: adsBase stretches the aim-in time
+      magSize: 100, ammoLabel: "ROUNDS", pellets: 1, spread: 0.016, spreadAds: 0.007, bloom: 0.0025, bloomMax: 0.04, bloomRecover: 0.08,
+      scoreScale: 0.6, recoil: 0.5, kick: 0.35, flashScale: 0.9, brake: false, smoke: 0.5,
+      action: "none", ejectOnShot: true, casing: "rifle",
+      muzzle: new THREE.Vector3(0, 0.012, -0.87), eject: new THREE.Vector3(0.04, 0.03, 0.0),
+      sound: { recording: "ak", rate: 0.92, lowcut: 55, length: 0.5, gain: 1.0 },
+      recoilKick: { up: 0.0045, grow: 0.0005, side: 0.0055, max: 0.12, recover: 6, hold: 0.12 },
+      mag: lmgMag, magRestY: lmgMag.position.y,
+      reload: {
+        time: 4.4, magOut: 0.4, magDrop: 0.8, magUp: 1.9, magSeat: 3.0, travel: 0.2, rise: 0.35, charge: 3.6,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.45, -0.08,  0.07,  0.16, 0.16, -0.62],
+          [1.9,  -0.08,  0.05,  0.12, 0.16, -0.70],
+          [3.0,  -0.08,  0.08,  0.18, 0.16, -0.58],
+          [3.45, -0.04,  0.03,  0.12, 0.06,  0.28],
+          [4.0,  -0.04,  0.03,  0.12, 0.06,  0.28],
+          [4.4,   0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 2.0, inspects: GUN_INSPECTS,
+    },
   };
   // (a gun travels over the network as its place in this list, so new guns go at the end, after the knife, never in the middle)
-  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr"];
+  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg"];
   for (const id of WEAPON_ORDER) {
     const w = WEAPONS[id];
     w.id = id;
@@ -2712,7 +2811,7 @@
     throwTimer: 0,
     grappleOut: 0,   // 0 gun in hand, 1 grapple in hand
     pumpTime: -1, pumpCues: [], slideTime: -1,
-    recoilPitch: 0, recoilYaw: 0, burstShots: 0, lastShotAt: -99,   // recoil on the aim (where bullets go)
+    recoilPitch: 0, recoilYaw: 0, burstShots: 0, burstQueue: 0, burstTimer: 0, lastShotAt: -99,   // recoil on the aim (where bullets go)
     viewRecoilPitch: 0, viewRecoilYaw: 0,                            // how much of it the view (crosshair) shows
     camKick: 0, camKickYaw: 0,
   };
@@ -3499,6 +3598,8 @@
     shotgun: '<rect x="2" y="9" width="36" height="2.6" rx="1"/><rect x="8" y="12" width="26" height="2.4" rx="1"/><rect x="14" y="11" width="12" height="4.5" rx="1.5"/><rect x="36" y="8.5" width="12" height="6.5" rx="1"/><path d="M47 9 L62 11 L62 18 L47 15 Z"/><path d="M40 15 L44 15 L43 18 L40 17 Z"/>',
     pistol: '<g transform="translate(6.5 0)"><path d="M5 5.2 L46 5.2 L46 11.2 L7.4 11.2 L5 9.2 Z"/><rect x="8" y="3.6" width="35" height="1.6" rx="0.4"/><rect x="7.6" y="2.6" width="1.6" height="1.4"/><rect x="41.6" y="2.6" width="2.8" height="1.4"/><rect x="12" y="11" width="34.5" height="3.2" rx="0.4"/><path d="M21.4 14 L21.4 19.2 Q21.4 20.4 22.8 20.4 L32 20.4 L32 18.6 L23.4 18.6 L23.4 14 Z"/><path d="M27.6 14 L29.4 14 L29 17.4 L27.8 17.4 Z"/><path d="M33 14 L46 14 Q47.8 14 48.2 15.8 L50.6 23.4 L39.6 23.4 L36.6 15.6 Z"/><path d="M45.8 5.8 L49.6 4.4 L50.4 7.2 L46.2 9 Z"/></g>',
     smg: '<rect x="2" y="10" width="9" height="2.6" rx="1"/><rect x="9" y="8.5" width="12" height="5.5" rx="1"/><rect x="20" y="7.5" width="22" height="7" rx="1"/><rect x="24" y="5" width="12" height="2.5" rx="1"/><rect x="27" y="14" width="5.5" height="9" rx="1"/><path d="M38 14 L43 14 L42 21.5 L37 21 Z"/><rect x="42" y="9" width="14" height="1.6"/><rect x="42" y="12" width="14" height="1.6"/><rect x="55" y="7.5" width="5" height="8" rx="1"/>',
+    burst: '<rect x="1" y="10" width="8" height="2.6" rx="1"/><rect x="8" y="8.5" width="17" height="6" rx="1"/><rect x="24" y="8" width="16" height="6" rx="1"/><rect x="39" y="9.2" width="19" height="2.8"/><rect x="57" y="8.2" width="5" height="4.8" rx="1"/><rect x="13" y="6" width="9" height="2.3" rx="1"/><path d="M16 14.5 L21 14.5 L20.5 21.5 L15.5 21 Z"/><path d="M9 14 L13 14 L14.5 19.5 L10.5 19.5 Z"/>',
+    lmg: '<rect x="1" y="9" width="8" height="4.5" rx="1"/><rect x="8" y="7.5" width="20" height="7.5" rx="1"/><rect x="27" y="8.5" width="22" height="5.5" rx="1"/><rect x="48" y="9.3" width="12" height="2.2"/><rect x="30" y="5.5" width="6" height="2.5"/><rect x="15" y="14.5" width="10" height="8" rx="1"/><path d="M33 14 L48 14 L47 17.5 L34 16 Z"/>',
     dmr: '<rect x="0.5" y="10.2" width="6" height="2.4" rx="0.8"/><rect x="5" y="8.8" width="26" height="5.2" rx="1"/><rect x="30" y="7.8" width="17" height="7" rx="1"/><rect x="34" y="5.2" width="9" height="2.6" rx="1"/><path d="M34 14.5 L40 14.5 L39.5 21 L34.5 21 Z"/><path d="M43 14.5 L47 14.5 L47.5 19.5 L44 19.5 Z"/><rect x="46" y="9" width="8" height="3.2" rx="1"/><rect x="53" y="7.5" width="9" height="8.5" rx="1.5"/>',
     knife: '<path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/><rect x="41" y="8" width="3" height="9" rx="1"/><rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/><circle cx="60.5" cy="12.4" r="2.4"/>',
   };
@@ -3535,6 +3636,8 @@
     ak: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
     smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
     dmr: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
+    burst: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
+    lmg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
         { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" }],
@@ -3563,6 +3666,8 @@
     shotgun: { muzzle: [-0.75, 0.022, 0.016, 0.2], tube: [-0.671, -0.018, 0.0145] },
     smg: { muzzle: [-0.4175, 0.012, 0.014, 0.24], optic: [0.0, 0.056], under: [-0.23, -0.02], mag: [-0.085, 0, 0, 0.03, 0.056] },
     dmr: { muzzle: [-0.79, 0.012, 0.0145, 0.3], optic: [0.0, 0.062], under: [-0.36, -0.018], mag: [-0.06, 0, 0, 0.034, 0.075] },
+    burst: { muzzle: [-0.66, 0.014, 0.0155, 0.26], optic: [0.0, 0.063], under: [-0.30, -0.014], mag: [-0.075, 0, 0, 0.03, 0.066] },
+    lmg: { muzzle: [-0.86, 0.012, 0.0185, 0.3], optic: [0.02, 0.067], under: [-0.40, -0.021], mag: [-0.065, 0, 0, 0.075, 0.15] },
     pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024], mag: [-0.06, 0, 0, 0.03, 0.045] },
   };
   const AV_MOUNT = {
@@ -3572,6 +3677,8 @@
     shotgun: { muzzle: [-0.975, 0.02, 0.03, 0.2], tube: [-0.75, -0.03, 0.035] },
     smg: { muzzle: [-0.65, 0.005, 0.013, 0.22], optic: [-0.05, 0.0425], under: [-0.35, -0.0425], mag: [-0.23, -0.1, 0, 0.03, 0.05] },
     dmr: { muzzle: [-1.1, 0.005, 0.014, 0.26], optic: [-0.1, 0.0425], under: [-0.6, -0.0425], mag: [-0.19, -0.15, 0, 0.03, 0.05] },
+    burst: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425], mag: [-0.24, -0.2, 0, 0.03, 0.05] },
+    lmg: { muzzle: [-1.0, 0.005, 0.015, 0.26], optic: [-0.05, 0.05], under: [-0.55, -0.05], mag: [-0.21, -0.15, 0, 0.1, 0.14] },
     pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
   };
   // a laser's beam: thick and bright by the gun, thinner and fainter further out until it is gone (the materials are shared)
@@ -3674,7 +3781,7 @@
       w.recoil = base.recoil * fx.recoil; w.kick = base.kick * fx.recoil;
       w.flashScale = base.flash * fx.flash;
       for (const k of Object.keys(base.reload)) if (typeof base.reload[k] === "number") w.reload[k] = base.reload[k] * fx.reload;
-      w.adsMult = fx.ads; w.scopeFovMult = fx.scopeFov; w.soundMult = fx.sound;
+      w.adsMult = (w.adsBase || 1) * fx.ads; w.scopeFovMult = fx.scopeFov; w.soundMult = fx.sound;
       if (w.ammo > w.magSize) w.ammo = w.magSize;
       if (w.atGroup) { w.group.remove(w.atGroup); w.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.atGroup = null; }
       const ids = chosenAttachments(id).map((o) => o.id), has = (x) => ids.includes(x);
@@ -3695,6 +3802,8 @@
       if (id === "ar") arRear.visible = !has("reddot");
       if (id === "smg") smgRear.visible = !has("reddot");
       if (id === "dmr") dmrRear.visible = !has("reddot");
+      if (id === "burst") burstRear.visible = !has("reddot");
+      if (id === "lmg") lmgRear.visible = !has("reddot");
     }
     updateAmmoHud();
   }
@@ -3723,7 +3832,7 @@
       cancelReload(); cancelBoltCycle(); cancelPump();
       vm.switchTimer = 0; vm.pending = null; vm.swapped = true; vm.throwTimer = 0; vm.slashTimer = 0;
       vm.inspectTimer = 0; vm.wantADS = false; vm.adsProgress = 0;
-      vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0; vm.burstShots = 0;
+      vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0; vm.burstShots = 0; vm.burstQueue = 0;
       currentWeapon().group.visible = false;
       vm.current = id;
       currentWeapon().group.visible = true;
@@ -3738,7 +3847,7 @@
   }
   // the menu shows a few favourites, plus your gun if it is not one of them, and a More button for the rest
   const QUICK_GUNS = ["rifle", "ar", "shotgun"];
-  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak"]], ["SMGs", ["smg"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol"]]];
+  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg"]], ["Machine guns", ["lmg"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol"]]];
   const loadoutEl = document.getElementById("loadout"), loadoutPopupEl = document.getElementById("loadout-popup"), loadoutGroupsEl = document.getElementById("loadout-groups");
   const gunButton = (id) => {
     const b = document.createElement("button");
@@ -5882,6 +5991,7 @@
       return;
     }
     fireGun(w);
+    if (w.burst) { vm.burstQueue = w.burst - 1; vm.burstTimer = w.burstGap; }   // the rest of the burst follows by itself
   }
 
   const _aimDir = new THREE.Vector3(), _pelletDir = new THREE.Vector3();
@@ -6238,10 +6348,12 @@
     ak: { body: 34, head: 50 }, ar: { body: 26, head: 40 },
     smg: { body: 20, head: 30, near: 12, far: 35, farMult: 0.5 },   // full damage to 12 m, half by 35 m
     dmr: { body: 60, head: 100 },
+    burst: { body: 28, head: 42 },   // per round, three rounds a pull
+    lmg: { body: 24, head: 34 },
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };
   const KNIFE_SWING_DMG = 55, KNIFE_THROW_DMG = 100;
-  const GG_ORDER = ["smg", "ar", "ak", "dmr", "shotgun", "pistol", "rifle"];   // gun game: seven guns, then the knife (level 8)
+  const GG_ORDER = ["smg", "burst", "ar", "ak", "lmg", "dmr", "shotgun", "pistol", "rifle"];   // gun game: nine guns, then the knife (level 10)
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
   // (the deathmatch spawn points, SPAWNS, come from the map)
@@ -6482,6 +6594,12 @@
     } else if (id === "dmr") {       // DMR: long and slim, a box magazine and a solid stock
       P(B(0.065, 0.085, 0.85), dark, 0, 0, -0.35); P(B(0.028, 0.028, 0.3), steel, 0, 0.005, -0.95);
       P(B(0.03, 0.14, 0.05), steel, 0, -0.12, -0.15); P(B(0.05, 0.08, 0.22), dark, 0, 0, 0.25);
+    } else if (id === "burst") {     // burst rifle: like the rifle, with a straight magazine
+      P(B(0.065, 0.085, 0.7), dark, 0, 0, -0.3); P(B(0.025, 0.025, 0.25), steel, 0, 0.005, -0.75);
+      P(B(0.03, 0.2, 0.05), steel, 0, -0.14, -0.2); P(B(0.05, 0.07, 0.2), dark, 0, 0, 0.15);
+    } else if (id === "lmg") {       // LMG: thick, a big box magazine and a long barrel
+      P(B(0.075, 0.1, 0.75), dark, 0, 0, -0.3); P(B(0.03, 0.03, 0.3), steel, 0, 0.005, -0.85);
+      P(B(0.1, 0.12, 0.14), steel, 0, -0.15, -0.15); P(B(0.05, 0.09, 0.25), dark, 0, 0, 0.2);
     } else if (id === "ak") {        // AK: wooden furniture and a curved magazine
       P(B(0.065, 0.085, 0.75), dark, 0, 0, -0.3); P(B(0.07, 0.07, 0.28), wood, 0, 0, -0.62);
       P(B(0.03, 0.22, 0.05), steel, 0, -0.15, -0.15, 0.35); P(B(0.05, 0.1, 0.25), wood, 0, -0.02, 0.2);
@@ -6673,7 +6791,7 @@
   }
 
   // ---------------- events: what actually happens on every peer ----------------
-  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned" };
+  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned" };
   function feedLine(html) {
     const el = document.createElement("div");
     el.innerHTML = html;
@@ -7563,7 +7681,7 @@
   // hop: hops a second while strafing in a fight
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
   BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
-  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28 };   // the distance each gun likes to fight at
+  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20 };   // the distance each gun likes to fight at
   // What a mode asks of its bots, on top of their level (L3). Hill bots defend the hill harder: on it they react and aim a fifth better.
   // Battle royale bots are more cautious: they get well inside the circle early, hang back from fights, and fall back when hurt.
   const BOT_MODE = { koth: { holdReact: 0.8, holdErr: 0.8 }, br: { margin: 12, prefer: 1.3, retreatHp: 45 } };
@@ -8101,7 +8219,11 @@
     const ai = p.ai, L = ai.lvl, g = ai.gun, w = WEAPONS[g];
     ai.ammo--; p.lastFireAt = now;
     let gap = w.fireRate * 1.08;
-    if (w.auto) {
+    if (w.burst) {   // three quick rounds, then the gun's own pause
+      if (ai.burstLeft <= 0) ai.burstLeft = w.burst;
+      ai.burstLeft--;
+      gap = ai.burstLeft > 0 ? w.burstGap * 1.08 : w.fireRate * 1.08 + rnd(0.05, 0.3) * (L.react / 0.4);
+    } else if (w.auto) {
       if (ai.burstLeft <= 0) ai.burstLeft = randInt(L.burst[0], L.burst[1]);
       ai.burstLeft--;
       if (ai.burstLeft <= 0) gap = rnd(L.pause[0], L.pause[1]);
@@ -10306,6 +10428,13 @@
       if (autoReloadTimer > 0) { autoReloadTimer -= dt; if (autoReloadTimer <= 0) startReload(); }
 
       if (fireCooldown > 0) fireCooldown -= dt;
+      if (vm.burstQueue > 0) {   // the second and third rounds of a burst
+        const bw = currentWeapon();
+        if (!bw.burst || reload.active || vm.switchTimer > 0 || (net.active && (localDead || net.phase !== "play"))) vm.burstQueue = 0;
+        else if ((vm.burstTimer -= dt) <= 0) {
+          if (bw.ammo > 0 || SETTINGS.unlimitedAmmo) { fireGun(bw); vm.burstQueue--; vm.burstTimer = bw.burstGap; } else vm.burstQueue = 0;
+        }
+      }
 
       const w = currentWeapon();
       if (w.auto) { if (mouseHeld) attack(); }
