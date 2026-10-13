@@ -761,6 +761,13 @@ def test_attachments(browser, base):
     check("clicking your gun a second time opens the attachments window", page.is_visible("#attach-popup"))
     page.click("#attach-close")
     page.click("#attach-open")
+    # the barrels and the magnified scopes
+    page.click('#attach-guns button[data-gun="ar"]')
+    check("the rifle offers two barrels and a 2x scope",
+          all(page.query_selector(f'#attach-slots .at-opt[data-opt="{o}"]') is not None for o in ("longbarrel", "heavybarrel", "optic-2x")))
+    page.click('#attach-slots .at-opt[data-opt="optic-2x"]')
+    page.click('#attach-slots .at-opt[data-opt="longbarrel"]')
+    check("a scope and a barrel can be fitted together", page.eval_on_selector_all('#attach-slots .at-opt.active', "els => els.map(e => e.dataset.opt)").count("optic-2x") == 1)
     # a grip and a magazine can be fitted together, and an old save with the magazine in the grip slot still works
     page.click('#attach-guns button[data-gun="dmr"]')
     page.click('#attach-slots .at-opt[data-opt="vgrip"]')

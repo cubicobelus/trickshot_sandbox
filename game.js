@@ -3199,7 +3199,7 @@
     const speedNow = Math.hypot(player.velocity.x, player.velocity.z);
     const speedT = Math.max(0, Math.min((speedNow - CFG.groundMaxSpeed) / (CFG.maxSpeed - CFG.groundMaxSpeed), 1));
     const speedFov = SETTINGS.reduceMotion ? 0 : CFG.speedFovBoost * speedT * (1 - adsEased);
-    const adsFov = w.scope ? CFG.scopedFov * (w.scopeFovMult || 1) : SETTINGS.fov * (w.adsZoom || 1);
+    const adsFov = w.scope ? CFG.scopedFov * (w.scopeFovMult || 1) : SETTINGS.fov * (w.adsZoom || 1) * (w.zoomMult || 1);
     const targetFov = SETTINGS.fov + (adsFov - SETTINGS.fov) * adsEased + speedFov;
     if (Math.abs(camera.fov - targetFov) > 0.02) {
       camera.fov += (targetFov - camera.fov) * Math.min(dt * 12, 1);
@@ -3616,6 +3616,12 @@
   const SUPPRESSOR = { id: "suppressor", name: "Suppressor", need: 20, fx: { flash: 0.2, sound: 0.45, recoil: 1.05 }, text: "Quieter, almost no flash; a touch more kick" };
   const AT_REDDOT = { id: "reddot", name: "Red dot", need: 10, fx: { ads: 0.85, spreadAds: 0.8 }, text: "Aims down sights 15% faster, tighter when aimed" };
   const AT_BRAKE = { id: "brake", name: "Muzzle brake", need: 55, fx: { recoil: 0.8, sound: 1.2 }, text: "20% less recoil, louder" };
+  const AT_SCOPE2 = { id: "optic-2x", name: "2x scope", need: 50, fx: { zoom: 0.7, ads: 1.15 }, text: "A closer view when aimed, a little slower to aim" };
+  const AT_SCOPE4 = { id: "optic-4x", name: "4x scope", need: 90, fx: { zoom: 0.45, ads: 1.35 }, text: "A much closer view, slower to aim" };
+  const AT_BARRELS = [
+    { id: "longbarrel", name: "Long barrel", need: 45, fx: { spread: 0.85, spreadAds: 0.8, ads: 1.1 }, text: "Tighter shots, a touch slower to aim" },
+    { id: "heavybarrel", name: "Heavy barrel", need: 70, fx: { recoil: 0.88, ads: 1.1 }, text: "12% less recoil, slower to aim" },
+  ];
   const AT_GRIPS = [
     { id: "vgrip", name: "Vertical grip", need: 30, fx: { recoil: 0.85 }, text: "15% less recoil" },
     { id: "agrip", name: "Angled grip", need: 65, fx: { ads: 0.85, spread: 0.92 }, text: "Faster to aim, a little tighter from the hip" },
@@ -3632,12 +3638,12 @@
       stock: [{ id: "stock-light", name: "Light stock", need: 30, fx: { ads: 0.9, recoil: 1.08 }, text: "Aims 10% faster, a little more kick" },
         { id: "stock-heavy", name: "Heavy stock", need: 65, fx: { recoil: 0.85, ads: 1.1 }, text: "Steadier, slower to aim" }],
     },
-    ar: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
-    ak: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
-    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
-    dmr: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
-    burst: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
-    lmg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
+    ar: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    ak: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    dmr: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
+    burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
         { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" }],
@@ -3690,7 +3696,19 @@
   function attachParts(ids, M) {
     const g = new THREE.Group();
     const add = (geo, mat, x, y, z, rx) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx) m.rotation.x = rx; g.add(m); return m; };
-    const HP = Math.PI / 2, mz = M.muzzle;
+    const HP = Math.PI / 2;
+    let mz = M.muzzle;
+    if (mz && ids.includes("longbarrel")) {   // a longer barrel: a sleeve out past the old muzzle, and anything on the muzzle moves out with it
+      const ext = mz[3] * 0.4, r = Math.max(mz[2], 0.012);
+      add(new THREE.CylinderGeometry(r, r, ext, 12), AT_STEEL, 0, mz[1], mz[0] - ext / 2, HP);
+      add(new THREE.CylinderGeometry(r * 1.2, r * 1.2, 0.016, 12), AT_STEEL, 0, mz[1], mz[0] - ext + 0.008, HP);
+      mz = [mz[0] - ext, mz[1], mz[2], mz[3]];
+    }
+    if (mz && ids.includes("heavybarrel")) {   // a fat sleeve over the barrel, with two bands
+      const len = Math.min(0.22, M.muzzle[3] * 0.85), r = Math.max(M.muzzle[2] * 1.3, 0.018), zc = M.muzzle[0] + 0.03 + len / 2;
+      add(new THREE.CylinderGeometry(r, r, len, 14), AT_STEEL, 0, mz[1], zc, HP);
+      for (const f of [0.2, 0.8]) add(new THREE.CylinderGeometry(r * 1.08, r * 1.08, 0.012, 14), AT_RUBBER, 0, mz[1], zc - len / 2 + len * f, HP);
+    }
     for (const id of ids) {
       if (id === "suppressor" && mz) {   // a can twice the barrel's width, from the muzzle forward
         const r = Math.max(mz[2] * 1.9, 0.024), len = mz[3];
@@ -3702,7 +3720,15 @@
         for (const side of [-1, 1]) for (let i = 0; i < 2; i++) add(new THREE.BoxGeometry(0.003, w * 0.6, len * 0.16), AT_RUBBER, side * (w / 2 + 0.0005), mz[1], mz[0] - len * (0.3 + i * 0.36));
       } else if (id === "choke" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.15, mz[2] * 1.3, 0.05, 14), AT_STEEL, 0, mz[1], mz[0] - 0.025, HP);
       else if (id === "wide" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.7, mz[2] * 1.2, 0.045, 14), AT_STEEL, 0, mz[1], mz[0] - 0.022, HP);
-      else if (id === "reddot" && M.optic) {   // clamped to the rail: a riser, an open frame, a faint lens and the dot
+      else if ((id === "optic-2x" || id === "optic-4x") && M.optic) {   // a scope on a clamp: an open tube, a flared front with glass, an eyepiece ring (the frame you aim through) and a turret
+        const [z, t] = M.optic, big = id === "optic-4x", len = big ? 0.17 : 0.11, r = big ? 0.0225 : 0.019, c = t + AT_DOT_RISE;
+        add(new THREE.BoxGeometry(0.024, 0.015, 0.05), AT_STEEL, 0, t + 0.0075, z);
+        add(new THREE.CylinderGeometry(r, r, len, 14, 1, true), AT_STEEL, 0, c, z, HP);
+        add(new THREE.CylinderGeometry(r, r * 1.35, 0.03, 14, 1, true), AT_STEEL, 0, c, z - len / 2 - 0.015, HP);
+        add(new THREE.TorusGeometry(r * 1.02, 0.0045, 6, 16), AT_STEEL, 0, c, z + len / 2);
+        add(new THREE.CircleGeometry(r * 1.3, 14), AT_LENS, 0, c, z - len / 2 - 0.03);
+        add(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 8), AT_STEEL, 0, c + r + 0.004, z);
+      } else if (id === "reddot" && M.optic) {   // clamped to the rail: a riser, an open frame, a faint lens and the dot
         const [z, t] = M.optic, c = t + AT_DOT_RISE;
         add(new THREE.BoxGeometry(0.026, 0.011, 0.05), AT_STEEL, 0, t + 0.0055, z);
         add(new THREE.BoxGeometry(0.038, 0.006, 0.045), AT_STEEL, 0, c - 0.021, z);
@@ -3759,7 +3785,7 @@
   const WEAPON_BASE = {};   // what each gun is without attachments
   for (const id of GUNS) {
     const w = WEAPONS[id];
-    WEAPON_BASE[id] = { mag: w.magSize, spread: w.spread, spreadAds: w.spreadAds, recoil: w.recoil, kick: w.kick, flash: w.flashScale, reload: Object.assign({}, w.reload), adsY: w.adsPos.y };
+    WEAPON_BASE[id] = { mag: w.magSize, spread: w.spread, spreadAds: w.spreadAds, recoil: w.recoil, kick: w.kick, flash: w.flashScale, reload: Object.assign({}, w.reload), adsY: w.adsPos.y, muzzleZ: w.muzzle ? w.muzzle.z : 0 };
   }
   const baseMag = (id) => (WEAPON_BASE[id] ? WEAPON_BASE[id].mag : WEAPONS[id].magSize);
   let devUnlockAll = false;   // the dev tools window (the ` key) turns this on: every attachment opens, for testing; otherwise each unlocks by hits landed with its gun
@@ -3774,22 +3800,26 @@
   }
   function applyAttachments() {
     for (const id of GUNS) {
-      const w = WEAPONS[id], base = WEAPON_BASE[id], fx = { ads: 1, spread: 1, spreadAds: 1, recoil: 1, mag: 1, reload: 1, flash: 1, sound: 1, scopeFov: 1 };
+      const w = WEAPONS[id], base = WEAPON_BASE[id], fx = { ads: 1, spread: 1, spreadAds: 1, recoil: 1, mag: 1, reload: 1, flash: 1, sound: 1, scopeFov: 1, zoom: 1 };
       for (const o of chosenAttachments(id)) for (const k of Object.keys(o.fx)) fx[k] *= o.fx[k];
       w.magSize = Math.max(1, Math.round(base.mag * fx.mag));
       w.spread = base.spread * fx.spread; w.spreadAds = base.spreadAds * fx.spreadAds;
       w.recoil = base.recoil * fx.recoil; w.kick = base.kick * fx.recoil;
       w.flashScale = base.flash * fx.flash;
       for (const k of Object.keys(base.reload)) if (typeof base.reload[k] === "number") w.reload[k] = base.reload[k] * fx.reload;
-      w.adsMult = (w.adsBase || 1) * fx.ads; w.scopeFovMult = fx.scopeFov; w.soundMult = fx.sound;
+      w.adsMult = (w.adsBase || 1) * fx.ads; w.scopeFovMult = fx.scopeFov; w.zoomMult = fx.zoom; w.soundMult = fx.sound;
       if (w.ammo > w.magSize) w.ammo = w.magSize;
       if (w.atGroup) { w.group.remove(w.atGroup); w.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.atGroup = null; }
-      const ids = chosenAttachments(id).map((o) => o.id), has = (x) => ids.includes(x);
+      const ids = chosenAttachments(id).map((o) => o.id), has = (x) => ids.includes(x), anyOptic = has("reddot") || has("optic-2x") || has("optic-4x");
       if (ids.length && AT_MOUNT[id]) { w.atGroup = attachParts(ids, AT_MOUNT[id]); w.group.add(w.atGroup); }
       if (w.magAt) { w.magAt.parent.remove(w.magAt); w.magAt.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.magAt = null; }
       const mp = w.mag && magParts(ids, AT_MOUNT[id]);
       if (mp) { w.magAt = mp; w.mag.add(mp); }
       w.adsPos.y = base.adsY;
+      if (w.muzzle) {   // a long barrel puts the muzzle further out
+        w.muzzle.z = base.muzzleZ - (has("longbarrel") && AT_MOUNT[id].muzzle ? AT_MOUNT[id].muzzle[3] * 0.4 : 0);
+        if (muzzleFlash.parent === w.group) muzzleFlash.position.copy(w.muzzle);
+      }
       if (id === "rifle") {   // the sniper: iron sights, unless a scope is fitted
         const scoped = has("scope-low") || has("scope-high");
         w.scope = scoped; rifleScope.visible = scoped; rifleIrons.visible = !scoped;
@@ -3798,12 +3828,12 @@
         rifleStock.visible = !has("stock-light");
         if (scoped) w.adsPos.y = w.scopeAdsY;
       }
-      if (AT_MOUNT[id].optic && has("reddot")) w.adsPos.y = -(AT_MOUNT[id].optic[1] + AT_DOT_RISE);   // look through the dot
-      if (id === "ar") arRear.visible = !has("reddot");
-      if (id === "smg") smgRear.visible = !has("reddot");
-      if (id === "dmr") dmrRear.visible = !has("reddot");
-      if (id === "burst") burstRear.visible = !has("reddot");
-      if (id === "lmg") lmgRear.visible = !has("reddot");
+      if (AT_MOUNT[id].optic && anyOptic) w.adsPos.y = -(AT_MOUNT[id].optic[1] + AT_DOT_RISE);   // look through the dot
+      if (id === "ar") arRear.visible = !anyOptic;
+      if (id === "smg") smgRear.visible = !anyOptic;
+      if (id === "dmr") dmrRear.visible = !anyOptic;
+      if (id === "burst") burstRear.visible = !anyOptic;
+      if (id === "lmg") lmgRear.visible = !anyOptic;
     }
     updateAmmoHud();
   }
