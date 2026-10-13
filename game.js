@@ -2451,7 +2451,7 @@
 
   // ---- LMG: a heavy receiver, a long shrouded barrel, a folded bipod and a big box magazine for 100 rounds ----
   // sights: the rear ring and the front post both sit 0.088 above the bore
-  const lmgGroup = new THREE.Group();
+  const lmgGroup = new THREE.Group();   // (the drum is the magazine mesh: the attachments' magazine parts are not built for it, so it has its own option)
   addPart(lmgGroup, new THREE.BoxGeometry(0.062, 0.082, 0.46), metalDark, 0, 0.014, 0);                  // receiver
   addPart(lmgGroup, new THREE.BoxGeometry(0.05, 0.012, 0.4), metalMid, 0, 0.061, -0.02);                 // top cover
   addPart(lmgGroup, new THREE.BoxGeometry(0.066, 0.066, 0.34), polymerMat, 0, 0.012, -0.40);             // heat shroud
@@ -2470,18 +2470,19 @@
   addPart(lmgGroup, new THREE.TorusGeometry(0.028, 0.005, 6, 12, Math.PI), metalDark, 0, -0.055, 0.075, 0, HALF_PI, Math.PI);   // trigger guard
   addPart(lmgGroup, new THREE.BoxGeometry(0.05, 0.1, 0.22), polymerMat, 0, -0.005, 0.34);                // stock
   addPart(lmgGroup, new THREE.BoxGeometry(0.052, 0.11, 0.02), gripMat, 0, -0.005, 0.46);                 // butt pad
-  const lmgMag = addPart(lmgGroup, new THREE.BoxGeometry(0.075, 0.13, 0.15), metalDark, 0, -0.085, 0);
+  addPart(lmgGroup, new THREE.BoxGeometry(0.06, 0.04, 0.07), metalDark, 0, -0.04, 0);                     // feed neck
+  const lmgMag = addPart(lmgGroup, new THREE.CylinderGeometry(0.1, 0.1, 0.1, 24), metalDark, 0, -0.115, 0, 0, 0, HALF_PI);   // the drum (its axis runs across the gun)
+  addPart(lmgMag, new THREE.CylinderGeometry(0.045, 0.045, 0.108, 16), metalMid, 0, 0, 0);                // hub
+  for (const sy of [-1, 1]) addPart(lmgMag, new THREE.TorusGeometry(0.093, 0.006, 6, 24), metalMid, 0, sy * 0.052, 0, HALF_PI, 0, 0);   // rims
 
-  // ---- crossbow: a dark stock with a rail, a prod with two swept limbs and a drawn string, and a bolt lying in the groove ----
+  // ---- crossbow: a dark stock with a rail, a prod with two flexing limbs and a moving string, and a bolt lying in the groove ----
   // sights: the rear ring and the front post both sit 0.07 above the rail's centre line (see adsPos)
   const crossbowGroup = new THREE.Group();
   addPart(crossbowGroup, new THREE.BoxGeometry(0.05, 0.07, 0.6), metalDark, 0, 0, 0.05);                  // stock body
   addPart(crossbowGroup, new THREE.BoxGeometry(0.026, 0.012, 0.5), metalMid, 0, 0.041, 0.0);              // rail on top
   addPart(crossbowGroup, new THREE.BoxGeometry(0.075, 0.056, 0.08), metalDark, 0, 0.0, -0.3);             // prod block
-  for (const sx of [-1, 1]) addPart(crossbowGroup, new THREE.BoxGeometry(0.3, 0.02, 0.03), polymerMat, sx * 0.17, 0.0, -0.33, 0, sx * 0.25, 0);   // limbs, tips swept forward
-  for (const sx of [-1, 1]) addPart(crossbowGroup, new THREE.BoxGeometry(0.004, 0.004, 0.396), metalMid, sx * 0.155, 0.0, -0.2435, 0, -sx * 0.9, 0);   // string, drawn back to the latch
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.03, 0.03, 0.05), metalMid, 0, 0.02, -0.12);               // latch
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.008, 0.03, 0.008), metalDark, 0, 0.055, -0.2);             // front sight post
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.03, 0.03, 0.05), metalMid, 0, 0.02, -0.12);              // latch
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.008, 0.03, 0.008), metalDark, 0, 0.055, -0.2);           // front sight post
   const crossbowRear = new THREE.Group();   // folds away under an optic
   crossbowGroup.add(crossbowRear);
   addPart(crossbowRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.052, 0.0);             // rear sight base
@@ -2490,8 +2491,35 @@
   addPart(crossbowGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.08, 0, HALF_PI, Math.PI);   // trigger guard
   addPart(crossbowGroup, new THREE.BoxGeometry(0.045, 0.08, 0.2), polymerMat, 0, -0.01, 0.43);            // butt
   addPart(crossbowGroup, new THREE.BoxGeometry(0.05, 0.09, 0.02), gripMat, 0, -0.01, 0.54);               // butt pad
+  // each limb is two segments, the outer one bending a little more as the string comes back
+  const XB = { px: 0.035, pz: -0.33, y: 0.015, inner: 0.17, outer: 0.15, latchZ: -0.12 };
+  const xbLimbs = [];
+  for (const sx of [-1, 1]) {
+    const inner = new THREE.Group(); inner.position.set(sx * XB.px, XB.y, XB.pz); crossbowGroup.add(inner);
+    addPart(inner, new THREE.BoxGeometry(XB.inner, 0.022, 0.032), polymerMat, sx * XB.inner / 2, 0, 0);
+    const outer = new THREE.Group(); outer.position.set(sx * XB.inner, 0, 0); inner.add(outer);
+    addPart(outer, new THREE.BoxGeometry(XB.outer, 0.018, 0.026), polymerMat, sx * XB.outer / 2, 0, 0);
+    addPart(outer, new THREE.BoxGeometry(0.014, 0.024, 0.036), metalMid, sx * XB.outer, 0, 0);            // the string's nock at the tip
+    xbLimbs.push({ sx, inner, outer });
+  }
+  const xbString = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.004, 1), metalMid); crossbowGroup.add(m); return m; });
+  // d: 1 = drawn back and latched, 0 = relaxed (just fired); a little below 0 is the limbs springing past
+  function setCrossbowDraw(d) {
+    const a1 = 0.42 - 0.42 * d, a2 = 0.55 - 0.85 * d;   // how far each segment sweeps forward
+    const tipZ = XB.pz - XB.inner * Math.sin(a1) - XB.outer * Math.sin(a2);
+    const tipX = XB.px + XB.inner * Math.cos(a1) + XB.outer * Math.cos(a2);
+    const zS = tipZ * (1 - d) + XB.latchZ * d;
+    xbLimbs.forEach((l) => { l.inner.rotation.y = l.sx * a1; l.outer.rotation.y = l.sx * (a2 - a1); });
+    xbString.forEach((m, k) => {
+      const sx = k === 0 ? -1 : 1, dx = sx * tipX, dz = tipZ - zS, len = Math.hypot(dx, dz);
+      m.position.set(dx / 2, XB.y, (tipZ + zS) / 2);
+      m.scale.set(1, 1, len);
+      m.rotation.set(0, Math.atan2(dx, dz), 0);
+    });
+  }
+  setCrossbowDraw(1);
   // the bolt is the "magazine": it slides out of the groove and a fresh one rises into it on a reload
-  const crossbowMag = addPart(crossbowGroup, new THREE.BoxGeometry(0.008, 0.008, 0.26), metalMid, 0, 0.0525, -0.08);
+  const crossbowMag = addPart(crossbowGroup, new THREE.BoxGeometry(0.008, 0.008, 0.26), metalMid, 0, 0.0525, -0.25);
   addPart(crossbowMag, new THREE.ConeGeometry(0.008, 0.035, 8), metalMid, 0, 0, -0.1475, -HALF_PI, 0, 0);   // head
   addPart(crossbowMag, new THREE.BoxGeometry(0.04, 0.002, 0.04), accentMat, 0, 0, 0.11);                   // fletching
   addPart(crossbowMag, new THREE.BoxGeometry(0.002, 0.04, 0.04), accentMat, 0, 0, 0.11);
@@ -2818,15 +2846,15 @@
       restPos: new THREE.Vector3(0.22, -0.25, -0.52), restRot: new THREE.Euler(0.03, -0.08, 0.01),
       adsPos: new THREE.Vector3(0.0, -0.07, -0.30), adsRot: new THREE.Euler(0, 0, 0),
       canADS: true, scope: false, adsZoom: 0.62, fireRate: 0.9, auto: false, isMelee: false, usesAmmo: true,
-      magSize: 1, ammoLabel: "BOLTS", pellets: 1, spread: 0.006, spreadAds: 0.0005, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
+      drawNow: 1, magSize: 1, ammoLabel: "BOLTS", pellets: 1, spread: 0.006, spreadAds: 0.0005, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
       scoreScale: 0.9, recoil: 0.5, kick: 0.4, flashScale: 0, brake: false, smoke: 0,
       action: "none", ejectOnShot: false, casing: "small",
-      muzzle: new THREE.Vector3(0, 0.0525, -0.26), eject: new THREE.Vector3(0.03, 0.03, 0.0),
+      muzzle: new THREE.Vector3(0, 0.0525, -0.42), eject: new THREE.Vector3(0.03, 0.03, 0.0),
       sound: { recording: "pistol", rate: 2, lowcut: 900, length: 0.25, gain: 0.5 },
       recoilKick: { up: 0.02, grow: 0, side: 0.002, max: 0.05, recover: 5, hold: 0.2 },
       mag: crossbowMag, magRestY: crossbowMag.position.y,
       reload: {
-        time: 1.9, magOut: 0.15, magDrop: 0.3, magUp: 0.8, magSeat: 1.25, travel: 0.1, rise: 0.12, charge: 1.5,
+        time: 1.9, magOut: 0.15, magDrop: 0.3, magUp: 0.8, magSeat: 1.25, travel: 0.1, rise: 0.12, charge: 0.75,
         keys: [
           [0.00,  0,     0,     0,    0,     0   ],
           [0.25, -0.05,  0.05,  0.14, 0.10, -0.45],
@@ -3649,7 +3677,7 @@
     pistol: '<g transform="translate(6.5 0)"><path d="M5 5.2 L46 5.2 L46 11.2 L7.4 11.2 L5 9.2 Z"/><rect x="8" y="3.6" width="35" height="1.6" rx="0.4"/><rect x="7.6" y="2.6" width="1.6" height="1.4"/><rect x="41.6" y="2.6" width="2.8" height="1.4"/><rect x="12" y="11" width="34.5" height="3.2" rx="0.4"/><path d="M21.4 14 L21.4 19.2 Q21.4 20.4 22.8 20.4 L32 20.4 L32 18.6 L23.4 18.6 L23.4 14 Z"/><path d="M27.6 14 L29.4 14 L29 17.4 L27.8 17.4 Z"/><path d="M33 14 L46 14 Q47.8 14 48.2 15.8 L50.6 23.4 L39.6 23.4 L36.6 15.6 Z"/><path d="M45.8 5.8 L49.6 4.4 L50.4 7.2 L46.2 9 Z"/></g>',
     smg: '<rect x="2" y="10" width="9" height="2.6" rx="1"/><rect x="9" y="8.5" width="12" height="5.5" rx="1"/><rect x="20" y="7.5" width="22" height="7" rx="1"/><rect x="24" y="5" width="12" height="2.5" rx="1"/><rect x="27" y="14" width="5.5" height="9" rx="1"/><path d="M38 14 L43 14 L42 21.5 L37 21 Z"/><rect x="42" y="9" width="14" height="1.6"/><rect x="42" y="12" width="14" height="1.6"/><rect x="55" y="7.5" width="5" height="8" rx="1"/>',
     burst: '<rect x="1" y="10" width="8" height="2.6" rx="1"/><rect x="8" y="8.5" width="17" height="6" rx="1"/><rect x="24" y="8" width="16" height="6" rx="1"/><rect x="39" y="9.2" width="19" height="2.8"/><rect x="57" y="8.2" width="5" height="4.8" rx="1"/><rect x="13" y="6" width="9" height="2.3" rx="1"/><path d="M16 14.5 L21 14.5 L20.5 21.5 L15.5 21 Z"/><path d="M9 14 L13 14 L14.5 19.5 L10.5 19.5 Z"/>',
-    lmg: '<rect x="1" y="9" width="8" height="4.5" rx="1"/><rect x="8" y="7.5" width="20" height="7.5" rx="1"/><rect x="27" y="8.5" width="22" height="5.5" rx="1"/><rect x="48" y="9.3" width="12" height="2.2"/><rect x="30" y="5.5" width="6" height="2.5"/><rect x="15" y="14.5" width="10" height="8" rx="1"/><path d="M33 14 L48 14 L47 17.5 L34 16 Z"/>',
+    lmg: '<rect x="1" y="9" width="8" height="4.5" rx="1"/><rect x="8" y="7.5" width="20" height="7.5" rx="1"/><rect x="27" y="8.5" width="22" height="5.5" rx="1"/><rect x="48" y="9.3" width="12" height="2.2"/><rect x="30" y="5.5" width="6" height="2.5"/><circle cx="17" cy="17.5" r="6"/><path d="M33 14 L48 14 L47 17.5 L34 16 Z"/>',
     crossbow: '<rect x="2" y="10" width="9" height="3" rx="1"/><rect x="10" y="9" width="34" height="5" rx="1"/><path d="M40 11.5 L47 11.5 L57 4 L59 6.5 L50 13 L59 19.5 L57 22 L47 14.5 L40 14.5 Z"/><rect x="18" y="14" width="5" height="8" rx="1"/><rect x="11" y="7.3" width="38" height="1.6"/>',
     dmr: '<rect x="0.5" y="10.2" width="6" height="2.4" rx="0.8"/><rect x="5" y="8.8" width="26" height="5.2" rx="1"/><rect x="30" y="7.8" width="17" height="7" rx="1"/><rect x="34" y="5.2" width="9" height="2.6" rx="1"/><path d="M34 14.5 L40 14.5 L39.5 21 L34.5 21 Z"/><path d="M43 14.5 L47 14.5 L47.5 19.5 L44 19.5 Z"/><rect x="46" y="9" width="8" height="3.2" rx="1"/><rect x="53" y="7.5" width="9" height="8.5" rx="1.5"/>',
     knife: '<path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/><rect x="41" y="8" width="3" height="9" rx="1"/><rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/><circle cx="60.5" cy="12.4" r="2.4"/>',
@@ -3694,7 +3722,7 @@
     smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
     dmr: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
     burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
-    lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
+    lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: [{ id: "drum", name: "Big drum", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "A bigger drum: 150 rounds, slower reload" }] },
     crossbow: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4] },
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
@@ -3725,7 +3753,7 @@
     smg: { muzzle: [-0.4175, 0.012, 0.014, 0.24], optic: [0.0, 0.056], under: [-0.23, -0.02], mag: [-0.085, 0, 0, 0.03, 0.056] },
     dmr: { muzzle: [-0.79, 0.012, 0.0145, 0.3], optic: [0.0, 0.062], under: [-0.36, -0.018], mag: [-0.06, 0, 0, 0.034, 0.075] },
     burst: { muzzle: [-0.66, 0.014, 0.0155, 0.26], optic: [0.0, 0.063], under: [-0.30, -0.014], mag: [-0.075, 0, 0, 0.03, 0.066] },
-    lmg: { muzzle: [-0.86, 0.012, 0.0185, 0.3], optic: [0.02, 0.067], under: [-0.40, -0.021], mag: [-0.065, 0, 0, 0.075, 0.15] },
+    lmg: { muzzle: [-0.86, 0.012, 0.0185, 0.3], optic: [0.02, 0.067], under: [-0.40, -0.021] },
     crossbow: { optic: [0.0, 0.047] },
     pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024], mag: [-0.06, 0, 0, 0.03, 0.045] },
   };
@@ -3737,7 +3765,7 @@
     smg: { muzzle: [-0.65, 0.005, 0.013, 0.22], optic: [-0.05, 0.0425], under: [-0.35, -0.0425], mag: [-0.23, -0.1, 0, 0.03, 0.05] },
     dmr: { muzzle: [-1.1, 0.005, 0.014, 0.26], optic: [-0.1, 0.0425], under: [-0.6, -0.0425], mag: [-0.19, -0.15, 0, 0.03, 0.05] },
     burst: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425], mag: [-0.24, -0.2, 0, 0.03, 0.05] },
-    lmg: { muzzle: [-1.0, 0.005, 0.015, 0.26], optic: [-0.05, 0.05], under: [-0.55, -0.05], mag: [-0.21, -0.15, 0, 0.1, 0.14] },
+    lmg: { muzzle: [-1.0, 0.005, 0.015, 0.26], optic: [-0.05, 0.05], under: [-0.55, -0.05] },
     crossbow: { optic: [-0.1, 0.0425] },
     pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
   };
@@ -3887,7 +3915,7 @@
       if (id === "smg") smgRear.visible = !anyOptic;
       if (id === "dmr") dmrRear.visible = !anyOptic;
       if (id === "burst") burstRear.visible = !anyOptic;
-      if (id === "lmg") lmgRear.visible = !anyOptic;
+      if (id === "lmg") { lmgRear.visible = !anyOptic; lmgMag.scale.setScalar(has("drum") ? 1.22 : 1); }
       if (id === "crossbow") crossbowRear.visible = !anyOptic;
     }
     updateAmmoHud();
@@ -6247,6 +6275,17 @@
   const BOLT_SPEED = 75, BOLT_GRAVITY = 4, BOLT_LIFE = 1.6, BOLT_CONVERGE = 40;   // metres a second, how hard it drops, seconds in the air (about 100 m), where the muzzle's aim meets the crosshair's
   const setThrownModel = (k, bolt) => { k.bolt = bolt; k.model.visible = !bolt; k.boltModel.visible = bolt; };
   const _boltDir = new THREE.Vector3(), _boltAim = new THREE.Vector3();
+  function updateCrossbowDraw() {   // the string springs forward on a shot, comes back during a reload, and stays latched otherwise
+    const w = WEAPONS.crossbow;
+    if (!w.group.visible) return;
+    const tf = elapsedTime - (w.lastFiredAt === undefined ? -99 : w.lastFiredAt), clamp = (x) => Math.min(Math.max(x, 0), 1);
+    const spring = (t) => (t < 0.03 ? 1 - t / 0.03 : -0.2 * Math.exp(-(t - 0.03) * 14) * Math.sin((t - 0.03) * 44));   // snaps forward, overshoots, settles
+    let d = 1;
+    if (reload.active && reload.weapon === "crossbow") d = easeInOut(clamp((reload.elapsed - 0.15) / 0.6));
+    else if (w.ammo <= 0 && !SETTINGS.unlimitedAmmo) d = tf < 0.6 ? spring(tf) : 0;
+    else if (tf < 0.95) d = tf < 0.35 ? spring(tf) : easeInOut(clamp((tf - 0.35) / 0.55));   // (unlimited ammo: it draws itself again)
+    if (Math.abs(d - w.drawNow) > 0.002) { w.drawNow = d; setCrossbowDraw(d); }
+  }
   function playBoltShot() {   // the string's twang and a short clack
     tone("triangle", 260, 70, 0.34 * SETTINGS.volGuns, 0.22, 0, 0.3);
     tone("sawtooth", 90, 55, 0.12 * SETTINGS.volGuns, 0.1, 0, 0.2);
@@ -6757,7 +6796,7 @@
       P(B(0.03, 0.2, 0.05), steel, 0, -0.14, -0.2); P(B(0.05, 0.07, 0.2), dark, 0, 0, 0.15);
     } else if (id === "lmg") {       // LMG: thick, a big box magazine and a long barrel
       P(B(0.075, 0.1, 0.75), dark, 0, 0, -0.3); P(B(0.03, 0.03, 0.3), steel, 0, 0.005, -0.85);
-      P(B(0.1, 0.12, 0.14), steel, 0, -0.15, -0.15); P(B(0.05, 0.09, 0.25), dark, 0, 0, 0.2);
+      P(B(0.12, 0.16, 0.2), steel, 0, -0.17, -0.15); P(B(0.05, 0.09, 0.25), dark, 0, 0, 0.2);
     } else if (id === "crossbow") {  // crossbow: a stock, a wide prod across the front and a bolt on the rail
       P(B(0.06, 0.08, 0.8), dark, 0, 0, -0.1); P(B(0.7, 0.04, 0.05), steel, 0, 0, -0.55);
       P(B(0.02, 0.02, 0.5), steel, 0, 0.05, -0.3); P(B(0.05, 0.09, 0.2), dark, 0, 0, 0.3);
@@ -9523,6 +9562,7 @@
     if ((slot === "grip" || slot === "sights") && M.under) return new THREE.Vector3(0, M.under[1], M.under[0]);
     if (slot === "mag") {
       if (M.tube) return new THREE.Vector3(0, M.tube[1], M.tube[0]);
+      if (attachGun === "lmg") return w.mag.position.clone();
       if (M.mag && w.mag) return new THREE.Vector3(0, w.mag.position.y + M.mag[0] + 0.04, w.mag.position.z + M.mag[1]);
     }
     return null;
@@ -10589,6 +10629,7 @@
       statsSaveTimer -= realDt;
       if (statsSaveTimer <= 0) { statsSaveTimer = 5; saveStats(); }
       updateReload(dt);
+      updateCrossbowDraw();
       if (autoReloadTimer > 0) { autoReloadTimer -= dt; if (autoReloadTimer <= 0) startReload(); }
 
       if (fireCooldown > 0) fireCooldown -= dt;
