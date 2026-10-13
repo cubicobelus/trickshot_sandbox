@@ -749,6 +749,19 @@ def test_attachments(browser, base):
     page.click("#attach-open")
     page.wait_for_timeout(150)
     check("Unlock all attachments opens every option", page.eval_on_selector_all("#attach-slots .at-opt.locked", "els => els.length") == 0)
+    # a grip and a magazine can be fitted together, and an old save with the magazine in the grip slot still works
+    page.click('#attach-guns button[data-gun="dmr"]')
+    page.click('#attach-slots .at-opt[data-opt="vgrip"]')
+    page.click('#attach-slots .at-opt[data-opt="extmag"]')
+    both = page.eval_on_selector_all('#attach-slots .at-opt.active', "els => els.map(e => e.dataset.opt)")
+    check("a vertical grip and an extended magazine can be fitted together", "vgrip" in both and "extmag" in both, ", ".join(both))
+    page.evaluate("localStorage.setItem('tsb-settings', JSON.stringify({attach: {dmr: {grip: 'extmag'}}}))")
+    page.reload()
+    page.wait_for_timeout(300)
+    page.click("#attach-open")
+    page.click('#attach-guns button[data-gun="dmr"]')
+    check("an old save with the magazine in the grip slot moves it to the magazine slot",
+          page.query_selector('#attach-slots .at-opt.active[data-opt="extmag"]') is not None)
     check("attachments run without errors", not errors, "; ".join(errors[:2]))
     page.close()
 

@@ -3491,7 +3491,7 @@
   // ---- attachments: each gun has up to three slots; every option is a trade, and unlocks once you have landed `need` hits with that gun ----
   // fx: ads (aim-down-sights time), spread (hip), spreadAds, recoil, mag (size), reload (time), flash, sound (how loud), scopeFov (>1 wider)
   const ATTACH_SLOTS = {
-    optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip / magazine", barrel: "Barrel", mag: "Magazine", sights: "Sights",
+    optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip", barrel: "Barrel", mag: "Magazine", sights: "Sights",
   };
   const SUPPRESSOR = { id: "suppressor", name: "Suppressor", need: 20, fx: { flash: 0.2, sound: 0.45, recoil: 1.05 }, text: "Quieter, almost no flash; a touch more kick" };
   const AT_REDDOT = { id: "reddot", name: "Red dot", need: 10, fx: { ads: 0.85, spreadAds: 0.8 }, text: "Aims down sights 15% faster, tighter when aimed" };
@@ -3499,6 +3499,8 @@
   const AT_GRIPS = [
     { id: "vgrip", name: "Vertical grip", need: 30, fx: { recoil: 0.85 }, text: "15% less recoil" },
     { id: "agrip", name: "Angled grip", need: 65, fx: { ads: 0.85, spread: 0.92 }, text: "Faster to aim, a little tighter from the hip" },
+  ];
+  const AT_MAGS = [
     { id: "extmag", name: "Extended magazine", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "50% more rounds, slower reload" },
     { id: "fastmag", name: "Fast magazine", need: 80, fx: { reload: 0.8 }, text: "Reloads 20% faster" },
   ];
@@ -3510,10 +3512,10 @@
       stock: [{ id: "stock-light", name: "Light stock", need: 30, fx: { ads: 0.9, recoil: 1.08 }, text: "Aims 10% faster, a little more kick" },
         { id: "stock-heavy", name: "Heavy stock", need: 65, fx: { recoil: 0.85, ads: 1.1 }, text: "Steadier, slower to aim" }],
     },
-    ar: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
-    ak: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
-    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS },
-    dmr: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS },
+    ar: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
+    ak: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
+    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], grip: AT_GRIPS, mag: AT_MAGS },
+    dmr: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
         { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" }],
@@ -3867,8 +3869,9 @@
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
     if (saved.attach && typeof saved.attach === "object") {   // only what the catalogue has
       for (const g of GUNS) {
-        const s = saved.attach[g];
+        let s = saved.attach[g];
         if (!s || typeof s !== "object") continue;
+        if ((s.grip === "extmag" || s.grip === "fastmag") && !s.mag) s = Object.assign({}, s, { mag: s.grip, grip: null });   // magazines used to share the grip slot
         for (const slot of Object.keys(ATTACHMENTS[g] || {})) if (typeof s[slot] === "string" && ATTACHMENTS[g][slot].some((o) => o.id === s[slot])) (SETTINGS.attach[g] = SETTINGS.attach[g] || {})[slot] = s[slot];
       }
     }
@@ -9184,10 +9187,23 @@
   // ---- the attachments window: a turnable 3D copy of the gun, and a card for every option ----
   const attachPopupEl = document.getElementById("attach-popup");
   let attachGun = SETTINGS.loadout;
-  const AP = { ready: false, gun: null, yaw: 0, el: 0.15, tYaw: 0, tEl: 0.15, drag: false, lastTouch: 0, raf: 0, len: 1 };
+  const AP = { ready: false, gun: null, holder: null, yaw: 0, el: 0.15, tYaw: 0, tEl: 0.15, zoom: 1, tZoom: 1, drag: false, lastTouch: 0, raf: 0,
+    off: new THREE.Vector3(), tOff: new THREE.Vector3(), center: new THREE.Vector3(), size: new THREE.Vector3(1, 1, 1) };
   const AP_YAW0 = -Math.PI / 2;   // the muzzle points right, like the icons
-  // where to look at the gun for each slot: [turn from the side view, how high the camera sits]
-  const AP_VIEWS = { optic: [0.3, 0.5], muzzle: [-0.85, 0.12], barrel: [-0.85, 0.12], stock: [0.85, 0.12], grip: [0.1, -0.35], mag: [0.1, -0.35], sights: [0.25, -0.3] };
+  // where to look at the gun for each slot: [turn from the side view, how high the camera sits, how far in to zoom]
+  const AP_VIEWS = { optic: [0.3, 0.5, 1.9], muzzle: [-0.85, 0.12, 1.8], barrel: [-0.85, 0.12, 1.8], stock: [0.85, 0.12, 1.5], grip: [0.1, -0.35, 1.8], mag: [0.1, -0.35, 1.8], sights: [0.25, -0.3, 1.8] };
+  function apFocus(slot) {   // the part of the gun a slot is about, in the gun's own space
+    const w = WEAPONS[attachGun], M = AT_MOUNT[attachGun] || {};
+    if (slot === "optic") { if (attachGun === "rifle") return rifleScope.position.clone(); if (M.optic) return new THREE.Vector3(0, M.optic[1], M.optic[0]); }
+    if ((slot === "muzzle" || slot === "barrel") && M.muzzle) return new THREE.Vector3(0, M.muzzle[1], M.muzzle[0] - M.muzzle[3] / 2);
+    if (slot === "stock" && M.butt) return new THREE.Vector3(0, M.butt[1], M.butt[0] - M.butt[3] / 2);
+    if ((slot === "grip" || slot === "sights") && M.under) return new THREE.Vector3(0, M.under[1], M.under[0]);
+    if (slot === "mag") {
+      if (M.tube) return new THREE.Vector3(0, M.tube[1], M.tube[0]);
+      if (M.mag && w.mag) return new THREE.Vector3(0, w.mag.position.y + M.mag[0] + 0.04, w.mag.position.z + M.mag[1]);
+    }
+    return null;
+  }
   function apSetup() {
     const canvas = document.getElementById("attach-canvas");
     AP.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -9196,7 +9212,7 @@
     AP.scene.add(new THREE.HemisphereLight(0xffffff, 0x4a4a55, 1.2));
     const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(2, 3, 4); AP.scene.add(key);
     const rim = new THREE.DirectionalLight(0x9fb4ff, 0.9); rim.position.set(-3, 1, -2); AP.scene.add(rim);
-    AP.camera = new THREE.PerspectiveCamera(28, 1, 0.05, 20);
+    AP.camera = new THREE.PerspectiveCamera(28, 1, 0.02, 20);
     AP.pivot = new THREE.Group(); AP.scene.add(AP.pivot);
     let lx = 0, ly = 0;
     canvas.addEventListener("pointerdown", (e) => { AP.drag = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
@@ -9205,6 +9221,7 @@
       AP.yaw += (e.clientX - lx) * 0.012; AP.el = Math.max(-0.7, Math.min(0.9, AP.el + (e.clientY - ly) * 0.008));
       AP.tYaw = AP.yaw; AP.tEl = AP.el; lx = e.clientX; ly = e.clientY; AP.lastTouch = performance.now();
     });
+    document.getElementById("attach-slots").addEventListener("mouseleave", () => apLook(""));   // back to the whole gun
     const up = () => { AP.drag = false; };
     canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
     AP.ready = true;
@@ -9218,18 +9235,34 @@
     const copy = w.group.clone(true);
     muzzleFlash.visible = flashWas;
     copy.visible = true; copy.position.set(0, 0, 0); copy.rotation.set(0, 0, 0); copy.scale.set(1, 1, 1);
+    const M = AT_MOUNT[attachGun];
+    if (M && M.under && chosenAttachments(attachGun).some((o) => o.id === "laser")) {   // a laser shows its beam here (not in the game)
+      const len = 0.3, y = M.under[1] - 0.011, z = M.under[0] - 0.031, red = 0xff3b30;
+      const beam = (r, opacity) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), new THREE.MeshBasicMaterial({ color: red, transparent: opacity < 1, opacity, depthWrite: false, blending: opacity < 1 ? THREE.AdditiveBlending : THREE.NormalBlending }));
+        m.rotation.x = Math.PI / 2; m.position.set(0, y, z - len / 2); copy.add(m);
+      };
+      beam(0.0013, 1); beam(0.0055, 0.22);
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.006, 8, 8), new THREE.MeshBasicMaterial({ color: red, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+      tip.position.set(0, y, z - len); copy.add(tip);
+    }
     copy.updateMatrixWorld(true);
     const box = new THREE.Box3();
     copy.traverse((o) => { if (o.isMesh && apVisible(o, copy)) box.union(new THREE.Box3().setFromObject(o)); });
-    const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
-    copy.position.set(-c.x, -c.y, -c.z);
+    box.getCenter(AP.center); box.getSize(AP.size);
+    copy.position.copy(AP.center).multiplyScalar(-1);
     const holder = new THREE.Group(); holder.add(copy);
-    AP.gun = holder; AP.pivot.add(holder);
-    AP.len = Math.max(size.z, size.y * 1.6);
+    AP.gun = AP.holder = holder; AP.pivot.add(holder);
   }
-  function apLook(slot) {   // turn to show a slot (the side view for none)
-    const v = AP_VIEWS[slot] || [0, 0.15];
-    AP.tYaw = AP_YAW0 + v[0]; AP.tEl = v[1]; AP.lastTouch = performance.now();
+  function apLook(slot) {   // turn and zoom to a slot's part of the gun (the whole gun for none)
+    const v = AP_VIEWS[slot], f = v && apFocus(slot);
+    AP.tYaw = AP_YAW0 + (v ? v[0] : 0); AP.tEl = v ? v[1] : 0.15;
+    AP.tZoom = f ? v[2] : 1;
+    AP.tOff.copy(f ? f.sub(AP.center) : new THREE.Vector3());
+    let d = (AP.yaw - AP.tYaw) % (Math.PI * 2);   // take the short way round after a drag
+    if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2;
+    AP.yaw = AP.tYaw + d;
+    AP.lastTouch = performance.now();
   }
   function apFrame() {
     AP.raf = 0;
@@ -9239,10 +9272,14 @@
       AP.renderer.setSize(w, h, false); AP.camera.aspect = w / h; AP.camera.updateProjectionMatrix();
     }
     if (!AP.drag) { AP.yaw += (AP.tYaw - AP.yaw) * 0.14; AP.el += (AP.tEl - AP.el) * 0.14; }
+    AP.zoom += (AP.tZoom - AP.zoom) * 0.14; AP.off.lerp(AP.tOff, 0.14);
+    if (AP.holder) AP.holder.position.copy(AP.off).multiplyScalar(-1);   // the part you are looking at sits in the middle
     const idle = performance.now() - AP.lastTouch > 3500 ? Math.sin(performance.now() / 1800) * 0.22 : 0;   // a slow sway when you leave it alone
     AP.pivot.rotation.y = AP.yaw + idle;
-    const vfov = AP.camera.fov * Math.PI / 180, hfov = 2 * Math.atan(Math.tan(vfov / 2) * AP.camera.aspect);
-    const d = (AP.len * 0.52) / Math.tan(Math.min(hfov, vfov) / 2);
+    // far enough back to fit the whole gun side-on, then closer by the zoom
+    const vfov = AP.camera.fov * Math.PI / 180, hfov = 2 * Math.atan(Math.tan(vfov / 2) * AP.camera.aspect), sz = AP.size;
+    const fit = Math.max((sz.z * 0.5 * 1.18) / Math.tan(hfov / 2), (sz.y * 0.5 * 1.35) / Math.tan(vfov / 2)) + sz.x * 0.5;
+    const d = Math.max(0.12, fit / AP.zoom);
     AP.camera.position.set(0, Math.sin(AP.el) * d, Math.cos(AP.el) * d);
     AP.camera.lookAt(0, 0, 0);
     AP.renderer.render(AP.scene, AP.camera);
@@ -9293,6 +9330,7 @@
       attachPopupEl.hidden = false;   // visible before the 3D view is sized
       if (!AP.ready) { try { apSetup(); } catch (e) { AP.ready = false; } }
       renderAttach(); apLook("");
+      AP.zoom = 1; AP.off.set(0, 0, 0);
       AP.yaw = AP.tYaw - 0.9;   // swings round into place
       if (AP.ready && !AP.raf) AP.raf = requestAnimationFrame(apFrame);
     } else attachPopupEl.hidden = true;
