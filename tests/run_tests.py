@@ -137,7 +137,7 @@ def test_game(browser, base):
     check("the menu shows three favourite guns and a More button", quick == ["rifle", "ar", "shotgun"] and page.is_visible("#loadout-more"), ", ".join(quick))
     page.click("#loadout-more")
     guns = page.eval_on_selector_all("#loadout-popup button[data-gun]", "els => els.map(e => e.dataset.gun)")
-    check("the More popup lists all nine guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr", "burst", "lmg"]), ", ".join(guns))
+    check("the More popup lists all ten guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr", "burst", "lmg", "crossbow"]), ", ".join(guns))
     page.click("#loadout-popup button[data-gun=dmr]")
     check("picking from More closes it, keeps the gun in the row and selects it",
           not page.is_visible("#loadout-popup") and page.is_visible("#loadout button.active[data-gun=dmr]"))
@@ -699,7 +699,7 @@ def test_play_setup(browser, base):
     page.click("#mp-play-btn")
     step(page, 60)
     gg_label = page.inner_text("#mp-timer-mode").lower()
-    check("gun game shows your level in the timer", "gun game" in gg_label and "level 1 / 10" in gg_label, gg_label)
+    check("gun game shows your level in the timer", "gun game" in gg_label and "level 1 / 11" in gg_label, gg_label)
     page.evaluate("__unlock()")
     step(page, 3)
     page.click("#mp-leave-btn")
@@ -990,9 +990,71 @@ def test_guns(browser, base):
         check("the SMG hits for 20 up close, fades from 12 m to half by 35 m, and stays at half beyond", f["smg"][:2] == [20, 20] and abs(f["smg"][2] - 15) < 0.5 and f["smg"][3] == 10 and f["smg"][4] == 10, str(f["smg"]))
         check("the SMG's head hit is 30 and fades the same way", f["smg"][5] == 30 and f["smg"][6] == 15, str(f["smg"][5:]))
         check("the DMR does 60 to the body (two to kill) and 100 to the head at any range", f["dmr"] == [60, 60, 100], str(f["dmr"]))
-        check("gun game has nine guns before the knife", f["ggLen"] == 9, str(f["ggLen"]))
+        check("gun game has ten guns before the knife", f["ggLen"] == 10, str(f["ggLen"]))
         check("the LMG holds 100 rounds and the burst rifle fires three rounds a pull", f["lmg"] == [100, 24, 34] and f["burst"] == [3, 28, 42], str(f["lmg"]) + " " + str(f["burst"]))
         check("the gun checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_crossbow(browser, base):
+    """The crossbow's bolt flies, scores on a target, and kills a dummy through the host's checks; the bolt is gone until the reload brings the next one."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 900, 560)
+        pick_gun(page, "crossbow")
+        page.click("#start-btn")
+        step(page, 60)
+        # a plate in the open (a wall or a pillar in the way is not the bolt's fault, so a few plates are tried)
+        g = None
+        for attempt in range(4):
+            step(page, 200)   # (the last bolt reloaded)
+            page.evaluate("""(n) => {
+              const d = window.__dbg, ts = d.targets.filter((x) => x.userData.alive && !x.userData.motion && x.userData.type === "normal"), t = ts[n % ts.length], tp = t.position;
+              d.yawObject.position.set(tp.x, d.player.feetY + 1.6, tp.z + 20);
+              const dx = tp.x - d.yawObject.position.x, dy = tp.y - d.yawObject.position.y, dz = tp.z - d.yawObject.position.z;
+              d.yawObject.rotation.y = Math.atan2(-dx, -dz); d.pitchObject.rotation.x = Math.atan2(dy, Math.hypot(dx, dz));
+            }""", attempt)
+            step(page, 3)
+            page.dispatch_event("body > canvas", "mousedown", {"button": 0})
+            step(page, 2)
+            page.dispatch_event("body > canvas", "mouseup", {"button": 0})
+            if attempt == 0:
+                flying = page.evaluate("window.__dbg.thrownPool.filter((k) => k.state === 'flying' && k.bolt).length")
+                check("a click launches a bolt that flies", flying == 1, str(flying))
+                check("the bolt is out of the groove (one bolt, none left)", page.evaluate("window.__dbg.WEAPONS.crossbow.ammo === 0 && !window.__dbg.WEAPONS.crossbow.mag.visible"))
+            step(page, 80)
+            g = page.evaluate("window.__dbg.stats.guns.crossbow")
+            if g and g["hits"] >= 1:
+                break
+        check("the bolt hit a plate and scored for the crossbow", g and g["hits"] >= 1 and g["points"] > 0, str(g))
+        step(page, 200)
+        check("the reload brings the next bolt", page.evaluate("window.__dbg.WEAPONS.crossbow.ammo === 1 && window.__dbg.WEAPONS.crossbow.mag.visible"))
+        page.close()
+        # a dummy at the range, through the host's checks
+        page, errors2 = open_page(browser, dbase + "/index.html", 900, 560)
+        pick_gun(page, "crossbow")
+        page.click("#mode-tabs .tab[data-mode=mp]")
+        start_practice(page, mode="range")
+        page.click("#mp-play-btn")
+        step(page, 90)
+        bot = page.evaluate("""() => {
+          const d = window.__dbg, b = [...d.net.players.values()].find((p) => p.bot && p.alive);
+          d.yawObject.position.set(b.x, b.y + 1.6, b.z + 25);
+          const dx = b.x - d.yawObject.position.x, dy = (b.y + 1.2) - d.yawObject.position.y, dz = b.z - d.yawObject.position.z;
+          d.yawObject.rotation.y = Math.atan2(-dx, -dz); d.pitchObject.rotation.x = Math.atan2(dy, Math.hypot(dx, dz));
+          return b.id;
+        }""")
+        step(page, 3)
+        page.dispatch_event("body > canvas", "mousedown", {"button": 0})
+        step(page, 2)
+        page.dispatch_event("body > canvas", "mouseup", {"button": 0})
+        step(page, 70)
+        hp = page.evaluate("(id) => window.__dbg.net.players.get(id).hp", bot)
+        check("one bolt kills a dummy (the host believes the hit)", hp <= 0, f"hp {hp}")
+        check("the crossbow runs without errors", not errors and not errors2, "; ".join((errors + errors2)[:2]))
         page.close()
     finally:
         server.shutdown()
@@ -1011,6 +1073,7 @@ def debug_site():
         src = fh.read().replace("\r\n", "\n")
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
+            "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1114,10 +1177,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_guns, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "guns", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

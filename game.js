@@ -2472,7 +2472,31 @@
   addPart(lmgGroup, new THREE.BoxGeometry(0.052, 0.11, 0.02), gripMat, 0, -0.005, 0.46);                 // butt pad
   const lmgMag = addPart(lmgGroup, new THREE.BoxGeometry(0.075, 0.13, 0.15), metalDark, 0, -0.085, 0);
 
-  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup];
+  // ---- crossbow: a dark stock with a rail, a prod with two swept limbs and a drawn string, and a bolt lying in the groove ----
+  // sights: the rear ring and the front post both sit 0.07 above the rail's centre line (see adsPos)
+  const crossbowGroup = new THREE.Group();
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.05, 0.07, 0.6), metalDark, 0, 0, 0.05);                  // stock body
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.026, 0.012, 0.5), metalMid, 0, 0.041, 0.0);              // rail on top
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.075, 0.056, 0.08), metalDark, 0, 0.0, -0.3);             // prod block
+  for (const sx of [-1, 1]) addPart(crossbowGroup, new THREE.BoxGeometry(0.3, 0.02, 0.03), polymerMat, sx * 0.17, 0.0, -0.33, 0, sx * 0.25, 0);   // limbs, tips swept forward
+  for (const sx of [-1, 1]) addPart(crossbowGroup, new THREE.BoxGeometry(0.004, 0.004, 0.396), metalMid, sx * 0.155, 0.0, -0.2435, 0, -sx * 0.9, 0);   // string, drawn back to the latch
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.03, 0.03, 0.05), metalMid, 0, 0.02, -0.12);               // latch
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.008, 0.03, 0.008), metalDark, 0, 0.055, -0.2);             // front sight post
+  const crossbowRear = new THREE.Group();   // folds away under an optic
+  crossbowGroup.add(crossbowRear);
+  addPart(crossbowRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.052, 0.0);             // rear sight base
+  addPart(crossbowRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.07, 0.0);        // rear sight ring
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.04, 0.1, 0.045), gripMat, 0, -0.075, 0.14, 0.3, 0, 0);  // grip
+  addPart(crossbowGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.08, 0, HALF_PI, Math.PI);   // trigger guard
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.045, 0.08, 0.2), polymerMat, 0, -0.01, 0.43);            // butt
+  addPart(crossbowGroup, new THREE.BoxGeometry(0.05, 0.09, 0.02), gripMat, 0, -0.01, 0.54);               // butt pad
+  // the bolt is the "magazine": it slides out of the groove and a fresh one rises into it on a reload
+  const crossbowMag = addPart(crossbowGroup, new THREE.BoxGeometry(0.008, 0.008, 0.26), metalMid, 0, 0.0525, -0.08);
+  addPart(crossbowMag, new THREE.ConeGeometry(0.008, 0.035, 8), metalMid, 0, 0, -0.1475, -HALF_PI, 0, 0);   // head
+  addPart(crossbowMag, new THREE.BoxGeometry(0.04, 0.002, 0.04), accentMat, 0, 0, 0.11);                   // fletching
+  addPart(crossbowMag, new THREE.BoxGeometry(0.002, 0.04, 0.04), accentMat, 0, 0, 0.11);
+
+  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup];
   for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   // everything held sits under one root, so left-handed is a single mirror (three.js
   // flips face winding for negative scale, so the models still render correctly)
@@ -2789,9 +2813,35 @@
       },
       inspectDuration: 2.0, inspects: GUN_INSPECTS,
     },
+    crossbow: {
+      name: "CROSSBOW", group: crossbowGroup, projectile: true,   // projectile: it fires a bolt that flies (speed and drop: BOLT_SPEED, BOLT_GRAVITY) instead of a hit-scan
+      restPos: new THREE.Vector3(0.22, -0.25, -0.52), restRot: new THREE.Euler(0.03, -0.08, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.07, -0.30), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.62, fireRate: 0.9, auto: false, isMelee: false, usesAmmo: true,
+      magSize: 1, ammoLabel: "BOLTS", pellets: 1, spread: 0.006, spreadAds: 0.0005, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
+      scoreScale: 0.9, recoil: 0.5, kick: 0.4, flashScale: 0, brake: false, smoke: 0,
+      action: "none", ejectOnShot: false, casing: "small",
+      muzzle: new THREE.Vector3(0, 0.0525, -0.26), eject: new THREE.Vector3(0.03, 0.03, 0.0),
+      sound: { recording: "pistol", rate: 2, lowcut: 900, length: 0.25, gain: 0.5 },
+      recoilKick: { up: 0.02, grow: 0, side: 0.002, max: 0.05, recover: 5, hold: 0.2 },
+      mag: crossbowMag, magRestY: crossbowMag.position.y,
+      reload: {
+        time: 1.9, magOut: 0.15, magDrop: 0.3, magUp: 0.8, magSeat: 1.25, travel: 0.1, rise: 0.12, charge: 1.5,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.25, -0.05,  0.05,  0.14, 0.10, -0.45],
+          [0.90, -0.05,  0.04,  0.10, 0.10, -0.50],
+          [1.25, -0.05,  0.06,  0.14, 0.10, -0.42],
+          [1.50, -0.02,  0.02,  0.08, 0.04,  0.15],
+          [1.70, -0.02,  0.02,  0.08, 0.04,  0.15],
+          [1.90,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 1.8, inspects: GUN_INSPECTS,
+    },
   };
   // (a gun travels over the network as its place in this list, so new guns go at the end, after the knife, never in the middle)
-  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg"];
+  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg", "crossbow"];
   for (const id of WEAPON_ORDER) {
     const w = WEAPONS[id];
     w.id = id;
@@ -3600,6 +3650,7 @@
     smg: '<rect x="2" y="10" width="9" height="2.6" rx="1"/><rect x="9" y="8.5" width="12" height="5.5" rx="1"/><rect x="20" y="7.5" width="22" height="7" rx="1"/><rect x="24" y="5" width="12" height="2.5" rx="1"/><rect x="27" y="14" width="5.5" height="9" rx="1"/><path d="M38 14 L43 14 L42 21.5 L37 21 Z"/><rect x="42" y="9" width="14" height="1.6"/><rect x="42" y="12" width="14" height="1.6"/><rect x="55" y="7.5" width="5" height="8" rx="1"/>',
     burst: '<rect x="1" y="10" width="8" height="2.6" rx="1"/><rect x="8" y="8.5" width="17" height="6" rx="1"/><rect x="24" y="8" width="16" height="6" rx="1"/><rect x="39" y="9.2" width="19" height="2.8"/><rect x="57" y="8.2" width="5" height="4.8" rx="1"/><rect x="13" y="6" width="9" height="2.3" rx="1"/><path d="M16 14.5 L21 14.5 L20.5 21.5 L15.5 21 Z"/><path d="M9 14 L13 14 L14.5 19.5 L10.5 19.5 Z"/>',
     lmg: '<rect x="1" y="9" width="8" height="4.5" rx="1"/><rect x="8" y="7.5" width="20" height="7.5" rx="1"/><rect x="27" y="8.5" width="22" height="5.5" rx="1"/><rect x="48" y="9.3" width="12" height="2.2"/><rect x="30" y="5.5" width="6" height="2.5"/><rect x="15" y="14.5" width="10" height="8" rx="1"/><path d="M33 14 L48 14 L47 17.5 L34 16 Z"/>',
+    crossbow: '<rect x="2" y="10" width="9" height="3" rx="1"/><rect x="10" y="9" width="34" height="5" rx="1"/><path d="M40 11.5 L47 11.5 L57 4 L59 6.5 L50 13 L59 19.5 L57 22 L47 14.5 L40 14.5 Z"/><rect x="18" y="14" width="5" height="8" rx="1"/><rect x="11" y="7.3" width="38" height="1.6"/>',
     dmr: '<rect x="0.5" y="10.2" width="6" height="2.4" rx="0.8"/><rect x="5" y="8.8" width="26" height="5.2" rx="1"/><rect x="30" y="7.8" width="17" height="7" rx="1"/><rect x="34" y="5.2" width="9" height="2.6" rx="1"/><path d="M34 14.5 L40 14.5 L39.5 21 L34.5 21 Z"/><path d="M43 14.5 L47 14.5 L47.5 19.5 L44 19.5 Z"/><rect x="46" y="9" width="8" height="3.2" rx="1"/><rect x="53" y="7.5" width="9" height="8.5" rx="1.5"/>',
     knife: '<path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/><rect x="41" y="8" width="3" height="9" rx="1"/><rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/><circle cx="60.5" cy="12.4" r="2.4"/>',
   };
@@ -3644,6 +3695,7 @@
     dmr: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
     burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
     lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
+    crossbow: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4] },
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
         { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" }],
@@ -3674,6 +3726,7 @@
     dmr: { muzzle: [-0.79, 0.012, 0.0145, 0.3], optic: [0.0, 0.062], under: [-0.36, -0.018], mag: [-0.06, 0, 0, 0.034, 0.075] },
     burst: { muzzle: [-0.66, 0.014, 0.0155, 0.26], optic: [0.0, 0.063], under: [-0.30, -0.014], mag: [-0.075, 0, 0, 0.03, 0.066] },
     lmg: { muzzle: [-0.86, 0.012, 0.0185, 0.3], optic: [0.02, 0.067], under: [-0.40, -0.021], mag: [-0.065, 0, 0, 0.075, 0.15] },
+    crossbow: { optic: [0.0, 0.047] },
     pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024], mag: [-0.06, 0, 0, 0.03, 0.045] },
   };
   const AV_MOUNT = {
@@ -3685,6 +3738,7 @@
     dmr: { muzzle: [-1.1, 0.005, 0.014, 0.26], optic: [-0.1, 0.0425], under: [-0.6, -0.0425], mag: [-0.19, -0.15, 0, 0.03, 0.05] },
     burst: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425], mag: [-0.24, -0.2, 0, 0.03, 0.05] },
     lmg: { muzzle: [-1.0, 0.005, 0.015, 0.26], optic: [-0.05, 0.05], under: [-0.55, -0.05], mag: [-0.21, -0.15, 0, 0.1, 0.14] },
+    crossbow: { optic: [-0.1, 0.0425] },
     pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
   };
   // a laser's beam: thick and bright by the gun, thinner and fainter further out until it is gone (the materials are shared)
@@ -3834,6 +3888,7 @@
       if (id === "dmr") dmrRear.visible = !anyOptic;
       if (id === "burst") burstRear.visible = !anyOptic;
       if (id === "lmg") lmgRear.visible = !anyOptic;
+      if (id === "crossbow") crossbowRear.visible = !anyOptic;
     }
     updateAmmoHud();
   }
@@ -3877,7 +3932,7 @@
   }
   // the menu shows a few favourites, plus your gun if it is not one of them, and a More button for the rest
   const QUICK_GUNS = ["rifle", "ar", "shotgun"];
-  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg"]], ["Machine guns", ["lmg"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol"]]];
+  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg"]], ["Machine guns", ["lmg"]], ["Specialty", ["crossbow"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol"]]];
   const loadoutEl = document.getElementById("loadout"), loadoutPopupEl = document.getElementById("loadout-popup"), loadoutGroupsEl = document.getElementById("loadout-groups");
   const gunButton = (id) => {
     const b = document.createElement("button");
@@ -4596,11 +4651,12 @@
       magY = w.magRestY - R.travel * x * x;
     } else if (t >= R.magDrop && t < R.magUp) {
       magShown = false;
-      if (!reload.magDropped) { reload.magDropped = true; dropMagazine(w); }
+      if (!reload.magDropped) { reload.magDropped = true; if (!w.projectile) dropMagazine(w); }   // (a crossbow has no spent magazine to drop)
     } else if (t >= R.magUp && t < R.magSeat) {
       const x = (t - R.magUp) / (R.magSeat - R.magUp);
       magY = w.magRestY - R.rise * (1 - easeOut(Math.min(x / 0.85, 1))) - seatGap * (x < 0.85 ? 1 : 1 - (x - 0.85) / 0.15);
     }
+    if (w.projectile && w.ammo <= 0 && t < R.magUp) magShown = false;   // the bolt is gone until the next one rises in
     w.mag.position.y = magY;
     w.mag.visible = magShown;
     if (t >= R.magSeat) {
@@ -5949,7 +6005,7 @@
     const pointsGained = awardPoints(res);
     stats.kinds[target.userData.type] = (stats.kinds[target.userData.type] || 0) + 1;
     if (isKnife && !thrown) stat("knifeSwingHits");
-    else { statMax("longestShot", dist); if (thrown) stat("knifeThrowHits"); else gunStat(vm.current).points += pointsGained; }
+    else { statMax("longestShot", dist); if (thrown) stat("knifeThrowHits"); else gunStat(weapon ? weapon.id : vm.current).points += pointsGained; }
     achHit(res, target.userData.type, isKnife, thrown, dist);
     recHit(target, dist, isKnife, thrown, res, pointsGained);
     target.userData.respawnTimer = 1.1;
@@ -6024,6 +6080,7 @@
       if (net.active) sendToHost({ t: "swing" });
       return;
     }
+    if (w.projectile) { fireBolt(w); return; }
     fireGun(w);
     if (w.burst) { vm.burstQueue = w.burst - 1; vm.burstTimer = w.burstGap; }   // the rest of the burst follows by itself
   }
@@ -6171,15 +6228,76 @@
     model.position.set(0, 0, 0.06);   // spin about the knife's balance point
     const spin = new THREE.Group();
     spin.add(model);
+    const boltModel = new THREE.Group();   // the crossbow's bolt shares the pool: it points down -Z like the knife
+    addPart(boltModel, new THREE.BoxGeometry(0.014, 0.014, 0.4), metalMid, 0, 0, 0);
+    addPart(boltModel, new THREE.ConeGeometry(0.014, 0.05, 8), metalMid, 0, 0, -0.225, -HALF_PI, 0, 0);
+    addPart(boltModel, new THREE.BoxGeometry(0.06, 0.003, 0.06), accentMat, 0, 0, 0.17);
+    addPart(boltModel, new THREE.BoxGeometry(0.003, 0.06, 0.06), accentMat, 0, 0, 0.17);
+    boltModel.visible = false;
+    spin.add(boltModel);
     const root = new THREE.Group();
     root.add(spin);
     root.visible = false;
     root.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
     scene.add(root);
-    thrownPool.push({ root, spin, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", snap: null });
+    thrownPool.push({ root, spin, model, boltModel, bolt: false, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", snap: null });
   }
 
   const _thFwd = new THREE.Vector3(), _thRight = new THREE.Vector3(), _thLook = new THREE.Vector3();
+  const BOLT_SPEED = 75, BOLT_GRAVITY = 4, BOLT_LIFE = 1.6, BOLT_CONVERGE = 40;   // metres a second, how hard it drops, seconds in the air (about 100 m), where the muzzle's aim meets the crosshair's
+  const setThrownModel = (k, bolt) => { k.bolt = bolt; k.model.visible = !bolt; k.boltModel.visible = bolt; };
+  const _boltDir = new THREE.Vector3(), _boltAim = new THREE.Vector3();
+  function playBoltShot() {   // the string's twang and a short clack
+    tone("triangle", 260, 70, 0.34 * SETTINGS.volGuns, 0.22, 0, 0.3);
+    tone("sawtooth", 90, 55, 0.12 * SETTINGS.volGuns, 0.1, 0, 0.2);
+    noiseHit(2600, 1.2, 0.18 * SETTINGS.volGuns, 0.05, "highpass", 0, 0.2);
+  }
+  function fireBolt(w) {
+    if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); if (w.mag) w.mag.visible = false; }
+    playBoltShot();
+    vm.recoil = w.recoil; vm.camKick = w.kick; vm.camKickYaw = Math.random() * 2 - 1;
+    const ads = easeInOut(vm.adsProgress);
+    let cone = w.spread + (w.spreadAds - w.spread) * ads;
+    if (SETTINGS.realisticShooting) {
+      if (player.onGround) {
+        const moveK = Math.min(Math.max((Math.hypot(player.velocity.x, player.velocity.z) - 0.5) / (CFG.realisticMoveFullSpeed - 0.5), 0), 1);
+        cone += CFG.realisticMoveSpread * moveK * (1 - 0.5 * ads);
+      } else cone += CFG.realisticAirSpread + CFG.realisticMoveSpread * (1 - 0.5 * ads);
+    }
+    camera.getWorldDirection(_aimDir);
+    const extraPitch = vm.recoilPitch - vm.viewRecoilPitch, extraYaw = vm.recoilYaw - vm.viewRecoilYaw;
+    if (extraPitch || extraYaw) {
+      _sprRight.set(1, 0, 0).applyQuaternion(camera.getWorldQuaternion(_camQuat));
+      _aimDir.applyAxisAngle(_sprRight, extraPitch).applyAxisAngle(_worldUp, extraYaw);
+    }
+    spreadDirection(_aimDir, cone, _pelletDir);
+    camera.getWorldPosition(_boltAim).addScaledVector(_pelletDir, BOLT_CONVERGE);
+    muzzleFlash.getWorldPosition(_muzzleWorld);
+    _boltDir.copy(_boltAim).sub(_muzzleWorld).normalize();   // from the muzzle, toward where the crosshair points
+    launchBolt(w, _muzzleWorld, _boltDir);
+    if (run.state === "live") run.shots++;
+    if (!net.active) { const gs = gunStat("crossbow"); gs.shots++; stat("shots"); }
+    w.lastFiredAt = elapsedTime;
+    addRecoil(w);
+    if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
+  }
+  function launchBolt(w, origin, dir) {
+    const k = thrownPool.find((q) => q.state === "idle") || thrownPool.reduce((a, b) => (a.age > b.age ? a : b));
+    if (k.root.parent !== scene) scene.add(k.root);
+    k.root.position.copy(origin);
+    k.from.copy(origin);
+    k.vel.copy(dir).multiplyScalar(BOLT_SPEED).add(player.velocity);
+    k.snap = trickState();
+    k.remote = false; k.weapon = w; k.age = 0; k.state = "flying";
+    setThrownModel(k, true);
+    k.root.visible = true;
+    k.root.scale.setScalar(1);
+    k.spin.rotation.set(0, 0, 0);
+    faceAlongVelocity(k);
+    recEvent({ type: "throw", b: 1 });
+    lastShotOrigin.copy(origin);
+    if (net.active) { mpSendShot(origin, dir, 120); mpSendThrow(k.root.position, k.vel, true); }   // the shot message is what lets the host believe a hit; the throw is the bolt others see
+  }
 
   function throwKnife() {
     if (vm.throwTimer > 0 || vm.switchTimer > 0 || vm.grappleOut > 0.25) return;
@@ -6211,6 +6329,7 @@
     k.remote = false;
     k.age = 0;
     k.state = "flying";
+    setThrownModel(k, false);
     k.root.visible = true;
     recEvent({ type: "throw" });
     if (net.active) mpSendThrow(k.root.position, k.vel);
@@ -6260,8 +6379,8 @@
         continue;
       }
 
-      if (k.age > 4) { retireKnife(k); if (!k.remote) breakStreak(); continue; }   // flew off without hitting anything
-      k.vel.y -= CFG.knifeThrowGravity * dt;
+      if (k.age > (k.bolt ? BOLT_LIFE : 4)) { retireKnife(k); if (!k.remote) breakStreak(); continue; }   // flew off without hitting anything
+      k.vel.y -= (k.bolt ? BOLT_GRAVITY : CFG.knifeThrowGravity) * dt;
       _kStep.copy(k.vel).multiplyScalar(dt);
       const len = _kStep.length();
       if (len < 1e-6) continue;
@@ -6314,7 +6433,8 @@
         playKnifeHit();
         lastShotOrigin.copy(k.from);
         hitPlayer.dist = k.from.distanceTo(o);   // how far it was thrown, not just this frame's step
-        mpPvpHit(hitPlayer, true, 0, undefined, k.snap, true);
+        if (k.bolt) mpPvpHit(hitPlayer, false, 0, k.weapon, k.snap, false);   // a bolt is scored and claimed as a gun hit
+        else mpPvpHit(hitPlayer, true, 0, undefined, k.snap, true);
         retireKnife(k);
         continue;
       }
@@ -6324,7 +6444,10 @@
         if (run.state === "live") run.shotsHit++;
         stat("shotsHit");
         lastShotOrigin.copy(k.from);
-        scoreHit(hitTarget, k.from.distanceTo(o), true, 0, k.snap, true);
+        if (k.bolt) {
+          const gs = gunStat("crossbow"); gs.hits++; announceUnlocks("crossbow", gs.hits);
+          scoreHit(hitTarget, k.from.distanceTo(o), false, 0, k.snap, false, k.weapon);
+        } else scoreHit(hitTarget, k.from.distanceTo(o), true, 0, k.snap, true);
         retireKnife(k);
         continue;
       }
@@ -6355,7 +6478,7 @@
 
       o.add(_kStep);
       faceAlongVelocity(k);
-      k.spin.rotation.x -= KNIFE_SPIN * dt;
+      if (!k.bolt) k.spin.rotation.x -= KNIFE_SPIN * dt;
     }
   }
 
@@ -6384,10 +6507,11 @@
     dmr: { body: 60, head: 100 },
     burst: { body: 28, head: 42 },   // per round, three rounds a pull
     lmg: { body: 24, head: 34 },
+    crossbow: { body: 100, head: 100 },   // one bolt kills; it flies, so it has to be led
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };
   const KNIFE_SWING_DMG = 55, KNIFE_THROW_DMG = 100;
-  const GG_ORDER = ["smg", "burst", "ar", "ak", "lmg", "dmr", "shotgun", "pistol", "rifle"];   // gun game: nine guns, then the knife (level 10)
+  const GG_ORDER = ["smg", "burst", "ar", "ak", "lmg", "dmr", "crossbow", "shotgun", "pistol", "rifle"];   // gun game: ten guns, then the knife (level 11)
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
   // (the deathmatch spawn points, SPAWNS, come from the map)
@@ -6634,6 +6758,9 @@
     } else if (id === "lmg") {       // LMG: thick, a big box magazine and a long barrel
       P(B(0.075, 0.1, 0.75), dark, 0, 0, -0.3); P(B(0.03, 0.03, 0.3), steel, 0, 0.005, -0.85);
       P(B(0.1, 0.12, 0.14), steel, 0, -0.15, -0.15); P(B(0.05, 0.09, 0.25), dark, 0, 0, 0.2);
+    } else if (id === "crossbow") {  // crossbow: a stock, a wide prod across the front and a bolt on the rail
+      P(B(0.06, 0.08, 0.8), dark, 0, 0, -0.1); P(B(0.7, 0.04, 0.05), steel, 0, 0, -0.55);
+      P(B(0.02, 0.02, 0.5), steel, 0, 0.05, -0.3); P(B(0.05, 0.09, 0.2), dark, 0, 0, 0.3);
     } else if (id === "ak") {        // AK: wooden furniture and a curved magazine
       P(B(0.065, 0.085, 0.75), dark, 0, 0, -0.3); P(B(0.07, 0.07, 0.28), wood, 0, 0, -0.62);
       P(B(0.03, 0.22, 0.05), steel, 0, -0.15, -0.15, 0.35); P(B(0.05, 0.1, 0.25), wood, 0, -0.02, 0.2);
@@ -6825,7 +6952,7 @@
   }
 
   // ---------------- events: what actually happens on every peer ----------------
-  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned" };
+  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned" };
   function feedLine(html) {
     const el = document.createElement("div");
     el.innerHTML = html;
@@ -7108,7 +7235,7 @@
 
       case "throw": {
         const o = vec3(m.o, 1000), v = vec3(m.v, 200);
-        if (m.id !== net.id && o && v) spawnRemoteKnife(o, v);
+        if (m.id !== net.id && o && v) spawnRemoteKnife(o, v, m.b === 1);
         break;
       }
 
@@ -7119,8 +7246,9 @@
           if (!o || !d || !Number.isFinite(l)) break;
           _tmpV1.set(o[0], o[1], o[2]);
           _tmpV2.set(d[0], d[1], d[2]);
-          spawnTracer(_tmpV1, _tmpV2, Math.max(0, Math.min(l, 2000)));
-          if (SETTINGS.bulletHoles && l > 0 && l < 249) {   // it ended on a wall or the floor: leave the mark
+          const proj = !!(WEAPONS[m.g] && WEAPONS[m.g].projectile);   // a bolt flies as its own object: no instant tracer or mark
+          if (!proj) spawnTracer(_tmpV1, _tmpV2, Math.max(0, Math.min(l, 2000)));
+          if (!proj && SETTINGS.bulletHoles && l > 0 && l < 249) {   // it ended on a wall or the floor: leave the mark
             raycaster.ray.origin.copy(_tmpV1); raycaster.ray.direction.copy(_tmpV2).normalize();
             const hit = occluderDistance(l + 0.5);
             if (Math.abs(hit - l) < 0.2) spawnDecal(_dP2.copy(_tmpV1).addScaledVector(raycaster.ray.direction, hit), _occNormal, 0.06);
@@ -7228,17 +7356,18 @@
   function mpSendShot(origin, dir, dist) {
     sendToHost({ t: "shot", g: vm.current, o: [r2(origin.x), r2(origin.y), r2(origin.z)], d: [r2(dir.x * 1000) / 1000, r2(dir.y * 1000) / 1000, r2(dir.z * 1000) / 1000], l: r2(dist) });
   }
-  function mpSendThrow(pos, vel) {
-    sendToHost({ t: "throw", o: [r2(pos.x), r2(pos.y), r2(pos.z)], v: [r2(vel.x), r2(vel.y), r2(vel.z)] });
+  function mpSendThrow(pos, vel, bolt) {
+    sendToHost({ t: "throw", o: [r2(pos.x), r2(pos.y), r2(pos.z)], v: [r2(vel.x), r2(vel.y), r2(vel.z)], b: bolt ? 1 : 0 });
   }
   // a thrown knife from another player: it flies and sticks on every screen, but only its owner scores with it
-  function spawnRemoteKnife(o, v) {
+  function spawnRemoteKnife(o, v, bolt) {
     const k = thrownPool.find((q) => q.state === "idle") || thrownPool.reduce((a, b) => (a.age > b.age ? a : b));
     if (k.root.parent !== scene) scene.add(k.root);
     k.root.position.set(o[0], o[1], o[2]);
     k.from.copy(k.root.position);
     k.vel.set(v[0], v[1], v[2]);
     k.snap = null; k.remote = true; k.age = 0; k.state = "flying";
+    setThrownModel(k, !!bolt);
     k.root.visible = true;
     k.root.scale.setScalar(1);
     k.spin.rotation.set(0, 0, 0);
@@ -7503,9 +7632,9 @@
         const now = nowMs();
         if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap) {
           if (now - p.lastThrowAt > THROW_WINDOW) p.knivesUp = 0;
-          p.knivesUp = Math.min(p.knivesUp + 1, 4);
+          if (m.b !== 1) p.knivesUp = Math.min(p.knivesUp + 1, 4);   // (a crossbow bolt is claimed through its shot message, not as a knife)
           p.lastThrowAt = now; p.lastFireAt = now;
-          hostBroadcast({ t: "throw", id: fromId, o, v });
+          hostBroadcast({ t: "throw", id: fromId, o, v, b: m.b === 1 ? 1 : 0 });
         }
         break;
       }
@@ -7715,7 +7844,7 @@
   // hop: hops a second while strafing in a fight
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
   BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
-  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20 };   // the distance each gun likes to fight at
+  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32 };   // the distance each gun likes to fight at
   // What a mode asks of its bots, on top of their level (L3). Hill bots defend the hill harder: on it they react and aim a fifth better.
   // Battle royale bots are more cautious: they get well inside the circle early, hang back from fights, and fall back when hurt.
   const BOT_MODE = { koth: { holdReact: 0.8, holdErr: 0.8 }, br: { margin: 12, prefer: 1.3, retreatHp: 45 } };
@@ -9385,6 +9514,7 @@
   const AP_YAW0 = -Math.PI / 2;   // the muzzle points right, like the icons
   // where to look at the gun for each slot: [turn from the side view, how high the camera sits, how far in to zoom]
   const AP_VIEWS = { optic: [0.3, 0.5, 1.9], muzzle: [-0.85, 0.12, 1.8], barrel: [-0.85, 0.12, 1.8], stock: [0.85, 0.12, 1.5], grip: [0.1, -0.35, 1.8], mag: [0.1, -0.35, 1.8], sights: [0.25, -0.3, 1.8] };
+  const AP_TURN = { crossbow: 0.6 };   // guns that read better from a three-quarter view (the crossbow's limbs are edge-on from the side)
   function apFocus(slot) {   // the part of the gun a slot is about, in the gun's own space
     const w = WEAPONS[attachGun], M = AT_MOUNT[attachGun] || {};
     if (slot === "optic") { if (attachGun === "rifle") return rifleScope.position.clone(); if (M.optic) return new THREE.Vector3(0, M.optic[1], M.optic[0]); }
@@ -9438,7 +9568,7 @@
   }
   function apLook(slot) {   // turn and zoom to a slot's part of the gun (the whole gun for none)
     const v = AP_VIEWS[slot], f = v && apFocus(slot);
-    AP.tYaw = AP_YAW0 + (v ? v[0] : 0); AP.tEl = v ? v[1] : 0.15;
+    AP.tYaw = AP_YAW0 + (AP_TURN[attachGun] || 0) + (v ? v[0] : 0); AP.tEl = (v ? v[1] : 0.15) + (AP_TURN[attachGun] ? 0.12 : 0);
     AP.tZoom = f ? v[2] : 1;
     AP.tOff.copy(f ? f.sub(AP.center) : new THREE.Vector3());
     let d = (AP.yaw - AP.tYaw) % (Math.PI * 2);   // take the short way round after a drag
@@ -9868,7 +9998,7 @@
     for (const k of thrownPool) {
       if (k.state !== "flying" && k.state !== "stuck") continue;   // the ones stuck in walls too
       k.root.getWorldQuaternion(_rq);
-      kn.push([r3(k.root.position.x), r3(k.root.position.y), r3(k.root.position.z), r4(_rq.x), r4(_rq.y), r4(_rq.z), r4(_rq.w), r2(k.spin.rotation.x)]);
+      kn.push([r3(k.root.position.x), r3(k.root.position.y), r3(k.root.position.z), r4(_rq.x), r4(_rq.y), r4(_rq.z), r4(_rq.w), r2(k.spin.rotation.x), k.bolt ? 1 : 0]);
     }
     if (kn.length) f.kn = kn;
     rec.frames.push(f);
@@ -10036,7 +10166,7 @@
         if (!untilImpact) spawnTracer(_tmpV1, _tmpV2, e.l);   // the trickshot's own bullet is the bullet cam's, not a tracer
         if (e.snd && WEAPONS[e.w]) playShotSound(WEAPONS[e.w].sound);
       } else if (e.type === "throw") {
-        playKnifeSwing();
+        if (e.b) playBoltShot(); else playKnifeSwing();
       } else if (e.type === "ko" && t) {
         const ud = t.userData;
         ud.knockT = 0;
@@ -10129,7 +10259,7 @@
           const ka = a.kn && a.kn[j];
           m.visible = !!ka;
           m.scale.setScalar(1);
-          if (ka) { m.position.set(ka[0], ka[1], ka[2]); m.quaternion.set(ka[3], ka[4], ka[5], ka[6]); if (m.children[0]) m.children[0].rotation.x = ka[7]; }
+          if (ka) { m.position.set(ka[0], ka[1], ka[2]); m.quaternion.set(ka[3], ka[4], ka[5], ka[6]); if (m.children[0]) { m.children[0].rotation.x = ka[7]; const parts = m.children[0].children; if (parts.length > 1) { parts[0].visible = !ka[8]; parts[1].visible = !!ka[8]; } } }
         });
         if (replay.phase === "impact" && replay.hit) {
           viewmodelRoot.visible = false;
