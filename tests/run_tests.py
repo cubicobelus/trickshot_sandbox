@@ -1140,6 +1140,24 @@ MAP_CHECK_JS = """(id) => {
 }"""
 
 
+def test_map_speed(browser, base):
+    """Ice Lake's speed cap is 25 u/s and its speed bonus goes with it; other maps stay at 22 u/s (x1.875)."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html")
+        got = {}
+        for mid in ("arena", "icelake", "arena"):
+            got[mid] = page.evaluate("(id) => { window.__dbg.loadMap(id); return [window.__dbg.CFG.maxSpeed, window.__dbg.CFG.speedMultMax]; }", mid)
+            step(page, 2)
+        check("Ice Lake caps speed at 25 u/s with a bonus up to x2.085", got["icelake"] == [25, 2.085], str(got["icelake"]))
+        check("going back to Arena puts the cap back to 22 u/s (x1.875)", got["arena"] == [22, 1.875], str(got["arena"]))
+        check("the speed cap runs without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_map_sanity(browser, base):
     """Every map: pads, spawns, flag bases, the hill, ladders, portals and strips stand in the open, and spawns, flags and the hill can be walked to."""
     server, dbase, tmp = debug_site()
@@ -1177,10 +1195,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

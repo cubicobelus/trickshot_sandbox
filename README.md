@@ -52,7 +52,7 @@ saves it as a video you can post anywhere (.webm, or .mp4 in Safari), and **Save
 score less per hit so trickshots stay king. Shots that land on a wall, platform or the floor leave bullet holes (switch them off in Settings > View).
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (press jump just as you land) and
-wall bounces, up to 22 u/s. Tap **E** to fire the grappling hook at a wall, the floor or a target and
+wall bounces, up to 22 u/s (25 on Ice Lake). Tap **E** to fire the grappling hook at a wall, the floor or a target and
 zip there (the gun goes away while it's out).
 
 **Scoring:** every trick multiplies the shot. Being airborne, hang time, spins, speed, distance (no cap: the

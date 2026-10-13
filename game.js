@@ -1197,7 +1197,7 @@
   defineMap({
     flags: [[-32, 0, 0.25], [32, 0, 0.25]],
     id: "icelake", name: "Ice Lake", blurb: "A frozen lake where nothing stops: slides never end and turning is slow. Ice pillars, snowbanks, an iceberg with a ramp up.",
-    half: 40, floor: "ice", wallH: 7, targetMaxY: 9, physics: { friction: 0.7, momentumFriction: 0.25, groundAccel: 3.2, slideFriction: 0.22 },
+    half: 40, floor: "ice", wallH: 7, targetMaxY: 9, physics: { friction: 0.7, momentumFriction: 0.25, groundAccel: 3.2, slideFriction: 0.22, maxSpeed: 25, speedMultMax: 2.085 },   // the speed cap is 25 here, and the speed bonus reaches x2.085 with it (a map's own maxSpeed and speedMultMax)
     theme: { skyTop: 0x5f9bd6, skyHorizon: 0xe4f1fb, fog: [50, 170], sunDir: [20, 45, -35], sunColor: 0xfff6e6, sunIntensity: 1.0, hemi: [0xe6f3ff, 0x9fb4c4, 0.8],
       surfaces: { ice: "#bfe3f2", concrete: "#dfeaf2", brick: "#9fd0e8", deck: "#c9d9e6", facade: "#dfeaf2", facadeb: "#9fd0e8", roof: "#d6e4ee" } },
     walls: [
@@ -1340,7 +1340,7 @@
     playerSpawn: [0, 26],
   });
 
-  const BASE_PHYS = { gravity: CFG.gravity, friction: CFG.friction, momentumFriction: CFG.momentumFriction, groundAccel: CFG.groundAccel, slideFriction: CFG.slideFriction };
+  const BASE_PHYS = { gravity: CFG.gravity, friction: CFG.friction, momentumFriction: CFG.momentumFriction, groundAccel: CFG.groundAccel, slideFriction: CFG.slideFriction, maxSpeed: CFG.maxSpeed, speedMultMax: CFG.speedMultMax };
   let currentMap = null;
   // "random" is a choice, never a map: it picks one of the real maps (a different one from the current map each time)
   function pickRandomMap(excludeId) {
@@ -5794,7 +5794,8 @@
         ["GRAPPLE", x(C.grappleMult), "Hit within " + C.grappleScoreWindow + " s of letting go of the grappling hook (the gun is away while you are hooked on)."],
         ["LAUNCHED / RAMP LAUNCH", x(C.launchMult), "Hit while still rising off a jump pad or a kicker ramp (not after a wall bounce)."],
         ["MEGA LAUNCH", x(C.megaLaunchMult), "Hit while still rising off a mega (purple) pad."],
-        ["FAST / BLAZING / SONIC", "up to " + x(Math.min(1 + (C.maxSpeed - C.speedFrom) * C.speedMultPer, C.speedMultMax)), "+" + C.speedMultPer + "x per u/s over " + C.speedFrom + " u/s; the tag shows your speed."],
+        ["FAST / BLAZING / SONIC", "up to " + x(Math.min(1 + (C.maxSpeed - C.speedFrom) * C.speedMultPer, C.speedMultMax)), "+" + C.speedMultPer + "x per u/s over " + C.speedFrom + " u/s; the tag shows your speed." +
+          (MAPS.icelake && MAPS.icelake.physics.maxSpeed ? " Ice Lake lets you go faster (" + MAPS.icelake.physics.maxSpeed + " u/s), so its top is x" + MAPS.icelake.physics.speedMultMax.toFixed(2) + "." : "")],
         ["REVERSE", x(C.reverseMult), "In the air, having turned 90°+ since takeoff, flying at " + C.reverseSpeed + "+ u/s away from where you aim. Backpedalling doesn't count."],
       ]],
       ["Aim", [
