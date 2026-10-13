@@ -227,6 +227,14 @@
   </div>
 </div>
 
+<!-- the full gun list, opened by the loadout's More button -->
+<div id="loadout-popup" hidden>
+  <div class="g-panel" role="dialog" aria-label="Choose a gun">
+    <div class="g-head"><h2>Choose a gun</h2><button type="button" class="g-close" id="loadout-close" aria-label="Close">&times;</button></div>
+    <div id="loadout-groups"></div>   <!-- built in game.js -->
+  </div>
+</div>
+
 <!-- attachments: pick what goes on each gun (unlocked by hitting targets and players with it) -->
 <div id="attach-popup" hidden>
   <div class="g-panel" role="dialog" aria-label="Attachments">

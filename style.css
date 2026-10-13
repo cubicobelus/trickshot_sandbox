@@ -26,11 +26,14 @@
   /* the trickshot list: a popup over everything */
   #glossary-open, #stats-open, #ach-open { margin-top: 10px; }
   #ach-count { color: #ffd24a; }
-  #glossary, #stats, #achievements, #settings-popup, #map-popup, #attach-popup {
+  #glossary, #stats, #achievements, #settings-popup, #map-popup, #attach-popup, #loadout-popup {
     position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.7);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
-  #glossary[hidden], #stats[hidden], #achievements[hidden], #settings-popup[hidden], #map-popup[hidden], #attach-popup[hidden] { display: none; }
+  #glossary[hidden], #stats[hidden], #achievements[hidden], #settings-popup[hidden], #map-popup[hidden], #attach-popup[hidden], #loadout-popup[hidden] { display: none; }
+  #loadout-popup .g-panel { width: min(520px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+  .lo-group h3 { margin: 12px 0 6px; font-size: 12px; color: #ffd24a; text-transform: uppercase; letter-spacing: 1px; }
+  .lo-row { display: flex; gap: 6px; flex-wrap: wrap; }
   #attach-popup .g-panel { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
   #attach-open { margin-top: 8px; }
   #attach-guns { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
@@ -367,13 +370,14 @@
   /* loadout picker in the menu */
   #loadout { display: flex; align-items: center; gap: 6px; margin: 12px 0 2px; flex-wrap: wrap; justify-content: center; }
   #loadout .lo-label { font-size: 12px; color: #ffd24a; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
-  #loadout button {
-    width: 76px; padding: 5px 4px 4px; border-radius: 6px; cursor: pointer;   /* seven guns fit on one row */
+  #loadout button, .lo-gun {
+    width: 76px; padding: 5px 4px 4px; border-radius: 6px; cursor: pointer;
     background: rgba(255,255,255,0.04); border: 1px solid #44444c; color: #aaa; font: bold 11px 'Segoe UI', Arial, sans-serif; letter-spacing: 0.6px;
   }
-  #loadout button svg { height: 22px; width: auto; display: block; margin: 0 auto 2px; }
-  #loadout button:hover { border-color: #888; color: #fff; }
-  #loadout button.active { border-color: #ffd24a; color: #ffd24a; background: rgba(255,210,74,0.12); }
+  #loadout button svg, .lo-gun svg { height: 22px; width: auto; display: block; margin: 0 auto 2px; }
+  #loadout button:hover, .lo-gun:hover { border-color: #888; color: #fff; }
+  #loadout button.active, .lo-gun.active { border-color: #ffd24a; color: #ffd24a; background: rgba(255,210,74,0.12); }
+  #loadout .lo-more { align-self: stretch; }
 
   /* ---------------- free play / score attack ---------------- */
   #map-picker { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; flex-wrap: wrap; justify-content: center; }

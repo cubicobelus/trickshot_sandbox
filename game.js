@@ -2374,7 +2374,7 @@
   for (let i = 0; i < 4; i++) addPart(smgGroup, new THREE.BoxGeometry(0.058, 0.008, 0.012), metalDark, 0, 0.008, -0.19 - i * 0.025);   // vent slots
   addPart(smgGroup, new THREE.CylinderGeometry(0.0095, 0.0095, 0.1, 10), metalDark, 0, 0.012, -0.34, HALF_PI, 0, 0);   // barrel
   addPart(smgGroup, new THREE.CylinderGeometry(0.014, 0.014, 0.045, 10), metalDark, 0, 0.012, -0.395, HALF_PI, 0, 0);  // flash hider
-  addPart(smgGroup, new THREE.BoxGeometry(0.005, 0.018, 0.006), metalDark, 0, 0.065, -0.27);             // front sight post
+  addPart(smgGroup, new THREE.BoxGeometry(0.005, 0.04, 0.006), metalDark, 0, 0.054, -0.27);             // front sight post
   const smgRear = new THREE.Group();   // folds away under a red dot
   smgGroup.add(smgRear);
   addPart(smgRear, new THREE.BoxGeometry(0.03, 0.012, 0.03), metalDark, 0, 0.062, 0.04);                 // rear sight base
@@ -2382,7 +2382,7 @@
   addPart(smgGroup, new THREE.BoxGeometry(0.016, 0.012, 0.03), metalMid, 0.03, 0.035, 0.0);              // charging handle
   addPart(smgGroup, new THREE.BoxGeometry(0.035, 0.1, 0.04), gripMat, 0, -0.075, 0.11, 0.3, 0, 0);       // pistol grip
   addPart(smgGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
-  for (const sx of [-0.02, 0.02]) addPart(smgGroup, new THREE.BoxGeometry(0.01, 0.01, 0.2), metalMid, sx, 0.0, 0.25);   // wire stock
+  for (const sx of [-0.02, 0.02]) addPart(smgGroup, new THREE.BoxGeometry(0.01, 0.01, 0.24), metalMid, sx, 0.0, 0.24);   // wire stock
   addPart(smgGroup, new THREE.BoxGeometry(0.05, 0.07, 0.012), metalDark, 0, 0.0, 0.355);                 // butt plate
   const smgMag = addPart(smgGroup, new THREE.BoxGeometry(0.03, 0.17, 0.056), metalDark, 0, -0.115, -0.02);
 
@@ -2394,7 +2394,7 @@
   for (let i = 0; i < 6; i++) addPart(dmrGroup, new THREE.BoxGeometry(0.058, 0.008, 0.012), metalDark, 0, 0.012, -0.22 - i * 0.05);   // vent slots
   addPart(dmrGroup, new THREE.CylinderGeometry(0.0105, 0.0105, 0.2, 10), metalDark, 0, 0.012, -0.64, HALF_PI, 0, 0);   // barrel
   addPart(dmrGroup, new THREE.CylinderGeometry(0.0145, 0.0145, 0.06, 10), metalDark, 0, 0.012, -0.76, HALF_PI, 0, 0);  // flash hider
-  addPart(dmrGroup, new THREE.BoxGeometry(0.005, 0.02, 0.006), metalDark, 0, 0.067, -0.55);              // front sight post
+  addPart(dmrGroup, new THREE.BoxGeometry(0.005, 0.04, 0.006), metalDark, 0, 0.057, -0.5);              // front sight post
   const dmrRear = new THREE.Group();   // folds away under a red dot
   dmrGroup.add(dmrRear);
   addPart(dmrRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.064, 0.10);                 // rear sight base
@@ -2402,7 +2402,7 @@
   addPart(dmrGroup, new THREE.BoxGeometry(0.036, 0.1, 0.042), gripMat, 0, -0.075, 0.12, 0.3, 0, 0);      // pistol grip
   addPart(dmrGroup, new THREE.TorusGeometry(0.028, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
   addPart(dmrGroup, new THREE.BoxGeometry(0.02, 0.012, 0.03), metalMid, 0.028, 0.035, 0.05);             // charging handle
-  addPart(dmrGroup, new THREE.CylinderGeometry(0.02, 0.026, 0.2, 10), polymerMat, 0, -0.01, 0.36, HALF_PI, 0, 0);   // stock tube
+  addPart(dmrGroup, new THREE.CylinderGeometry(0.02, 0.026, 0.31, 10), polymerMat, 0, -0.01, 0.305, HALF_PI, 0, 0);   // stock tube
   addPart(dmrGroup, new THREE.BoxGeometry(0.05, 0.085, 0.03), gripMat, 0, -0.01, 0.47);                  // butt pad
   const dmrMag = addPart(dmrGroup, new THREE.BoxGeometry(0.034, 0.12, 0.075), metalDark, 0, -0.09, -0.02, 0.1, 0, 0);
 
@@ -3698,18 +3698,49 @@
     buildHotbar();
     updateHotbar();
     updateAmmoHud();
-    loadoutEl.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.gun === id));
+    renderLoadout();
     if (prev !== id) saveSettings();
   }
-  const loadoutEl = document.getElementById("loadout");
-  for (const id of GUNS) {
+  // the menu shows a few favourites, plus your gun if it is not one of them, and a More button for the rest
+  const QUICK_GUNS = ["rifle", "ar", "shotgun"];
+  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak"]], ["SMGs", ["smg"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol"]]];
+  const loadoutEl = document.getElementById("loadout"), loadoutPopupEl = document.getElementById("loadout-popup"), loadoutGroupsEl = document.getElementById("loadout-groups");
+  const gunButton = (id) => {
     const b = document.createElement("button");
-    b.type = "button";
-    b.dataset.gun = id;
+    b.type = "button"; b.dataset.gun = id; b.className = "lo-gun" + (id === SETTINGS.loadout ? " active" : "");
     b.innerHTML = iconSVG(id) + WEAPONS[id].name;
-    b.addEventListener("click", () => setLoadout(id));
-    loadoutEl.appendChild(b);
+    b.addEventListener("click", () => { setLoadout(id); setLoadoutPopup(false); });
+    return b;
+  };
+  function renderLoadout() {
+    loadoutEl.textContent = "";
+    const label = document.createElement("span"); label.className = "lo-label"; label.textContent = "Loadout"; loadoutEl.appendChild(label);
+    for (const id of QUICK_GUNS.includes(SETTINGS.loadout) ? QUICK_GUNS : [...QUICK_GUNS, SETTINGS.loadout]) loadoutEl.appendChild(gunButton(id));
+    const more = document.createElement("button");
+    more.type = "button"; more.id = "loadout-more"; more.className = "lo-more"; more.textContent = "More guns";
+    more.addEventListener("click", () => setLoadoutPopup(true));
+    loadoutEl.appendChild(more);
   }
+  function setLoadoutPopup(open) {
+    if (open) {
+      loadoutGroupsEl.textContent = "";
+      const groups = GUN_CLASSES.map(([title, ids]) => [title, ids.filter((id) => GUNS.includes(id))]);
+      groups.push(["Other", GUNS.filter((id) => !GUN_CLASSES.some(([, ids]) => ids.includes(id)))]);   // a gun nobody filed yet still shows
+      for (const [title, ids] of groups) {
+        if (!ids.length) continue;
+        const sec = document.createElement("div"); sec.className = "lo-group";
+        sec.innerHTML = "<h3>" + title + "</h3>";
+        const row = document.createElement("div"); row.className = "lo-row";
+        for (const id of ids) row.appendChild(gunButton(id));
+        sec.appendChild(row); loadoutGroupsEl.appendChild(sec);
+      }
+    }
+    loadoutPopupEl.hidden = !open;
+  }
+  document.getElementById("loadout-close").addEventListener("click", () => setLoadoutPopup(false));
+  loadoutPopupEl.addEventListener("click", (e) => { if (e.target === loadoutPopupEl) setLoadoutPopup(false); });
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !loadoutPopupEl.hidden) setLoadoutPopup(false); });
+  renderLoadout();
   loadoutEl.addEventListener("click", (e) => e.stopPropagation());   // the menu backdrop starts the game
   const ammoCountEl = document.getElementById("ammo-count");
   const ammoLabelEl = document.getElementById("ammo-label");

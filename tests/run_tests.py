@@ -117,6 +117,15 @@ def step(page, n):
     page.evaluate(f"__step({n}, 16)")
 
 
+def pick_gun(page, gun):
+    """Choose a loadout gun, through the More popup when it is not one of the favourites in the menu row."""
+    if not page.is_visible(f"#loadout button[data-gun={gun}]"):
+        page.click("#loadout-more")
+        page.click(f"#loadout-popup button[data-gun={gun}]")
+    else:
+        page.click(f"#loadout button[data-gun={gun}]")
+
+
 def test_game(browser, base):
     """Every loadout fires and reloads, weapons switch, the trickshot list, settings tabs and graphics levels, and the menu."""
     page, errors = open_page(browser, base + "/index.html")
@@ -124,11 +133,17 @@ def test_game(browser, base):
     check("replay buttons stay hidden until there's something to watch",
           not page.is_visible("#watch-best") and not page.is_visible("#watch-last"))
     check("three.js loads from lib/", page.evaluate("typeof THREE !== 'undefined' && THREE.REVISION === '128'"))
-    guns = page.eval_on_selector_all("#loadout button", "els => els.map(e => e.dataset.gun)")
-    check("loadout menu lists seven guns, the new ones last", len(guns) == 7 and guns[-2:] == ["smg", "dmr"], ", ".join(guns))
+    quick = page.eval_on_selector_all("#loadout button[data-gun]", "els => els.map(e => e.dataset.gun)")
+    check("the menu shows three favourite guns and a More button", quick == ["rifle", "ar", "shotgun"] and page.is_visible("#loadout-more"), ", ".join(quick))
+    page.click("#loadout-more")
+    guns = page.eval_on_selector_all("#loadout-popup button[data-gun]", "els => els.map(e => e.dataset.gun)")
+    check("the More popup lists all seven guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr"]), ", ".join(guns))
+    page.click("#loadout-popup button[data-gun=dmr]")
+    check("picking from More closes it, keeps the gun in the row and selects it",
+          not page.is_visible("#loadout-popup") and page.is_visible("#loadout button.active[data-gun=dmr]"))
 
     for gun in guns:
-        page.click(f"#loadout button[data-gun={gun}]")
+        pick_gun(page, gun)
         page.click("#start-btn")
         step(page, 45)
         ammo_before = page.inner_text("#ammo-count")
