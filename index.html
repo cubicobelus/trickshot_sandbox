@@ -240,8 +240,24 @@
   <div class="g-panel" role="dialog" aria-label="Attachments">
     <div class="g-head"><h2>Attachments</h2><button type="button" class="g-close" id="attach-close" aria-label="Close">&times;</button></div>
     <div id="attach-guns"></div>
-    <p class="g-note" id="attach-progress"></p>
-    <div id="attach-slots"></div>
+    <div id="attach-body">
+      <div id="attach-view">
+        <canvas id="attach-canvas" aria-label="A 3D view of the gun with its attachments. Drag to turn it."></canvas>
+        <div id="attach-name"></div>
+        <p class="g-note" id="attach-progress"></p>
+        <p class="g-note">Drag to turn the gun.</p>
+      </div>
+      <div id="attach-slots"></div>
+    </div>
+  </div>
+</div>
+
+<!-- dev tools: the ` key opens test switches -->
+<div id="dev-popup" hidden>
+  <div class="g-panel" role="dialog" aria-label="Dev tools">
+    <div class="g-head"><h2>Dev tools</h2><button type="button" class="g-close" id="dev-close" aria-label="Close">&times;</button></div>
+    <p class="g-note">For testing. Nothing here is saved; a reload turns it all off.</p>
+    <div id="dev-list"></div>
   </div>
 </div>
 

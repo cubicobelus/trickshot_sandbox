@@ -739,6 +739,16 @@ def test_attachments(browser, base):
     page.wait_for_timeout(300)
     ammo2 = page.inner_text("#ammo-count")
     check("the fitted attachment is remembered", "45" in ammo2, ammo2)
+    # the dev tools window (the ` key) opens every attachment
+    page.keyboard.press("Escape")
+    page.keyboard.press("Backquote")
+    check("the ` key opens the dev tools window", page.is_visible("#dev-popup"))
+    page.click('#dev-list button[data-dev="unlock"]')
+    page.keyboard.press("Backquote")
+    check("the dev tools window closes with ` again", not page.is_visible("#dev-popup"))
+    page.click("#attach-open")
+    page.wait_for_timeout(150)
+    check("Unlock all attachments opens every option", page.eval_on_selector_all("#attach-slots .at-opt.locked", "els => els.length") == 0)
     check("attachments run without errors", not errors, "; ".join(errors[:2]))
     page.close()
 

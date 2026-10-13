@@ -3620,8 +3620,8 @@
     WEAPON_BASE[id] = { mag: w.magSize, spread: w.spread, spreadAds: w.spreadAds, recoil: w.recoil, kick: w.kick, flash: w.flashScale, reload: Object.assign({}, w.reload), adsY: w.adsPos.y };
   }
   const baseMag = (id) => (WEAPON_BASE[id] ? WEAPON_BASE[id].mag : WEAPONS[id].magSize);
-  const UNLOCK_ALL_ATTACHMENTS = false;   // true opens every attachment (for testing); false unlocks each by hits landed with its gun
-  const attachUnlocked = (gun, opt) => UNLOCK_ALL_ATTACHMENTS || ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= opt.need;
+  let devUnlockAll = false;   // the dev tools window (the ` key) turns this on: every attachment opens, for testing; otherwise each unlocks by hits landed with its gun
+  const attachUnlocked = (gun, opt) => devUnlockAll || ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= opt.need;
   function chosenAttachments(gun) {   // what is fitted (an option that is still locked, or unknown, is ignored)
     const out = [], fitted = (SETTINGS.attach && SETTINGS.attach[gun]) || {};
     for (const [slot, opts] of Object.entries(ATTACHMENTS[gun] || {})) {
@@ -9181,48 +9181,156 @@
     if (m.hill) { g.strokeStyle = "#ffd24a"; g.lineWidth = Math.max(1.5, k * 0.5); g.beginPath(); g.arc(px(m.hill.x), px(m.hill.z), Math.max(3, m.hill.r * k), 0, 7); g.stroke(); }
     g.strokeStyle = css(m.theme.skyHorizon); g.lineWidth = 2; g.strokeRect(1, 1, n - 2, n - 2);
   }
-  // ---- the attachments window ----
+  // ---- the attachments window: a turnable 3D copy of the gun, and a card for every option ----
   const attachPopupEl = document.getElementById("attach-popup");
   let attachGun = SETTINGS.loadout;
+  const AP = { ready: false, gun: null, yaw: 0, el: 0.15, tYaw: 0, tEl: 0.15, drag: false, lastTouch: 0, raf: 0, len: 1 };
+  const AP_YAW0 = -Math.PI / 2;   // the muzzle points right, like the icons
+  // where to look at the gun for each slot: [turn from the side view, how high the camera sits]
+  const AP_VIEWS = { optic: [0.3, 0.5], muzzle: [-0.85, 0.12], barrel: [-0.85, 0.12], stock: [0.85, 0.12], grip: [0.1, -0.35], mag: [0.1, -0.35], sights: [0.25, -0.3] };
+  function apSetup() {
+    const canvas = document.getElementById("attach-canvas");
+    AP.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    AP.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    AP.scene = new THREE.Scene();
+    AP.scene.add(new THREE.HemisphereLight(0xffffff, 0x4a4a55, 1.2));
+    const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(2, 3, 4); AP.scene.add(key);
+    const rim = new THREE.DirectionalLight(0x9fb4ff, 0.9); rim.position.set(-3, 1, -2); AP.scene.add(rim);
+    AP.camera = new THREE.PerspectiveCamera(28, 1, 0.05, 20);
+    AP.pivot = new THREE.Group(); AP.scene.add(AP.pivot);
+    let lx = 0, ly = 0;
+    canvas.addEventListener("pointerdown", (e) => { AP.drag = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!AP.drag) return;
+      AP.yaw += (e.clientX - lx) * 0.012; AP.el = Math.max(-0.7, Math.min(0.9, AP.el + (e.clientY - ly) * 0.008));
+      AP.tYaw = AP.yaw; AP.tEl = AP.el; lx = e.clientX; ly = e.clientY; AP.lastTouch = performance.now();
+    });
+    const up = () => { AP.drag = false; };
+    canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+    AP.ready = true;
+  }
+  function apVisible(o, root) { for (; o && o !== root; o = o.parent) if (!o.visible) return false; return true; }
+  function apBuild() {   // a copy of the real gun model, with whatever is fitted to it right now
+    if (!AP.ready) return;
+    if (AP.gun) { AP.pivot.remove(AP.gun); AP.gun = null; }
+    const w = WEAPONS[attachGun], flashWas = muzzleFlash.visible;
+    muzzleFlash.visible = false;
+    const copy = w.group.clone(true);
+    muzzleFlash.visible = flashWas;
+    copy.visible = true; copy.position.set(0, 0, 0); copy.rotation.set(0, 0, 0); copy.scale.set(1, 1, 1);
+    copy.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    copy.traverse((o) => { if (o.isMesh && apVisible(o, copy)) box.union(new THREE.Box3().setFromObject(o)); });
+    const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+    copy.position.set(-c.x, -c.y, -c.z);
+    const holder = new THREE.Group(); holder.add(copy);
+    AP.gun = holder; AP.pivot.add(holder);
+    AP.len = Math.max(size.z, size.y * 1.6);
+  }
+  function apLook(slot) {   // turn to show a slot (the side view for none)
+    const v = AP_VIEWS[slot] || [0, 0.15];
+    AP.tYaw = AP_YAW0 + v[0]; AP.tEl = v[1]; AP.lastTouch = performance.now();
+  }
+  function apFrame() {
+    AP.raf = 0;
+    if (attachPopupEl.hidden) return;
+    const canvas = AP.renderer.domElement, w = canvas.clientWidth, h = canvas.clientHeight, pr = AP.renderer.getPixelRatio();
+    if (w && h && (canvas.width !== Math.round(w * pr) || canvas.height !== Math.round(h * pr))) {
+      AP.renderer.setSize(w, h, false); AP.camera.aspect = w / h; AP.camera.updateProjectionMatrix();
+    }
+    if (!AP.drag) { AP.yaw += (AP.tYaw - AP.yaw) * 0.14; AP.el += (AP.tEl - AP.el) * 0.14; }
+    const idle = performance.now() - AP.lastTouch > 3500 ? Math.sin(performance.now() / 1800) * 0.22 : 0;   // a slow sway when you leave it alone
+    AP.pivot.rotation.y = AP.yaw + idle;
+    const vfov = AP.camera.fov * Math.PI / 180, hfov = 2 * Math.atan(Math.tan(vfov / 2) * AP.camera.aspect);
+    const d = (AP.len * 0.52) / Math.tan(Math.min(hfov, vfov) / 2);
+    AP.camera.position.set(0, Math.sin(AP.el) * d, Math.cos(AP.el) * d);
+    AP.camera.lookAt(0, 0, 0);
+    AP.renderer.render(AP.scene, AP.camera);
+    AP.raf = requestAnimationFrame(apFrame);
+  }
   function renderAttach() {
     const gunsEl = document.getElementById("attach-guns"), slotsEl = document.getElementById("attach-slots");
     gunsEl.textContent = ""; slotsEl.textContent = "";
     for (const g of GUNS) {
       const b = document.createElement("button");
-      b.type = "button"; b.textContent = WEAPONS[g].name; b.className = g === attachGun ? "active" : "";
-      b.addEventListener("click", () => { attachGun = g; renderAttach(); });
+      b.type = "button"; b.dataset.gun = g; b.className = "lo-gun" + (g === attachGun ? " active" : "");
+      b.innerHTML = iconSVG(g) + WEAPONS[g].name;
+      b.addEventListener("click", () => { attachGun = g; renderAttach(); apLook(""); });
       gunsEl.appendChild(b);
     }
     const hits = (stats.guns[attachGun] && stats.guns[attachGun].hits) || 0;
-    document.getElementById("attach-progress").textContent = WEAPONS[attachGun].name + ": " + hits + " hits so far. Land hits with a gun to unlock its attachments.";
+    document.getElementById("attach-name").textContent = WEAPONS[attachGun].name;
+    document.getElementById("attach-progress").textContent = hits + " hits landed with this gun. Land more to unlock the rest.";
     const fitted = (SETTINGS.attach && SETTINGS.attach[attachGun]) || {};
     for (const [slot, opts] of Object.entries(ATTACHMENTS[attachGun] || {})) {
       const sec = document.createElement("div"); sec.className = "at-slot";
       sec.innerHTML = "<h3>" + (ATTACH_SLOTS[slot] || slot) + "</h3>";
       const grid = document.createElement("div"); grid.className = "at-opts";
-      const mk = (id, name, text, locked) => {
+      const mk = (id, name, text, locked, o) => {
         const b = document.createElement("button");
-        b.type = "button"; b.dataset.opt = id; b.className = "at-opt" + ((fitted[slot] || "") === id ? " active" : "") + (locked ? " locked" : "");
-        b.innerHTML = "<b>" + name + "</b><span>" + text + "</span>";
+        b.type = "button"; b.dataset.opt = id; b.className = "at-opt" + (id ? "" : " none") + ((fitted[slot] || "") === id ? " active" : "") + (locked ? " locked" : "");
+        b.innerHTML = "<b>" + name + "</b><span>" + text + "</span>" +
+          (locked ? '<i class="at-bar"><u style="width:' + Math.round(Math.min(1, hits / o.need) * 100) + '%"></u></i><em>' + hits + " / " + o.need + " hits</em>" : "");
+        b.addEventListener("mouseenter", () => apLook(slot));
         b.addEventListener("click", () => {
           if (locked) return;
           SETTINGS.attach = SETTINGS.attach || {};
           const cur = SETTINGS.attach[attachGun] = SETTINGS.attach[attachGun] || {};
           if (id) cur[slot] = id; else delete cur[slot];
-          saveSettings(); applyAttachments(); renderAttach();
+          saveSettings(); applyAttachments(); renderAttach(); apLook(slot);
         });
         grid.appendChild(b);
       };
       mk("", "None", "Nothing fitted", false);
-      for (const o of opts) { const open = attachUnlocked(attachGun, o); mk(o.id, o.name, open ? o.text : "Locked: " + (o.need - hits) + " more hits", !open); }
+      for (const o of opts) { const open = attachUnlocked(attachGun, o); mk(o.id, o.name, o.text, !open, o); }
       sec.appendChild(grid); slotsEl.appendChild(sec);
     }
+    apBuild();
   }
-  function setAttachPopup(open) { if (open) { attachGun = SETTINGS.loadout; renderAttach(); } attachPopupEl.hidden = !open; }
+  function setAttachPopup(open) {
+    if (open) {
+      attachGun = SETTINGS.loadout;
+      attachPopupEl.hidden = false;   // visible before the 3D view is sized
+      if (!AP.ready) { try { apSetup(); } catch (e) { AP.ready = false; } }
+      renderAttach(); apLook("");
+      AP.yaw = AP.tYaw - 0.9;   // swings round into place
+      if (AP.ready && !AP.raf) AP.raf = requestAnimationFrame(apFrame);
+    } else attachPopupEl.hidden = true;
+  }
   document.getElementById("attach-open").addEventListener("click", (e) => { e.stopPropagation(); setAttachPopup(true); });
   document.getElementById("attach-close").addEventListener("click", () => setAttachPopup(false));
   attachPopupEl.addEventListener("click", (e) => { if (e.target === attachPopupEl) setAttachPopup(false); });
   window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !attachPopupEl.hidden) setAttachPopup(false); });
+
+  // ---- dev tools: press ` for a small window of test switches (nothing here is saved) ----
+  const devPopupEl = document.getElementById("dev-popup");
+  const DEV_TOOLS = [
+    { id: "unlock", name: "Unlock all attachments", get on() { return devUnlockAll; },
+      run() { devUnlockAll = !devUnlockAll; applyAttachments(); if (!attachPopupEl.hidden) renderAttach(); } },
+  ];
+  function renderDev() {
+    const list = document.getElementById("dev-list");
+    list.textContent = "";
+    for (const t of DEV_TOOLS) {
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.dev = t.id; b.className = "btn small" + (t.on ? " on" : "");
+      b.textContent = t.name + (t.on ? ": ON" : ": off");
+      b.addEventListener("click", () => { t.run(); renderDev(); });
+      list.appendChild(b);
+    }
+  }
+  function setDevPopup(open) {
+    if (open) { renderDev(); if (document.pointerLockElement) document.exitPointerLock(); }
+    devPopupEl.hidden = !open;
+  }
+  document.getElementById("dev-close").addEventListener("click", () => setDevPopup(false));
+  devPopupEl.addEventListener("click", (e) => { if (e.target === devPopupEl) setDevPopup(false); });
+  window.addEventListener("keydown", (e) => {
+    const tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (e.code === "Backquote") { e.preventDefault(); setDevPopup(devPopupEl.hidden); }
+    else if (e.code === "Escape" && !devPopupEl.hidden) setDevPopup(false);
+  });
 
   // ---- the bigger map: from the menu, and held in a game ----
   const mapPopupEl = document.getElementById("map-popup"), mapBigEl = document.getElementById("map-big"), mapBigCtx = mapBigEl.getContext("2d");

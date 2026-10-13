@@ -34,19 +34,38 @@
   #loadout-popup .g-panel { width: min(520px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
   .lo-group h3 { margin: 12px 0 6px; font-size: 12px; color: #ffd24a; text-transform: uppercase; letter-spacing: 1px; }
   .lo-row { display: flex; gap: 6px; flex-wrap: wrap; }
-  #attach-popup .g-panel { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+  #attach-popup .g-panel { width: min(900px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
   #attach-open { margin-top: 8px; }
-  #attach-guns { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
-  #attach-guns button { padding: 5px 12px; border: 1px solid #44444c; border-radius: 6px; background: rgba(255,255,255,0.04); color: #ccc; font: inherit; font-size: 13px; cursor: pointer; }
-  #attach-guns button.active { border-color: #ffd24a; color: #ffd24a; background: rgba(255,210,74,0.12); }
-  .at-slot h3 { margin: 12px 0 6px; font-size: 12px; color: #ffd24a; text-transform: uppercase; letter-spacing: 1px; }
-  .at-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
-  .at-opt { text-align: left; padding: 7px 10px; border-radius: 8px; border: 1px solid #44444c; background: rgba(255,255,255,0.04); color: #ddd; font: inherit; cursor: pointer; }
+  #attach-guns { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+  #attach-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  #attach-view { position: sticky; top: 0; }
+  #attach-canvas { display: block; width: 100%; height: 280px; border-radius: 10px; border: 1px solid #33333b; cursor: grab; touch-action: none;
+    background: radial-gradient(ellipse at 50% 60%, #2b2c36 0%, #16171d 75%); }
+  #attach-canvas:active { cursor: grabbing; }
+  #attach-name { margin-top: 8px; font-size: 18px; font-weight: bold; letter-spacing: 1.5px; color: #ffd24a; text-align: center; }
+  #attach-view .g-note { text-align: center; margin: 4px 0 0; }
+  .at-slot:first-child h3 { margin-top: 0; }
+  .at-slot h3 { margin: 14px 0 6px; font-size: 12px; color: #ffd24a; text-transform: uppercase; letter-spacing: 1px; }
+  .at-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .at-opt { position: relative; text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid #44444c; background: rgba(255,255,255,0.04); color: #ddd; font: inherit; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+  .at-opt:hover:not(.locked) { border-color: #888; background: rgba(255,255,255,0.08); }
   .at-opt b { display: block; font-size: 13px; color: #fff; }
   .at-opt span { font-size: 11px; color: #9a9aa3; line-height: 1.35; display: block; }
-  .at-opt.active { border-color: #ffd24a; background: rgba(255,210,74,0.12); }
+  .at-opt.none { background: transparent; }
+  .at-opt.active { border-color: #ffd24a; background: rgba(255,210,74,0.14); }
   .at-opt.active b { color: #ffd24a; }
-  .at-opt.locked { opacity: 0.45; cursor: not-allowed; }
+  .at-opt.active::after { content: "\2713"; position: absolute; top: 6px; right: 9px; color: #ffd24a; font-weight: bold; }
+  .at-opt.locked { cursor: not-allowed; }
+  .at-opt.locked b, .at-opt.locked span { opacity: 0.45; }
+  .at-bar { display: block; height: 4px; margin-top: 7px; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden; }
+  .at-bar u { display: block; height: 100%; background: #ffd24a; opacity: 0.7; }
+  .at-opt em { display: block; margin-top: 3px; font-size: 10.5px; font-style: normal; color: #9a9aa3; }
+  @media (max-width: 720px) { #attach-body { grid-template-columns: 1fr; } #attach-view { position: static; } #attach-canvas { height: 220px; } }
+  #dev-popup { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #dev-popup[hidden] { display: none; }
+  #dev-popup .g-panel { width: min(380px, 100%); }
+  #dev-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  #dev-list .btn.on { border-color: #ffd24a; color: #ffd24a; background: rgba(255,210,74,0.12); }
   #map-popup .g-panel { width: min(520px, 100%); text-align: center; }
   #map-big { display: block; width: min(440px, 58vh); height: min(440px, 58vh); margin: 8px auto; border-radius: 8px; border: 1px solid #44444c; }
   #map-popup.ingame { pointer-events: none; background: rgba(0,0,0,0.35); }
