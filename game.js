@@ -3853,7 +3853,11 @@
     const b = document.createElement("button");
     b.type = "button"; b.dataset.gun = id; b.className = "lo-gun" + (id === SETTINGS.loadout ? " active" : "");
     b.innerHTML = iconSVG(id) + WEAPONS[id].name;
-    b.addEventListener("click", () => { setLoadout(id); setLoadoutPopup(false); });
+    b.addEventListener("click", () => {
+      const again = id === SETTINGS.loadout;   // a second click on your gun opens its attachments
+      setLoadout(id); setLoadoutPopup(false);
+      if (again) setAttachPopup(true);
+    });
     return b;
   };
   function renderLoadout() {
@@ -9452,7 +9456,7 @@
       const b = document.createElement("button");
       b.type = "button"; b.dataset.gun = g; b.className = "lo-gun" + (g === attachGun ? " active" : "");
       b.innerHTML = iconSVG(g) + WEAPONS[g].name;
-      b.addEventListener("click", () => { attachGun = g; renderAttach(); apLook(""); });
+      b.addEventListener("click", () => { attachGun = g; setLoadout(g); renderAttach(); apLook(""); });   // the gun you look at becomes your gun
       gunsEl.appendChild(b);
     }
     const hits = (stats.guns[attachGun] && stats.guns[attachGun].hits) || 0;

@@ -753,6 +753,14 @@ def test_attachments(browser, base):
     page.click("#attach-open")
     page.wait_for_timeout(150)
     check("Unlock all attachments opens every option", page.eval_on_selector_all("#attach-slots .at-opt.locked", "els => els.length") == 0)
+    # switching guns in the window selects that gun; a second click on your gun in the menu opens the window
+    page.click('#attach-guns button[data-gun="ak"]')
+    check("choosing a gun in the attachments window makes it your gun", page.evaluate("document.querySelector('#loadout .lo-gun.active').dataset.gun") == "ak")
+    page.click("#attach-close")
+    page.click('#loadout .lo-gun.active')
+    check("clicking your gun a second time opens the attachments window", page.is_visible("#attach-popup"))
+    page.click("#attach-close")
+    page.click("#attach-open")
     # a grip and a magazine can be fitted together, and an old save with the magazine in the grip slot still works
     page.click('#attach-guns button[data-gun="dmr"]')
     page.click('#attach-slots .at-opt[data-opt="vgrip"]')
