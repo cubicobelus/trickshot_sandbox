@@ -7478,6 +7478,7 @@
   }
 
   function hostStartRound() {
+    net.botBolts = [];   // (a bot's crossbow bolts still in the air)
     let mapId = net.pendingMap === "random" ? pickRandomMap(currentMap.id) : MAPS[net.pendingMap] ? net.pendingMap : "arena";
     if (net.pendingKoth && net.pendingSub !== "race" && !MAPS[mapId].hill) mapId = MAP_ORDER.find((i) => MAPS[i].hill) || mapId;   // King of the Hill needs a hill
     if (net.pendingRange) mapId = "range";   // and the range is its own map
@@ -7827,6 +7828,7 @@
     }
     if (net.phase === "play" && net.sub === "dm") {
       if (net.practice) for (let left = dt; left > 0; left -= 0.05) botsThink(Math.min(left, 0.05), now);
+      hostBotBolts(now);
       if (net.koth) hostHillTick(dt);
       if (net.ctf) hostCtfTick(dt);
       if (net.br) hostBrTick(dt);
@@ -8418,6 +8420,31 @@
     return null;
   }
 
+  // a bot's crossbow bolt: everyone sees it fly, and it only lands if the target is still where it was aimed when it arrives (so it can be dodged)
+  function botLaunchBolt(p, tgt, dist, errRad, aimHeight, ox, oy, oz, tx, ty, tz, now) {
+    const land = botShotLands(dist, errRad, aimHeight);
+    const flight = Math.max(0.05, Math.hypot(tx, ty, tz) / BOLT_SPEED);
+    let vx = tx / flight, vz = tz / flight;
+    if (!land) { const side = (Math.random() < 0.5 ? -1 : 1) * rnd(0.8, 1.6) / flight, len = Math.hypot(tx, tz) || 1; vx += -tz / len * side; vz += tx / len * side; }   // a miss goes wide
+    hostBroadcast({ t: "throw", id: p.id, o: [r2(ox), r2(oy), r2(oz)], v: [r2(vx), r2((ty + 0.5 * BOLT_GRAVITY * flight * flight) / flight), r2(vz)], b: 1 });
+    if (land) (net.botBolts = net.botBolts || []).push({ at: now + flight * 1000, p, v: tgt, ax: tgt.x, az: tgt.z, head: land === "head", dist });
+  }
+  function hostBotBolts(now) {
+    const list = net.botBolts;
+    if (!list || !list.length) return;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const b = list[i];
+      if (now < b.at) continue;
+      list.splice(i, 1);
+      const v = b.v;
+      if (!v.alive || Math.hypot(v.x - b.ax, v.z - b.az) > 0.9 || now < v.protectUntil) continue;   // it moved, died or is protected
+      const dmg = hostDamage(b.p, v, { head: b.head, n: 1, h: b.head ? 1 : 0 }, "crossbow");
+      if (dmg <= 0) continue;
+      const pts = Math.round(CFG.basePoints * (1 + Math.max(0, b.dist - CFG.distanceFrom) * CFG.distanceMultPerM) * (b.head ? 1.5 : 1));
+      hostDealDamage(b.p, v, dmg, { pts, tags: [], head: b.head, knife: false });
+    }
+  }
+
   function botFire(p, tgt, dist, now) {
     const ai = p.ai, L = ai.lvl, g = ai.gun, w = WEAPONS[g];
     ai.ammo--; p.lastFireAt = now;
@@ -8443,6 +8470,7 @@
     // aim error: worse against a moving target and the longer an automatic keeps firing
     const burstK = w.auto ? 1 + 0.12 * Math.min(ai.burstLeft === 0 ? 0 : (L.burst[1] - ai.burstLeft), 8) : 1;
     const errRad = L.err * (ai.errK || 1) * Math.PI / 180 * (1 + ai.tspd / 8) * burstK * (g === "rifle" ? 0.55 : g === "dmr" ? 0.75 : 1);
+    if (w.projectile) { botLaunchBolt(p, tgt, dist, errRad, aimHeight, ox, oy, oz, tx, ty, tz, now); return; }
     let n = 0, h = 0;
     if (g === "shotgun") {
       for (let i = 0; i < DAMAGE.shotgun.pellets; i++) {

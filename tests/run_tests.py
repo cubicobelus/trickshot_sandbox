@@ -1054,7 +1054,26 @@ def test_crossbow(browser, base):
         step(page, 70)
         hp = page.evaluate("(id) => window.__dbg.net.players.get(id).hp", bot)
         check("one bolt kills a dummy (the host believes the hit)", hp <= 0, f"hp {hp}")
-        check("the crossbow runs without errors", not errors and not errors2, "; ".join((errors + errors2)[:2]))
+        page.close()
+        # a bot's crossbow: its bolt flies where everyone can see it, and it can kill
+        page, errors3 = open_page(browser, dbase + "/index.html", 800, 450)
+        page.click("#mode-tabs .tab[data-mode=mp]")
+        start_practice(page, mode="dm", bots=1, level="hard")
+        page.click("#mp-play-btn")
+        step(page, 90)
+        page.evaluate("""() => {
+          const d = window.__dbg, bot = [...d.net.players.values()].find((p) => p.bot), me = d.net.players.get('you');
+          bot.ai.gun = 'crossbow'; bot.g = d.WEAPON_ORDER.indexOf('crossbow'); bot.ai.ammo = 1; bot.ai.reloadT = 0; bot.ai.fireT = 0;
+          bot.x = me.x; bot.z = me.z - 18; bot.y = me.y;
+        }""")
+        seen, lowest = 0, 100
+        for _ in range(120):
+            step(page, 5)
+            r = page.evaluate("() => ({ f: window.__dbg.thrownPool.filter((k) => k.state === 'flying' && k.bolt && k.remote).length, hp: window.__dbg.net.players.get('you').hp })")
+            seen, lowest = max(seen, r["f"]), min(lowest, r["hp"])
+        check("a bot's crossbow bolt flies where you can see it", seen >= 1, str(seen))
+        check("and a bolt that arrives on a still target hurts", lowest < 100, f"hp {lowest}")
+        check("the crossbow runs without errors", not errors and not errors2 and not errors3, "; ".join((errors + errors2 + errors3)[:2]))
         page.close()
     finally:
         server.shutdown()
