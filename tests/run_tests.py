@@ -1000,7 +1000,7 @@ def test_guns(browser, base):
 
 
 def test_crossbow(browser, base):
-    """The crossbow's bolt flies, scores on a target, and kills a dummy through the host's checks; the bolt is gone until the reload brings the next one."""
+    """The crossbow's bolt flies, scores on a target, and hurts a dummy through the host's checks (55 body, a head kills); the bolt is gone until the reload brings the next one."""
     server, dbase, tmp = debug_site()
     try:
         page, errors = open_page(browser, dbase + "/index.html", 900, 560)
@@ -1053,7 +1053,19 @@ def test_crossbow(browser, base):
         page.dispatch_event("body > canvas", "mouseup", {"button": 0})
         step(page, 70)
         hp = page.evaluate("(id) => window.__dbg.net.players.get(id).hp", bot)
-        check("one bolt kills a dummy (the host believes the hit)", hp <= 0, f"hp {hp}")
+        check("a bolt to the body takes 55 (the host believes the hit)", hp == 45, f"hp {hp}")
+        step(page, 200)   # reloaded; aim at the head this time
+        page.evaluate("""(id) => {
+          const d = window.__dbg, b = d.net.players.get(id);
+          const dx = b.x - d.yawObject.position.x, dy = (b.y + 1.62) - d.yawObject.position.y, dz = b.z - d.yawObject.position.z;
+          d.yawObject.rotation.y = Math.atan2(-dx, -dz); d.pitchObject.rotation.x = Math.atan2(dy, Math.hypot(dx, dz));
+        }""", bot)
+        step(page, 3)
+        page.dispatch_event("body > canvas", "mousedown", {"button": 0})
+        step(page, 2)
+        page.dispatch_event("body > canvas", "mouseup", {"button": 0})
+        step(page, 70)
+        check("a bolt to the head kills", page.evaluate("(id) => !window.__dbg.net.players.get(id).alive", bot))
         page.close()
         # a bot's crossbow: its bolt flies where everyone can see it, and it can kill
         page, errors3 = open_page(browser, dbase + "/index.html", 800, 450)
@@ -1067,8 +1079,9 @@ def test_crossbow(browser, base):
           bot.x = me.x; bot.z = me.z - 18; bot.y = me.y;
         }""")
         seen, lowest = 0, 100
-        for _ in range(120):
+        for i in range(120):
             step(page, 5)
+            if i % 25 == 24: page.evaluate("() => { const b = [...window.__dbg.net.players.values()].find((p) => p.bot); b.ai.ammo = 1; b.ai.reloadT = 0; b.ai.fireT = 0; }")   # (a hard bot can miss: let it try again)
             r = page.evaluate("() => ({ f: window.__dbg.thrownPool.filter((k) => k.state === 'flying' && k.bolt && k.remote).length, hp: window.__dbg.net.players.get('you').hp })")
             seen, lowest = max(seen, r["f"]), min(lowest, r["hp"])
         check("a bot's crossbow bolt flies where you can see it", seen >= 1, str(seen))

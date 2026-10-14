@@ -6547,10 +6547,10 @@
     dmr: { body: 60, head: 100 },
     burst: { body: 28, head: 42 },   // per round, three rounds a pull
     lmg: { body: 24, head: 34 },
-    crossbow: { body: 100, head: 100 },   // one bolt kills; it flies, so it has to be led
+    crossbow: { body: 55, head: 100 },   // like the Deagle: two body hits or one to the head; it flies, so it has to be led
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };
-  const KNIFE_SWING_DMG = 55, KNIFE_THROW_DMG = 100;
+  const KNIFE_SWING_DMG = 55, KNIFE_THROW_DMG = 55, KNIFE_THROW_HEAD_DMG = 100;   // a thrown knife is like the Deagle: two body hits, or one to the head
   const GG_ORDER = ["smg", "burst", "ar", "ak", "lmg", "dmr", "crossbow", "shotgun", "pistol", "rifle"];   // gun game: ten guns, then the knife (level 11)
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
@@ -7584,7 +7584,7 @@
   }
   function hostDamage(p, v, m, g) {
     if (g === "knife") return KNIFE_SWING_DMG;
-    if (g === "knifeThrow") return KNIFE_THROW_DMG;
+    if (g === "knifeThrow") return m.head ? KNIFE_THROW_HEAD_DMG : KNIFE_THROW_DMG;
     const d = DAMAGE[g];
     if (!d) return 0;
     if (g === "shotgun") {
@@ -8901,7 +8901,7 @@
     let html = "<b>" + (w ? w.name : id) + "</b><br>";
     if (d && d.pellet) html += "per pellet " + d.pellet + " (" + Math.round(d.pellet * d.headMult) + " head) \u00b7 " + d.pellets + " pellets<br>full damage to " + d.near + " m, " + Math.round(d.farMult * 100) + "% by " + d.far + " m";
     else if (d) html += "body " + d.body + " \u00b7 head " + d.head + "<br>" + Math.ceil(100 / d.body) + " body hit" + (Math.ceil(100 / d.body) === 1 ? "" : "s") + " or " + Math.ceil(100 / d.head) + " head hit" + (Math.ceil(100 / d.head) === 1 ? "" : "s") + " to kill" + (d.far ? "<br>full damage to " + d.near + " m, " + Math.round(d.farMult * 100) + "% by " + d.far + " m" : "");
-    else if (id === "knife") html += "swing " + KNIFE_SWING_DMG + " \u00b7 throw " + KNIFE_THROW_DMG;
+    else if (id === "knife") html += "swing " + KNIFE_SWING_DMG + " \u00b7 throw " + KNIFE_THROW_DMG + " body, " + KNIFE_THROW_HEAD_DMG + " head";
     rangeInfoEl.innerHTML = html;
   }
 
