@@ -3761,6 +3761,7 @@
   const AT_STEEL = new THREE.MeshStandardMaterial({ color: 0x2b2f35, metalness: 0.7, roughness: 0.45 });
   const AT_RUBBER = new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.9 });
   const AT_DOT = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+  const AT_DOT_HALO = new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.24, depthWrite: false, blending: THREE.AdditiveBlending });
   const AT_LENS = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
   const AT_DOT_RISE = 0.034;   // a red dot's window centre sits this far above the rail it is clamped to
   // per gun (the viewmodel, and AV_MOUNT for the other-player models; forward is -z):
@@ -3832,14 +3833,21 @@
         add(new THREE.TorusGeometry(r * 1.02, 0.0045, 6, 16), AT_STEEL, 0, c, z + len / 2);
         add(new THREE.CircleGeometry(r * 1.3, 14), AT_LENS, 0, c, z - len / 2 - 0.03);
         add(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 8), AT_STEEL, 0, c + r + 0.004, z);
-      } else if (id === "reddot" && M.optic) {   // clamped to the rail: a riser, an open frame, a faint lens and the dot
+      } else if (id === "reddot" && M.optic) {   // a reflex sight: a clamp and base, a slim frame round the window, a hood with a lip, a glass, a small emitter pod, two knobs, and a pin-prick dot
         const [z, t] = M.optic, c = t + AT_DOT_RISE;
-        add(new THREE.BoxGeometry(0.026, 0.011, 0.05), AT_STEEL, 0, t + 0.0055, z);
-        add(new THREE.BoxGeometry(0.038, 0.006, 0.045), AT_STEEL, 0, c - 0.021, z);
-        add(new THREE.BoxGeometry(0.038, 0.006, 0.045), AT_STEEL, 0, c + 0.021, z);
-        for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.006, 0.048, 0.045), AT_STEEL, side * 0.016, c, z);
-        add(new THREE.PlaneGeometry(0.026, 0.036), AT_LENS, 0, c, z - 0.02);
-        add(new THREE.BoxGeometry(0.0032, 0.0032, 0.001), AT_DOT, 0, c, z - 0.021);
+        add(new THREE.BoxGeometry(0.03, 0.008, 0.05), AT_STEEL, 0, t + 0.004, z);                       // rail clamp
+        for (const side of [-1, 1]) { const bolt = add(new THREE.CylinderGeometry(0.0035, 0.0035, 0.006, 8), AT_RUBBER, side * 0.0165, t + 0.004, z + 0.012); bolt.rotation.z = HP; }
+        add(new THREE.BoxGeometry(0.036, 0.012, 0.052), AT_STEEL, 0, t + 0.014, z);                     // the base the window sits on
+        add(new THREE.BoxGeometry(0.03, 0.008, 0.012), AT_STEEL, 0, t + 0.0145, z - 0.03, 0.5);        // its sloped nose
+        for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.0045, 0.037, 0.05), AT_STEEL, side * 0.0175, c, z);   // the two sides of the window
+        add(new THREE.BoxGeometry(0.039, 0.005, 0.054), AT_RUBBER, 0, c + 0.021, z);                    // the hood over the top
+        add(new THREE.BoxGeometry(0.037, 0.003, 0.012), AT_RUBBER, 0, c + 0.021, z - 0.032);            // and its lip out front
+        add(new THREE.PlaneGeometry(0.03, 0.034), AT_LENS, 0, c, z - 0.021);                            // the glass
+        add(new THREE.BoxGeometry(0.014, 0.008, 0.012), AT_STEEL, 0, c - 0.0125, z - 0.016);            // the emitter pod at the foot of the window
+        const knobW = add(new THREE.CylinderGeometry(0.0045, 0.0045, 0.008, 10), AT_RUBBER, 0.0225, c + 0.005, z - 0.004); knobW.rotation.z = HP;   // windage knob
+        add(new THREE.CylinderGeometry(0.0045, 0.0045, 0.005, 10), AT_RUBBER, 0, c + 0.0255, z - 0.004);  // elevation knob
+        add(new THREE.BoxGeometry(0.0016, 0.0016, 0.001), AT_DOT, 0, c, z - 0.0215);                   // the dot (small: it is a point of light)
+        add(new THREE.CircleGeometry(0.0038, 12), AT_DOT_HALO, 0, c, z - 0.0218);                      // and its faint glow
       } else if (id === "vgrip" && M.under) add(new THREE.CylinderGeometry(0.015, 0.017, 0.1, 10), AT_STEEL, 0, M.under[1] - 0.048, M.under[0]);
       else if (id === "agrip" && M.under) add(new THREE.BoxGeometry(0.028, 0.03, 0.085), AT_STEEL, 0, M.under[1] - 0.012, M.under[0] + 0.01, 0.35);
       else if (id === "laser" && M.under) {   // a box under the frame, the red lens facing forward
