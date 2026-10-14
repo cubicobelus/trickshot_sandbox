@@ -5913,6 +5913,7 @@
     else if (!settingsSeen) { settingsSeen = true; settingsOpenBtn.classList.remove("glow"); try { localStorage.setItem("tsb-settings-seen", "1"); } catch (e) { /* ignore */ } }
   }
   document.getElementById("settings-open").addEventListener("click", (e) => { e.stopPropagation(); setSettingsPopup(true); });
+  document.getElementById("mp-settings-open").addEventListener("click", (e) => { e.stopPropagation(); setSettingsPopup(true); });   // (settings from inside a room too)
   document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
   // Back up and restore: everything the game keeps in this browser as one file. An imported file is checked key by key and
   // value by value before it replaces anything (and the game's own loaders check again when it starts).
@@ -8573,6 +8574,18 @@
     hostDealDamage(p, tgt, dmg, { pts, tags: [], head: h > 0, knife: false });
   }
 
+  // the shooting range: dummies at set distances, started from the single player menu (it runs as a practice room with the dummies as bots)
+  let rangeFromMenu = false;
+  function startRange() {
+    const kept = setup.practice;
+    setup.practice = Object.assign({}, kept, { mode: "range", bots: 4, rules: Object.assign({}, NO_RULES) });
+    setUiMode("mp");
+    rangeFromMenu = true;
+    mpBots();
+    setup.practice = kept;
+    requestPlay();
+  }
+  document.getElementById("range-start").addEventListener("click", (e) => { e.stopPropagation(); startRange(); });
   function mpBots() {
     const count = Math.max(1, Math.min(setup.practice.bots, MAX_PLAYERS - 1));
     const level = setup.practice.mode === "range" ? "dummy" : setup.practice.level;
@@ -8614,7 +8627,7 @@
     for (const kind of ["practice", "host"]) {
       const s = saved[kind], d = setup[kind];
       if (!s || typeof s !== "object") continue;
-      if (MODES.some((m) => m.id === s.mode) && !(kind === "practice" && s.mode === "race")) d.mode = s.mode;
+      if (MODES.some((m) => m.id === s.mode) && !(kind === "practice" && s.mode === "race") && s.mode !== "range") d.mode = s.mode;
       if (s.map === "random" || MAPS[s.map]) d.map = s.map;
       if (LIMITS.includes(s.limit)) d.limit = s.limit;
       if (s.rules && typeof s.rules === "object") d.rules = cleanRules(s.rules);
@@ -8628,10 +8641,9 @@
   const mapNameOf = (id) => (id === "random" ? "Random map" : MAPS[id] ? MAPS[id].name : "Arena");
   const hillMapId = () => MAP_ORDER.find((i) => MAPS[i].hill);
   const limitText = (mode, limit) => (mode.id === "race" || mode.id === "range" || mode.id === "gungame" || mode.id === "br" ? "" : mode.flags ? (limit ? "first to " + Math.max(1, Math.round(limit / 5)) + " capture" + (Math.max(1, Math.round(limit / 5)) === 1 ? "" : "s") : "no limit") : limit ? "first to " + (mode.hill ? limit * 5 + " s" : limit) : "no limit");
-  function refreshMpCards() {   // the two big buttons remind you what they will start
-    const p = setup.practice, h = setup.host, pm = modeById(p.mode), hm = modeById(h.mode);
-    document.getElementById("mp-card-practice-sub").textContent = pm.name + " \u00b7 " + mapNameOf(p.map) + " \u00b7 " + p.bots + " bot" + (p.bots === 1 ? "" : "s") + " (" + p.level + ")";
-    document.getElementById("mp-card-host-sub").textContent = hm.name + " \u00b7 " + mapNameOf(h.map);
+  function refreshMpCards() {   // the three big choices say what they are, nothing about the last match you set up
+    document.getElementById("mp-card-practice-sub").textContent = "Play offline against AI players";
+    document.getElementById("mp-card-host-sub").textContent = "Start a room and share the code";
   }
   function pendingModeValue() { return net.pendingBr ? "br" : net.pendingCtf ? "ctf" : net.pendingGun ? "gungame" : net.pendingRange ? "range" : net.pendingKoth ? (net.pendingTeams ? "tkoth" : "koth") : net.pendingTeams ? "tdm" : net.pendingSub; }
   function refreshLobbyLine() {   // in a hosted room: what the next round will be
@@ -8667,6 +8679,7 @@
     const modesEl = document.getElementById("ps-modes");
     modesEl.textContent = "";
     for (const m of MODES) {
+      if (m.id === "range") continue;   // the range starts from the single player menu
       if (ps.kind === "practice" && m.practice === false) continue;   // a score race needs real people
       if (ps.kind !== "practice" && m.host === false) continue;   // and the range is for practice
       const b = document.createElement("button");
@@ -8713,7 +8726,6 @@
     const sum = [limitText(mode, d.limit)];
     if (ps.kind === "practice") sum.push(mode.id === "range" ? d.bots + " dummies" : d.bots + " bot" + (d.bots === 1 ? "" : "s"), mode.id === "range" ? "" : d.level);
     if (ruleText(d.rules)) sum.push(ruleText(d.rules));
-    document.getElementById("ps-rules-sum").textContent = sum.filter(Boolean).join(" \u00b7 ");
     document.getElementById("ps-go").textContent = ps.kind === "practice" ? "Start practice" : ps.kind === "host" ? "Create room" : "Use for the next round";
   }
   for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"]]) {
@@ -8792,6 +8804,7 @@
     for (const t of targets) respawnTarget(t);
     resetLocalRound();
     mpEls.tabs.forEach((t) => (t.disabled = false));
+    if (rangeFromMenu) { rangeFromMenu = false; setUiMode("solo"); }   // the range was started from single player: go back there
     mpEls.connect.hidden = false;
     mpEls.room.hidden = true;
     mpEls.timer.hidden = true;
@@ -9970,7 +9983,7 @@
   }
 
   // ---- the mode buttons in the menu ----
-  const modeButtons = document.querySelectorAll("#play-modes button");
+  const modeButtons = document.querySelectorAll("#play-modes button[data-play-mode]");
   function refreshModeUI() {
     modeButtons.forEach((b) => b.classList.toggle("active", b.dataset.playMode === SETTINGS.playMode));
     const note = document.getElementById("mode-note");

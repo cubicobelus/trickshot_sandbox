@@ -45,6 +45,7 @@
         <span class="lo-label">Mode</span>
         <button type="button" data-play-mode="free">Free play</button>
         <button type="button" data-play-mode="sa60">Score Attack &middot; 1:00</button>
+        <button type="button" id="range-start" title="Dummies at set distances: every hit shows its damage">Shooting range</button>
       </div>
       <p id="mode-note"></p>
       <div class="start" id="start-btn">Click to play</div>
@@ -87,6 +88,7 @@
         </div>
         <ul id="mp-players"></ul>
         <div class="start" id="mp-play-btn">Click to play</div>
+        <button type="button" class="btn small" id="mp-settings-open">Settings</button>
         <button type="button" class="btn small" id="mp-leave-btn">Leave room</button>
       </div>
     </div>
@@ -284,8 +286,8 @@
       <div id="ps-maps"></div>
       <div class="ps-preview"><canvas id="ps-preview" width="200" height="200"></canvas><b id="ps-map-name"></b><span id="ps-map-note"></span></div>
     </div>
-    <details id="ps-rules">
-      <summary>Rules <span id="ps-rules-sum"></span></summary>
+    <div id="ps-rules">
+      <h3 class="ps-h">Rules</h3>
       <div class="ps-rules-body">
         <label id="ps-limit-row">First to <select id="ps-limit"><option value="5">5</option><option value="10">10</option><option value="15">15</option><option value="25">25</option><option value="50">50</option><option value="0">no limit</option></select> <span id="ps-limit-unit"></span></label>
         <label id="ps-bots-row"><span id="ps-bots-label">Bots</span> <select id="ps-bots"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
@@ -297,7 +299,7 @@
           <label id="ps-r-fastresp-row" title="Back in the fight after 1 second instead of 3"><input type="checkbox" id="ps-r-fastresp">Fast respawn</label>
         </div>
       </div>
-    </details>
+    </div>
     <div class="start ps-go" id="ps-go">Start</div>
   </div>
 </div>

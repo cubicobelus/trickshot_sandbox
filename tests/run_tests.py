@@ -410,6 +410,13 @@ def test_erase(browser, base):
 
 def start_practice(page, mode=None, map_id=None, bots=None, level=None, limit=None):
     """Open the practice window (from the Multiplayer tab), set what's asked, and press Start."""
+    if mode == "range":   # the range is started from the single player menu
+        page.click('#mode-tabs .tab[data-mode="solo"]')
+        page.click("#range-start")
+        page.wait_for_timeout(300)
+        page.evaluate("__unlock()")   # the click starts playing straight away; back to the menu, where the tests expect to press play
+        page.wait_for_timeout(100)
+        return
     page.click("#mp-card-practice")
     page.wait_for_timeout(100)
     if mode:
@@ -606,24 +613,21 @@ def test_play_setup(browser, base):
     page.click("#mp-card-practice")
     page.wait_for_timeout(100)
     modes = page.eval_on_selector_all("#ps-modes .ps-card", "els => els.map(e => e.dataset.mode)")
-    check("the practice window lists the modes (no score race: it needs real people)", modes == ["dm", "tdm", "koth", "tkoth", "br", "ctf", "gungame", "range"], ", ".join(modes))
+    check("the practice window lists the modes (no score race: it needs real people, no range: that is in single player)", modes == ["dm", "tdm", "koth", "tkoth", "br", "ctf", "gungame"], ", ".join(modes))
     page.click('#ps-modes .ps-card[data-mode="koth"]')
     active_map = page.evaluate("document.querySelector('#ps-maps button.active').dataset.map")
     off = page.eval_on_selector_all("#ps-maps button.off", "els => els.map(e => e.dataset.map)")
     check("King of the Hill picks the hill map and switches the others off", active_map == "summit" and "arena" in off and "summit" not in off, f"{active_map} / {len(off)} off")
     page.click('#ps-modes .ps-card[data-mode="ctf"]')
     off = page.eval_on_selector_all("#ps-maps button.off", "els => els.map(e => e.dataset.map)")
-    check("capture the flag switches off the maps without flag bases (Moonbase, Rooftops)", {"moonbase", "rooftops"} <= set(off) and "courtyard" not in off and "canyon" not in off, ", ".join(off))
+    check("capture the flag switches off the maps without flag bases (Arena, Ice Lake, Summit)", {"arena", "icelake", "summit"} <= set(off) and not ({"courtyard", "foundry", "moonbase", "rooftops", "canyon"} & set(off)), ", ".join(off))
     page.click('#ps-modes .ps-card[data-mode="koth"]')
     page.evaluate("document.getElementById('ps-rules').open = true")
     page.select_option("#ps-bots", "4")
     page.select_option("#ps-level", "easy")
-    summary = page.inner_text("#ps-rules-sum")
-    check("the rules line sums up the choices", "4 bots" in summary and "easy" in summary.lower(), summary)
+    check("the rules are all out in the open (no hidden section)", all(page.is_visible(sel) for sel in ("#ps-bots", "#ps-level", "#ps-r-lowgrav", "#ps-r-oneshot")))
     page.check("#ps-r-lowgrav")
     page.check("#ps-r-oneshot")
-    summary = page.inner_text("#ps-rules-sum")
-    check("the match rules show in the rules line", "low gravity" in summary and "one-shot" in summary, summary)
     page.click("#ps-go")
     page.wait_for_timeout(300)
     page.click("#mp-play-btn")
@@ -651,24 +655,27 @@ def test_play_setup(browser, base):
     page.wait_for_timeout(300)
     page.click('#mode-tabs .tab[data-mode="mp"]')
     sub = page.inner_text("#mp-card-practice-sub")
-    check("the last practice choices are remembered", "Team Deathmatch" in sub and "Foundry" in sub and "4 bots" in sub, sub)
-    # the shooting range: practice only, on its own map, with what the gun does in the corner
+    check("the three big choices say nothing about the last match", sub == "Play offline against AI players" and "Foundry" not in page.inner_text("#mp-card-host-sub"), sub)
+    # the shooting range: started from single player, on its own map, with what the gun does in the corner
     page.click("#mp-card-practice")
     page.wait_for_timeout(100)
-    check("the practice window offers the shooting range", page.query_selector('#ps-modes .ps-card[data-mode="range"]') is not None)
-    page.click('#ps-modes .ps-card[data-mode="range"]')
-    rmap = page.evaluate("document.querySelector('#ps-maps button.active').dataset.map")
-    check("the range mode plays on the range map", rmap == "range", rmap)
-    page.click("#ps-go")
+    check("the practice window does not offer the shooting range (it is in single player)", page.query_selector('#ps-modes .ps-card[data-mode="range"]') is None)
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(100)
+    page.click('#mode-tabs .tab[data-mode="solo"]')
+    page.click("#range-start")
     page.wait_for_timeout(300)
-    page.click("#mp-play-btn")
     step(page, 90)
+    rmap = page.evaluate("document.querySelector('canvas') ? 'range' : ''")
+    check("the Shooting range button in single player starts the range", page.is_visible("#range-info"), rmap)
     info = page.evaluate("[!document.getElementById('range-info').hidden, document.getElementById('range-info').textContent]")
     check("the range shows what your gun does", info[0] and "body" in info[1], str(info))
     page.evaluate("__unlock()")
     step(page, 3)
     page.click("#mp-leave-btn")
     page.wait_for_timeout(200)
+    check("leaving the range goes back to single player", page.is_visible("#panel-solo") and page.is_hidden("#panel-mp"))
+    page.click('#mode-tabs .tab[data-mode="mp"]')
     # battle royale: one life, a closing zone, and who is left across the top
     start_practice(page, mode="br", bots=2)
     page.wait_for_timeout(300)
@@ -1054,10 +1061,10 @@ def test_crossbow(browser, base):
         step(page, 70)
         hp = page.evaluate("(id) => window.__dbg.net.players.get(id).hp", bot)
         check("a bolt to the body takes 55 (the host believes the hit)", hp == 45, f"hp {hp}")
-        step(page, 200)   # reloaded; aim at the head this time
+        step(page, 200)   # reloaded; aim at the head this time (a little high: the bolt drops about 20 cm over 25 m)
         page.evaluate("""(id) => {
           const d = window.__dbg, b = d.net.players.get(id);
-          const dx = b.x - d.yawObject.position.x, dy = (b.y + 1.62) - d.yawObject.position.y, dz = b.z - d.yawObject.position.z;
+          const dx = b.x - d.yawObject.position.x, dy = (b.y + 1.75) - d.yawObject.position.y, dz = b.z - d.yawObject.position.z;
           d.yawObject.rotation.y = Math.atan2(-dx, -dz); d.pitchObject.rotation.x = Math.atan2(dy, Math.hypot(dx, dz));
         }""", bot)
         step(page, 3)
@@ -1077,6 +1084,7 @@ def test_crossbow(browser, base):
           const d = window.__dbg, bot = [...d.net.players.values()].find((p) => p.bot), me = d.net.players.get('you');
           bot.ai.gun = 'crossbow'; bot.g = d.WEAPON_ORDER.indexOf('crossbow'); bot.ai.ammo = 1; bot.ai.reloadT = 0; bot.ai.fireT = 0;
           bot.x = me.x; bot.z = me.z - 18; bot.y = me.y;
+          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;   // (no countdown or spawn protection: this checks the bolt)
         }""")
         seen, lowest = 0, 100
         for i in range(120):
