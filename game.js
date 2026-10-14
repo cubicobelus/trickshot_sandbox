@@ -716,6 +716,29 @@
   const groundMeshes = [];
   const wallBoxes = [];      // everything that blocks movement
   const bounceBoxes = [];    // the subset you can wall-bounce off: actual walls and pillars
+  // A round rock or tank is a box with `round: {x, z, r}`: the box is only its bounding square for quick rejection, and walking into it,
+  // bouncing off it and shooting it all use the circle (see resolveWalls, nearestWallNormal and rayHitBox).
+  function rayHitBox(ray, box, out) {
+    const hit = ray.intersectBox(box, out);
+    if (!hit || !box.round) return hit;
+    const c = box.round, o = ray.origin, d = ray.direction;
+    const ox = o.x - c.x, oz = o.z - c.z, a = d.x * d.x + d.z * d.z, cc = ox * ox + oz * oz - c.r * c.r;
+    let best = Infinity;
+    if (a > 1e-9) {   // the curved side
+      const b = ox * d.x + oz * d.z, disc = b * b - a * cc;
+      if (disc >= 0) {
+        const t = cc <= 0 ? 0 : (-b - Math.sqrt(disc)) / a;
+        const y = o.y + d.y * t;
+        if (t >= 0 && y >= box.min.y && y <= box.max.y) best = t;
+      }
+    }
+    if (d.y < -1e-9 && o.y >= box.max.y) {   // the flat top, from above
+      const t = (box.max.y - o.y) / d.y, px = ox + d.x * t, pz = oz + d.z * t;
+      if (t >= 0 && px * px + pz * pz <= c.r * c.r && t < best) best = t;
+    }
+    if (best === Infinity) return null;
+    return out.copy(o).addScaledVector(d, best);
+  }
   const levelGroup = new THREE.Group();   // everything a map builds lives here, so changing map is: empty it and build again
   scene.add(levelGroup);
   const movers = [], portals = [], boosts = [], gates = [];   // moving platforms, portal ends, boost strips
@@ -1011,6 +1034,7 @@
         levelGroup.add(leg);
       }
       const box = new THREE.Box3(new THREE.Vector3(d[1] - 1.25, d[2], d[3] - 1.25), new THREE.Vector3(d[1] + 1.25, d[2] + 3.3, d[3] + 1.25));
+      box.round = { x: d[1], z: d[3], r: 1.25 };
       wallBoxes.push(box); bounceBoxes.push(box);
     } else if (kind === "tree") {   // ["tree", x, z, scale, height of the ground]
       const sc = d[3] || 1, gy = d[4] === undefined ? FLOOR_Y : d[4];
@@ -1034,9 +1058,10 @@
       levelGroup.add(mesh);
       const half = sz * 0.58, top = gy + sz * 0.78;
       const box = new THREE.Box3(new THREE.Vector3(d[1] - half, gy, d[2] - half), new THREE.Vector3(d[1] + half, top, d[2] + half));
+      box.round = { x: d[1], z: d[2], r: half };   // a round rock is round to walk into and shoot
       wallBoxes.push(box); bounceBoxes.push(box);
-      const proxy = new THREE.Object3D();   // so you can land on top of it
-      proxy.userData = { topY: top, halfW: half, halfD: half, cx: d[1], cz: d[2], wall: true };
+      const proxy = new THREE.Object3D();   // so you can land on top of it (the square inside the circle, so nobody stands on air)
+      proxy.userData = { topY: top, halfW: half * 0.72, halfD: half * 0.72, cx: d[1], cz: d[2], wall: true };
       groundMeshes.push(proxy);
     } else if (kind === "pond") {   // ["pond", x, z, radius]: shallow water you can wade through
       const water = new THREE.Mesh(new THREE.CircleGeometry(d[3], 28), new THREE.MeshStandardMaterial({ color: 0x3d7fa6, transparent: true, opacity: 0.78, roughness: 0.15, metalness: 0.2 }));
@@ -4871,7 +4896,7 @@
     if (!grappleFloors) grappleFloors = groundMeshes.map((m) => new THREE.Box3().setFromObject(m));
     for (const list of [wallBoxes, grappleFloors]) {
       for (const box of list) {
-        if (!grappleRay.intersectBox(box, _gHit)) continue;
+        if (!rayHitBox(grappleRay, box, _gHit)) continue;
         const d = _gHit.distanceTo(grappleRay.origin);
         if (d > 0.5 && d < best) { best = d; _gBest.copy(_gHit); found = true; }
       }
@@ -4981,6 +5006,16 @@
     for (const box of wallBoxes) {
       if (feetY >= box.max.y - CFG.stepHeight) continue;   // low enough to step up onto / already above
       if (headY <= box.min.y) continue;                    // passing underneath
+      if (box.round) {   // a round rock: push out along the line from its centre
+        const c = box.round, rr = c.r + r;
+        let dx = pos.x - c.x, dz = pos.z - c.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= rr * rr) continue;
+        if (d2 < 1e-10) { const f = from || pos; dx = f.x - c.x; dz = f.z - c.z; if (dx * dx + dz * dz < 1e-10) dx = 1; }
+        const dd = Math.hypot(dx, dz);
+        pos.x = c.x + dx / dd * rr; pos.z = c.z + dz / dd * rr;
+        continue;
+      }
       const clx = Math.max(box.min.x, Math.min(pos.x, box.max.x));
       const clz = Math.max(box.min.z, Math.min(pos.z, box.max.z));
       const dx = pos.x - clx, dz = pos.z - clz;
@@ -5014,6 +5049,11 @@
     let bestD = Infinity, found = false;
     for (const box of bounceBoxes) {
       if (pos.y < box.min.y - 0.2 || pos.y > box.max.y + 0.2) continue;
+      if (box.round) {
+        const c = box.round, rx = pos.x - c.x, rz = pos.z - c.z, rd = Math.hypot(rx, rz), gap = rd - c.r;
+        if (gap < maxDist && gap > 0.001 && gap < bestD && rd > 1e-6) { bestD = gap; _wallNormal.set(rx / rd, 0, rz / rd); found = true; }
+        continue;
+      }
       const clx = Math.max(box.min.x, Math.min(pos.x, box.max.x));
       const clz = Math.max(box.min.z, Math.min(pos.z, box.max.z));
       const dx = pos.x - clx, dz = pos.z - clz;
@@ -5548,11 +5588,12 @@
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
     let best = maxDist, bestBox = null, floor = false;
     for (const box of wallBoxes) {
-      const hit = raycaster.ray.intersectBox(box, _occPoint);
+      const hit = rayHitBox(raycaster.ray, box, _occPoint);
       if (hit) { const dist = o.distanceTo(hit); if (dist < best) { best = dist; bestBox = box; _occBest.copy(hit); } }
     }
     if (d.y < 0) { const t = (o.y - 0.25) / -d.y; if (t > 0 && t < best) { best = t; floor = true; } }
     if (floor) _occNormal.set(0, 1, 0);
+    else if (bestBox && bestBox.round && _occBest.y < bestBox.max.y - 0.02) _occNormal.set(_occBest.x - bestBox.round.x, 0, _occBest.z - bestBox.round.z).normalize();
     else if (bestBox) boxFaceNormal(bestBox, _occBest, _occNormal);
     return best;
   }
@@ -6443,10 +6484,10 @@
       }
       for (const list of [wallBoxes, groundBoxes]) {
         for (const box of list) {
-          const p = _kRay.intersectBox(box, _kTmp);
+          const p = rayHitBox(_kRay, box, _kTmp);
           if (!p) continue;
           const dist = o.distanceTo(p);
-          if (dist < hitDist) { hitDist = dist; kind = "wall"; _kHit.copy(p); boxFaceNormal(box, p, _kNormal); }
+          if (dist < hitDist) { hitDist = dist; kind = "wall"; _kHit.copy(p); if (box.round && p.y < box.max.y - 0.02) _kNormal.set(p.x - box.round.x, 0, p.z - box.round.z).normalize(); else boxFaceNormal(box, p, _kNormal); }
         }
       }
       if (d.y < 0) {
@@ -7976,7 +8017,7 @@
     const dist = _botRay.direction.length();
     _botRay.direction.divideScalar(dist || 1);
     for (const box of wallBoxes) {
-      if (_botRay.intersectBox(box, _botHit) && _botHit.distanceTo(_botRay.origin) < dist - 0.3) return false;
+      if (rayHitBox(_botRay, box, _botHit) && _botHit.distanceTo(_botRay.origin) < dist - 0.3) return false;
     }
     return true;
   }

@@ -1106,7 +1106,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, pickSpawn, hostRespawn, "
+            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1171,6 +1171,42 @@ MAP_CHECK_JS = """(id) => {
   });
   return { probs, notes };
 }"""
+
+
+def test_round_rocks(browser, base):
+    """A round rock is round: you can stand at the corner of its bounding square, and a shot that skims the corner passes by."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        res = page.evaluate("""() => {
+          const D = window.__dbg;
+          D.loadMap("canyon");
+          const box = D.wallBoxes.find((b) => b.round && b.round.r > 1.5);
+          if (!box) return { none: true };
+          const c = box.round, h = c.r, y = (box.min.y + box.max.y) / 2;
+          const pos = { x: c.x + h * 0.95, z: c.z + h * 0.95 };
+          const before = { x: pos.x, z: pos.z };
+          D.resolveWalls(pos, box.min.y, null);
+          const moved = Math.hypot(pos.x - before.x, pos.z - before.z);
+          // walking straight at the centre is still stopped at the rim
+          const p2 = { x: c.x + 0.1, z: c.z };
+          D.resolveWalls(p2, box.min.y, { x: c.x + 5, z: c.z });
+          const rim = Math.hypot(p2.x - c.x, p2.z - c.z);
+          // a shot skimming near the corner of the square (0.9 of the radius off-centre) meets the circle well inside the square
+          const ray = new THREE.Ray(new THREE.Vector3(c.x + 4 * h, y, c.z + 0.9 * h), new THREE.Vector3(-1, 0, 0));
+          const hit = D.rayHitBox(ray, box, new THREE.Vector3());
+          return { moved, rim, h, r: c.r, hitDx: hit ? hit.x - c.x : null, offset: 0.9 * h };
+        }""")
+        check("a round rock has a round collider", res.get("none") is not True, str(res))
+        if not res.get("none"):
+            check("standing at the corner of its bounding square is not blocked", res["moved"] < 0.01, f"moved {res['moved']:.2f}")
+            check("a shot skimming the corner meets the circle, not the square", res["hitDx"] is not None and res["hitDx"] < res["h"] * 0.6, f"hit {res['hitDx']}")
+            check("walking into the middle of it is stopped at the rim (the rock's radius plus yours)", res["rim"] >= res["r"] + 0.3, f"rim {res['rim']:.2f}")
+        check("the round rock checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_countdown(browser, base):
@@ -1299,10 +1335,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 
