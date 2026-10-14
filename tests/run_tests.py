@@ -417,6 +417,8 @@ def start_practice(page, mode=None, map_id=None, bots=None, level=None, limit=No
         page.evaluate("__unlock()")   # the click starts playing straight away; back to the menu, where the tests expect to press play
         page.wait_for_timeout(100)
         return
+    if page.is_hidden("#panel-mp"):
+        page.click('#mode-tabs .tab[data-mode="mp"]')
     page.click("#mp-card-practice")
     page.wait_for_timeout(100)
     if mode:
@@ -1087,7 +1089,8 @@ def test_crossbow(browser, base):
           const d = window.__dbg, bot = [...d.net.players.values()].find((p) => p.bot), me = d.net.players.get('you');
           bot.ai.gun = 'crossbow'; bot.g = d.WEAPON_ORDER.indexOf('crossbow'); bot.ai.ammo = 1; bot.ai.reloadT = 0; bot.ai.fireT = 0;
           bot.x = me.x; bot.z = me.z - 18; bot.y = me.y;
-          d.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;   // (no countdown or spawn protection: this checks the bolt)
+          d.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0; bot.ai.errK = 0.05;   // (a bot that aims true, so a missed shot is not what this checks)
+             // (no countdown or spawn protection: this checks the bolt)
         }""")
         seen, lowest = 0, 100
         for i in range(120):
