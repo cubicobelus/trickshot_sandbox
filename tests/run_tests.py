@@ -708,7 +708,7 @@ def test_play_setup(browser, base):
     page.click("#mp-play-btn")
     step(page, 60)
     gg_label = page.inner_text("#mp-timer-mode").lower()
-    check("gun game shows your level in the timer", "gun game" in gg_label and "level 1 / 11" in gg_label, gg_label)
+    check("gun game shows your level in the timer", "gun game" in gg_label and "0 / 11 guns" in gg_label, gg_label)
     page.evaluate("__unlock()")
     step(page, 3)
     check("in a gun game the loadout buttons and attachments are locked", page.evaluate("document.querySelectorAll('#loadout button:not([disabled])').length === 0 && document.getElementById('attach-open').disabled"))
@@ -1120,7 +1120,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, "
+            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1183,6 +1183,35 @@ MAP_CHECK_JS = """(id) => {
   });
   return { probs, notes };
 }"""
+
+
+def test_gungame_bot_knife(browser, base):
+    """A bot that reaches the gun game's last level takes the knife, runs up and can win the round with it."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        page.click("#mode-tabs .tab[data-mode=mp]")
+        start_practice(page, mode="gungame", bots=1, level="hard")
+        page.click("#mp-play-btn")
+        step(page, 30)
+        held = page.evaluate("""() => {
+          const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
+          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;
+          bot.gg = D.GG_ORDER.length; D.ggBotGun(bot);
+          bot.x = me.x; bot.z = me.z - 12; bot.y = me.y;
+          return D.WEAPON_ORDER[bot.g];
+        }""")
+        check("a bot past the last gun holds the knife", held == "knife", held)
+        for _ in range(120):
+            step(page, 10)
+            if page.evaluate("window.__dbg.net.phase") == "results": break
+        res = page.evaluate("[window.__dbg.net.phase, window.__dbg.net.players.get('you').alive]")
+        check("and it runs up and stabs to win the round", res[0] == "results" and res[1] is False, str(res))
+        check("the bot knife runs without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_round_rocks(browser, base):
@@ -1373,10 +1402,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

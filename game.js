@@ -7711,7 +7711,7 @@
     let ggWin = false;
     if (net.gungame) {
       if (info.knife && v.gg > 0) v.gg--;   // knifed: back a level
-      if (p.gg >= GG_ORDER.length) ggWin = !!info.knife && !p.bot;   // on the knife: a knife kill wins (the bots can't, they have no knife)
+      if (p.gg >= GG_ORDER.length) ggWin = !!info.knife;   // on the knife: a knife kill wins (bots too: they run up and stab)
       else { p.gg++; ggBotGun(p); }
     }
     hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
@@ -7982,7 +7982,7 @@
   // hop: hops a second while strafing in a fight
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
   BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
-  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32 };   // the distance each gun likes to fight at
+  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32, knife: 1.6 };   // the distance each gun likes to fight at (the knife: right up close)
   // What a mode asks of its bots, on top of their level (L3). Hill bots defend the hill harder: on it they react and aim a fifth better.
   // Battle royale bots are more cautious: they get well inside the circle early, hang back from fights, and fall back when hurt.
   const BOT_MODE = { koth: { holdReact: 0.8, holdErr: 0.8 }, br: { margin: 12, prefer: 1.3, retreatHp: 45 } };
@@ -8017,12 +8017,12 @@
   // gun game: a bot uses the gun of its level (it has no knife, so it stays on the last gun)
   function ggBotGun(p) {
     if (!p.bot) return;
-    const g = GG_ORDER[Math.min(p.gg, GG_ORDER.length - 1)];
-    p.ai.gun = g; p.g = WEAPON_ORDER.indexOf(g); p.rl = 0; p.ai.ammo = baseMag(g); p.ai.reloadT = 0; p.at = randomAttachCode(g);
+    const g = p.gg >= GG_ORDER.length ? "knife" : GG_ORDER[p.gg];   // (past the last gun a bot takes the knife and goes for the win)
+    p.ai.gun = g; p.g = WEAPON_ORDER.indexOf(g); p.rl = 0; p.ai.ammo = g === "knife" ? 999 : baseMag(g); p.ai.reloadT = 0; p.at = randomAttachCode(g);
   }
   function botReset(p, spawn) {
     const ai = p.ai;
-    ai.gun = net.gungame ? GG_ORDER[Math.min(p.gg, GG_ORDER.length - 1)] : GUNS[Math.floor(Math.random() * GUNS.length)];
+    ai.gun = net.gungame ? (p.gg >= GG_ORDER.length ? "knife" : GG_ORDER[p.gg]) : GUNS[Math.floor(Math.random() * GUNS.length)];
     p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
     ai.ammo = baseMag(ai.gun); ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
     p.at = randomAttachCode(ai.gun);
@@ -8322,7 +8322,7 @@
     else if (!sn.reachedAt && Math.hypot(sn.x - p.x, sn.z - p.z) < 2 && Math.abs(sn.y - p.y) < 2) sn.reachedAt = now;
     const cold = now - sn.t > 9000 || (sn.reachedAt && now - sn.reachedAt > 2500);
     const goX = los || cold ? tgt.x : sn.x, goZ = los || cold ? tgt.z : sn.z, goY = los || cold ? tgt.y : sn.y;
-    const range = w.range || 140;
+    const range = g === "knife" ? 140 : (w.range || 140);   // (a bot on the knife still sees you from afar and runs at you)
     ai.seeT = los && dist < range ? ai.seeT + dt : 0;
     // how fast the target is moving (what makes it hard to hit), smoothed
     const inst = Math.hypot(tgt.x - ai.tx, tgt.z - ai.tz) / dt;
@@ -8430,7 +8430,7 @@
     ai.strafeT -= dt;
     if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? 1 : -1; ai.strafeT = rnd(0.6, 1.8); }
     let mx = 0, mz = 0;
-    const along = navigating ? 1 : retreating ? -1 : (kothHill || ai.perch) && holding ? 0 : dist < prefer - 4 ? -0.8 : 0;   // (on the hill or a perch it does not back away: that walks it off the edge)
+    const along = navigating ? 1 : g === "knife" && dist > 1.2 ? 1 : retreating ? -1 : (kothHill || ai.perch) && holding ? 0 : dist < prefer - 4 ? -0.8 : 0;   // (on the hill or a perch it does not back away: that walks it off the edge)
     const hx = wx - p.x, hz = wz - p.z, hl = Math.hypot(hx, hz) || 1;   // toward the next point on the route
     if (along > 0) { mx += hx / hl; mz += hz / hl; } else { mx += fx * along; mz += fz * along; }
     const side = !navigating ? (holding && ai.perch && !kothHill ? 0.4 : 0.9) : los ? 0.4 : 0;
@@ -8543,6 +8543,14 @@
 
   function botFire(p, tgt, dist, now) {
     const ai = p.ai, L = ai.lvl, g = ai.gun, w = WEAPONS[g];
+    if (g === "knife") {   // the gun game's last level: a bot only stabs once it is next to you
+      if (dist > 2.8) { ai.fireT = 0.08; return; }
+      p.lastFireAt = now; p.protectUntil = 0;
+      ai.fireT = w.fireRate * 1.1 + rnd(0, 0.15);
+      hostBroadcast({ t: "swing", id: p.id });
+      if (Math.random() < 0.85) hostDealDamage(p, tgt, KNIFE_SWING_DMG, { pts: 100, tags: [], head: false, knife: true, g: "knife" });
+      return;
+    }
     ai.ammo--; p.lastFireAt = now; p.protectUntil = 0;
     let gap = w.fireRate * 1.08;
     if (w.burst) {   // three quick rounds, then the gun's own pause
@@ -8994,7 +9002,7 @@
     }
     if (net.sub === "dm" && net.br) label = "Battle royale" + (ruleText(net.rules) ? " \u00b7 " + ruleText(net.rules) : "");
     if (net.sub === "dm" && net.ctf) label = "Capture the flag \u00b7 " + (net.limit ? "first to " + ctfNeed() : "no limit") + (ruleText(net.rules) ? " \u00b7 " + ruleText(net.rules) : "");
-    if (net.sub === "dm" && net.gungame) { const me = localPlayer(); label = "Gun game · level " + (me ? Math.min(me.gg + 1, GG_ORDER.length + 1) : 1) + " / " + (GG_ORDER.length + 1) + (ruleText(net.rules) ? " · " + ruleText(net.rules) : ""); }
+    if (net.sub === "dm" && net.gungame) { const me = localPlayer(); label = "Gun game · " + (me ? Math.min(me.gg, GG_ORDER.length + 1) : 0) + " / " + (GG_ORDER.length + 1) + " guns" + (ruleText(net.rules) ? " · " + ruleText(net.rules) : ""); }
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
     mpEls.roomMode.textContent = modeName();
     updateKothBar();
@@ -9223,7 +9231,7 @@
     const kd = (p) => (p.kills / Math.max(1, p.deaths)).toFixed(2), n = (v) => Math.round(v).toLocaleString();
     const cols = dm && net.br ? [["Status", (p) => (p.alive ? "alive" : "out")], ["Kills", (p) => p.kills], ["Dmg", (p) => n(p.dmg)]]
       : dm && net.ctf ? [["Caps", (p) => p.caps], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
-      : ggm ? [["Level", (p) => Math.min(p.gg + 1, GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
+      : ggm ? [["Guns", (p) => Math.min(p.gg, GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
       : koth ? [["Hill", (p) => Math.floor(p.hill)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")]]
       : dm ? [["Score", (p) => n(p.score)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["HS", (p) => p.heads], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")], ["Streak", (p) => p.bstreak]]
       : [["Score", (p) => n(p.score)], ["Hits", (p) => p.kills]];
@@ -9267,7 +9275,7 @@
     const me = localPlayer();
     if (!me) return "";
     const t = me.gg >= GG_ORDER.length ? "knife" : GG_ORDER[me.gg];
-    return "LEVEL UP " + (me.gg + 1) + " / " + (GG_ORDER.length + 1) + ' <span class="kb-gun">' + iconSVG(t) + "</span> " + (t === "knife" ? "KNIFE: one more kill wins" : WEAPONS[t].name);
+    return me.gg + " / " + (GG_ORDER.length + 1) + " GUNS " + ' <span class="kb-gun">' + iconSVG(t) + "</span> " + (t === "knife" ? "KNIFE: one more kill wins" : WEAPONS[t].name);
   }
   function mpFrame(dt) {
     updateMpCountdown();
