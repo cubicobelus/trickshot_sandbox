@@ -3882,6 +3882,7 @@
   const attachCode = () => { const ids = chosenAttachments(SETTINGS.loadout).map((o) => o.id); return ids.length ? SETTINGS.loadout + ":" + ids.join(",") : ""; };
   const AT_CODE_OK = /^[a-z]{2,8}:[a-z0-9,\-]{1,50}$/;
   function randomAttachCode(gun) {   // a bot's look: a few random attachments (they do not change how a bot shoots)
+    if (net.gungame) return "";
     const ids = [];
     for (const opts of Object.values(ATTACHMENTS[gun] || {})) if (Math.random() < 0.4) ids.push(opts[Math.floor(Math.random() * opts.length)].id);
     return ids.length ? gun + ":" + ids.join(",") : "";
@@ -3894,7 +3895,9 @@
   const baseMag = (id) => (WEAPON_BASE[id] ? WEAPON_BASE[id].mag : WEAPONS[id].magSize);
   let devUnlockAll = false;   // the dev tools window (the ` key) turns this on: every attachment opens, for testing; otherwise each unlocks by hits landed with its gun
   const attachUnlocked = (gun, opt) => devUnlockAll || ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= opt.need;
+  let ggOn = false;   // true while a gun game is on (set by ggSync and ggRestore: the loadout code runs before the room state exists)
   function chosenAttachments(gun) {   // what is fitted (an option that is still locked, or unknown, is ignored)
+    if (ggOn) return [];   // a gun game is played on stock guns
     const out = [], fitted = (SETTINGS.attach && SETTINGS.attach[gun]) || {};
     for (const [slot, opts] of Object.entries(ATTACHMENTS[gun] || {})) {
       const o = opts.find((x) => x.id === fitted[slot]);
@@ -3961,6 +3964,7 @@
   // swap the gun slot, instantly (this happens from the menu)
   function setLoadout(id) {
     if (!GUNS.includes(id)) return;
+    if (ggOn && !ggForcing) return;   // in a gun game the ladder picks your gun
     const prev = SETTINGS.loadout;
     SETTINGS.loadout = id;
     if (vm.current !== id) {   // even from the knife: picking a gun puts it in your hand
@@ -4003,6 +4007,9 @@
     more.type = "button"; more.id = "loadout-more"; more.className = "lo-more"; more.textContent = "More guns";
     more.addEventListener("click", () => setLoadoutPopup(true));
     loadoutEl.appendChild(more);
+    const locked = ggOn;   // (a gun game picks your gun for you)
+    for (const b of loadoutEl.querySelectorAll("button")) { b.disabled = locked; b.title = locked ? "The gun game picks your gun" : ""; }
+    document.getElementById("attach-open").disabled = locked;
   }
   function setLoadoutPopup(open) {
     if (open) {
@@ -7389,7 +7396,13 @@
         const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
         feedLine("<b>" + esc(k ? k.name : "?") + "</b> " + ((Object.prototype.hasOwnProperty.call(KILL_VERBS, m.w) ? KILL_VERBS[m.w] : m.knife ? "knifed" : "shot") + (m.head && !m.knife ? " (headshot)" : "")) +
           " <b>" + esc(v ? v.name : "?") + "</b><i>+" + (Number(m.pts) || 0) + (tags ? " " + esc(tags) : "") + "</i>");
-        if (m.k === net.id) lifeLog.dealt.delete(m.v);
+        if (m.k === net.id) {
+          lifeLog.dealt.delete(m.v);
+          showKillBanner("ELIMINATED " + (v ? v.name.toUpperCase() : ""), "+" + (Number(m.pts) || 0), false);
+          playKillSound();
+          if (net.gungame) setTimeout(() => { if (!killBannerEl.hidden) killBannerEl.querySelector(".kb-sub").innerHTML = ggLevelHtml(); }, 280);   // (the board with your new level arrives a moment later)
+        }
+        if (m.v === net.id && net.gungame && m.w === "knife") showKillBanner("KNIFED", "back a level", true);
         if (m.v === net.id) { setLocalDead(k ? k.name : "", m.k, deathRecap(k, m)); lifeLogReset(); }
         else if (m.k !== net.id) { playPlayerHit(!!m.head, 0.5); if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8); }
         break;
@@ -9004,19 +9017,26 @@
   }
 
   // gun game: your gun follows your level (the knife at the end); everything goes back when you leave
-  let ggApplied = "", ggSaved = null;
+  let ggApplied = "", ggSaved = null, ggForcing = false;
   const ggKnife = () => net.active && net.gungame && ggApplied === "knife";
   function ggSync() {
-    if (!net.active || !net.gungame) return;
+    if (!net.active || !net.gungame) { if (ggSaved !== null) ggRestore(); return; }   // (the next round is another mode: your own gun comes back)
     const me = localPlayer();
     if (!me) return;
     const t = me.gg >= GG_ORDER.length ? "knife" : GG_ORDER[me.gg];
     if (ggApplied === t) return;
     ggApplied = t;
-    if (ggSaved === null) ggSaved = SETTINGS.loadout;
-    if (t === "knife") { switchWeapon("knife"); updateAmmoHud(); } else setLoadout(t);
+    const first = ggSaved === null;
+    if (first) { ggSaved = SETTINGS.loadout; ggOn = true; }
+    ggForcing = true;
+    try { if (t === "knife") { switchWeapon("knife"); updateAmmoHud(); } else setLoadout(t); } finally { ggForcing = false; }
+    if (first) { applyAttachments(); renderLoadout(); }   // stock guns, and the loadout buttons lock
   }
-  function ggRestore() { ggApplied = ""; if (ggSaved) { const g = ggSaved; ggSaved = null; setLoadout(g); } }
+  function ggRestore() {
+    ggApplied = ""; ggOn = false;
+    if (ggSaved) { const g = ggSaved; ggSaved = null; ggForcing = true; try { setLoadout(g); } finally { ggForcing = false; } }
+    applyAttachments(); renderLoadout();
+  }
 
   // the flags in the world: a pole with a cloth in the team colour, on its base, or on the shoulders of whoever has it
   let ctfObjs = null;
@@ -9095,7 +9115,7 @@
   // with a tick for whoever is in front
   const kothBarEl = document.getElementById("koth-bar");
   function updateKothBar() {
-    const on = net.active && (net.koth || net.ctf || net.br) && net.sub === "dm" && net.phase === "play";
+    const on = net.active && (net.koth || net.ctf || net.br || (net.teams && !net.gungame && !net.range)) && net.sub === "dm" && net.phase === "play";
     kothBarEl.hidden = !on;
     if (!on) return;
     if (net.br) {   // battle royale: who is left, and what the zone is doing
@@ -9125,6 +9145,15 @@
       document.getElementById("kb-left").textContent = TEAM_NAMES[0] + " " + net.caps[0];
       document.getElementById("kb-right").textContent = net.caps[1] + " " + TEAM_NAMES[1];
       const mid = document.getElementById("kb-mid"); mid.textContent = msg; mid.style.color = f1.s === 1 ? "#ff6a5e" : f2.s === 1 ? "#7cfc00" : "#e6e6e6";
+      return;
+    }
+    if (!net.koth) {   // team deathmatch: each team's kills fill in from its own side towards the middle (the first to the limit wins)
+      const k0 = teamKills(0), k1 = teamKills(1), need = net.limit > 0 ? net.limit : Math.max(10, k0, k1), fa = kothBarEl.querySelector(".kb-a"), fb = kothBarEl.querySelector(".kb-b"), mk = kothBarEl.querySelector(".kb-mark");
+      fa.style.background = "#" + TEAM_COLORS[0].toString(16).padStart(6, "0"); fb.style.background = "#" + TEAM_COLORS[1].toString(16).padStart(6, "0");
+      fa.style.width = Math.min(k0 / need, 1) * 50 + "%"; fb.style.width = Math.min(k1 / need, 1) * 50 + "%"; mk.style.left = "50%"; mk.style.display = "block";
+      document.getElementById("kb-left").textContent = TEAM_NAMES[0] + " " + k0;
+      document.getElementById("kb-right").textContent = k1 + " " + TEAM_NAMES[1];
+      const mid = document.getElementById("kb-mid"); mid.textContent = net.limit > 0 ? "First to " + net.limit : "Most kills"; mid.style.color = "#e6e6e6";
       return;
     }
     kothBarEl.querySelector(".kb-mark").style.display = "";
@@ -9215,6 +9244,30 @@
     if (n > 0) { showRunCount(String(n)); runBeep(false); }
     else if (lastCdShown > 0) { showRunCount("GO!"); runBeep(true); }
     lastCdShown = n;
+  }
+  // the middle-of-the-screen banner when you eliminate someone (and, in a gun game, what you move up to)
+  const killBannerEl = document.getElementById("kill-banner");
+  let killBannerTimer = 0;
+  function showKillBanner(top, sub, bad) {
+    killBannerEl.querySelector(".kb-top").textContent = top;
+    killBannerEl.querySelector(".kb-sub").innerHTML = sub || "";
+    killBannerEl.classList.toggle("bad", !!bad);
+    killBannerEl.hidden = false;
+    killBannerEl.classList.remove("pop"); void killBannerEl.offsetWidth; killBannerEl.classList.add("pop");
+    clearTimeout(killBannerTimer);
+    killBannerTimer = setTimeout(() => { killBannerEl.hidden = true; }, 1900);
+  }
+  function playKillSound() {   // two quick rising notes
+    const v = SETTINGS.volHits;
+    if (v <= 0) return;
+    tone("triangle", 660, 760, 0.16 * v, 0.1, 0, 0.1);
+    tone("triangle", 990, 1240, 0.18 * v, 0.16, 0.09, 0.15);
+  }
+  function ggLevelHtml() {
+    const me = localPlayer();
+    if (!me) return "";
+    const t = me.gg >= GG_ORDER.length ? "knife" : GG_ORDER[me.gg];
+    return "LEVEL UP " + (me.gg + 1) + " / " + (GG_ORDER.length + 1) + ' <span class="kb-gun">' + iconSVG(t) + "</span> " + (t === "knife" ? "KNIFE: one more kill wins" : WEAPONS[t].name);
   }
   function mpFrame(dt) {
     updateMpCountdown();
@@ -9833,6 +9886,7 @@
     apBuild();
   }
   function setAttachPopup(open) {
+    if (open && ggOn) return;
     if (open) {
       attachGun = SETTINGS.loadout;
       attachPopupEl.hidden = false;   // visible before the 3D view is sized

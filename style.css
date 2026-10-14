@@ -672,3 +672,12 @@
   #spawn-prot { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); padding: 4px 12px; border-radius: 12px; font: bold 12px 'Segoe UI', Arial, sans-serif; letter-spacing: 1.5px;
     color: #9fe6ff; background: rgba(20,70,95,0.55); border: 1px solid rgba(120,210,255,0.6); pointer-events: none; z-index: 5; }
   #spawn-prot[hidden] { display: none; }
+
+  #kill-banner { position: absolute; top: 56%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; z-index: 60; }
+  #kill-banner[hidden] { display: none; }
+  #kill-banner .kb-top { font: bold 30px 'Segoe UI', Arial, sans-serif; letter-spacing: 3px; color: #ffd24a; text-shadow: 0 0 18px rgba(0,0,0,0.75), 0 2px 0 rgba(0,0,0,0.6); }
+  #kill-banner .kb-sub { margin-top: 4px; font: bold 20px 'Segoe UI', Arial, sans-serif; letter-spacing: 2px; color: #fff; text-shadow: 0 0 14px rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 26px; }
+  #kill-banner .kb-gun svg { height: 26px; width: auto; display: block; color: #ffd24a; }
+  #kill-banner.bad .kb-top { color: #ff6a5e; }
+  #kill-banner.pop { animation: kill-pop 1.9s ease-out forwards; }
+  @keyframes kill-pop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -62%) scale(1); } }

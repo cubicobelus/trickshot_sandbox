@@ -709,6 +709,9 @@ def test_play_setup(browser, base):
     check("gun game shows your level in the timer", "gun game" in gg_label and "level 1 / 11" in gg_label, gg_label)
     page.evaluate("__unlock()")
     step(page, 3)
+    check("in a gun game the loadout buttons and attachments are locked", page.evaluate("document.querySelectorAll('#loadout button:not([disabled])').length === 0 && document.getElementById('attach-open').disabled"))
+    hot = page.eval_on_selector_all("#hotbar .slot", "els => els.map(e => e.textContent)")
+    check("and the gun in your hand is the ladder's first (the SMG), whatever you picked", any("SMG" in h for h in hot), " | ".join(hot))
     page.click("#mp-leave-btn")
     page.wait_for_timeout(200)
     page.click("#mp-card-host")
@@ -1114,7 +1117,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, "
+            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
