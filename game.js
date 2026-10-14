@@ -1113,7 +1113,7 @@
     decks: [[30, 6.3, -30, 7, 7, "deck", true]],   // the tower: its top is at 6.55 m, which a mega pad clears
     ramps: [[-8, 18, "x", 4, 7, 2.4, 1], [12, 22, "z", 4, 7, 2.4, -1], [-4, -30, "x", 4, 7, 2.4, -1]],
     pads: [[0, -2, "mega"], [24, -24, "mega"], [-30, 30, "mega"], [-28, -27, "normal"], [30, 30, "normal"], [-28, 12, "normal"]],
-    spawns: [[0, 8], [-28, 28], [28, 28], [28, -28], [-28, -28], [0, 28], [-28, 2], [8, -26]],
+    spawns: [[0, 8], [-28, 28], [28, 28], [28, -28], [-28, -28], [0, 28], [-28, 2], [8, -26], [26, -2], [-10, -34], [-34, -12], [36, 12], [-10, -12], [20, -16], [-14, 36], [36, -14], [18, 14], [36, -36]],
     playerSpawn: [0, 8],
   });
 
@@ -1141,7 +1141,7 @@
     ],
     decks: [], ramps: [],
     pads: [[-19.5, 0, "normal"], [19.5, 0, "normal"]],
-    spawns: [[-21, -9], [-21, 9], [21, -9], [21, 9], [-9, -21], [9, -21], [-9, 21], [9, 21], [0, -8], [0, 8], [-8, 0], [8, 0]],
+    spawns: [[-21, -9], [-21, 9], [21, -9], [21, 9], [-9, -21], [9, -21], [-9, 21], [9, 21], [0, -8], [0, 8], [-8, 0], [8, 0], [-9, -9], [9, 9], [-9, 9], [9, -9]],
     playerSpawn: [0, 8],
   });
 
@@ -1170,7 +1170,7 @@
     boosts: [[0, -18, 0, 1, 3.5, 3.5], [0, 18, 0, -1, 3.5, 3.5]],
     // sliding gates in the four gaps of the hall: they slide into the wall to open and back to close
     gates: [[-9, 7, 1.2, 4, 6, "z", 4, 0.5, 0, "deck"], [-9, -7, 1.2, 4, 6, "z", 4, 0.5, 3.14, "deck"], [9, 7, 1.2, 4, 6, "z", 4, 0.5, 1.57, "deck"], [9, -7, 1.2, 4, 6, "z", 4, 0.5, 4.71, "deck"]],
-    spawns: [[-30, -22], [30, -22], [-30, 22], [30, 22], [-28, 0], [28, 0], [-15, -24], [15, -24], [-15, 24], [15, 24], [0, -23], [0, 23]],
+    spawns: [[-30, -22], [30, -22], [-30, 22], [30, 22], [-28, 0], [28, 0], [-15, -24], [15, -24], [-15, 24], [15, 24], [0, -23], [0, 23], [-5, -3], [5, 3], [-15, 9], [15, -9], [-17, -9], [17, 9]],
     playerSpawn: [0, 22],
   });
 
@@ -1189,7 +1189,7 @@
     decks: [], ramps: [],
     pads: [[-7, 0, "normal"], [7, 0, "normal"], [0, -7, "normal"], [0, 7, "normal"]],
     portals: [[-38, 0, 1, 0, 38, 0, -1, 0], [0, -38, 0, 1, 0, 38, 0, -1]],
-    spawns: [[-38, -38], [38, -38], [-38, 38], [38, 38], [-40, -20], [40, 20], [-20, 40], [20, -40], [-10, -30], [10, 30], [30, 10], [-30, -10]],
+    spawns: [[-38, -38], [38, -38], [-38, 38], [38, 38], [-40, -20], [40, 20], [-20, 40], [20, -40], [-10, -30], [10, 30], [30, 10], [-30, -10], [-35, 13], [35, -13], [-11, 5], [11, -5], [-3, 41], [3, -41]],
     playerSpawn: [0, -30],
   });
 
@@ -1209,7 +1209,7 @@
     ramps: [[-9, 0, "x", 4, 8, 4.25, 1], [28, -5, "x", 4, 8, 2.4, -1], [-28, 6, "x", 4, 8, 2.4, 1]],
     pads: [],
     boosts: [[0, -14, 1, 0, 3.5, 3.5], [0, 14, -1, 0, 3.5, 3.5]],
-    spawns: [[-34, -34], [34, -34], [-34, 34], [34, 34], [-36, 0], [36, 0], [0, -36], [0, 36], [-20, -30], [20, 30]],
+    spawns: [[-34, -34], [34, -34], [-34, 34], [34, 34], [-36, 0], [36, 0], [0, -36], [0, 36], [-20, -30], [20, 30], [-12, 8], [12, -8], [-6, -16], [6, 16], [-16, 26], [16, -26], [-30, -16], [30, 16]],
     playerSpawn: [0, 24],
   });
 
@@ -1270,7 +1270,7 @@
       ["pond", -34, -30, 5.5], ["pond", 36, 34, 4.5],
     ]),
     hill: { x: 0, z: 0, y: 9, r: 3.6 },
-    spawns: [[-40, -40], [40, -40], [-40, 40], [40, 40], [-41, 0], [41, 0], [0, -41], [0, 41], [-30, -38], [30, 38], [-38, 30], [38, -30]],
+    spawns: [[-40, -40], [40, -40], [-40, 40], [40, 40], [-41, 0], [41, 0], [0, -41], [0, 41], [-30, -38], [30, 38], [-38, 30], [38, -30], [-25, 11], [25, -11], [-17, 37], [17, -37], [25, 19], [-25, -19]],
     playerSpawn: [0, 41],
   });
 
@@ -1336,7 +1336,7 @@
       [5, -22, -1, 0, 0.25, 6.5], [5, 0, -1, 0, 0.25, 10], [5, 22, -1, 0, 0.25, 6.5],
       [-22, 0, -1, 0, 0.25, 10], [22, 0, 1, 0, 0.25, 10],
     ],
-    spawns: [[-29, -27], [29, -27], [-29, 27], [29, 27], [-29, 0], [29, 0], [0, -26], [0, 26], [-13, -9], [13, -9], [-13, 9], [13, 9]],
+    spawns: [[-29, -27], [29, -27], [-29, 27], [29, 27], [-29, 0], [29, 0], [0, -26], [0, 26], [-13, -9], [13, -9], [-13, 9], [13, 9], [0, -4], [0, 4], [-30, -14], [30, 14], [-30, 14], [30, -14]],
     playerSpawn: [0, 26],
   });
 
@@ -6096,6 +6096,7 @@
 
     fireCooldown = w.fireRate;
     vm.inspectTimer = 0;
+    localProtectUntil = 0;
 
     camera.getWorldDirection(raycaster.ray.direction);
     raycaster.ray.origin.setFromMatrixPosition(camera.matrixWorld);
@@ -6346,6 +6347,7 @@
     stat("knifeThrows"); stat("shots");
     if (net.active && (localDead || net.phase !== "play")) return;
     vm.throwTimer = CFG.knifeThrowCooldown;
+    localProtectUntil = 0;
     vm.throwReleased = false;
     vm.inspectTimer = 0;
     vm.slashTimer = 0;
@@ -6535,7 +6537,7 @@
   // ======================================================================
   const ROOM_PREFIX = "trickshot-sandbox-";
   const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // no 0/O/1/I to avoid misreads
-  const ROUND_SECONDS = 180, RESULTS_SECONDS = 10, RESPAWN_MS = 3000, PROTECT_MS = 1500, MAX_PLAYERS = 8;
+  const ROUND_SECONDS = 180, RESULTS_SECONDS = 10, RESPAWN_MS = 3000, PROTECT_MS = 3000, MAX_PLAYERS = 8;
   // health: 100, healing starts after REGEN_DELAY ms with no damage taken and no shooting. The host works damage out
   // from the gun, so a client only ever says what it hit. Sniper and Deagle one-shot to the head; the sniper to the body too.
   const REGEN_DELAY = 10000, REGEN_PER_SEC = 10;
@@ -7374,11 +7376,14 @@
           mpEls.dead.hidden = true;
           teleportLocal(m.pos[0], m.pos[1]);
           cancelReload(); refillAmmo(); updateAmmoHud();
+          localProtectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS : 0;
         }
         break;
       }
     }
   }
+  const spawnProtEl = document.getElementById("spawn-prot");
+  let localProtectUntil = 0;   // (the host decides; this only drives the SPAWN PROTECTED label)
   const _tmpV1 = new THREE.Vector3(), _tmpV2 = new THREE.Vector3(), _dP2 = new THREE.Vector3();
 
   // someone else's shot: the recording of that gun, quieter and a touch further back the further away they are
@@ -7445,35 +7450,57 @@
 
   function mpAnnounceSpawn(t) { hostBroadcast({ t: "tspawn", i: t.userData.idx, d: serializeTarget(t) }); }
 
-  function pickSpawn(exceptId) {
-    let best = SPAWNS[0], bestScore = -1;
-    const mine = net.players.get(exceptId);
-    let list = SPAWNS;
-    if (net.ctf && mine && mine.team >= 0 && currentMap.flags) {   // capture the flag: spawn near your own base
-      const b = ctfBase(mine.team);
-      list = SPAWNS.slice().sort((a, c) => Math.hypot(a[0] - b.x, a[1] - b.z) - Math.hypot(c[0] - b.x, c[1] - b.z)).slice(0, 4);
-      best = list[0];
+  // Spawning. Each map has a list of open spots. A new spawn is chosen by score: far from anyone who could shoot you (never next to an
+  // enemy if there is another choice), never on top of anyone, not where someone spawned in the last few seconds, and in a team mode
+  // near your team without being right on top of them. At the start of a team round each team takes its own end of the map.
+  function spawnSides() {   // the two ends of the map: the farthest pair of spawn points, and every spawn goes to the nearer one
+    let a = SPAWNS[0], b = SPAWNS[1] || SPAWNS[0], far = -1;
+    for (let i = 0; i < SPAWNS.length; i++) for (let k = i + 1; k < SPAWNS.length; k++) {
+      const d = Math.hypot(SPAWNS[i][0] - SPAWNS[k][0], SPAWNS[i][1] - SPAWNS[k][1]);
+      if (d > far) { far = d; a = SPAWNS[i]; b = SPAWNS[k]; }
     }
-    for (const s of list) {
-      let nearest = 999;
-      for (const p of net.players.values()) {
-        if (p.id === exceptId || !p.alive) continue;
-        if (net.teams && mine && p.team === mine.team) continue;   // spawn away from the other team, not from your own
-        nearest = Math.min(nearest, Math.hypot(p.x - s[0], p.z - s[1]));
+    const sides = [[], []];
+    for (const s of SPAWNS) sides[Math.hypot(s[0] - a[0], s[1] - a[1]) <= Math.hypot(s[0] - b[0], s[1] - b[1]) ? 0 : 1].push(s);
+    return sides;
+  }
+  function pickSpawn(exceptId, opening) {
+    const me = net.players.get(exceptId), teamed = net.teams && me && me.team >= 0;
+    let pool = SPAWNS;
+    if (opening && teamed) {
+      if (net.ctf && currentMap.flags) { const b = ctfBase(me.team); pool = SPAWNS.slice().sort((a, c) => Math.hypot(a[0] - b.x, a[1] - b.z) - Math.hypot(c[0] - b.x, c[1] - b.z)).slice(0, 6); }
+      else pool = spawnSides()[me.team];
+      if (!pool.length) pool = SPAWNS;
+    }
+    const now = nowMs();
+    net.recentSpawns = (net.recentSpawns || []).filter((r) => now - r.t < 6000);
+    let best = pool[0], bestScore = -1e9;
+    for (const s of pool) {
+      let dEnemy = 99, dMate = 99, dAny = 99;
+      for (const q of net.players.values()) {
+        if (q.id === exceptId || !q.alive) continue;
+        const d = Math.hypot(q.x - s[0], q.z - s[1]);
+        dAny = Math.min(dAny, d);
+        if (teamed && q.team === me.team) dMate = Math.min(dMate, d); else dEnemy = Math.min(dEnemy, d);
       }
-      const sc = nearest + Math.random() * 6;
+      let sc = Math.min(dEnemy, 40) * 1.5;
+      if (dEnemy < 10) sc -= 60;
+      if (dAny < 3.5) sc -= 80;
+      if (teamed && dMate < 99) sc += 14 - Math.min(Math.abs(dMate - 9), 14);
+      for (const r of net.recentSpawns) if (Math.hypot(r.x - s[0], r.z - s[1]) < 8) sc -= 30;
+      sc += Math.random() * 5;
       if (sc > bestScore) { bestScore = sc; best = s; }
     }
+    net.recentSpawns.push({ x: best[0], z: best[1], t: now });
     return best;
   }
 
-  function hostRespawn(p) {
+  function hostRespawn(p, opening) {
     const spots = currentMap.rangeSpots;
-    const s = net.range && p.bot && spots ? spots[Math.max(0, p.botIndex) % spots.length] : pickSpawn(p.id);
+    const s = net.range && p.bot && spots ? spots[Math.max(0, p.botIndex) % spots.length] : pickSpawn(p.id, opening);
     p.alive = true; p.x = s[0]; p.y = 0.25; p.z = s[1];
     p.hp = 100; p.lastDamageAt = -1e9;
     if (p.bot) botReset(p, s);
-    p.protectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS : 0;
+    p.protectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS : 0;   // safe for a few seconds, or until you shoot
     hostBroadcast({ t: "respawn", id: p.id, pos: s });
   }
 
@@ -7514,7 +7541,9 @@
     for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.gg = 0; p.caps = 0; p.heads = 0; p.dmg = 0; p.best = 0; p.streak = 0; p.bstreak = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
     if (net.sub === "race") for (const t of targets) { respawnTarget(t); t.userData.respawnTimer = 1.1; }
     hostBroadcast(roundMsg(true));
-    for (const p of net.players.values()) hostRespawn(p);
+    net.recentSpawns = [];
+    for (const p of net.players.values()) p.alive = false;   // nobody counts as standing somewhere until they are placed
+    for (const p of net.players.values()) hostRespawn(p, true);
   }
 
   function hostEndRound() {
@@ -7653,7 +7682,7 @@
         break;
 
       case "swing":
-        if (p.alive && nowMs() - p.lastSwingAt >= 150) { p.lastSwingAt = nowMs(); hostBroadcast({ t: "swing", id: fromId }); }
+        if (p.alive && nowMs() - p.lastSwingAt >= 150) { p.lastSwingAt = nowMs(); p.protectUntil = 0; hostBroadcast({ t: "swing", id: fromId }); }
         break;
 
       case "shot": {
@@ -7662,7 +7691,7 @@
         const now = nowMs();
         if (p.alive && o && d && Number.isFinite(l) && g && now - p.lastFireAt >= WEAPONS[g].fireRate * 500) {   // faster than the gun can fire: dropped
           const len = Math.max(0, Math.min(l, 2000));
-          p.lastShot = { o, d, l: len, g }; p.lastShotAt = now; p.lastFireAt = now;
+          p.lastShot = { o, d, l: len, g }; p.lastShotAt = now; p.lastFireAt = now; p.protectUntil = 0;   // shooting ends spawn protection
           hostBroadcast({ t: "shot", id: fromId, g, o, d, l: len });
         }
         break;
@@ -7674,7 +7703,7 @@
         if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap) {
           if (now - p.lastThrowAt > THROW_WINDOW) p.knivesUp = 0;
           if (m.b !== 1) p.knivesUp = Math.min(p.knivesUp + 1, 4);   // (a crossbow bolt is claimed through its shot message, not as a knife)
-          p.lastThrowAt = now; p.lastFireAt = now;
+          p.lastThrowAt = now; p.lastFireAt = now; p.protectUntil = 0;
           hostBroadcast({ t: "throw", id: fromId, o, v, b: m.b === 1 ? 1 : 0 });
         }
         break;
@@ -8447,7 +8476,7 @@
 
   function botFire(p, tgt, dist, now) {
     const ai = p.ai, L = ai.lvl, g = ai.gun, w = WEAPONS[g];
-    ai.ammo--; p.lastFireAt = now;
+    ai.ammo--; p.lastFireAt = now; p.protectUntil = 0;
     let gap = w.fireRate * 1.08;
     if (w.burst) {   // three quick rounds, then the gun's own pause
       if (ai.burstLeft <= 0) ai.burstLeft = w.burst;
@@ -10680,6 +10709,7 @@
       hudTimer -= realDt;
       if (hudTimer <= 0) {
         hudTimer = 0.07;
+        spawnProtEl.hidden = !(net.active && nowMs() < localProtectUntil && !localDead);
         speedEl.textContent = speed.toFixed(1);
         speedbarEl.style.width = Math.min(speed / CFG.maxSpeed * 100, 100).toFixed(0) + "%";
         const gReady = player.grappleCooldown <= 0, gUsed = !!player.hook || player.grappleWant;

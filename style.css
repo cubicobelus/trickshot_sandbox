@@ -669,3 +669,7 @@
   #play-setup .ps-go { display: block; text-align: center; width: 100%; max-width: 360px; padding: 13px 16px; border: 1px solid #ffd24a; border-radius: 8px; background: rgba(255,210,74,0.12);
     color: #ffd24a; font-weight: bold; font-size: 16px; cursor: pointer; }
   #play-setup .ps-go:hover { background: rgba(255,210,74,0.24); }
+
+  #spawn-prot { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); padding: 4px 12px; border-radius: 12px; font: bold 12px 'Segoe UI', Arial, sans-serif; letter-spacing: 1.5px;
+    color: #9fe6ff; background: rgba(20,70,95,0.55); border: 1px solid rgba(120,210,255,0.6); pointer-events: none; z-index: 5; }
+  #spawn-prot[hidden] { display: none; }

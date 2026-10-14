@@ -1106,6 +1106,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
+            "hostStartRound, pickSpawn, hostRespawn, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1172,6 +1173,52 @@ MAP_CHECK_JS = """(id) => {
 }"""
 
 
+def test_spawns(browser, base):
+    """Team rounds start with each team grouped at its own end of the map (not stacked, not beside an enemy); respawns keep away from enemies and from each other."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        page.click("#mode-tabs .tab[data-mode=mp]")
+        start_practice(page, mode="tdm", bots=5, level="easy")
+        page.click("#mp-play-btn")
+        step(page, 30)
+        res = page.evaluate("""() => {
+          const D = window.__dbg, out = [];
+          for (const id of Object.keys(D.MAPS)) {
+            if (id === "range") continue;
+            D.net.pendingMap = id; D.hostStartRound();
+            const ps = [...D.net.players.values()];
+            let stacked = 0, nearEnemy = 99, mateFar = 0;
+            for (const a of ps) for (const b of ps) {
+              if (a === b) continue;
+              const d = Math.hypot(a.x - b.x, a.z - b.z);
+              if (d < 3.5) stacked++;
+              if (a.team !== b.team) nearEnemy = Math.min(nearEnemy, d);
+            }
+            const cen = [0, 1].map((t) => { const m = ps.filter((p) => p.team === t); return [m.reduce((s, p) => s + p.x, 0) / m.length, m.reduce((s, p) => s + p.z, 0) / m.length]; });
+            const apart = Math.hypot(cen[0][0] - cen[1][0], cen[0][1] - cen[1][1]);
+            // respawns: kill each player in turn and put them back; nobody may land within 10 m of an enemy
+            let worst = 99;
+            for (let k = 0; k < 12; k++) {
+              const p = ps[k % ps.length]; p.alive = false;
+              D.hostRespawn(p, false);
+              for (const q of ps) if (q !== p && q.team !== p.team && q.alive) worst = Math.min(worst, Math.hypot(p.x - q.x, p.z - q.z));
+            }
+            out.push({ id, stacked, nearEnemy: Math.round(nearEnemy), apart: Math.round(apart), worst: Math.round(worst), half: D.MAPS[id].half });
+          }
+          return out;
+        }""")
+        for r in res:
+            check(f"{r['id']}: a team round opens with nobody stacked, the teams apart ({r['apart']} m) and no enemy within 10 m",
+                  r["stacked"] == 0 and r["nearEnemy"] >= 10 and r["apart"] >= r["half"] * 0.5, str(r))
+            check(f"{r['id']}: respawns land at least 10 m from every enemy", r["worst"] >= 10, str(r["worst"]))
+        check("the spawn checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_map_speed(browser, base):
     """Ice Lake's speed cap is 25 u/s and its speed bonus goes with it; other maps stay at 22 u/s (x1.875)."""
     server, dbase, tmp = debug_site()
@@ -1227,10 +1274,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 
