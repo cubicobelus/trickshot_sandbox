@@ -1087,7 +1087,7 @@ def test_crossbow(browser, base):
           const d = window.__dbg, bot = [...d.net.players.values()].find((p) => p.bot), me = d.net.players.get('you');
           bot.ai.gun = 'crossbow'; bot.g = d.WEAPON_ORDER.indexOf('crossbow'); bot.ai.ammo = 1; bot.ai.reloadT = 0; bot.ai.fireT = 0;
           bot.x = me.x; bot.z = me.z - 18; bot.y = me.y;
-          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;   // (no countdown or spawn protection: this checks the bolt)
+          d.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;   // (no countdown or spawn protection: this checks the bolt)
         }""")
         seen, lowest = 0, 100
         for i in range(120):
