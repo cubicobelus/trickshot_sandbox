@@ -6633,7 +6633,7 @@
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };
   const KNIFE_SWING_DMG = 100, KNIFE_THROW_DMG = 55, KNIFE_THROW_HEAD_DMG = 100;   // a thrown knife is like the Deagle: two body hits, or one to the head
-  const GG_ORDER = ["smg", "burst", "ar", "ak", "lmg", "dmr", "crossbow", "shotgun", "pistol", "rifle"];   // gun game: ten guns, then the knife (level 11)
+  const GG_ORDER = ["smg", "ar", "ak", "burst", "lmg", "shotgun", "dmr", "crossbow", "pistol", "rifle"];   // gun game: ten guns, then the knife (level 11)
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
   // (the deathmatch spawn points, SPAWNS, come from the map)
