@@ -627,7 +627,13 @@ def test_play_setup(browser, base):
     page.evaluate("document.getElementById('ps-rules').open = true")
     page.select_option("#ps-bots", "4")
     page.select_option("#ps-level", "easy")
-    check("the rules are all out in the open (no hidden section)", all(page.is_visible(sel) for sel in ("#ps-bots", "#ps-level", "#ps-r-lowgrav", "#ps-r-oneshot")))
+    check("the rules are all out in the open (no hidden section)", all(page.is_visible(sel) for sel in ("#ps-bots", "#ps-level", "#ps-r-lowgrav", "#ps-r-oneshot", "#ps-r-siphon")))
+    sip = {}
+    for mode in ("dm", "tdm", "koth", "tkoth", "br", "ctf", "gungame"):
+        page.click(f'#ps-modes .ps-card[data-mode="{mode}"]')
+        sip[mode] = page.is_checked("#ps-r-siphon")
+    check("siphon starts on for deathmatch, King of the Hill, battle royale and gun game, off for the team modes", sip == {"dm": True, "tdm": False, "koth": True, "tkoth": False, "br": True, "ctf": False, "gungame": True}, str(sip))
+    page.click('#ps-modes .ps-card[data-mode="koth"]')
     page.check("#ps-r-lowgrav")
     page.check("#ps-r-oneshot")
     page.click("#ps-go")
@@ -985,6 +991,7 @@ GUNS_JS = """() => {
   out.facts.dmr = [dm("dmr", 5), dm("dmr", 80), dm("dmr", 5, true)];
   out.facts.lmg = [D.WEAPONS.lmg.magSize, dm("lmg", 5), dm("lmg", 5, true)];
   out.facts.burst = [D.WEAPONS.burst.burst, dm("burst", 5), dm("burst", 5, true)];
+  out.facts.knife = dm("knife", 1);
   out.facts.ggLen = D.GG_ORDER.length;
   return out;
 }"""
@@ -1002,6 +1009,7 @@ def test_guns(browser, base):
         check("the SMG hits for 20 up close, fades from 12 m to half by 35 m, and stays at half beyond", f["smg"][:2] == [20, 20] and abs(f["smg"][2] - 15) < 0.5 and f["smg"][3] == 10 and f["smg"][4] == 10, str(f["smg"]))
         check("the SMG's head hit is 30 and fades the same way", f["smg"][5] == 30 and f["smg"][6] == 15, str(f["smg"][5:]))
         check("the DMR does 60 to the body (two to kill) and 100 to the head at any range", f["dmr"] == [60, 60, 100], str(f["dmr"]))
+        check("a knife swing kills in one hit", f["knife"] >= 100, str(f["knife"]))
         check("gun game has ten guns before the knife", f["ggLen"] == 10, str(f["ggLen"]))
         check("the LMG holds 100 rounds and the burst rifle fires three rounds a pull", f["lmg"] == [100, 24, 34] and f["burst"] == [3, 28, 42], str(f["lmg"]) + " " + str(f["burst"]))
         check("the gun checks run without errors", not errors, "; ".join(errors[:2]))
@@ -1120,7 +1128,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, "
+            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1185,6 +1193,81 @@ MAP_CHECK_JS = """(id) => {
 }"""
 
 
+def test_shots_after_death(browser, base):
+    """A bolt shot just before its shooter died still scores the kill; spawn protection ends when you move; the gun game's attachments make sense for each gun."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        page.click("#mode-tabs .tab[data-mode=mp]")
+        start_practice(page, mode="dm", bots=1, level="easy")
+        page.click("#mp-play-btn")
+        step(page, 30)
+        res = page.evaluate("""() => {
+          const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
+          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;
+          bot.x = me.x; bot.z = me.z - 20; bot.y = me.y; bot.hp = 100; bot.alive = true;
+          const o = [me.x, me.y + 1.6, me.z], d = [0, 0, -1];
+          D.hostHandle('you', { t: 'shot', g: 'crossbow', o, d, l: 100 });
+          me.alive = false; me.diedAt = performance.now();   // dies with the bolt in the air
+          const kills = me.kills;
+          D.hostHandle('you', { t: 'hurt', v: bot.id, pts: 100, tags: [], head: true, knife: false, thr: false, n: 1, h: 1 });
+          const credited = !bot.alive && me.kills === kills + 1;
+          // too long after dying: no credit
+          me.alive = false; me.diedAt = performance.now() - 5000; bot.hp = 100; bot.alive = true;
+          D.hostHandle('you', { t: 'shot', g: 'crossbow', o, d, l: 100 });
+          me.alive = false; me.diedAt = performance.now() - 5000;
+          D.hostHandle('you', { t: 'hurt', v: bot.id, pts: 100, tags: [], head: true, knife: false, thr: false, n: 1, h: 1 });
+          const late = bot.alive;
+          // spawn protection: gone once you move
+          me.alive = true; D.hostRespawn(me, false);
+          const st = (x, z) => ({ t: 'st', x, y: 0.25, z, yaw: 0, pitch: 0, w: 0, sl: 0, g: 0, rl: 0, at: '', gr: 0, gh: null });
+          const had = me.protectUntil > performance.now();
+          D.hostHandle('you', st(me.spawnX + 0.1, me.spawnZ));
+          const stillOn = me.protectUntil > performance.now();
+          D.hostHandle('you', st(me.spawnX + 1.5, me.spawnZ));
+          const gone = me.protectUntil === 0;
+          return { credited, late, had, stillOn, gone };
+        }""")
+        check("a bolt shot before the shooter died still scores the kill", res["credited"], str(res))
+        check("but not one claimed long after they died", res["late"], str(res))
+        check("a respawn is protected, a small shuffle keeps it, moving ends it", res["had"] and res["stillOn"] and res["gone"], str(res))
+        sip = page.evaluate("""() => {
+          const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
+          const kill = (on) => {
+            D.net.rules = Object.assign({}, D.net.rules, { siphon: on, oneShot: false });
+            me.alive = true; me.protectUntil = 0; bot.alive = true; bot.hp = 100; bot.protectUntil = 0; me.hp = 40; me.lastFireAt = -1e9;   // (the clock is frozen in tests: let the shot through)
+            D.hostHandle('you', { t: 'shot', g: 'crossbow', o: [me.x, me.y + 1.6, me.z], d: [0, 0, -1], l: 100 });
+            bot.x = me.x; bot.z = me.z - 20; bot.y = me.y;
+            D.hostHandle('you', { t: 'hurt', v: bot.id, pts: 100, tags: [], head: true, knife: false, thr: false, n: 1, h: 1 });
+            return [bot.alive, me.hp];
+          };
+          return { on: kill(true), off: kill(false) };
+        }""")
+        check("with siphon on, a kill refills your health to 100", sip["on"][0] is False and sip["on"][1] == 100, str(sip))
+        check("with it off, it does not", sip["off"][0] is False and sip["off"][1] == 40, str(sip))
+        gg = page.evaluate("""() => {
+          const D = window.__dbg, out = { bad: [], scoped: 0, optics: 0, seen: new Set(), n: 80 };
+          for (let i = 0; i < out.n; i++) {
+            const str = D.makeGgPreset(), map = D.ggParsePreset(str);
+            out.seen.add(str);
+            for (const g of D.GUNS) {
+              if (!map[g]) { out.bad.push(g + " missing"); continue; }
+              const ids = map[g].map((o) => o.id);
+              if (g === "rifle" && !(ids.includes("scope-low") || ids.includes("scope-high"))) out.bad.push("sniper without a scope");
+              if ((g === "dmr" || g === "crossbow") && !ids.some((x) => ["reddot", "optic-2x", "optic-4x"].includes(x))) out.bad.push(g + " without an optic");
+            }
+          }
+          return { bad: out.bad.slice(0, 3), varied: out.seen.size };
+        }""")
+        check("every gun game setup has a scope on the sniper and an optic on the marksman rifle and crossbow", not gg["bad"], str(gg))
+        check("and the setup is different from game to game", gg["varied"] > 20, str(gg["varied"]))
+        check("the checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_bot_aim(browser, base):
     """A bot's chance to hit depends on how the target moves across its aim: easy to hit when still or running straight, hard when strafing fast or jumping."""
     server, dbase, tmp = debug_site()
@@ -1213,7 +1296,7 @@ def test_bot_aim(browser, base):
         }""")
         check("a still target is hit often", res["still"] > 0.3, str(res))
         check("moving across the aim lowers the chance, more the faster it goes", res["still"] > res["walk"] > res["run"] > res["max"], str(res))
-        check("flat-out strafing is hit only rarely", res["max"] < 0.1 and res["max"] < res["still"] / 4, str(res))
+        check("flat-out strafing is hit only rarely, but still can be", 0.01 < res["max"] < 0.14 and res["max"] < res["still"] / 3, str(res))
         check("jumping while strafing is harder still, and a jump alone costs accuracy", res["jump"] <= res["max"] + 0.02 and res["air"] < res["still"], str(res))
         check("the bot aim checks run without errors", not errors, "; ".join(errors[:2]))
         page.close()
@@ -1440,10 +1523,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_bot_aim, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "bot_aim", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

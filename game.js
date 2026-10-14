@@ -12,7 +12,7 @@
 
   // ---- problems: anything the game throws is kept (the last few, with how often) and shown in a small bar, so a bug never passes
   // silently and a player can copy what happened. A repeating error (one thrown every frame) is counted, not shown again and again. ----
-  const GAME_VERSION = "2026.10.14";   // bump with each push, so a report says which build it came from
+  const GAME_VERSION = "2026.10.14b";   // bump with each push, so a report says which build it came from
   const problems = [];   // newest last: { msg, where, n }
   let problemTimer = 0, problemDismissed = false;
   function renderProblems() {
@@ -3890,7 +3890,7 @@
   const attachCode = () => { const ids = chosenAttachments(SETTINGS.loadout).map((o) => o.id); return ids.length ? SETTINGS.loadout + ":" + ids.join(",") : ""; };
   const AT_CODE_OK = /^[a-z]{2,8}:[a-z0-9,\-]{1,50}$/;
   function randomAttachCode(gun) {   // a bot's look: a few random attachments (they do not change how a bot shoots)
-    if (net.gungame) return "";
+    if (net.gungame) { const ids = (ggParsePreset(net.ggp)[gun] || []).map((o) => o.id); return ids.length ? gun + ":" + ids.join(",") : ""; }   // (in a gun game, the game's setup)
     const ids = [];
     for (const opts of Object.values(ATTACHMENTS[gun] || {})) if (Math.random() < 0.4) ids.push(opts[Math.floor(Math.random() * opts.length)].id);
     return ids.length ? gun + ":" + ids.join(",") : "";
@@ -3903,9 +3903,35 @@
   const baseMag = (id) => (WEAPON_BASE[id] ? WEAPON_BASE[id].mag : WEAPONS[id].magSize);
   let devUnlockAll = false;   // the dev tools window (the ` key) turns this on: every attachment opens, for testing; otherwise each unlocks by hits landed with its gun
   const attachUnlocked = (gun, opt) => devUnlockAll || ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= opt.need;
+  let ggPresetKey = null, ggPresetMap = {};   // the gun game's attachments for each gun (parsed from the host's string, see makeGgPreset)
+  function ggParsePreset(str) {
+    const out = {};
+    for (const part of String(str || "").split(";")) {
+      const [gun, list] = part.split(":");
+      if (!GUNS.includes(gun)) continue;
+      const known = Object.values(ATTACHMENTS[gun] || {}).flat();
+      out[gun] = (list || "").split(",").map((id) => known.find((o) => o.id === id)).filter(Boolean);
+    }
+    return out;
+  }
+  // each game the host rolls a setup for every gun: a sniper always has a scope, a marksman rifle or crossbow always an optic, the rest get
+  // each slot with some chance, one option from the slot. Nothing needs unlocking, and everyone gets the same.
+  const GG_SLOT_CHANCE = { optic: 0.7, muzzle: 0.45, barrel: 0.3, grip: 0.5, mag: 0.4, stock: 0.4, sights: 0.5 };
+  const GG_MUST_OPTIC = ["rifle", "dmr", "crossbow"];
+  function makeGgPreset() {
+    const parts = [];
+    for (const gun of GUNS) {
+      const ids = [];
+      for (const [slot, opts] of Object.entries(ATTACHMENTS[gun] || {})) {
+        if ((slot === "optic" && GG_MUST_OPTIC.includes(gun)) || Math.random() < (GG_SLOT_CHANCE[slot] || 0.4)) ids.push(opts[Math.floor(Math.random() * opts.length)].id);
+      }
+      parts.push(gun + ":" + ids.join(","));
+    }
+    return parts.join(";");
+  }
   let ggOn = false;   // true while a gun game is on (set by ggSync and ggRestore: the loadout code runs before the room state exists)
   function chosenAttachments(gun) {   // what is fitted (an option that is still locked, or unknown, is ignored)
-    if (ggOn) return [];   // a gun game is played on stock guns
+    if (ggOn) return ggPresetMap[gun] || [];   // a gun game uses the game's own setup for each gun, not yours
     const out = [], fitted = (SETTINGS.attach && SETTINGS.attach[gun]) || {};
     for (const [slot, opts] of Object.entries(ATTACHMENTS[gun] || {})) {
       const o = opts.find((x) => x.id === fitted[slot]);
@@ -6606,7 +6632,7 @@
     crossbow: { body: 55, head: 100 },   // like the Deagle: two body hits or one to the head; it flies, so it has to be led
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };
-  const KNIFE_SWING_DMG = 55, KNIFE_THROW_DMG = 55, KNIFE_THROW_HEAD_DMG = 100;   // a thrown knife is like the Deagle: two body hits, or one to the head
+  const KNIFE_SWING_DMG = 100, KNIFE_THROW_DMG = 55, KNIFE_THROW_HEAD_DMG = 100;   // a thrown knife is like the Deagle: two body hits, or one to the head
   const GG_ORDER = ["smg", "burst", "ar", "ak", "lmg", "dmr", "crossbow", "shotgun", "pistol", "rifle"];   // gun game: ten guns, then the knife (level 11)
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
@@ -6660,13 +6686,13 @@
     id: null, code: "", sub: "race", pendingSub: "race",
     map: "arena", pendingMap: "arena",
     teams: false, limit: 15, pendingTeams: false, pendingLimit: 15, botCount: 0,   // team deathmatch, and first to this many kills (0 = no limit)
-    rules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false }, pendingRules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false },   // the host's match rules
+    rules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false, siphon: false }, pendingRules: { lowGrav: false, oneShot: false, headOnly: false, fastResp: false, siphon: true },   // the host's match rules
     br: false, pendingBr: false, zc: [0, 0],   // battle royale: one life, and a safe zone that closes in (its centre; its size comes from the round clock)
     ctf: false, pendingCtf: false, flags: [{ s: 0, x: 0, y: 0, z: 0, c: null, t: 0 }, { s: 0, x: 0, y: 0, z: 0, c: null, t: 0 }], caps: [0, 0],   // capture the flag: each flag (s: 0 home, 1 carried, 2 dropped; where; who has it; the drop timer) and the captures
     gungame: false, pendingGun: false,   // gun game: every kill swaps your gun; a kill with the knife at the end wins
     range: false, pendingRange: false,   // the shooting range: dummies that stand still and never shoot back (practice only)
     koth: false, pendingKoth: false, hs: [0, -1], teamHill: [0, 0],   // King of the Hill: who holds the hill (0 empty, 1 held, 2 contested; who), and each team's time on it
-    phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0, cd: 0, cdRecv: 0,   // cd: seconds of 3-2-1 left before a round starts
+    phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0, cd: 0, cdRecv: 0, ggp: "",   // cd: seconds of 3-2-1 left before a round starts
     players: new Map(), ttOffset: 0, ttSynced: false,
     lastTick: 0, boardTimer: 0, lastHostMsg: 0,
     practice: false,                      // a local room with bots in it: no network at all
@@ -6718,9 +6744,10 @@
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
-  const cleanRules = (r) => ({ lowGrav: !!(r && r.lowGrav), oneShot: !!(r && r.oneShot), headOnly: !!(r && r.headOnly), fastResp: !!(r && r.fastResp) });
+  const cleanRules = (r) => ({ lowGrav: !!(r && r.lowGrav), oneShot: !!(r && r.oneShot), headOnly: !!(r && r.headOnly), fastResp: !!(r && r.fastResp), siphon: !!(r && r.siphon) });
+  const siphonDefault = (modeId) => modeId === "dm" || modeId === "koth" || modeId === "gungame" || modeId === "br";   // on by default everywhere but the team modes (and the race and range, where nobody fights)
   function chooseRules(r) { net.pendingRules = cleanRules(r); }
-  const RULE_NAMES = [["lowGrav", "low gravity"], ["oneShot", "one-shot kills"], ["headOnly", "headshots only"], ["fastResp", "fast respawn"]];
+  const RULE_NAMES = [["lowGrav", "low gravity"], ["oneShot", "one-shot kills"], ["headOnly", "headshots only"], ["fastResp", "fast respawn"], ["siphon", "siphon"]];
   const ruleText = (r) => RULE_NAMES.filter(([k]) => r && r[k]).map(([, n]) => n).join(", ");
   // the map's own physics, then low gravity on top when the room asks for it (everyone's physics runs on their own computer)
   function applyRulePhysics() {
@@ -7273,6 +7300,7 @@
     net.phase = m.phase;
     net.left = m.left; net.leftRecv = nowMs();
     net.cd = Math.max(0, Math.min(Number(m.cd) || 0, 10)); net.cdRecv = nowMs();
+    net.ggp = typeof m.gp === "string" ? m.gp.slice(0, 800) : "";
     net.resultsLeft = m.rl || 0;
     if (m.targets) {
       m.targets.forEach((d, i) => { if (targets[i]) { applyTargetData(targets[i], d); targets[i].userData.respawnTimer = 1.1; } });
@@ -7382,7 +7410,7 @@
           const lost = Math.max(0, p.hp - hp);
           p.hp = hp;
           if (m.id === net.id) { lifeLog.taken.set(String(m.by), (lifeLog.taken.get(String(m.by)) || 0) + lost); lifeLog.hits.set(String(m.by), (lifeLog.hits.get(String(m.by)) || 0) + 1); }
-          if (m.id === net.id) showDamage(String(m.by), lost);
+          if (m.id === net.id && lost > 0) showDamage(String(m.by), lost);
         }
         if (m.by === net.id) { flashCrosshair(); playPlayerHit(!!m.head); }   // your hit landed
         break;
@@ -7439,12 +7467,14 @@
           teleportLocal(m.pos[0], m.pos[1]);
           cancelReload(); refillAmmo(); updateAmmoHud();
           localProtectUntil = net.sub === "dm" && !net.range && m.op !== 1 ? nowMs() + PROTECT_MS : 0;
+          localSpawn = [m.pos[0], m.pos[1]];
         }
         break;
       }
     }
   }
   const spawnProtEl = document.getElementById("spawn-prot");
+  let localSpawn = [0, 0];
   let localProtectUntil = 0;   // (the host decides; this only drives the SPAWN PROTECTED label)
   const _tmpV1 = new THREE.Vector3(), _tmpV2 = new THREE.Vector3(), _dP2 = new THREE.Vector3();
 
@@ -7505,7 +7535,7 @@
   function hostBroadcastBoard() { hostBroadcast(hostBoardMsg()); }
   function roundMsg(fresh) {
     return {
-      t: "round", cd: net.cd, map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, br: net.br, zc: net.zc, ctf: net.ctf, fl: net.flags.map((f) => [f.s, f.x, f.y, f.z, f.c]), cp: net.caps, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
+      t: "round", cd: net.cd, gp: net.ggp, map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, br: net.br, zc: net.zc, ctf: net.ctf, fl: net.flags.map((f) => [f.s, f.x, f.y, f.z, f.c]), cp: net.caps, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
       targets: net.sub === "race" ? targets.map(serializeTarget) : null, tt: mpTargetClock(),
     };
   }
@@ -7559,7 +7589,7 @@
   function hostRespawn(p, opening) {
     const spots = currentMap.rangeSpots;
     const s = net.range && p.bot && spots ? spots[Math.max(0, p.botIndex) % spots.length] : pickSpawn(p.id, opening);
-    p.alive = true; p.x = s[0]; p.y = 0.25; p.z = s[1];
+    p.alive = true; p.x = s[0]; p.y = 0.25; p.z = s[1]; p.spawnX = s[0]; p.spawnZ = s[1];
     p.hp = 100; p.lastDamageAt = -1e9;
     if (p.bot) botReset(p, s);
     p.protectUntil = net.sub === "dm" && !net.range && !opening ? nowMs() + PROTECT_MS : 0;   // safe for a second after a respawn, or until you shoot (the first spawn of a round has the 3-2-1 instead)
@@ -7579,6 +7609,7 @@
     net.koth = net.sub === "dm" && net.pendingKoth;
     net.range = net.sub === "dm" && net.pendingRange;
     net.gungame = net.sub === "dm" && net.pendingGun;
+    net.ggp = net.gungame ? makeGgPreset() : "";
     net.br = net.sub === "dm" && net.pendingBr;
     net.zc = net.br ? [(Math.random() * 2 - 1) * CFG.arenaHalfSize * 0.25, (Math.random() * 2 - 1) * CFG.arenaHalfSize * 0.25] : [0, 0];
     net.ctf = net.sub === "dm" && net.pendingCtf && !!currentMap.flags;
@@ -7712,10 +7743,11 @@
     if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
     v.hp = 0;
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
-    v.alive = false; v.deaths++; v.respawnAt = net.br ? Infinity : nowMs() + (rules.fastResp ? 1000 : net.range ? 1200 : RESPAWN_MS);
+    v.alive = false; v.diedAt = nowMs(); v.deaths++; v.respawnAt = net.br ? Infinity : nowMs() + (rules.fastResp ? 1000 : net.range ? 1200 : RESPAWN_MS);
     p.kills++; p.score += pts;
     if (info.head) p.heads++;
     p.best = Math.max(p.best, pts); p.streak++; p.bstreak = Math.max(p.bstreak, p.streak); v.streak = 0;
+    if (rules.siphon && p.alive && p !== v) { p.hp = 100; hostBroadcast({ t: "hp", id: p.id, hp: 100, by: "", head: false, dmg: 0 }); }   // siphon: a kill refills your health
     let ggWin = false;
     if (net.gungame) {
       if (info.knife && v.gg > 0) v.gg--;   // knifed: back a level
@@ -7736,6 +7768,7 @@
       case "st":
         if (p.alive && Number.isFinite(m.x + m.y + m.z + m.yaw + m.pitch)) {
           p.x = m.x; p.y = m.y; p.z = m.z; p.yaw = m.yaw; p.pitch = m.pitch; p.w = m.w ? "knife" : "rifle"; p.sl = !!m.sl;
+          if (p.protectUntil && p.spawnX !== undefined && (Math.hypot(m.x - p.spawnX, m.z - p.spawnZ) > 0.4 || Math.abs(m.y - 0.25) > 0.3)) p.protectUntil = 0;   // moving ends spawn protection
           p.g = Number.isInteger(m.g) && m.g >= 0 && m.g < WEAPON_ORDER.length ? m.g : 0;
           p.rl = m.rl ? 1 : 0;
           p.at = typeof m.at === "string" && AT_CODE_OK.test(m.at) ? m.at : "";
@@ -7787,7 +7820,8 @@
 
       case "hurt": {
         const v = net.players.get(m.v);
-        if (net.sub !== "dm" || net.phase !== "play" || net.cd > 0 || !v || v === p || !v.alive || !p.alive) break;
+        if (net.sub !== "dm" || net.phase !== "play" || net.cd > 0 || !v || v === p || !v.alive) break;
+        if (!p.alive && nowMs() - (p.diedAt || 0) > 2500) break;   // (a bolt or a knife already flying when its thrower died still counts)
         if (net.teams && v.team === p.team) break;   // no friendly fire
         if (nowMs() < v.protectUntil) break;
         const g = checkClaim(p, v, m, nowMs());
@@ -7991,7 +8025,7 @@
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
   // lag: how far behind a moving target a bot's aim trails, in seconds. A shot misses by (the target's sideways speed x this x a random share), so
   // standing still or running straight at a bot is easy to hit, strafing is hard, and flat-out strafing and jumping is only rarely hit
-  BOT_LEVELS.easy.lag = 0.30; BOT_LEVELS.medium.lag = 0.22; BOT_LEVELS.hard.lag = 0.16;
+  BOT_LEVELS.easy.lag = 0.30; BOT_LEVELS.medium.lag = 0.20; BOT_LEVELS.hard.lag = 0.13;
   BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
   const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32, knife: 1.6 };   // the distance each gun likes to fight at (the knife: right up close)
   // What a mode asks of its bots, on top of their level (L3). Hill bots defend the hill harder: on it they react and aim a fifth better.
@@ -8306,6 +8340,7 @@
 
   function botUpdate(p, dt, now) {
     const ai = p.ai, L = ai.lvl, g = ai.gun, w = WEAPONS[g];
+    if (p.protectUntil && p.spawnX !== undefined && Math.hypot(p.x - p.spawnX, p.z - p.spawnZ) > 0.4) p.protectUntil = 0;   // a bot that moves loses it too
     // the nearest living player is who it goes after
     let tgt = null, dist = Infinity, bestScore = Infinity;
     for (const q of net.players.values()) {
@@ -8659,8 +8694,8 @@
   const modeById = (id) => MODES.find((m) => m.id === id) || MODES[1];
   const LIMITS = [5, 10, 15, 25, 50, 0];
   const BOT_LEVEL_IDS = ["easy", "medium", "hard"];
-  const NO_RULES = { lowGrav: false, oneShot: false, headOnly: false, fastResp: false };
-  const setup = { practice: { mode: "dm", map: "arena", limit: 15, bots: 3, level: "medium", rules: Object.assign({}, NO_RULES) }, host: { mode: "dm", map: "arena", limit: 15, rules: Object.assign({}, NO_RULES) } };
+  const NO_RULES = { lowGrav: false, oneShot: false, headOnly: false, fastResp: false, siphon: false };
+  const setup = { practice: { mode: "dm", map: "arena", limit: 15, bots: 3, level: "medium", rules: Object.assign({}, NO_RULES, { siphon: true }) }, host: { mode: "dm", map: "arena", limit: 15, rules: Object.assign({}, NO_RULES, { siphon: true }) } };
   (function loadSetup() {   // the last choices come back (each value is checked, so a damaged save can't break the menu)
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(SETUP_KEY)); } catch (e) { /* none saved */ }
@@ -8671,7 +8706,7 @@
       if (MODES.some((m) => m.id === s.mode) && !(kind === "practice" && s.mode === "race") && s.mode !== "range") d.mode = s.mode;
       if (s.map === "random" || MAPS[s.map]) d.map = s.map;
       if (LIMITS.includes(s.limit)) d.limit = s.limit;
-      if (s.rules && typeof s.rules === "object") d.rules = cleanRules(s.rules);
+      if (s.rules && typeof s.rules === "object") { d.rules = cleanRules(s.rules); if (s.rules.siphon === undefined) d.rules.siphon = siphonDefault(d.mode); }
       if (kind === "practice") {
         if (Number.isInteger(s.bots) && s.bots >= 1 && s.bots <= 5) d.bots = s.bots;
         if (BOT_LEVEL_IDS.includes(s.level)) d.level = s.level;
@@ -8726,7 +8761,7 @@
       const b = document.createElement("button");
       b.type = "button"; b.className = "ps-card" + (m.id === d.mode ? " active" : ""); b.dataset.mode = m.id;
       b.innerHTML = "<b>" + m.name + "</b><span>" + m.short + "</span>";
-      b.addEventListener("click", () => { d.mode = m.id; fixHillMap(); renderSetup(); });
+      b.addEventListener("click", () => { d.mode = m.id; d.rules.siphon = siphonDefault(m.id); fixHillMap(); renderSetup(); });
       modesEl.appendChild(b);
     }
     document.getElementById("ps-mode-desc").textContent = SUB_HINTS[d.mode] || "";
@@ -8760,7 +8795,7 @@
     document.getElementById("ps-bots-label").textContent = mode.id === "range" ? "Dummies" : "Bots";
     if (ps.kind === "practice") { document.getElementById("ps-bots").value = String(d.bots); document.getElementById("ps-level").value = d.level; }
     const race = mode.id === "race" || mode.id === "range";   // (no fighting there: only gravity matters)
-    for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"]]) {
+    for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"], ["ps-r-siphon", "siphon"]]) {
       document.getElementById(id).checked = !!d.rules[key];
       if (key !== "lowGrav") document.getElementById(id).parentElement.hidden = race;
     }
@@ -8769,7 +8804,7 @@
     if (ruleText(d.rules)) sum.push(ruleText(d.rules));
     document.getElementById("ps-go").textContent = ps.kind === "practice" ? "Start practice" : ps.kind === "host" ? "Create room" : "Use for the next round";
   }
-  for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"]]) {
+  for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"], ["ps-r-siphon", "siphon"]]) {
     document.getElementById(id).addEventListener("change", (e) => { if (ps) { ps.draft.rules[key] = e.target.checked; renderSetup(); } });
   }
   document.getElementById("ps-limit").addEventListener("change", (e) => { if (ps) { ps.draft.limit = parseInt(e.target.value, 10); renderSetup(); } });
@@ -9049,6 +9084,8 @@
   const ggKnife = () => net.active && net.gungame && ggApplied === "knife";
   function ggSync() {
     if (!net.active || !net.gungame) { if (ggSaved !== null) ggRestore(); return; }   // (the next round is another mode: your own gun comes back)
+    const gp = net.ggp || "";
+    if (gp !== ggPresetKey) { ggPresetKey = gp; ggPresetMap = ggParsePreset(gp); if (ggOn) applyAttachments(); }   // a new game, a new setup
     const me = localPlayer();
     if (!me) return;
     const t = me.gg >= GG_ORDER.length ? "knife" : GG_ORDER[me.gg];
@@ -10878,6 +10915,7 @@
       hudTimer -= realDt;
       if (hudTimer <= 0) {
         hudTimer = 0.07;
+        if (localProtectUntil && Math.hypot(yawObject.position.x - localSpawn[0], yawObject.position.z - localSpawn[1]) > 0.4) localProtectUntil = 0;   // moving ends it
         spawnProtEl.hidden = !(net.active && nowMs() < localProtectUntil && !localDead);
         speedEl.textContent = speed.toFixed(1);
         speedbarEl.style.width = Math.min(speed / CFG.maxSpeed * 100, 100).toFixed(0) + "%";
