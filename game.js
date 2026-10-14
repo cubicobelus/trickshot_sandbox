@@ -6591,7 +6591,7 @@
   // ======================================================================
   const ROOM_PREFIX = "trickshot-sandbox-";
   const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // no 0/O/1/I to avoid misreads
-  const ROUND_SECONDS = 180, RESULTS_SECONDS = 10, RESPAWN_MS = 3000, PROTECT_MS = 3000, MAX_PLAYERS = 8;
+  const ROUND_SECONDS = 180, RESULTS_SECONDS = 10, RESPAWN_MS = 3000, PROTECT_MS = 1000, MAX_PLAYERS = 8;
   // health: 100, healing starts after REGEN_DELAY ms with no damage taken and no shooting. The host works damage out
   // from the gun, so a client only ever says what it hit. Sniper and Deagle one-shot to the head; the sniper to the body too.
   const REGEN_DELAY = 10000, REGEN_PER_SEC = 10;
@@ -7438,7 +7438,7 @@
           mpEls.dead.hidden = true;
           teleportLocal(m.pos[0], m.pos[1]);
           cancelReload(); refillAmmo(); updateAmmoHud();
-          localProtectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS + cdNow() * 1000 : 0;
+          localProtectUntil = net.sub === "dm" && !net.range && m.op !== 1 ? nowMs() + PROTECT_MS : 0;
         }
         break;
       }
@@ -7562,8 +7562,8 @@
     p.alive = true; p.x = s[0]; p.y = 0.25; p.z = s[1];
     p.hp = 100; p.lastDamageAt = -1e9;
     if (p.bot) botReset(p, s);
-    p.protectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS + Math.max(0, net.cd) * 1000 : 0;   // safe for a few seconds, or until you shoot
-    hostBroadcast({ t: "respawn", id: p.id, pos: s });
+    p.protectUntil = net.sub === "dm" && !net.range && !opening ? nowMs() + PROTECT_MS : 0;   // safe for a second after a respawn, or until you shoot (the first spawn of a round has the 3-2-1 instead)
+    hostBroadcast({ t: "respawn", id: p.id, pos: s, op: opening ? 1 : 0 });
   }
 
   function hostStartRound() {
@@ -7719,7 +7719,7 @@
     let ggWin = false;
     if (net.gungame) {
       if (info.knife && v.gg > 0) v.gg--;   // knifed: back a level
-      if (p.gg >= GG_ORDER.length) ggWin = !!info.knife;   // on the knife: a knife kill wins (bots too: they run up and stab)
+      if (p.gg >= GG_ORDER.length) { ggWin = !!info.knife; if (ggWin) p.gg = GG_ORDER.length + 1; }   // on the knife: a knife kill wins (bots too: they run up and stab), and that kill is the last of the 11
       else { p.gg++; ggBotGun(p); }
     }
     hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
@@ -7989,6 +7989,9 @@
   };
   // hop: hops a second while strafing in a fight
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
+  // lag: how far behind a moving target a bot's aim trails, in seconds. A shot misses by (the target's sideways speed x this x a random share), so
+  // standing still or running straight at a bot is easy to hit, strafing is hard, and flat-out strafing and jumping is only rarely hit
+  BOT_LEVELS.easy.lag = 0.30; BOT_LEVELS.medium.lag = 0.22; BOT_LEVELS.hard.lag = 0.16;
   BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
   const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32, knife: 1.6 };   // the distance each gun likes to fight at (the knife: right up close)
   // What a mode asks of its bots, on top of their level (L3). Hill bots defend the hill harder: on it they react and aim a fifth better.
@@ -8334,7 +8337,14 @@
     ai.seeT = los && dist < range ? ai.seeT + dt : 0;
     // how fast the target is moving (what makes it hard to hit), smoothed
     const inst = Math.hypot(tgt.x - ai.tx, tgt.z - ai.tz) / dt;
-    ai.tspd += (Math.min(inst, 30) - ai.tspd) * 0.15; ai.tx = tgt.x; ai.tz = tgt.z;
+    ai.tspd += (Math.min(inst, 30) - ai.tspd) * 0.15;
+    if (ai.ty === undefined || ai.tid !== tgt.id) { ai.ty = tgt.y; ai.tvx = ai.tvz = ai.tvy = ai.tlat = 0; ai.tid = tgt.id; ai.tx = tgt.x; ai.tz = tgt.z; }
+    {
+      const lim = (v) => Math.max(-30, Math.min(30, v));
+      ai.tvx += (lim((tgt.x - ai.tx) / dt) - ai.tvx) * 0.3; ai.tvz += (lim((tgt.z - ai.tz) / dt) - ai.tvz) * 0.3; ai.tvy += (lim((tgt.y - ai.ty) / dt) - ai.tvy) * 0.3;
+      ai.tlat = Math.abs(ai.tvx * dz - ai.tvz * dx) / (dist || 1);   // the part of the target's movement across the line of fire
+    }
+    ai.tx = tgt.x; ai.tz = tgt.z; ai.ty = tgt.y;
 
     // far or out of sight: follow a route round the walls to the target (re-planned a bit more than once a second)
     const prefer = (BOT_PREFER[g] || 18) * preferK;
@@ -8517,16 +8527,17 @@
 
   // where a shot aimed at `y` (height above the target's feet) really goes: an error angle in both directions,
   // then does that land in the head, the body, or nowhere? Returns "head", "body" or null
-  function botShotLands(dist, errRad, aimHeight) {
-    const hx = gauss() * errRad * dist, vy = aimHeight + gauss() * errRad * dist;
+  function botShotLands(dist, errRad, aimHeight, lag) {   // lag: [sideways, vertical] metres of lag at most (the share that applies is random)
+    const sgn = () => (Math.random() < 0.5 ? -1 : 1);
+    const hx = gauss() * errRad * dist + (lag ? lag[0] * Math.random() * sgn() : 0), vy = aimHeight + gauss() * errRad * dist + (lag ? lag[1] * Math.random() * sgn() : 0);
     if (Math.hypot(hx, vy - 1.62) < 0.27) return "head";
     if (Math.abs(hx) < 0.42 && vy > 0.35 && vy < 1.38) return "body";
     return null;
   }
 
   // a bot's crossbow bolt: everyone sees it fly, and it only lands if the target is still where it was aimed when it arrives (so it can be dodged)
-  function botLaunchBolt(p, tgt, dist, errRad, aimHeight, ox, oy, oz, tx, ty, tz, now) {
-    const land = botShotLands(dist, errRad, aimHeight);
+  function botLaunchBolt(p, tgt, dist, errRad, aimHeight, ox, oy, oz, tx, ty, tz, now, lag) {
+    const land = botShotLands(dist, errRad, aimHeight, lag);
     const flight = Math.max(0.05, Math.hypot(tx, ty, tz) / BOLT_SPEED);
     let vx = tx / flight, vz = tz / flight;
     if (!land) { const side = (Math.random() < 0.5 ? -1 : 1) * rnd(0.8, 1.6) / flight, len = Math.hypot(tx, tz) || 1; vx += -tz / len * side; vz += tx / len * side; }   // a miss goes wide
@@ -8581,18 +8592,19 @@
 
     // aim error: worse against a moving target and the longer an automatic keeps firing
     const burstK = w.auto ? 1 + 0.12 * Math.min(ai.burstLeft === 0 ? 0 : (L.burst[1] - ai.burstLeft), 8) : 1;
-    const errRad = L.err * (ai.errK || 1) * Math.PI / 180 * (1 + ai.tspd / 8) * burstK * (g === "rifle" ? 0.55 : g === "dmr" ? 0.75 : 1);
-    if (w.projectile) { botLaunchBolt(p, tgt, dist, errRad, aimHeight, ox, oy, oz, tx, ty, tz, now); return; }
+    const errRad = L.err * (ai.errK || 1) * Math.PI / 180 * (1 + ai.tspd / 24) * (Math.abs(ai.tvy) > 1.5 ? 1.35 : 1) * burstK * (g === "rifle" ? 0.55 : g === "dmr" ? 0.75 : 1);
+    const lag = [ai.tlat * (L.lag || 0.2), Math.abs(ai.tvy) * (L.lag || 0.2) * 1.3];
+    if (w.projectile) { botLaunchBolt(p, tgt, dist, errRad, aimHeight, ox, oy, oz, tx, ty, tz, now, lag); return; }
     let n = 0, h = 0;
     if (g === "shotgun") {
       for (let i = 0; i < DAMAGE.shotgun.pellets; i++) {
         const spread = 0.065 * Math.sqrt(Math.random());
-        const land = botShotLands(dist, Math.hypot(errRad, spread * 0.55), aimHeight);
+        const land = botShotLands(dist, Math.hypot(errRad, spread * 0.55), aimHeight, lag);
         if (land) { n++; if (land === "head") h++; }
       }
       if (!n) return;
     } else {
-      const land = botShotLands(dist, errRad, aimHeight);
+      const land = botShotLands(dist, errRad, aimHeight, lag);
       if (!land) return;
       n = 1; h = land === "head" ? 1 : 0;
     }
@@ -9283,6 +9295,7 @@
     const me = localPlayer();
     if (!me) return "";
     const t = me.gg >= GG_ORDER.length ? "knife" : GG_ORDER[me.gg];
+    if (me.gg > GG_ORDER.length) return (GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1) + " GUNS: YOU WIN";
     return me.gg + " / " + (GG_ORDER.length + 1) + " GUNS " + ' <span class="kb-gun">' + iconSVG(t) + "</span> " + (t === "knife" ? "KNIFE: one more kill wins" : WEAPONS[t].name);
   }
   function mpFrame(dt) {

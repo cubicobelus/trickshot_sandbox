@@ -1120,7 +1120,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, "
+            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1185,6 +1185,43 @@ MAP_CHECK_JS = """(id) => {
 }"""
 
 
+def test_bot_aim(browser, base):
+    """A bot's chance to hit depends on how the target moves across its aim: easy to hit when still or running straight, hard when strafing fast or jumping."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        page.click("#mode-tabs .tab[data-mode=mp]")
+        start_practice(page, mode="dm", bots=1, level="hard")
+        page.click("#mp-play-btn")
+        step(page, 30)
+        res = page.evaluate("""() => {
+          const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
+          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;
+          bot.x = me.x; bot.z = me.z - 15; bot.y = me.y;
+          const rate = (lat, vy, n) => {
+            let hit = 0;
+            for (let i = 0; i < n; i++) {
+              me.hp = 100; me.alive = true; me.lastDamageAt = -1e9;
+              const ai = bot.ai; ai.gun = 'ar'; ai.ammo = 30; ai.reloadT = 0; ai.burstLeft = 0; ai.fireT = 0; ai.errK = 1;
+              ai.tspd = lat; ai.tlat = lat; ai.tvy = vy;
+              D.botFire(bot, me, 15, performance.now());
+              if (me.hp < 100) hit++;
+            }
+            return hit / n;
+          };
+          return { still: rate(0, 0, 700), walk: rate(5, 0, 700), run: rate(10, 0, 700), max: rate(22, 0, 700), jump: rate(22, 7, 700), air: rate(0, 7, 700) };
+        }""")
+        check("a still target is hit often", res["still"] > 0.3, str(res))
+        check("moving across the aim lowers the chance, more the faster it goes", res["still"] > res["walk"] > res["run"] > res["max"], str(res))
+        check("flat-out strafing is hit only rarely", res["max"] < 0.1 and res["max"] < res["still"] / 4, str(res))
+        check("jumping while strafing is harder still, and a jump alone costs accuracy", res["jump"] <= res["max"] + 0.02 and res["air"] < res["still"], str(res))
+        check("the bot aim checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_gungame_bot_knife(browser, base):
     """A bot that reaches the gun game's last level takes the knife, runs up and can win the round with it."""
     server, dbase, tmp = debug_site()
@@ -1207,6 +1244,7 @@ def test_gungame_bot_knife(browser, base):
             if page.evaluate("window.__dbg.net.phase") == "results": break
         res = page.evaluate("[window.__dbg.net.phase, window.__dbg.net.players.get('you').alive]")
         check("and it runs up and stabs to win the round", res[0] == "results" and res[1] is False, str(res))
+        check("the winning knife kill counts as the 11th gun (11 / 11)", page.evaluate("[...window.__dbg.net.players.values()].find((p) => p.bot).gg") == 11)
         check("the bot knife runs without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:
@@ -1402,10 +1440,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_bot_aim, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "bot_aim", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 
