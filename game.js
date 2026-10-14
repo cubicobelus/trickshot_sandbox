@@ -12,7 +12,7 @@
 
   // ---- problems: anything the game throws is kept (the last few, with how often) and shown in a small bar, so a bug never passes
   // silently and a player can copy what happened. A repeating error (one thrown every frame) is counted, not shown again and again. ----
-  const GAME_VERSION = "2026.10.14b";   // bump with each push, so a report says which build it came from
+  const GAME_VERSION = "2026.10.14c";   // bump with each push, so a report says which build it came from
   const problems = [];   // newest last: { msg, where, n }
   let problemTimer = 0, problemDismissed = false;
   function renderProblems() {
@@ -661,6 +661,7 @@
   const surfaceCanvases = {};
   // Materials a level makes are shared when they are the same (so identical walls and every tree use one), and cleared when the map changes
   const levelMats = new Map();
+  const waterAnim = [];   // the drifting glints on every pond and river: { tex, vx, vy }
   const sharedMat = (key, make) => { let m = levelMats.get(key); if (!m) { m = make(); levelMats.set(key, m); } return m; };
   function surfaceMaterial(kind, repeatX, repeatY, base) {
     const key = kind + (base || "");
@@ -1013,6 +1014,38 @@
   }
 
   // ---- decoration: a mast, a water tank (solid), a door painted on a wall ----
+  // water: a tinted body with two layers of bright ripples drifting different ways over it (the glints), so it moves and catches the light
+  let waterTexBase = null;
+  function waterTexture() {
+    if (waterTexBase) return waterTexBase;
+    const n = 128, c = document.createElement("canvas");
+    c.width = c.height = n;
+    const g = c.getContext("2d"), img = g.createImageData(n, n), T = Math.PI * 2 / n;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {   // sums of whole waves, so it tiles
+      const v = Math.sin(x * T * 3 + Math.sin(y * T * 2) * 1.6) + Math.sin(y * T * 4 + Math.sin(x * T * 3) * 1.3) + Math.sin((x + y) * T * 2);
+      const a = Math.pow(Math.max(0, v / 3), 3), i = (y * n + x) * 4;
+      img.data[i] = 220; img.data[i + 1] = 240; img.data[i + 2] = 255; img.data[i + 3] = Math.round(a * 255);
+    }
+    g.putImageData(img, 0, 0);
+    waterTexBase = new THREE.CanvasTexture(c);
+    waterTexBase.wrapS = waterTexBase.wrapT = THREE.RepeatWrapping;
+    return waterTexBase;
+  }
+  function addWater(geo, x, z, repX, repZ, scaleZ) {
+    const body = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x1f6a98, emissive: 0x082a44, emissiveIntensity: 0.3, transparent: true, opacity: 0.92, roughness: 0.55, metalness: 0.0, depthWrite: false }));
+    body.rotation.x = -Math.PI / 2; body.scale.y = scaleZ; body.position.set(x, FLOOR_Y + 0.04, z);
+    levelGroup.add(body);
+    [[1, 0.012, 0.012, 0.26, 0.044], [0.6, -0.009, 0.016, 0.15, 0.048]].forEach(([rep, vx, vy, opacity, lift], k) => {
+      const tex = waterTexture().clone();
+      tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(repX * rep * (k ? 1.7 : 1), repZ * rep * (k ? 1.7 : 1));
+      const glints = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
+      glints.rotation.x = -Math.PI / 2; glints.scale.y = scaleZ; glints.position.set(x, FLOOR_Y + lift, z);
+      levelGroup.add(glints);
+      waterAnim.push({ tex, vx, vy });
+    });
+  }
+  function updateWater(t) { for (const a of waterAnim) a.tex.offset.set((t * a.vx) % 1, (t * a.vy) % 1); }
   function addDecor(d) {   // ["mast", x, roof height, z] ["tank", x, roof height, z] ["door", x, z, facing x, facing z]
     const kind = d[0];
     if (kind === "mast") {
@@ -1064,15 +1097,20 @@
       proxy.userData = { topY: top, halfW: half * 0.72, halfD: half * 0.72, cx: d[1], cz: d[2], wall: true };
       groundMeshes.push(proxy);
     } else if (kind === "pond") {   // ["pond", x, z, radius]: shallow water you can wade through
-      const water = new THREE.Mesh(new THREE.CircleGeometry(d[3], 28), new THREE.MeshStandardMaterial({ color: 0x3d7fa6, transparent: true, opacity: 0.78, roughness: 0.15, metalness: 0.2 }));
-      water.rotation.x = -Math.PI / 2; water.scale.y = 0.7;
-      water.position.set(d[1], FLOOR_Y + 0.04, d[2]);
-      levelGroup.add(water);
+      const r = d[3];
+      addWater(new THREE.CircleGeometry(r, 36), d[1], d[2], r / 3, r / 3, 0.7);
+      const deep = new THREE.Mesh(new THREE.CircleGeometry(r * 0.6, 28), new THREE.MeshBasicMaterial({ color: 0x14507a, transparent: true, opacity: 0.42, depthWrite: false }));   // deeper in the middle
+      deep.rotation.x = -Math.PI / 2; deep.scale.y = 0.7; deep.position.set(d[1], FLOOR_Y + 0.052, d[2]);
+      const foam = new THREE.Mesh(new THREE.RingGeometry(r * 0.9, r * 1.04, 48), new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0.26, depthWrite: false }));   // foam along the edge
+      foam.rotation.x = -Math.PI / 2; foam.scale.y = 0.7; foam.position.set(d[1], FLOOR_Y + 0.056, d[2]);
+      levelGroup.add(deep, foam);
     } else if (kind === "river") {   // ["river", x, z, width, length]: shallow water you can wade through
-      const water = new THREE.Mesh(new THREE.PlaneGeometry(d[3], d[4]), new THREE.MeshStandardMaterial({ color: 0x3a7ea8, transparent: true, opacity: 0.8, roughness: 0.15, metalness: 0.2 }));
-      water.rotation.x = -Math.PI / 2;
-      water.position.set(d[1], FLOOR_Y + 0.04, d[2]);
-      levelGroup.add(water);
+      addWater(new THREE.PlaneGeometry(d[3], d[4]), d[1], d[2], d[3] / 6, d[4] / 6, 1);
+      for (const side of [-1, 1]) {   // foam along both banks
+        const foam = new THREE.Mesh(new THREE.PlaneGeometry(0.7, d[4]), new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0.24, depthWrite: false }));
+        foam.rotation.x = -Math.PI / 2; foam.position.set(d[1] + side * (d[3] / 2 - 0.3), FLOOR_Y + 0.056, d[2]);
+        levelGroup.add(foam);
+      }
     } else if (kind === "sign") {   // ["sign", x, z, "text", direction it faces (1 = +x, -1 = -x)]: a distance board
       const c = document.createElement("canvas"); c.width = 256; c.height = 128;
       const g = c.getContext("2d");
@@ -1395,7 +1433,7 @@
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((mt) => { if (mt.map) mt.map.dispose(); mt.dispose(); });
     });
     levelGroup.clear();
-    levelMats.clear();
+    levelMats.clear(); waterAnim.length = 0;
     groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0; ladders.length = 0; movers.length = 0; portals.length = 0; boosts.length = 0; gates.length = 0;
     currentMap = m;
     CFG.arenaHalfSize = m.half;
@@ -3763,6 +3801,32 @@
   const AT_DOT = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
   const AT_DOT_HALO = new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.24, depthWrite: false, blending: THREE.AdditiveBlending });
   const AT_LENS = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
+  let reticleTexBase = null;
+  const AT_RETICLE = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  function reticleTexture() {   // a duplex reticle: thick outer posts narrowing to fine lines, small ticks, a red centre dot
+    if (reticleTexBase) return reticleTexBase;
+    const n = 128, c = document.createElement("canvas");
+    c.width = c.height = n;
+    const g = c.getContext("2d");
+    g.strokeStyle = "#08090b"; g.fillStyle = "#08090b";
+    g.lineWidth = 1.6; g.lineCap = "butt";
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      g.beginPath(); g.moveTo(64 + dx * 7, 64 + dy * 7); g.lineTo(64 + dx * 40, 64 + dy * 40); g.stroke();   // the fine part
+    }
+    g.lineWidth = 4.5;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      g.beginPath(); g.moveTo(64 + dx * 40, 64 + dy * 40); g.lineTo(64 + dx * 62, 64 + dy * 62); g.stroke();   // the thick outer post
+    }
+    g.lineWidth = 1.2;
+    for (const k of [14, 22, 30]) for (const s of [-1, 1]) {   // ticks along the cross
+      g.beginPath(); g.moveTo(64 + s * k, 61); g.lineTo(64 + s * k, 67); g.stroke();
+      g.beginPath(); g.moveTo(61, 64 + s * k); g.lineTo(67, 64 + s * k); g.stroke();
+    }
+    g.fillStyle = "#ff3b30"; g.beginPath(); g.arc(64, 64, 1.8, 0, 7); g.fill();
+    reticleTexBase = new THREE.CanvasTexture(c);
+    AT_RETICLE.map = reticleTexBase;
+    return reticleTexBase;
+  }
   const AT_DOT_RISE = 0.034;   // a red dot's window centre sits this far above the rail it is clamped to
   // per gun (the viewmodel, and AV_MOUNT for the other-player models; forward is -z):
   //   muzzle [z where a muzzle device starts, barrel height, barrel radius, suppressor length]
@@ -3832,6 +3896,8 @@
         add(new THREE.CylinderGeometry(r, r * 1.35, 0.03, 14, 1, true), AT_STEEL, 0, c, z - len / 2 - 0.015, HP);
         add(new THREE.TorusGeometry(r * 1.02, 0.0045, 6, 16), AT_STEEL, 0, c, z + len / 2);
         add(new THREE.CircleGeometry(r * 1.3, 14), AT_LENS, 0, c, z - len / 2 - 0.03);
+        reticleTexture();
+        add(new THREE.PlaneGeometry(r * 1.85, r * 1.85), AT_RETICLE, 0, c, z + len / 2 - 0.014);   // the reticle you aim with, just inside the eyepiece
         add(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 8), AT_STEEL, 0, c + r + 0.004, z);
       } else if (id === "reddot" && M.optic) {   // a reflex sight: a clamp and base, a slim frame round the window, a hood with a lip, a glass, a small emitter pod, two knobs, and a pin-prick dot
         const [z, t] = M.optic, c = t + AT_DOT_RISE;
@@ -10867,6 +10933,7 @@
     if (pointerLocked || net.active) {
       if ((player.hook || player.grappleWant) && (!pointerLocked || localDead || run.state === "countdown" || countingDown())) releaseHook(0);
       updateMovers();
+      updateWater(elapsedTime);
       updateGates();
       if (pointerLocked && !localDead && run.state !== "countdown" && !countingDown()) updatePlayer(dt);
       achSummitCheck();
