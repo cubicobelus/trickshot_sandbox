@@ -1122,7 +1122,6 @@
 
   // The original arena: built for trickshots (bounce corridors, kicker ramps, pads and a sniper tower)
   defineMap({
-    flags: [[-34, 0, 0.25], [34, 0, 0.25]],
     id: "arena", name: "Arena", blurb: "The trickshot arena: bounce corridors, kicker ramps, jump pads and a sniper tower.",
     half: 40, floor: "grass", wallH: 12, targetMaxY: 9.5,
     theme: { skyTop: 0x3f7dc6, skyHorizon: 0xcfe2ee, fog: [45, 140], sunDir: [30, 50, 20], sunColor: 0xfff0d8, sunIntensity: 1.05, hemi: [0xdbe9ff, 0x56663f, 0.62], surfaces: {} },
@@ -1201,6 +1200,7 @@
 
   // Moonbase: low gravity, black sky, two portal pairs and boost strips
   defineMap({
+    flags: [[-38, -30, 0.25], [38, 30, 0.25]],
     id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals.",
     half: 45, floor: "moon", wallH: 18, targetMaxY: 18, physics: { gravity: 8.5 },
     theme: { skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x33405c, 0x14151a, 0.38],
@@ -1220,7 +1220,6 @@
 
   // Ice Lake: slippery. Everything you do carries on; steering is slow
   defineMap({
-    flags: [[-32, 0, 0.25], [32, 0, 0.25]],
     id: "icelake", name: "Ice Lake", blurb: "A frozen lake where nothing stops: slides never end and turning is slow. Ice pillars, snowbanks, an iceberg with a ramp up.",
     half: 40, floor: "ice", wallH: 7, targetMaxY: 9, physics: { friction: 0.7, momentumFriction: 0.25, groundAccel: 3.2, slideFriction: 0.22, maxSpeed: 25, speedMultMax: 2.085 },   // the speed cap is 25 here, and the speed bonus reaches x2.085 with it (a map's own maxSpeed and speedMultMax)
     theme: { skyTop: 0x5f9bd6, skyHorizon: 0xe4f1fb, fog: [50, 170], sunDir: [20, 45, -35], sunColor: 0xfff6e6, sunIntensity: 1.0, hemi: [0xe6f3ff, 0x9fb4c4, 0.8],
@@ -1272,7 +1271,6 @@
     }
   }
   defineMap({
-    flags: [[0, -18, 3], [0, 18, 3]],
     id: "summit", name: "Summit", blurb: "A wooded valley round a stepped hill with a lookout on top: trails and ramps up three tiers, ladders up the last cliff, boulders and trees for cover. The home of King of the Hill.",
     half: 45, floor: "grass", wallH: 12, targetMaxY: 14, boundary: "rock", rampSurface: "dirt",
     theme: { skyTop: 0x4a93e0, skyHorizon: 0xe3edf3, fog: [75, 230], sunDir: [40, 60, -20], sunColor: 0xfff1d6, sunIntensity: 0.95, hemi: [0xdfe9f5, 0x4c5f33, 0.5],
@@ -1300,12 +1298,11 @@
   });
 
   // Canyon: a desert canyon with a river down the middle, a base at each end, and ledges up both sides
-  const CANYON_LEDGES = [plateau(-40, -29, 16, 34, 7, "dirt"), plateau(-40, 29, 16, 34, 7, "dirt"), plateau(40, -29, 16, 34, 7, "dirt"), plateau(40, 29, 16, 34, 7, "dirt"),
-    plateau(0, -40, 26, 10, 3, "dirt"), plateau(0, 40, 26, 10, 3, "dirt")];
-  const CANYON_BOULDERS = [[-20, -30, 4.5], [18, -34, 5], [-24, -10, 6], [22, -8, 5.5], [-18, 12, 5], [20, 14, 6.5], [-22, 32, 4.5], [16, 30, 5], [-12, -2, 3], [12, 2, 3.2], [-30, 6, 4], [30, -4, 4.2]];
+  const CANYON_LEDGES = [plateau(-40, -29, 16, 34, 7, "dirt"), plateau(-40, 29, 16, 34, 7, "dirt"), plateau(40, -29, 16, 34, 7, "dirt"), plateau(40, 29, 16, 34, 7, "dirt")];   // (the raised bases at each end of the river are gone: the flags sit on the ground)
+  const CANYON_BOULDERS = [[-20, -30, 4.5], [18, -34, 5], [-24, -10, 6], [22, -8, 5.5], [-18, 12, 5], [20, 14, 6.5], [-22, 32, 4.5], [16, 30, 5]];
   defineMap({
-    flags: [[0, -40, 3], [0, 40, 3]],
-    id: "canyon", name: "Canyon", blurb: "A desert canyon with a river down the middle: long sight lines, a base at each end, ledges up both sides (take the ramps or the mega pads) and two bridges.",
+    flags: [[0, -40, 0.25], [0, 40, 0.25]],
+    id: "canyon", name: "Canyon", blurb: "A desert canyon with a river down the middle: long sight lines, a flag spot at each end, ledges up both sides (take the ramps or the mega pads) and two bridges.",
     half: 50, floor: "dirt", wallH: 24, targetMaxY: 12, boundary: "rock", rampSurface: "dirt",
     theme: { skyTop: 0x6aa4da, skyHorizon: 0xf3dcb4, fog: [75, 230], sunDir: [-35, 50, 25], sunColor: 0xfff0d0, sunIntensity: 1.05, hemi: [0xf5e6d0, 0x8a6a4a, 0.6],
       surfaces: { dirt: "#c9a46b", rock: "#b8714a", concrete: "#b8714a", deck: "#a8814f" } },
@@ -1314,17 +1311,17 @@
     ramps: [
       [-26, -22, "x", 5, 12, 6.75, -1], [-26, 22, "x", 5, 12, 6.75, -1], [26, -22, "x", 5, 12, 6.75, 1], [26, 22, "x", 5, 12, 6.75, 1],   // up to the ledges
       [-9.5, -25, "x", 6, 7, 2.25, 1], [9.5, -25, "x", 6, 7, 2.25, -1], [-9.5, 25, "x", 6, 7, 2.25, 1], [9.5, 25, "x", 6, 7, 2.25, -1],   // up to the bridges
-      [0, -31.5, "z", 6, 7, 2.75, -1], [0, 31.5, "z", 6, 7, 2.75, 1],   // up to the bases
     ],
     pads: [[-28, 0, "mega"], [28, 0, "mega"], [-12, -36, "normal"], [12, 36, "normal"]],
     decor: CANYON_BOULDERS.map((b) => ["boulder", b[0], b[1], b[2]]).concat([["river", 0, 0, 8, 68]]),
-    spawns: [[-22, -44], [22, -44], [-22, 44], [22, 44], [-40, 0], [40, 0], [-18, -2], [18, 2], [-27, -15], [27, 15], [-27, 15], [27, -15]],
+    spawns: [[-22, -44], [22, -44], [-22, 44], [22, 44], [-40, 0], [40, 0], [-18, -2], [18, 2], [-27, -15], [27, 15], [-27, 15], [27, -15], [14, -28], [-14, 28], [12, 24], [-12, -24], [0, -46], [0, 46]],
     playerSpawn: [-16, 44],
   });
 
   // Rooftops: a street canyon between two rows of buildings at three heights, with ladders, ramps, bridges and pads between the levels
   const roofBox = (x, z, top, w, d, h) => [x, top + h / 2, z, w, h, d, "deck"];   // a crate or vent standing on a roof
   defineMap({
+    flags: [[-13.5, 0, 10], [13.5, 0, 10]],
     id: "rooftops", name: "Rooftops", blurb: "Three levels: a street canyon, rooftops at 6.5 and 10 m, climbed by ladders, ramps and lifts, linked by bridges and a shuttle. Hold forward at a ladder to climb.",
     half: 34, floor: "slab", wallH: 14, targetMaxY: 13,
     theme: { skyTop: 0x4f86d4, skyHorizon: 0xf1e2c8, fog: [55, 170], sunDir: [35, 40, -25], sunColor: 0xfff3dc, sunIntensity: 1.1, hemi: [0xe6f0ff, 0x6d6f73, 0.6],
@@ -7795,6 +7792,16 @@
   // Capture the flag. Each map has `flags: [[x, z, y], [x, z, y]]`: the bases of team 0 and team 1. A flag is home (0), carried (1) or dropped (2).
   const CTF_PICKUP = 1.7, CTF_DROP_SECONDS = 15;
   function ctfBase(t) { const b = currentMap && currentMap.flags && currentMap.flags[t]; return b ? { x: b[0], z: b[1], y: b[2] === undefined ? FLOOR_Y : b[2] } : { x: 0, z: 0, y: FLOOR_Y }; }
+  // the highest floor, roof, deck or crate top under a point that is no higher than the point (a flag dropped in mid-air falls to this)
+  function surfaceBelow(x, y, z) {
+    if (!groundBoxes) groundBoxes = groundMeshes.map((m) => new THREE.Box3().setFromObject(m));
+    let best = FLOOR_Y;
+    for (const list of [wallBoxes, groundBoxes]) for (const b of list) {
+      if (b.gate || x < b.min.x || x > b.max.x || z < b.min.z || z > b.max.z) continue;
+      if (b.max.y <= y && b.max.y > best) best = b.max.y;
+    }
+    return best;
+  }
   function ctfSendHome(t) { const b = ctfBase(t), f = net.flags[t]; f.s = 0; f.x = b.x; f.y = b.y; f.z = b.z; f.c = null; f.t = 0; }
   function ctfReset() { net.caps = [0, 0]; ctfSendHome(0); ctfSendHome(1); for (const p of net.players.values()) p.caps = 0; }
   const ctfNeed = () => Math.max(1, Math.round(net.limit / 5)) || 3;
@@ -7804,7 +7811,7 @@
       const f = net.flags[t];
       if (f.s === 1) {   // carried: it goes where its carrier goes, and drops if they die or leave
         const c = net.players.get(f.c);
-        if (!c || !c.alive) { f.s = 2; f.t = CTF_DROP_SECONDS; if (c) { f.x = c.x; f.y = c.y; f.z = c.z; } hostBroadcast({ t: "ctf", e: "drop", id: f.c, tm: t }); f.c = null; }
+        if (!c || !c.alive) { f.s = 2; f.t = CTF_DROP_SECONDS; if (c) { f.x = c.x; f.y = c.y; f.z = c.z; } f.y = surfaceBelow(f.x, f.y + 0.4, f.z); hostBroadcast({ t: "ctf", e: "drop", id: f.c, tm: t }); f.c = null; }
         else { f.x = c.x; f.y = c.y; f.z = c.z; }
       } else {
         if (f.s === 2) { f.t -= dt; if (f.t <= 0) { ctfSendHome(t); hostBroadcast({ t: "ctf", e: "return", id: null, tm: t }); continue; } }
@@ -9032,6 +9039,14 @@
         if (c && c.id === net.id) { x = yawObject.position.x; z = yawObject.position.z; y = player.feetY; carried = true; }
         else if (c && c.mesh) { x = c.mesh.position.x; y = c.mesh.position.y; z = c.mesh.position.z; carried = true; }
       }
+      if (f.s === 2) {   // dropped: it falls to the floor under it
+        const u = g.userData, dtf = Math.min(Math.max(t - (u.fallT === undefined ? t : u.fallT), 0), 0.1);
+        u.fallT = t;
+        if (u.curY === undefined) u.curY = y;
+        u.fallV = (u.fallV || 0) + 22 * dtf;
+        u.curY = Math.max(y, u.curY - u.fallV * dtf);
+        y = u.curY;
+      } else { g.userData.curY = carried ? y + 0.9 : y; g.userData.fallV = 0; g.userData.fallT = t; }
       g.position.set(x, y + (carried ? 0.9 : 0), z);
       g.userData.cloth.rotation.y = Math.sin(t * 3 + tm) * 0.35;
       g.userData.beam.visible = !carried || f.c === net.id;

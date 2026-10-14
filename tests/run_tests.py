@@ -1106,7 +1106,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, "
+            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1119,9 +1119,7 @@ def debug_site():
 
 # Map problems already known and waiting for a decision: they are reported as notes, not failures. Each is a piece of the message.
 # Remove an entry once the map is fixed (the test says so when an entry no longer matches anything).
-KNOWN_MAP_ISSUES = {
-    "canyon": ["jump pad at (-12, -36)", "jump pad at (12, 36)"],   # placed at floor level inside the 3 m base blocks: nobody can reach them
-}
+KNOWN_MAP_ISSUES = {}   # (Canyon's two buried pads were fixed when its raised bases came out)
 
 # Runs inside the page for one map; returns the problems (things that are wrong) and notes (things worth knowing).
 MAP_CHECK_JS = """(id) => {
@@ -1273,6 +1271,32 @@ def test_spawns(browser, base):
             check(f"{r['id']}: a team round opens with nobody stacked, the teams apart ({r['apart']} m) and no enemy within 10 m",
                   r["stacked"] == 0 and r["nearEnemy"] >= 10 and r["apart"] >= r["half"] * 0.5, str(r))
             check(f"{r['id']}: respawns land at least 10 m from every enemy", r["worst"] >= 10, str(r["worst"]))
+        # capture the flag: each team opens beside its own base, and a flag dropped in mid-air lands on the floor
+        ctf = page.evaluate("""() => {
+          const D = window.__dbg, out = [];
+          D.net.pendingCtf = true; D.net.pendingTeams = true;
+          for (const id of Object.keys(D.MAPS)) {
+            if (!D.MAPS[id].flags) continue;
+            D.net.pendingMap = id; D.hostStartRound();
+            const ps = [...D.net.players.values()];
+            let nearEnemy = 99, wrong = 0;
+            for (const a of ps) {
+              const own = D.ctfBase(a.team), other = D.ctfBase(1 - a.team);
+              if (Math.hypot(a.x - own.x, a.z - own.z) > Math.hypot(a.x - other.x, a.z - other.z)) wrong++;
+              for (const b of ps) if (a.team !== b.team) nearEnemy = Math.min(nearEnemy, Math.hypot(a.x - b.x, a.z - b.z));
+            }
+            const carrier = ps.find((p) => p.team === 0), f = D.net.flags[1];
+            f.s = 1; f.c = carrier.id; carrier.y = 12; carrier.alive = false;
+            D.hostCtfTick(0.05);
+            out.push({ id, wrong, nearEnemy: Math.round(nearEnemy), dropped: f.s === 2, y: f.y, below: D.surfaceBelow(f.x, 12.4, f.z) });
+          }
+          D.net.pendingCtf = false; D.net.pendingTeams = false;
+          return out;
+        }""")
+        check("capture the flag is on Courtyard, Foundry, Moonbase, Rooftops and Canyon only", sorted(r["id"] for r in ctf) == ["canyon", "courtyard", "foundry", "moonbase", "rooftops"], ", ".join(r["id"] for r in ctf))
+        for r in ctf:
+            check(f"{r['id']}: both teams open nearer their own flag, with no enemy within 10 m", r["wrong"] == 0 and r["nearEnemy"] >= 10, str(r))
+            check(f"{r['id']}: a flag dropped in mid-air lands on the floor ({r['y']})", r["dropped"] and r["y"] == r["below"] and r["y"] < 11, str(r))
         check("the spawn checks run without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:
