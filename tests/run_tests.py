@@ -1173,6 +1173,31 @@ MAP_CHECK_JS = """(id) => {
 }"""
 
 
+def test_countdown(browser, base):
+    """Every room round starts with a 3-2-1: nobody can shoot until it ends."""
+    page, errors = open_page(browser, base + "/index.html", 800, 450)
+    page.click("#mode-tabs .tab[data-mode=mp]")
+    start_practice(page, mode="dm", bots=1, level="easy")
+    page.click("#mp-play-btn")
+    step(page, 10)
+    check("the round opens with a 3 on the screen", page.inner_text("#run-count").strip() == "3", page.inner_text("#run-count"))
+    before = page.inner_text("#ammo-count")
+    page.dispatch_event("body > canvas", "mousedown", {"button": 0})
+    step(page, 3)
+    page.dispatch_event("body > canvas", "mouseup", {"button": 0})
+    step(page, 3)
+    check("you cannot shoot during the countdown", page.inner_text("#ammo-count") == before, f"{before} -> {page.inner_text('#ammo-count')}")
+    step(page, 260)
+    check("after it, GO and you can shoot", page.inner_text("#run-count").strip() in ("GO!", ""), page.inner_text("#run-count"))
+    page.dispatch_event("body > canvas", "mousedown", {"button": 0})
+    step(page, 3)
+    page.dispatch_event("body > canvas", "mouseup", {"button": 0})
+    step(page, 3)
+    check("and the shot goes off", page.inner_text("#ammo-count") != before, f"{before} -> {page.inner_text('#ammo-count')}")
+    check("the countdown runs without errors", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_spawns(browser, base):
     """Team rounds start with each team grouped at its own end of the map (not stacked, not beside an enemy); respawns keep away from enemies and from each other."""
     server, dbase, tmp = debug_site()
@@ -1274,10 +1299,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

@@ -6082,7 +6082,7 @@
     if (run.state === "countdown" || run.state === "done") return;
     const w = currentWeapon();
     if (fireCooldown > 0 || vm.switchTimer > 0 || vm.grappleOut > 0.25) return;
-    if (net.active && (localDead || net.phase !== "play")) return;
+    if (net.active && (localDead || net.phase !== "play" || countingDown())) return;
 
     if (w.usesAmmo && !SETTINGS.unlimitedAmmo) {
       if (reload.active) {
@@ -6345,7 +6345,7 @@
     if (run.state === "countdown" || run.state === "done") return;
     if (run.state === "live") run.shots++;
     stat("knifeThrows"); stat("shots");
-    if (net.active && (localDead || net.phase !== "play")) return;
+    if (net.active && (localDead || net.phase !== "play" || countingDown())) return;
     vm.throwTimer = CFG.knifeThrowCooldown;
     localProtectUntil = 0;
     vm.throwReleased = false;
@@ -6612,7 +6612,7 @@
     gungame: false, pendingGun: false,   // gun game: every kill swaps your gun; a kill with the knife at the end wins
     range: false, pendingRange: false,   // the shooting range: dummies that stand still and never shoot back (practice only)
     koth: false, pendingKoth: false, hs: [0, -1], teamHill: [0, 0],   // King of the Hill: who holds the hill (0 empty, 1 held, 2 contested; who), and each team's time on it
-    phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0,
+    phase: "play", left: ROUND_SECONDS, leftRecv: 0, resultsLeft: 0, cd: 0, cdRecv: 0,   // cd: seconds of 3-2-1 left before a round starts
     players: new Map(), ttOffset: 0, ttSynced: false,
     lastTick: 0, boardTimer: 0, lastHostMsg: 0,
     practice: false,                      // a local room with bots in it: no network at all
@@ -7218,6 +7218,7 @@
     net.limit = Math.max(0, Math.min(Number(m.limit) || 0, 999));
     net.phase = m.phase;
     net.left = m.left; net.leftRecv = nowMs();
+    net.cd = Math.max(0, Math.min(Number(m.cd) || 0, 10)); net.cdRecv = nowMs();
     net.resultsLeft = m.rl || 0;
     if (m.targets) {
       m.targets.forEach((d, i) => { if (targets[i]) { applyTargetData(targets[i], d); targets[i].userData.respawnTimer = 1.1; } });
@@ -7235,6 +7236,7 @@
 
       case "board": {
         net.phase = m.phase; net.left = m.left; net.leftRecv = nowMs(); net.resultsLeft = m.rl || 0;
+        if (net.role === "client") { net.cd = Math.max(0, Math.min(Number(m.cd) || 0, 10)); net.cdRecv = nowMs(); }
         const off = m.tt - nowMs() / 1000;
         net.ttOffset = net.ttSynced ? net.ttOffset + (off - net.ttOffset) * 0.25 : off;
         net.ttSynced = true;
@@ -7376,7 +7378,7 @@
           mpEls.dead.hidden = true;
           teleportLocal(m.pos[0], m.pos[1]);
           cancelReload(); refillAmmo(); updateAmmoHud();
-          localProtectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS : 0;
+          localProtectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS + cdNow() * 1000 : 0;
         }
         break;
       }
@@ -7438,12 +7440,12 @@
   function hostSendRaw(m) { for (const c of net.conns.values()) if (c.open) c.send(m); }
   function hostBroadcast(m) { hostSendRaw(m); applyEvent(m); }
   function hostBoardMsg() {
-    return { t: "board", p: boardList(), sub: net.sub, left: net.left, phase: net.phase, rl: net.resultsLeft, tt: mpTargetClock(), fl: net.flags.map((f) => [f.s, Math.round(f.x * 100) / 100, Math.round(f.y * 100) / 100, Math.round(f.z * 100) / 100, f.c]), cp: net.caps, hs: net.hs, th: [Math.round(net.teamHill[0] * 10) / 10, Math.round(net.teamHill[1] * 10) / 10] };
+    return { t: "board", p: boardList(), sub: net.sub, left: net.left, cd: net.cd, phase: net.phase, rl: net.resultsLeft, tt: mpTargetClock(), fl: net.flags.map((f) => [f.s, Math.round(f.x * 100) / 100, Math.round(f.y * 100) / 100, Math.round(f.z * 100) / 100, f.c]), cp: net.caps, hs: net.hs, th: [Math.round(net.teamHill[0] * 10) / 10, Math.round(net.teamHill[1] * 10) / 10] };
   }
   function hostBroadcastBoard() { hostBroadcast(hostBoardMsg()); }
   function roundMsg(fresh) {
     return {
-      t: "round", map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, br: net.br, zc: net.zc, ctf: net.ctf, fl: net.flags.map((f) => [f.s, f.x, f.y, f.z, f.c]), cp: net.caps, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
+      t: "round", cd: net.cd, map: net.map, sub: net.sub, teams: net.teams, koth: net.koth, br: net.br, zc: net.zc, ctf: net.ctf, fl: net.flags.map((f) => [f.s, f.x, f.y, f.z, f.c]), cp: net.caps, rules: net.rules, hs: net.hs, th: net.teamHill, limit: net.limit, left: net.left, phase: net.phase, rl: net.resultsLeft, fresh: !!fresh, p: boardList(),
       targets: net.sub === "race" ? targets.map(serializeTarget) : null, tt: mpTargetClock(),
     };
   }
@@ -7500,7 +7502,7 @@
     p.alive = true; p.x = s[0]; p.y = 0.25; p.z = s[1];
     p.hp = 100; p.lastDamageAt = -1e9;
     if (p.bot) botReset(p, s);
-    p.protectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS : 0;   // safe for a few seconds, or until you shoot
+    p.protectUntil = net.sub === "dm" && !net.range ? nowMs() + PROTECT_MS + Math.max(0, net.cd) * 1000 : 0;   // safe for a few seconds, or until you shoot
     hostBroadcast({ t: "respawn", id: p.id, pos: s });
   }
 
@@ -7536,6 +7538,7 @@
       ensureAvatar(q);
     }
     net.phase = "play";
+    net.cd = net.range ? 0 : 3;   // the 3-2-1 (the range has none: it is practice)
     net.left = net.range ? 3599 : ROUND_SECONDS;
     net.resultsLeft = 0;
     for (const p of net.players.values()) { p.score = 0; p.kills = 0; p.deaths = 0; p.hill = 0; p.gg = 0; p.caps = 0; p.heads = 0; p.dmg = 0; p.best = 0; p.streak = 0; p.bstreak = 0; p.alive = true; p.hp = 100; p.lastDamageAt = -1e9; }
@@ -7710,7 +7713,7 @@
       }
 
       case "hit": {
-        if (net.sub !== "race" || net.phase !== "play") break;
+        if (net.sub !== "race" || net.phase !== "play" || net.cd > 0) break;
         const t = targets[m.i];
         if (!t || (fromId !== net.id && !t.userData.alive)) break;   // someone beat them to it
         if (nowMs() - p.lastHitAt < 120) break;                      // nobody hits two targets in a blink
@@ -7724,7 +7727,7 @@
 
       case "hurt": {
         const v = net.players.get(m.v);
-        if (net.sub !== "dm" || net.phase !== "play" || !v || v === p || !v.alive || !p.alive) break;
+        if (net.sub !== "dm" || net.phase !== "play" || net.cd > 0 || !v || v === p || !v.alive || !p.alive) break;
         if (net.teams && v.team === p.team) break;   // no friendly fire
         if (nowMs() < v.protectUntil) break;
         const g = checkClaim(p, v, m, nowMs());
@@ -7848,14 +7851,16 @@
   function hostTick(dt) {
     const now = nowMs();
     if (net.practice && (!pointerLocked || replay.active)) return;   // practice pauses with the menu
+    const counting = net.phase === "play" && net.cd > 0;
+    if (counting) net.cd = Math.max(0, net.cd - dt);
     if (net.phase === "play") {
-      net.left -= dt;
+      if (!counting) net.left -= dt;
       if (net.left <= 0) { net.left = 0; hostEndRound(); }
     } else {
       net.resultsLeft -= dt;
       if (net.resultsLeft <= 0) hostStartRound();
     }
-    if (net.phase === "play" && net.sub === "dm") {
+    if (net.phase === "play" && net.sub === "dm" && !counting) {
       if (net.practice) for (let left = dt; left > 0; left -= 0.05) botsThink(Math.min(left, 0.05), now);
       hostBotBolts(now);
       if (net.koth) hostHillTick(dt);
@@ -8894,6 +8899,9 @@
     sec = Math.max(0, Math.ceil(sec));
     return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
   }
+  // the 3-2-1 before every round: nobody moves, shoots or takes damage until it ends (the host counts it; everyone else counts from the last message)
+  function cdNow() { return net.role === "host" ? Math.max(0, net.cd) : Math.max(0, net.cd - (nowMs() - net.cdRecv) / 1000); }
+  const countingDown = () => net.active && net.phase === "play" && cdNow() > 0;
   function leftNow() {
     return net.role === "host" ? net.left : net.left - (nowMs() - net.leftRecv) / 1000;
   }
@@ -9131,7 +9139,16 @@
   }
 
   let mpUiTimer = 0;
+  let lastCdShown = 0;
+  function updateMpCountdown() {   // 3, 2, 1, GO in the middle of the screen
+    const n = net.active && net.phase === "play" ? Math.ceil(cdNow()) : 0;
+    if (n === lastCdShown) return;
+    if (n > 0) { showRunCount(String(n)); runBeep(false); }
+    else if (lastCdShown > 0) { showRunCount("GO!"); runBeep(true); }
+    lastCdShown = n;
+  }
   function mpFrame(dt) {
+    updateMpCountdown();
     updateAvatars(dt);
     updateSpectate(dt);
     updateDamageNumbers(dt);
@@ -10659,10 +10676,10 @@
     if (!pointerLocked && mapPopupLive) hideMapPopup();   // the menu opened while the map was held
     // in a room the world keeps running while the menu is up, so everyone else's view stays correct
     if (pointerLocked || net.active) {
-      if ((player.hook || player.grappleWant) && (!pointerLocked || localDead || run.state === "countdown")) releaseHook(0);
+      if ((player.hook || player.grappleWant) && (!pointerLocked || localDead || run.state === "countdown" || countingDown())) releaseHook(0);
       updateMovers();
       updateGates();
-      if (pointerLocked && !localDead && run.state !== "countdown") updatePlayer(dt);
+      if (pointerLocked && !localDead && run.state !== "countdown" && !countingDown()) updatePlayer(dt);
       achSummitCheck();
       updateMapPopup();
       updateTrickFeed();
@@ -10693,7 +10710,7 @@
       if (fireCooldown > 0) fireCooldown -= dt;
       if (vm.burstQueue > 0) {   // the second and third rounds of a burst
         const bw = currentWeapon();
-        if (!bw.burst || reload.active || vm.switchTimer > 0 || (net.active && (localDead || net.phase !== "play"))) vm.burstQueue = 0;
+        if (!bw.burst || reload.active || vm.switchTimer > 0 || (net.active && (localDead || net.phase !== "play" || countingDown()))) vm.burstQueue = 0;
         else if ((vm.burstTimer -= dt) <= 0) {
           if (bw.ammo > 0 || SETTINGS.unlimitedAmmo) { fireGun(bw); vm.burstQueue--; vm.burstTimer = bw.burstGap; } else vm.burstQueue = 0;
         }
