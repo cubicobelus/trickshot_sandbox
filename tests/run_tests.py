@@ -1335,6 +1335,77 @@ def test_gungame_bot_knife(browser, base):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_bot_extras(browser, base):
+    """Bots sprint while travelling and walk in a fight; practice allows more bots on big maps and in a battle royale; capture the flag respawns stay on your side."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        # the bot menu: 7 on most maps, 11 on the big ones, 4 more in a battle royale (15 at most)
+        page.click("#mode-tabs .tab[data-mode=mp]")
+        page.click("#mp-card-practice")
+        page.evaluate("document.getElementById('ps-rules').open = true")
+        def cap(mode, map_id):
+            page.click(f'#ps-modes .ps-card[data-mode="{mode}"]')
+            page.click(f'#ps-maps button[data-map="{map_id}"]')
+            return page.evaluate("document.getElementById('ps-bots').options.length")
+        got = {"dm courtyard": cap("dm", "courtyard"), "dm canyon": cap("dm", "canyon"), "br courtyard": cap("br", "courtyard"), "br canyon": cap("br", "canyon")}
+        check("the bot menu holds 7 on a small map, 11 on a big one", got["dm courtyard"] == 7 and got["dm canyon"] == 11, str(got))
+        check("a battle royale allows 4 more (15 at most)", got["br courtyard"] == 11 and got["br canyon"] == 15, str(got))
+        page.click("#ps-close")
+        page.wait_for_timeout(100)
+        # sprint: a hard bot sent across the map runs faster than its walking speed (6.6 u/s)
+        start_practice(page, mode="dm", map_id="courtyard", bots=1, level="hard")
+        page.click("#mp-play-btn")
+        step(page, 30)
+        page.evaluate("""() => {
+          const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
+          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;
+        }""")
+        trail = [page.evaluate("(() => { const b = [...window.__dbg.net.players.values()].find((p) => p.bot); return [b.x, b.z]; })()")]
+        for _ in range(80):
+            step(page, 3)
+            trail.append(page.evaluate("(() => { const b = [...window.__dbg.net.players.values()].find((p) => p.bot); return [b.x, b.z]; })()"))
+        # the fastest half second of straight travel (a chord over 10 samples of 48 ms; a launch pad or a respawn is skipped)
+        runs = [((trail[i][0] - trail[i - 10][0]) ** 2 + (trail[i][1] - trail[i - 10][1]) ** 2) ** 0.5 / 0.48 for i in range(10, len(trail))]
+        top = max([v for v in runs if v < 11.5] or [0])
+        seen = [round(v, 1) for v in sorted(runs)[-5:]]
+        check("a hard bot travelling faster than its 6.6 u/s walk (it sprints)", top > 7.5, f"{top:.1f} u/s {sorted(seen)[-6:]}")
+        check("but not faster than a sprinting player (about 9 u/s)", top < 9.6, f"{top:.1f} u/s")
+        page.evaluate("__unlock()")
+        step(page, 5)
+        page.click("#mp-leave-btn")
+        # capture the flag: a respawn lands on your own side of the map or in the middle band, never nearer their base than the band allows
+        start_practice(page, mode="ctf", bots=5, level="easy")
+        page.click("#mp-play-btn")
+        step(page, 30)
+        res = page.evaluate("""() => {
+          const D = window.__dbg, out = [];
+          D.net.pendingCtf = true; D.net.pendingTeams = true;
+          for (const id of Object.keys(D.MAPS)) {
+            if (!D.MAPS[id].flags) continue;
+            D.net.pendingMap = id; D.hostStartRound();
+            const ps = [...D.net.players.values()];
+            let bad = 0, n = 0;
+            for (let k = 0; k < 30; k++) {
+              const p = ps[k % ps.length]; p.alive = false;
+              D.hostRespawn(p, false);
+              const mine = D.ctfBase(p.team), theirs = D.ctfBase(1 - p.team), band = Math.hypot(mine.x - theirs.x, mine.z - theirs.z) * 0.2;
+              const over = Math.hypot(p.x - mine.x, p.z - mine.z) - Math.hypot(p.x - theirs.x, p.z - theirs.z);
+              n++; if (over > band + 0.01) bad++;
+            }
+            out.push({ id, bad, n });
+          }
+          return out;
+        }""")
+        for r in res:
+            check(f"{r['id']}: capture the flag respawns stay on your side or in the middle", r["bad"] == 0, str(r))
+        check("the bot extras run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_round_rocks(browser, base):
     """A round rock is round: you can stand at the corner of its bounding square, and a shot that skims the corner passes by."""
     server, dbase, tmp = debug_site()
@@ -1523,10 +1594,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

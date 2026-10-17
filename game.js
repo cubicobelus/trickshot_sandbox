@@ -8099,7 +8099,7 @@
   // hop: hops a second while strafing in a fight
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
   // sprint: the speed bonus a bot takes while it is travelling (to a target, a flag, the hill, a perch) and not in a burst of fire; it walks in a fight
-  BOT_LEVELS.easy.sprint = 1.2; BOT_LEVELS.medium.sprint = 1.3; BOT_LEVELS.hard.sprint = 1.4;
+  BOT_LEVELS.easy.sprint = 1.15; BOT_LEVELS.medium.sprint = 1.25; BOT_LEVELS.hard.sprint = 1.3;
   // lag: how far behind a moving target a bot's aim trails, in seconds. A shot misses by (the target's sideways speed x this x a random share), so
   // standing still or running straight at a bot is easy to hit, strafing is hard, and flat-out strafing and jumping is only rarely hit
   BOT_LEVELS.easy.lag = 0.30; BOT_LEVELS.medium.lag = 0.20; BOT_LEVELS.hard.lag = 0.13;
@@ -8112,7 +8112,7 @@
   // one nudges a few numbers a little (prefer: how far it likes to fight, err: aim error, perch: how often it goes up high, retreat: backs
   // off from a fight below this health). Where everyone wants the same thing (the hill, the flag, a gun ladder, the range) there are none.
   const BOT_TRAITS = {
-    rusher: { prefer: 0.65, speed: 1.05, hop: 1.6, sprint: 1.05 },
+    rusher: { prefer: 0.65, speed: 1.05, hop: 1.6 },
     marksman: { prefer: 1.45, speed: 0.96, err: 0.85, perch: 0.5 },
     careful: { react: 0.9, retreat: 40 },
   };
@@ -10252,7 +10252,7 @@
     { title: "Grapple", text: () => "Aim at a wall, the floor or a target and tap " + keyOf("grapple") + ". A hook flies out and zips you there. Tap " + keyOf("grapple") + " or " + keyOf("jump") + " to let go and keep your speed.", done: () => tutDelta("grapples") >= 1 },
     { title: "Knife", text: () => "Press " + either("knife", "swap") + " for the knife, then " + keyOf("aim") + " to throw it. " + either("gun", "swap") + " takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
     { title: "Map and records", text: () => "Hold " + keyOf("map") + " to see the map and where you are, and " + keyOf("leaderboard") + " for your records on this map.", done: () => tut.sawMap && tut.sawBoard },
-    { title: "Trickshot", text: "Put it together: land a 3x shot. Jump, spin, hit from far away...", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
+    { title: "Trickshot", text: "Put it together: land a 2x shot. Jump, spin, hit from far away...", done: () => tut.lastHit && tut.lastHit.mult >= 2 },
   ];
   const tutEl = document.getElementById("tutorial");
   function startTutorial() {
@@ -10291,7 +10291,7 @@
     if (tut.step >= TUT_STEPS.length) {
       document.getElementById("tut-count").textContent = "Tutorial complete";
       document.getElementById("tut-title").textContent = "You're ready";
-      document.getElementById("tut-text").textContent = "Next: Score Attack is a 1:00 run for a high score. Attachments (in the menu) add scopes and more as you land hits.\nMultiplayer > Practice has bots and modes: hill, flag, gun game, battle royale.\nMoonbase has portals, Foundry launch strips, Rooftops lifts and ladders. The Trickshot list shows every trick.";
+      document.getElementById("tut-text").textContent = "Next: Score Attack is a 1:00 run for a high score. Attachments (in the menu, under More guns) add scopes, barrels and more as you land hits.\nMultiplayer > Practice has bots and modes: hill, flag, gun game, battle royale. Each round opens with a 3-2-1, and in free-for-alls a kill refills your health.\nMoonbase has portals, Foundry launch strips, Rooftops lifts and ladders. The Trickshot list shows every trick.";
       document.getElementById("tut-fill").style.width = "100%";
       tutEl.classList.add("done");
       tut.active = false;
