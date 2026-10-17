@@ -1160,6 +1160,7 @@
 
   // The original arena: built for trickshots (bounce corridors, kicker ramps, pads and a sniper tower)
   defineMap({
+    maxBots: 11,   // (a big map holds more bots in practice)
     id: "arena", name: "Arena", blurb: "The trickshot arena: bounce corridors, kicker ramps, jump pads and a sniper tower.",
     half: 40, floor: "grass", wallH: 12, targetMaxY: 9.5,
     theme: { skyTop: 0x3f7dc6, skyHorizon: 0xcfe2ee, fog: [45, 140], sunDir: [30, 50, 20], sunColor: 0xfff0d8, sunIntensity: 1.05, hemi: [0xdbe9ff, 0x56663f, 0.62], surfaces: {} },
@@ -1239,6 +1240,7 @@
   // Moonbase: low gravity, black sky, two portal pairs and boost strips
   defineMap({
     flags: [[-38, -30, 0.25], [38, 30, 0.25]],
+    maxBots: 11,   // (a big map holds more bots in practice)
     id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals.",
     half: 45, floor: "moon", wallH: 18, targetMaxY: 18, physics: { gravity: 8.5 },
     theme: { skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x33405c, 0x14151a, 0.38],
@@ -1258,6 +1260,7 @@
 
   // Ice Lake: slippery. Everything you do carries on; steering is slow
   defineMap({
+    maxBots: 11,   // (a big map holds more bots in practice)
     id: "icelake", name: "Ice Lake", blurb: "A frozen lake where nothing stops: slides never end and turning is slow. Ice pillars, snowbanks, an iceberg with a ramp up.",
     half: 40, floor: "ice", wallH: 7, targetMaxY: 9, physics: { friction: 0.7, momentumFriction: 0.25, groundAccel: 3.2, slideFriction: 0.22, maxSpeed: 25, speedMultMax: 2.085 },   // the speed cap is 25 here, and the speed bonus reaches x2.085 with it (a map's own maxSpeed and speedMultMax)
     theme: { skyTop: 0x5f9bd6, skyHorizon: 0xe4f1fb, fog: [50, 170], sunDir: [20, 45, -35], sunColor: 0xfff6e6, sunIntensity: 1.0, hemi: [0xe6f3ff, 0x9fb4c4, 0.8],
@@ -1309,6 +1312,7 @@
     }
   }
   defineMap({
+    maxBots: 11,   // (a big map holds more bots in practice)
     id: "summit", name: "Summit", blurb: "A wooded valley round a stepped hill with a lookout on top: trails and ramps up three tiers, ladders up the last cliff, boulders and trees for cover. The home of King of the Hill.",
     half: 45, floor: "grass", wallH: 12, targetMaxY: 14, boundary: "rock", rampSurface: "dirt",
     theme: { skyTop: 0x4a93e0, skyHorizon: 0xe3edf3, fog: [75, 230], sunDir: [40, 60, -20], sunColor: 0xfff1d6, sunIntensity: 0.95, hemi: [0xdfe9f5, 0x4c5f33, 0.5],
@@ -1340,6 +1344,7 @@
   const CANYON_BOULDERS = [[-20, -30, 4.5], [18, -34, 5], [-24, -10, 6], [22, -8, 5.5], [-18, 12, 5], [20, 14, 6.5], [-22, 32, 4.5], [16, 30, 5]];
   defineMap({
     flags: [[0, -40, 0.25], [0, 40, 0.25]],
+    maxBots: 11,   // (a big map holds more bots in practice)
     id: "canyon", name: "Canyon", blurb: "A desert canyon with a river down the middle: long sight lines, a flag spot at each end, ledges up both sides (take the ramps or the mega pads) and two bridges.",
     half: 50, floor: "dirt", wallH: 24, targetMaxY: 12, boundary: "rock", rampSurface: "dirt",
     theme: { skyTop: 0x6aa4da, skyHorizon: 0xf3dcb4, fog: [75, 230], sunDir: [-35, 50, 25], sunColor: 0xfff0d0, sunIntensity: 1.05, hemi: [0xf5e6d0, 0x8a6a4a, 0.6],
@@ -1359,7 +1364,7 @@
   // Rooftops: a street canyon between two rows of buildings at three heights, with ladders, ramps, bridges and pads between the levels
   const roofBox = (x, z, top, w, d, h) => [x, top + h / 2, z, w, h, d, "deck"];   // a crate or vent standing on a roof
   defineMap({
-    flags: [[-13.5, 0, 10], [13.5, 0, 10]],
+    flags: [[0, -31.5, 0.25], [0, 31.5, 0.25]],   // at the two ends of the street
     id: "rooftops", name: "Rooftops", blurb: "Three levels: a street canyon, rooftops at 6.5 and 10 m, climbed by ladders, ramps and lifts, linked by bridges and a shuttle. Hold forward at a ladder to climb.",
     half: 34, floor: "slab", wallH: 14, targetMaxY: 13,
     theme: { skyTop: 0x4f86d4, skyHorizon: 0xf1e2c8, fog: [55, 170], sunDir: [35, 40, -25], sunColor: 0xfff3dc, sunIntensity: 1.1, hemi: [0xe6f0ff, 0x6d6f73, 0.6],
@@ -1389,14 +1394,14 @@
     decks: [[0, 6.25, -18.5, 10, 3, "deck", true], [0, 6.25, 18.5, 10, 3, "deck", true]],
     // a ramp from each yard up to a low roof (the roof edge is at 6.5 m)
     ramps: [[-27, -18.5, "x", 4, 10, 6.25, 1], [27, -18.5, "x", 4, 10, 6.25, -1], [-27, 18.5, "x", 4, 10, 6.25, 1], [27, 18.5, "x", 4, 10, 6.25, -1]],
-    pads: [[0, -29, "normal"], [0, 29, "normal"], [-27, -7, "mega"], [-27, 7, "mega"], [27, -7, "mega"], [27, 7, "mega"], [-12, -12.3, "mega", 6.5], [12, 12.3, "mega", 6.5]],   // the last two sit on the low roofs: run off one to reach the tall roof
+    pads: [[0, -25, "normal"], [0, 25, "normal"], [-27, -7, "mega"], [-27, 7, "mega"], [27, -7, "mega"], [27, 7, "mega"], [-12, -12.3, "mega", 6.5], [12, 12.3, "mega", 6.5]],   // the last two sit on the low roofs: run off one to reach the tall roof
     // [x, z, facing x, facing z, bottom, top]: on the street walls up to each roof, and on the yard side of the tall buildings
     ladders: [
       [-5, -22, 1, 0, 0.25, 6.5], [-5, 0, 1, 0, 0.25, 10], [-5, 22, 1, 0, 0.25, 6.5],
       [5, -22, -1, 0, 0.25, 6.5], [5, 0, -1, 0, 0.25, 10], [5, 22, -1, 0, 0.25, 6.5],
       [-22, 0, -1, 0, 0.25, 10], [22, 0, 1, 0, 0.25, 10],
     ],
-    spawns: [[-29, -27], [29, -27], [-29, 27], [29, 27], [-29, 0], [29, 0], [0, -26], [0, 26], [-13, -9], [13, -9], [-13, 9], [13, 9], [0, -4], [0, 4], [-30, -14], [30, 14], [-30, 14], [30, -14]],
+    spawns: [[-29, -27], [29, -27], [-29, 27], [29, 27], [-29, 0], [29, 0], [0, -21], [0, 21], [-13, -9], [13, -9], [-13, 9], [13, 9], [0, -4], [0, 4], [-30, -14], [30, 14], [-30, 14], [30, -14]],
     playerSpawn: [0, 26],
   });
 
@@ -7628,6 +7633,10 @@
       if (net.ctf && currentMap.flags) { const b = ctfBase(me.team); pool = SPAWNS.slice().sort((a, c) => Math.hypot(a[0] - b.x, a[1] - b.z) - Math.hypot(c[0] - b.x, c[1] - b.z)).slice(0, 6); }
       else pool = spawnSides()[me.team];
       if (!pool.length) pool = SPAWNS;
+    } else if (teamed && net.ctf && currentMap.flags) {   // capture the flag, a respawn: only on your own side of the map, or in the neutral middle band
+      const mine = ctfBase(me.team), theirs = ctfBase(1 - me.team), band = Math.hypot(mine.x - theirs.x, mine.z - theirs.z) * 0.2;
+      const own = SPAWNS.filter((s) => Math.hypot(s[0] - mine.x, s[1] - mine.z) - Math.hypot(s[0] - theirs.x, s[1] - theirs.z) <= band);
+      if (own.length) pool = own;
     }
     const now = nowMs();
     net.recentSpawns = (net.recentSpawns || []).filter((r) => now - r.t < 6000);
@@ -8089,6 +8098,8 @@
   };
   // hop: hops a second while strafing in a fight
   BOT_LEVELS.easy.hop = 0; BOT_LEVELS.medium.hop = 0.12; BOT_LEVELS.hard.hop = 0.3;
+  // sprint: the speed bonus a bot takes while it is travelling (to a target, a flag, the hill, a perch) and not in a burst of fire; it walks in a fight
+  BOT_LEVELS.easy.sprint = 1.2; BOT_LEVELS.medium.sprint = 1.3; BOT_LEVELS.hard.sprint = 1.4;
   // lag: how far behind a moving target a bot's aim trails, in seconds. A shot misses by (the target's sideways speed x this x a random share), so
   // standing still or running straight at a bot is easy to hit, strafing is hard, and flat-out strafing and jumping is only rarely hit
   BOT_LEVELS.easy.lag = 0.30; BOT_LEVELS.medium.lag = 0.20; BOT_LEVELS.hard.lag = 0.13;
@@ -8101,7 +8112,7 @@
   // one nudges a few numbers a little (prefer: how far it likes to fight, err: aim error, perch: how often it goes up high, retreat: backs
   // off from a fight below this health). Where everyone wants the same thing (the hill, the flag, a gun ladder, the range) there are none.
   const BOT_TRAITS = {
-    rusher: { prefer: 0.65, speed: 1.05, hop: 1.6 },
+    rusher: { prefer: 0.65, speed: 1.05, hop: 1.6, sprint: 1.05 },
     marksman: { prefer: 1.45, speed: 0.96, err: 0.85, perch: 0.5 },
     careful: { react: 0.9, retreat: 40 },
   };
@@ -8420,7 +8431,7 @@
     const T = ai.trait ? BOT_TRAITS[ai.trait] : null;
     let reactK = (T && T.react) || 1, errK = (T && T.err) || 1, preferK = (T && T.prefer) || 1, retreatHp = (T && T.retreat) || 0;
     const perchK = (T && T.perch) || 1;
-    ai.speedK = (T && T.speed) || 1; ai.hopK = (T && T.hop) || 1;
+    ai.speedK = (T && T.speed) || 1; ai.sprintK = (T && T.sprint) || 1; ai.hopK = (T && T.hop) || 1;
     if (net.koth && currentMap.hill && Math.hypot(p.x - currentMap.hill.x, p.z - currentMap.hill.z) < currentMap.hill.r * 1.1) { reactK *= BOT_MODE.koth.holdReact; errK *= BOT_MODE.koth.holdErr; }
     if (net.br) { preferK *= BOT_MODE.br.prefer; retreatHp = Math.max(retreatHp, BOT_MODE.br.retreatHp); }
     ai.reactK = reactK; ai.errK = errK;
@@ -8561,7 +8572,8 @@
     }
     if (stay) { mx = 0; mz = 0; }
     const ml = Math.hypot(mx, mz) || 1;
-    const speed = L.speed * ai.speedK * (ai.burstLeft > 0 ? 0.75 : 1);
+    const sprinting = navigating && !stay && ai.burstLeft <= 0 && !(los && dist < prefer + 4);   // (running to somewhere, not strafing in a fight)
+    const speed = L.speed * ai.speedK * (ai.burstLeft > 0 ? 0.75 : sprinting ? (L.sprint || 1) * ai.sprintK : 1);
     _botFrom.set(p.x, p.y, p.z);
     _botPos.set(p.x + (mx / ml) * speed * dt, p.y, p.z + (mz / ml) * speed * dt);
     if (ai.boost) {   // thrown down a launch strip: a burst of speed that fades
@@ -8728,8 +8740,14 @@
     requestPlay();
   }
   document.getElementById("range-start").addEventListener("click", (e) => { e.stopPropagation(); startRange(); });
+  // how many bots a practice game may have: 7 on most maps, 11 on the big ones, 4 more in a battle royale (15 at most); the range keeps 5 dummies
+  function botCap(mapChoice, modeId) {
+    if (modeId === "range") return 5;
+    const m = MAPS[mapChoice], base = (m && m.maxBots) || 7;
+    return modeId === "br" ? Math.min(15, base + 4) : base;
+  }
   function mpBots() {
-    const count = Math.max(1, Math.min(setup.practice.bots, MAX_PLAYERS - 1));
+    const count = Math.max(1, Math.min(setup.practice.bots, botCap(setup.practice.map, setup.practice.mode)));
     const level = setup.practice.mode === "range" ? "dummy" : setup.practice.level;
     chooseMode(setup.practice.mode, setup.practice.limit); chooseMap(setup.practice.map); chooseRules(setup.practice.rules); net.id = "you"; net.practice = true; net.botCount = count;
     mpEnter("host", "BOTS");
@@ -8774,7 +8792,7 @@
       if (LIMITS.includes(s.limit)) d.limit = s.limit;
       if (s.rules && typeof s.rules === "object") { d.rules = cleanRules(s.rules); if (s.rules.siphon === undefined) d.rules.siphon = siphonDefault(d.mode); }
       if (kind === "practice") {
-        if (Number.isInteger(s.bots) && s.bots >= 1 && s.bots <= 5) d.bots = s.bots;
+        if (Number.isInteger(s.bots) && s.bots >= 1 && s.bots <= 15) d.bots = s.bots;
         if (BOT_LEVEL_IDS.includes(s.level)) d.level = s.level;
       }
     }
@@ -8859,7 +8877,12 @@
     document.getElementById("ps-bots-row").hidden = ps.kind !== "practice";
     document.getElementById("ps-level-row").hidden = ps.kind !== "practice" || mode.id === "range";
     document.getElementById("ps-bots-label").textContent = mode.id === "range" ? "Dummies" : "Bots";
-    if (ps.kind === "practice") { document.getElementById("ps-bots").value = String(d.bots); document.getElementById("ps-level").value = d.level; }
+    if (ps.kind === "practice") {
+      const cap = botCap(d.map, d.mode), sel = document.getElementById("ps-bots");
+      if (d.bots > cap) d.bots = cap;
+      if (sel.options.length !== cap) { sel.textContent = ""; for (let i = 1; i <= cap; i++) sel.add(new Option(String(i))); }
+      sel.value = String(d.bots); document.getElementById("ps-level").value = d.level;
+    }
     const race = mode.id === "race" || mode.id === "range";   // (no fighting there: only gravity matters)
     for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"], ["ps-r-siphon", "siphon"]]) {
       document.getElementById(id).checked = !!d.rules[key];
