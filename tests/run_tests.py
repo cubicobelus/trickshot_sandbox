@@ -1336,7 +1336,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, grenades, throwFrag, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
+            "hostStartRound, hostDealDamage, grenades, throwFrag, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
