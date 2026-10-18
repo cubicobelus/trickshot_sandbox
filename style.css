@@ -510,6 +510,9 @@
     font: 12.5px 'Segoe UI', Arial, sans-serif; cursor: pointer; }
   .rp-buttons button:hover { border-color: #ffd24a; color: #fff; }
   #rp-exit { color: #ff9d3b; }
+  #nade-chip { position: absolute; left: 18px; bottom: 78px; background: rgba(15,15,20,0.7); border: 1px solid rgba(255,255,255,0.18); color: #cfd6de; padding: 4px 10px; border-radius: 6px; font-size: 12px; letter-spacing: 0.04em; pointer-events: none; }
+  #nade-chip.ready { border-color: #ffd24a; color: #ffe9a8; }
+  #nade-chip[hidden] { display: none; }
   #map-tip { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); max-width: min(560px, 90vw); text-align: center; background: rgba(15,15,20,0.85);
     border: 1px solid #ffd24a; color: #ffe9a8; padding: 6px 14px; border-radius: 6px; font-size: 13px; pointer-events: none; z-index: 5; }
   #map-tip[hidden] { display: none; }

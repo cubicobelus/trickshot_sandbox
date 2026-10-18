@@ -273,7 +273,7 @@
     ["inspect", "Inspect weapon", ["KeyF"]], ["gun", "Switch to gun", ["Digit1"]],
     ["knife", "Switch to knife", ["Digit2"]], ["swap", "Swap gun / knife", ["KeyQ", "Wheel"]],
     ["replay", "Watch last hit", ["KeyP"]], ["grapple", "Grappling hook", ["KeyE"]],
-    ["map", "Show map (hold)", ["KeyM"]], ["leaderboard", "Show leaderboard (hold)", ["KeyL"]],
+    ["map", "Show map (hold)", ["KeyM"]], ["leaderboard", "Show leaderboard (hold)", ["KeyL"]], ["grenade", "Throw grenade", ["KeyG"]],
   ];
   const ACTION_IDS = ACTIONS.map((a) => a[0]);
   const ACTION_NAMES = Object.fromEntries(ACTIONS.map((a) => [a[0], a[1]]));
@@ -2652,7 +2652,21 @@
   const launcherMag = addPart(launcherGroup, new THREE.CylinderGeometry(0.02, 0.02, 0.1, 10), accentMat, 0, 0.055, -0.06, HALF_PI, 0, 0);   // the grenade in the breech (the "magazine")
   addPart(launcherMag, new THREE.SphereGeometry(0.02, 10, 6), accentMat, 0, 0.05, 0);
 
-  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup, launcherGroup];
+  // ---- RPG: a long tube with a flared rear, a pistol grip, a sight and a warhead poking out of the front (the "magazine": it goes after a shot and a new one is loaded) ----
+  const rpgGroup = new THREE.Group();
+  addPart(rpgGroup, new THREE.CylinderGeometry(0.05, 0.05, 0.85, 14), metalDark, 0, 0, -0.05, HALF_PI, 0, 0);          // the tube
+  addPart(rpgGroup, new THREE.CylinderGeometry(0.075, 0.05, 0.14, 14), metalMid, 0, 0, 0.42, HALF_PI, 0, 0);           // flared rear
+  addPart(rpgGroup, new THREE.CylinderGeometry(0.058, 0.058, 0.05, 14), metalMid, 0, 0, -0.45, HALF_PI, 0, 0);         // front collar
+  addPart(rpgGroup, new THREE.BoxGeometry(0.04, 0.1, 0.045), gripMat, 0, -0.1, 0.1, 0.3, 0, 0);                        // grip
+  addPart(rpgGroup, new THREE.BoxGeometry(0.035, 0.07, 0.04), gripMat, 0, -0.08, -0.2, -0.1, 0, 0);                    // front hand grip
+  addPart(rpgGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.062, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
+  addPart(rpgGroup, new THREE.BoxGeometry(0.008, 0.04, 0.008), metalDark, 0, 0.075, -0.4);                             // front post
+  addPart(rpgGroup, new THREE.BoxGeometry(0.03, 0.035, 0.016), metalDark, 0, 0.07, 0.15);                              // rear sight block
+  const rpgMag = new THREE.Group(); rpgMag.position.set(0, 0, -0.5); rpgGroup.add(rpgMag);
+  addPart(rpgMag, new THREE.CylinderGeometry(0.04, 0.04, 0.12, 12), accentMat, 0, 0, 0, HALF_PI, 0, 0);                 // the warhead's body
+  addPart(rpgMag, new THREE.ConeGeometry(0.04, 0.12, 12), accentMat, 0, 0, -0.12, -HALF_PI, 0, 0);                      // and its nose
+
+  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup, launcherGroup, rpgGroup];
   for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   // everything held sits under one root, so left-handed is a single mirror (three.js
   // flips face winding for negative scale, so the models still render correctly)
@@ -3021,9 +3035,35 @@
       },
       inspectDuration: 1.8, inspects: GUN_INSPECTS,
     },
+    rpg: {
+      name: "RPG", group: rpgGroup, projectile: "rocket",   // projectile "rocket": a fast rocket that goes off on whatever it touches (BLAST.rpg)
+      restPos: new THREE.Vector3(0.2, -0.2, -0.4), restRot: new THREE.Euler(0.03, -0.07, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.105, -0.3), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.78, fireRate: 1.2, auto: false, isMelee: false, usesAmmo: true,
+      magSize: 1, ammoLabel: "ROCKETS", pellets: 1, spread: 0.01, spreadAds: 0.002, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
+      scoreScale: 0.8, recoil: 1.4, kick: 1.1, flashScale: 1.2, brake: false, smoke: 1.4,
+      action: "none", ejectOnShot: false, casing: "small",
+      muzzle: new THREE.Vector3(0, 0, -0.52), eject: new THREE.Vector3(0.03, 0.03, 0.0),
+      sound: { recording: "shotgun", rate: 0.5, lowcut: 40, length: 1.4, gain: 1.0 },
+      recoilKick: { up: 0.05, grow: 0, side: 0.008, max: 0.07, recover: 6, hold: 0.12 },
+      mag: rpgMag, magRestY: rpgMag.position.y,
+      reload: {
+        time: 3.0, magOut: 0.2, magDrop: 0.35, magUp: 1.3, magSeat: 2.0, travel: 0.1, rise: 0.12, charge: 1.2,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.35, -0.05,  0.05,  0.14, 0.10, -0.45],
+          [1.40, -0.05,  0.04,  0.10, 0.10, -0.50],
+          [2.00, -0.05,  0.06,  0.14, 0.10, -0.42],
+          [2.40, -0.02,  0.02,  0.08, 0.04,  0.15],
+          [2.70, -0.02,  0.02,  0.08, 0.04,  0.15],
+          [3.00,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 1.8, inspects: GUN_INSPECTS,
+    },
   };
   // (a gun travels over the network as its place in this list, so new guns go at the end, after the knife, never in the middle)
-  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg", "crossbow", "launcher"];
+  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg"];
   for (const id of WEAPON_ORDER) {
     const w = WEAPONS[id];
     w.id = id;
@@ -3835,6 +3875,7 @@
     lmg: '<rect x="1" y="9" width="8" height="4.5" rx="1"/><rect x="8" y="7.5" width="20" height="7.5" rx="1"/><rect x="27" y="8.5" width="22" height="5.5" rx="1"/><rect x="48" y="9.3" width="12" height="2.2"/><rect x="30" y="5.5" width="6" height="2.5"/><circle cx="17" cy="17.5" r="6"/><path d="M33 14 L48 14 L47 17.5 L34 16 Z"/>',
     crossbow: '<rect x="2" y="10" width="9" height="3" rx="1"/><rect x="10" y="9" width="34" height="5" rx="1"/><path d="M40 11.5 L47 11.5 L57 4 L59 6.5 L50 13 L59 19.5 L57 22 L47 14.5 L40 14.5 Z"/><rect x="18" y="14" width="5" height="8" rx="1"/><rect x="11" y="7.3" width="38" height="1.6"/>',
     dmr: '<rect x="0.5" y="10.2" width="6" height="2.4" rx="0.8"/><rect x="5" y="8.8" width="26" height="5.2" rx="1"/><rect x="30" y="7.8" width="17" height="7" rx="1"/><rect x="34" y="5.2" width="9" height="2.6" rx="1"/><path d="M34 14.5 L40 14.5 L39.5 21 L34.5 21 Z"/><path d="M43 14.5 L47 14.5 L47.5 19.5 L44 19.5 Z"/><rect x="46" y="9" width="8" height="3.2" rx="1"/><rect x="53" y="7.5" width="9" height="8.5" rx="1.5"/>',
+    rpg: '<rect x="6" y="9" width="40" height="6" rx="2"/><path d="M2 7 L8 9 L8 15 L2 17 Z"/><path d="M46 8 L58 12 L46 16 Z"/><rect x="22" y="15" width="5" height="7" rx="1"/><rect x="32" y="15" width="4" height="5" rx="1"/>',
     launcher: '<rect x="2" y="10" width="10" height="4" rx="1"/><rect x="11" y="8.5" width="22" height="6.5" rx="1"/><rect x="30" y="7" width="26" height="8" rx="3"/><rect x="54" y="6" width="6" height="10" rx="1"/><rect x="18" y="14" width="5" height="7" rx="1"/><rect x="27" y="15" width="11" height="3.5" rx="1"/>',
     knife: '<path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/><rect x="41" y="8" width="3" height="9" rx="1"/><rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/><circle cx="60.5" cy="12.4" r="2.4"/>',
   };
@@ -3883,6 +3924,7 @@
     lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: [{ id: "drum", name: "Big drum", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "A bigger drum: 150 rounds, slower reload" }], bipod: AT_BIPOD, sling: AT_SLING },
     crossbow: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4] },
     launcher: {},   // nothing to fit (yet)
+    rpg: {},
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
         { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" },
@@ -3943,6 +3985,7 @@
     lmg: { muzzle: [-0.86, 0.012, 0.0185, 0.3], optic: [0.02, 0.067], under: [-0.40, -0.021] },
     crossbow: { optic: [0.0, 0.047] },
     launcher: {},
+    rpg: {},
     pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024], mag: [-0.06, 0, 0, 0.03, 0.045] },
   };
   const AV_MOUNT = {
@@ -3956,6 +3999,7 @@
     lmg: { muzzle: [-1.0, 0.005, 0.015, 0.26], optic: [-0.05, 0.05], under: [-0.55, -0.05] },
     crossbow: { optic: [-0.1, 0.0425] },
     launcher: {},
+    rpg: {},
     pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
   };
   // a laser's beam: thick and bright by the gun, thinner and fainter further out until it is gone (the materials are shared)
@@ -4203,7 +4247,7 @@
   }
   // the menu shows a few favourites, plus your gun if it is not one of them, and a More button for the rest
   const QUICK_GUNS = ["rifle", "ar", "shotgun"];
-  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg"]], ["Machine guns", ["lmg"]], ["Specialty", ["crossbow", "launcher"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol"]]];
+  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg"]], ["Machine guns", ["lmg"]], ["Specialty", ["crossbow", "launcher", "rpg"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol"]]];
   const loadoutEl = document.getElementById("loadout"), loadoutPopupEl = document.getElementById("loadout-popup"), loadoutGroupsEl = document.getElementById("loadout-groups");
   const gunButton = (id) => {
     const b = document.createElement("button");
@@ -4665,7 +4709,7 @@
     ["forward", (g) => (g.axes[1] || 0) < -0.35], ["back", (g) => (g.axes[1] || 0) > 0.35], ["left", (g) => (g.axes[0] || 0) < -0.35], ["right", (g) => (g.axes[0] || 0) > 0.35],
     ["jump", (g) => padBtn(g, 0)], ["slide", (g) => padBtn(g, 1)], ["reload", (g) => padBtn(g, 2)], ["swap", (g) => padBtn(g, 3)],
     ["grapple", (g) => padBtn(g, 4)], ["knife", (g) => padBtn(g, 5)], ["aim", (g) => padBtn(g, 6)], ["fire", (g) => padBtn(g, 7)],
-    ["sprint", (g) => padBtn(g, 10)], ["inspect", (g) => padBtn(g, 12)], ["leaderboard", (g) => padBtn(g, 8)], ["map", (g) => padBtn(g, 14)],
+    ["sprint", (g) => padBtn(g, 10)], ["inspect", (g) => padBtn(g, 12)], ["leaderboard", (g) => padBtn(g, 8)], ["map", (g) => padBtn(g, 14)], ["grenade", (g) => padBtn(g, 11)],
   ];
   const held = (action) => BINDS[action].some((b) => b && inputHeld(b)) || !!pad.held[action];
   // Ctrl+D (bookmark), Ctrl+S and friends would fire mid-game while Ctrl is a game key, so they're blocked then
@@ -4676,6 +4720,7 @@
     jump() { jumpQueued = true; jumpQueueTimer = 0.12; },
     reload() { startReload(); },
     inspect() { startInspect(); },
+    grenade() { throwFrag(); },
     gun() { if (ggKnife()) return; switchWeapon(SETTINGS.loadout); },
     knife() { switchWeapon("knife"); },
     swap(e, wheel) { if (ggKnife()) return; switchWeapon((wheel ? vm.pending || vm.current : vm.current) === "knife" ? SETTINGS.loadout : "knife"); },
@@ -4787,7 +4832,7 @@
       k(move.every((l) => l.length === 1) ? move.join("") : move.join(" ")) + " move" + dot + k(L("jump")) + " jump" + dot +
       k(L("sprint")) + " sprint" + dot + k(L("slide")) + " slide" + dot + k(L("reload")) + " reload" + dot +
       k(L("inspect")) + " inspect" + dot + k(L("grapple")) + " grapple" + dot + k(L("replay")) + " replay last hit<br>" +
-      k(L("fire")) + " attack" + dot + k(L("aim")) + " aim / throw knife" + dot + k(gunKnife) + " gun / knife";
+      k(L("fire")) + " attack" + dot + k(L("aim")) + " aim / throw knife" + dot + k(L("grenade")) + " grenade" + dot + k(gunKnife) + " gun / knife";
     loadoutWeapons().forEach((w, i) => {
       const el = hotbarSlots[w] && hotbarSlots[w].querySelector(".num");
       if (el) el.textContent = hotbarKey(i === 0 ? "gun" : "knife");
@@ -6373,7 +6418,8 @@
       if (net.active) sendToHost({ t: "swing" });
       return;
     }
-    if (w.projectile === "grenade") { fireGrenade(w); return; }
+    if (w.projectile === "grenade") { fireBlastGun("launcher", w); return; }
+    if (w.projectile === "rocket") { fireBlastGun("rpg", w); return; }
     if (w.projectile) { fireBolt(w); return; }
     fireGun(w);
     if (w.burst) { vm.burstQueue = w.burst - 1; vm.burstTimer = w.burstGap; }   // the rest of the burst follows by itself
@@ -6605,40 +6651,53 @@
   }
 
   // ======================================================================
-  // GRENADES (the launcher): a ball that flies in an arc, bounces off walls and floors, and goes off after GREN_FUSE seconds or on touching a
-  // target or a player. The blast hurts everything within GREN_R (full in the middle, a quarter at the edge), shoves you away (a blast jump)
-  // and never hurts you. Only the thrower works out who it hit; the host checks the claim ("blast" message) and does the damage.
+  // BLASTS: the launcher's grenade, the thrown grenade (G) and the RPG's rocket. A grenade flies in an arc, bounces off walls and floors and
+  // goes off after its fuse or on touching a target or a player; a rocket flies nearly straight and goes off on anything. The blast hurts
+  // everything inside its radius (full in the middle, less at the edge, DAMAGE[kind]), shoves you away (a blast jump) and never hurts you.
+  // Only the thrower works out who it hit; the host checks the claim ("blast" message) and does the damage itself.
   // ======================================================================
-  const GREN_SPEED = 26, GREN_GRAVITY = 16, GREN_FUSE = 1.8, GREN_R = 4.5, GREN_BOUNCE = 0.45, GREN_RADIUS = 0.12, GREN_PUSH = 15;
+  const BLAST = {
+    launcher: { speed: 26, gravity: 16, fuse: 1.8, bounce: 0.45, push: 15 },
+    frag: { speed: 22, gravity: 16, fuse: 2.2, bounce: 0.5, push: 12 },
+    rpg: { speed: 44, gravity: 1.5, fuse: 4, rocket: true, push: 18 },
+  };
+  const BLAST_CODE = { launcher: 2, frag: 3, rpg: 4 }, BLAST_KIND = { 2: "launcher", 3: "frag", 4: "rpg" };   // how a blast travels over the network
+  const GREN_RADIUS = 0.12, FRAG_COOLDOWN = 9;
   const grenades = [];
   const grenGeo = new THREE.SphereGeometry(GREN_RADIUS, 12, 8), grenMat = new THREE.MeshStandardMaterial({ color: 0x4a6342, roughness: 0.6, metalness: 0.3 });
   const grenBand = new THREE.MeshStandardMaterial({ color: 0xd9b43a, roughness: 0.6 });
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 10; i++) {
     const mesh = new THREE.Mesh(grenGeo, grenMat);
     mesh.add(new THREE.Mesh(new THREE.TorusGeometry(GREN_RADIUS * 0.98, 0.012, 6, 14), grenBand));
+    const rocket = new THREE.Group();   // a rocket points down -Z
+    const rb = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.45, 10), metalMid); rb.rotation.x = HALF_PI; rocket.add(rb);
+    const rn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 10), accentMat); rn.rotation.x = -HALF_PI; rn.position.z = -0.29; rocket.add(rn);
+    for (const rot of [0, HALF_PI]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.012, 0.1), metalDark); fin.position.z = 0.2; fin.rotation.z = rot; rocket.add(fin); }
+    rocket.visible = false; mesh.add(rocket);
     mesh.visible = false; mesh.frustumCulled = false;
     scene.add(mesh);
-    grenades.push({ mesh, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", remote: false, snap: null });
+    grenades.push({ mesh, rocket, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", remote: false, snap: null, kind: "launcher", smokeT: 0 });
   }
   const blastFx = [];   // expanding balls of light
   for (let i = 0; i < 4; i++) {
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffa530, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
     mesh.visible = false; mesh.frustumCulled = false;
     scene.add(mesh);
-    blastFx.push({ mesh, age: 99 });
+    blastFx.push({ mesh, age: 99, r: 4.5 });
   }
-  function retireGrenade(g) { g.state = "idle"; g.mesh.visible = false; }
-  function playBlastSound(pos) {
-    const d = pos.distanceTo(yawObject.position), lvl = 1 / (1 + d / 22);
+  function retireGrenade(g) { g.state = "idle"; g.mesh.visible = false; g.rocket.visible = false; }
+  function playBlastSound(pos, r) {
+    const d = pos.distanceTo(yawObject.position), lvl = (1 / (1 + d / 22)) * (r > 5 ? 1.15 : 1);
     noiseHit(260, 0.7, 0.95 * SETTINGS.volGuns * lvl, 0.55, "lowpass", 0, 0.4, true);
     tone("sine", 120, 28, 0.85 * SETTINGS.volGuns * lvl, 0.5, 0, 0.3);
     noiseHit(2400, 1.0, 0.25 * SETTINGS.volGuns * lvl, 0.12, "highpass", 0, 0.2);
   }
-  function showBlast(pos) {
+  function showBlast(pos, r) {
+    r = r || 4.5;
     burst(pos, 0xffa020, 26); burst(pos, 0xffe08a, 10); burst(pos, 0x555555, 12);
     const fx = blastFx.reduce((a, b) => (a.age > b.age ? a : b));
-    fx.age = 0; fx.mesh.position.copy(pos); fx.mesh.visible = true;
-    playBlastSound(pos);
+    fx.age = 0; fx.r = r; fx.mesh.position.copy(pos); fx.mesh.visible = true;
+    playBlastSound(pos, r);
   }
   function updateBlastFx(dt) {
     for (const fx of blastFx) {
@@ -6646,13 +6705,28 @@
       fx.age += dt;
       const t = fx.age / 0.35;
       if (t >= 1) { fx.mesh.visible = false; continue; }
-      fx.mesh.scale.setScalar(GREN_R * (0.25 + 0.75 * Math.sqrt(t)));
+      fx.mesh.scale.setScalar(fx.r * (0.25 + 0.75 * Math.sqrt(t)));
       fx.mesh.material.opacity = 0.55 * (1 - t) * (1 - t);
     }
   }
-  const blastDamage = (d) => { const b = DAMAGE.launcher; return b.max - (b.max - b.min) * Math.min(Math.max(d / b.radius, 0), 1); };
-  function fireGrenade(w) {
-    if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); }
+  const blastDamage = (d, kind) => { const b = DAMAGE[kind] || DAMAGE.launcher; return b.max - (b.max - b.min) * Math.min(Math.max(d / b.radius, 0), 1); };
+  function launchBlast(kind, origin, dir) {
+    const B = BLAST[kind];
+    const g = grenades.find((q) => q.state === "idle") || grenades.reduce((a, b) => (a.age > b.age ? a : b));
+    g.kind = kind; g.mesh.position.copy(origin); g.from.copy(origin);
+    g.vel.copy(dir).multiplyScalar(B.speed);
+    if (!B.rocket) g.vel.add(player.velocity);
+    g.snap = trickState(); g.remote = false; g.age = 0; g.smokeT = 0; g.state = "flying";
+    g.mesh.visible = true; g.rocket.visible = !!B.rocket; g.mesh.children[0].visible = !B.rocket;
+    g.mesh.geometry = B.rocket ? emptyGeo : grenGeo;
+    g.mesh.rotation.set(0, 0, 0);
+    if (B.rocket) g.mesh.lookAt(_gLookAt.copy(origin).add(dir));
+    if (net.active) mpSendThrow(g.mesh.position, g.vel, BLAST_CODE[kind]);
+    return g;
+  }
+  const emptyGeo = new THREE.BufferGeometry(), _gLookAt = new THREE.Vector3();
+  function fireBlastGun(kind, w) {   // the launcher and the RPG
+    if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); if (w.mag && w.magSize === 1) w.mag.visible = false; }
     playShotSound(w.sound, w.soundMult || 1);
     vm.recoil = w.recoil; vm.camKick = w.kick; vm.camKickYaw = Math.random() * 2 - 1;
     vm.flashTimer = FLASH_TIME;
@@ -6664,43 +6738,70 @@
       _aimDir.applyAxisAngle(_sprRight, extraPitch).applyAxisAngle(_worldUp, extraYaw);
     }
     spreadDirection(_aimDir, w.spread + (w.spreadAds - w.spread) * ads, _pelletDir);
-    camera.getWorldPosition(_boltAim).addScaledVector(_pelletDir, 30);
+    camera.getWorldPosition(_boltAim).addScaledVector(_pelletDir, kind === "rpg" ? 60 : 30);
     muzzleFlash.getWorldPosition(_muzzleWorld);
     _boltDir.copy(_boltAim).sub(_muzzleWorld).normalize();   // from the muzzle, toward where the crosshair points
-    const g = grenades.find((q) => q.state === "idle") || grenades.reduce((a, b) => (a.age > b.age ? a : b));
-    g.mesh.position.copy(_muzzleWorld);
-    g.from.copy(_muzzleWorld);
-    g.vel.copy(_boltDir).multiplyScalar(GREN_SPEED).add(player.velocity);
-    g.snap = trickState(); g.remote = false; g.age = 0; g.state = "flying";
-    g.mesh.visible = true;
-    if (net.active) mpSendThrow(g.mesh.position, g.vel, 2);
+    launchBlast(kind, _muzzleWorld, _boltDir);
     if (run.state === "live") run.shots++;
-    if (!net.active) { const gs = gunStat("launcher"); gs.shots++; stat("shots"); }
+    if (!net.active) { const gs = gunStat(kind); gs.shots++; stat("shots"); }
     w.lastFiredAt = elapsedTime;
     addRecoil(w);
     if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
   }
-  function spawnRemoteGrenade(o, v) {
+  // the thrown grenade (G): an overarm lob on a cooldown, whatever you are holding
+  let fragCd = 0;
+  const nadeChip = document.getElementById("nade-chip");
+  function fragAllowed() { return !(replay.active || localDead || (net.active && (net.phase !== "play" || countingDown() || net.gungame))); }
+  function throwFrag() {
+    if (fragCd > 0 || !fragAllowed()) return;
+    fragCd = FRAG_COOLDOWN;
+    camera.getWorldDirection(_thFwd);
+    camera.getWorldQuaternion(_camQuat);
+    _thRight.set(1, 0, 0).applyQuaternion(_camQuat);
+    camera.getWorldPosition(_gLookAt).addScaledVector(_thFwd, 0.5).addScaledVector(_thRight, 0.12 * handSign());
+    _gLookAt.y -= 0.12;
+    _boltDir.copy(_thFwd); _boltDir.y += 0.14; _boltDir.normalize();   // a little lob
+    launchBlast("frag", _gLookAt, _boltDir);
+    tone("triangle", 330, 120, 0.12 * SETTINGS.volGear, 0.14, 0, 0.1);
+    noiseHit(1800, 1.0, 0.10 * SETTINGS.volGear, 0.09, "highpass", 0, 0.1);
+    if (run.state === "live") run.shots++;
+  }
+  function updateNadeChip(dt) {
+    if (fragCd > 0) fragCd = Math.max(0, fragCd - dt);
+    if (!nadeChip) return;
+    const show = fragAllowed();
+    nadeChip.hidden = !show;
+    if (!show) return;
+    const label = bindLabel("grenade");
+    nadeChip.className = fragCd > 0 ? "wait" : "ready";
+    nadeChip.textContent = label + " \u00b7 GRENADE " + (fragCd > 0 ? fragCd.toFixed(1) + "s" : "READY");
+  }
+  function spawnRemoteGrenade(o, v, kind) {
     const g = grenades.find((q) => q.state === "idle") || grenades.reduce((a, b) => (a.age > b.age ? a : b));
+    const B = BLAST[kind] || BLAST.launcher;
+    g.kind = BLAST[kind] ? kind : "launcher";
     g.mesh.position.set(o[0], o[1], o[2]); g.from.copy(g.mesh.position);
     g.vel.set(v[0], v[1], v[2]);
-    g.snap = null; g.remote = true; g.age = 0; g.state = "flying";
-    g.mesh.visible = true;
+    g.snap = null; g.remote = true; g.age = 0; g.smokeT = 0; g.state = "flying";
+    g.mesh.visible = true; g.rocket.visible = !!B.rocket; g.mesh.children[0].visible = !B.rocket;
+    g.mesh.geometry = B.rocket ? emptyGeo : grenGeo;
+    g.mesh.rotation.set(0, 0, 0);
+    if (B.rocket) g.mesh.lookAt(_gLookAt.copy(g.mesh.position).add(g.vel));
   }
   // the blast, for the thrower: what it hurts, scores and claims
   const _blastC = new THREE.Vector3();
   function explodeGrenade(g) {
-    const pos = g.mesh.position.clone();
+    const pos = g.mesh.position.clone(), kind = g.kind, D = DAMAGE[kind], R = D.radius, B = BLAST[kind];
     retireGrenade(g);
-    showBlast(pos);
-    const w = WEAPONS.launcher;
+    showBlast(pos, R);
+    const w = WEAPONS[kind] || WEAPONS.launcher;   // (a thrown grenade scores like the launcher's)
     let hitCount = 0;
     // you: shoved away from the middle of the blast
     _blastC.set(yawObject.position.x, player.feetY + 0.9, yawObject.position.z).sub(pos);
     const pd = _blastC.length();
-    if (pd < GREN_R * 1.4 && !localDead) {
+    if (pd < R * 1.4 && !localDead) {
       _blastC.y += 0.35 * Math.max(pd, 0.5); _blastC.normalize();
-      const push = GREN_PUSH * (1 - pd / (GREN_R * 1.4));
+      const push = B.push * (1 - pd / (R * 1.4));
       player.velocity.addScaledVector(_blastC, push);
       if (player.velocity.y > 2.5) { player.onGround = false; player.sliding = false; }
     }
@@ -6709,7 +6810,7 @@
       for (const t of targets) {
         if (!t.userData.alive) continue;
         const dist = t.position.distanceTo(pos);
-        if (dist - t.userData.hitRadius > GREN_R || !botLineClear(pos.x, pos.y, pos.z, t.position.x, t.position.y, t.position.z)) continue;
+        if (dist - t.userData.hitRadius > R || !botLineClear(pos.x, pos.y, pos.z, t.position.x, t.position.y, t.position.z)) continue;
         hitCount++;
         if (run.state === "live") run.shotsHit++;
         stat("shotsHit");
@@ -6719,9 +6820,9 @@
     if (!net.active) {
       for (const pr of props) {   // crates get thrown about
         const d = pr.mesh.position.distanceTo(pos);
-        if (d < GREN_R) { _blastC.copy(pr.mesh.position).sub(pos).normalize(); pr.velocity.addScaledVector(_blastC, 12 * (1 - d / GREN_R)); pr.velocity.y += 4; }
+        if (d < R) { _blastC.copy(pr.mesh.position).sub(pos).normalize(); pr.velocity.addScaledVector(_blastC, 12 * (1 - d / R)); pr.velocity.y += 4; }
       }
-      if (hitCount) { const gs = gunStat("launcher"); gs.hits++; announceUnlocks("launcher", gs.hits); }
+      if (hitCount && WEAPONS[kind]) { const gs = gunStat(kind); gs.hits++; announceUnlocks(kind, gs.hits); }
     }
     // other players: claimed to the host, which works out the damage itself
     if (net.active) {
@@ -6732,7 +6833,7 @@
           if (q.id === net.id || !q.alive) continue;
           if (net.teams && me && q.team === me.team) continue;
           const d = Math.hypot(q.x - pos.x, q.y + 0.9 - pos.y, q.z - pos.z);
-          if (d > GREN_R || !botLineClear(pos.x, pos.y, pos.z, q.x, q.y + 0.9, q.z)) continue;
+          if (d > R || !botLineClear(pos.x, pos.y, pos.z, q.x, q.y + 0.9, q.z)) continue;
           const res = computeMultipliers(_pseudoTarget, g.from.distanceTo(_blastC.set(q.x, q.y + 0.9, q.z)), false, 0, g.snap, false, w);
           pendingRes.set(q.id, res);
           burst(_blastC, 0xff5555, 8);
@@ -6740,7 +6841,7 @@
           hitCount++;
         }
       }
-      sendToHost({ t: "blast", o: [r2(pos.x), r2(pos.y), r2(pos.z)], h: hits });
+      sendToHost({ t: "blast", k: kind, o: [r2(pos.x), r2(pos.y), r2(pos.z)], h: hits });
     }
     if (!hitCount) breakStreak();
     else flashCrosshair();
@@ -6748,20 +6849,23 @@
   const _grRay = new THREE.Ray(), _grStep = new THREE.Vector3(), _grHit = new THREE.Vector3(), _grTmp = new THREE.Vector3(), _grNormal = new THREE.Vector3();
   function updateGrenades(dt) {
     updateBlastFx(dt);
+    updateNadeChip(dt);
     if (!groundBoxes) groundBoxes = groundMeshes.map((m) => new THREE.Box3().setFromObject(m));
     for (const g of grenades) {
       if (g.state === "idle") continue;
+      const B = BLAST[g.kind];
       g.age += dt;
-      if (g.remote) { if (g.age > GREN_FUSE + 0.5) { retireGrenade(g); continue; } }   // (the thrower's blast message normally ends it)
-      else if (g.age >= GREN_FUSE) { explodeGrenade(g); continue; }
-      g.vel.y -= GREN_GRAVITY * dt;
+      if (g.remote) { if (g.age > B.fuse + 0.5) { retireGrenade(g); continue; } }   // (the thrower's blast message normally ends it)
+      else if (g.age >= B.fuse) { explodeGrenade(g); continue; }
+      g.vel.y -= B.gravity * dt;
       _grStep.copy(g.vel).multiplyScalar(dt);
       const len = _grStep.length();
       if (len < 1e-6) continue;
       const o = g.mesh.position;
       _grRay.origin.copy(o); _grRay.direction.copy(_grStep).divideScalar(len);
       const d = _grRay.direction;
-      let hitDist = len + GREN_RADIUS, kind = null;
+      const rad = B.rocket ? 0.05 : GREN_RADIUS;
+      let hitDist = len + rad, kind = null;
       for (const list of [wallBoxes, groundBoxes]) for (const box of list) {
         const p = rayHitBox(_grRay, box, _grTmp);
         if (!p) continue;
@@ -6776,23 +6880,28 @@
         let direct = false;
         for (const t of targets) {
           if (!t.userData.alive || (net.active && net.sub !== "race")) continue;
-          if (t.position.distanceTo(o) < t.userData.hitRadius + GREN_RADIUS + len) {
+          if (t.position.distanceTo(o) < t.userData.hitRadius + rad + len) {
             const ox = t.position.x - o.x, oy = t.position.y - o.y, oz = t.position.z - o.z, proj = Math.min(Math.max(ox * d.x + oy * d.y + oz * d.z, 0), len);
-            if (Math.hypot(ox - d.x * proj, oy - d.y * proj, oz - d.z * proj) < t.userData.hitRadius + GREN_RADIUS && proj < hitDist) { direct = true; hitDist = proj; }
+            if (Math.hypot(ox - d.x * proj, oy - d.y * proj, oz - d.z * proj) < t.userData.hitRadius + rad && proj < hitDist) { direct = true; hitDist = proj; }
           }
         }
         if (net.active && net.sub === "dm" && net.phase === "play") {
           raycaster.ray.origin.copy(o); raycaster.ray.direction.copy(d);
-          const pres = raycastPlayers(Math.min(hitDist, len + GREN_RADIUS));
+          const pres = raycastPlayers(Math.min(hitDist, len + rad));
           if (pres.p && pres.dist < hitDist) { direct = true; hitDist = pres.dist; }
         }
         if (direct) { o.addScaledVector(d, Math.max(hitDist, 0)); explodeGrenade(g); continue; }
       }
-      if (kind === "wall" && hitDist <= len + GREN_RADIUS) {   // bounce
-        o.copy(_grHit).addScaledVector(_grNormal, GREN_RADIUS + 0.01);
+      if (kind === "wall" && hitDist <= len + rad) {
+        if (B.rocket) {   // a rocket goes off on whatever it touches
+          o.copy(_grHit).addScaledVector(_grNormal, 0.15);
+          if (g.remote) retireGrenade(g); else explodeGrenade(g);
+          continue;
+        }
+        o.copy(_grHit).addScaledVector(_grNormal, rad + 0.01);   // a grenade bounces
         const vn = g.vel.dot(_grNormal);
         if (vn < 0) {
-          g.vel.addScaledVector(_grNormal, -(1 + GREN_BOUNCE) * vn);
+          g.vel.addScaledVector(_grNormal, -(1 + B.bounce) * vn);
           _grTmp.copy(g.vel).addScaledVector(_grNormal, -g.vel.dot(_grNormal));   // the sliding part
           g.vel.addScaledVector(_grTmp, -0.2);
           if (_grNormal.y > 0.6 && Math.abs(vn) < 2.2) { g.vel.y = 0; g.vel.x *= 0.85; g.vel.z *= 0.85; }   // settles on the floor
@@ -6800,7 +6909,11 @@
         continue;
       }
       o.add(_grStep);
-      g.mesh.rotation.x += dt * 9; g.mesh.rotation.z += dt * 5;
+      if (B.rocket) {
+        g.mesh.lookAt(_gLookAt.copy(o).add(g.vel));
+        g.smokeT -= dt;
+        if (g.smokeT <= 0) { g.smokeT = 0.03; spawnSmoke(o, 0, 0.3, 0, 0.9, 0.18, 0.8, 0.4); }
+      } else { g.mesh.rotation.x += dt * 9; g.mesh.rotation.z += dt * 5; }
     }
   }
 
@@ -7013,7 +7126,9 @@
     dmr: { body: 60, head: 100 },
     burst: { body: 28, head: 42 },   // per round, three rounds a pull
     lmg: { body: 24, head: 34 },
-    launcher: { blast: 1, max: 100, min: 25, radius: 4.5 },   // splash: full damage in the middle of the blast, a quarter at its edge (a ball 4.5 m wide each way)
+    launcher: { blast: 1, max: 100, min: 25, radius: 4.5 },
+    rpg: { blast: 1, max: 100, min: 30, radius: 5.2 },
+    frag: { blast: 1, max: 90, min: 20, radius: 4 },   // the thrown grenade (G), not a gun   // splash: full damage in the middle of the blast, a quarter at its edge (a ball 4.5 m wide each way)
     crossbow: { body: 55, head: 100 },   // like the Deagle: two body hits or one to the head; it flies, so it has to be led
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };
@@ -7266,6 +7381,9 @@
     } else if (id === "lmg") {       // LMG: thick, a big box magazine and a long barrel
       P(B(0.075, 0.1, 0.75), dark, 0, 0, -0.3); P(B(0.03, 0.03, 0.3), steel, 0, 0.005, -0.85);
       P(B(0.12, 0.16, 0.2), steel, 0, -0.17, -0.15); P(B(0.05, 0.09, 0.25), dark, 0, 0, 0.2);
+    } else if (id === "rpg") {       // RPG: a long tube with a warhead in the front
+      P(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 12), dark, 0, 0.02, -0.15, HP); P(new THREE.ConeGeometry(0.05, 0.14, 12), steel, 0, 0.02, -0.66, -HP);
+      P(B(0.04, 0.1, 0.05), steel, 0, -0.1, 0.1);
     } else if (id === "launcher") {  // launcher: a short body and one fat barrel
       P(B(0.065, 0.085, 0.55), dark, 0, 0, -0.1); P(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 12), steel, 0, 0.01, -0.55, HP);
       P(B(0.07, 0.06, 0.16), wood, 0, -0.06, -0.3); P(B(0.05, 0.09, 0.2), dark, 0, 0, 0.25);
@@ -7463,7 +7581,7 @@
   }
 
   // ---------------- events: what actually happens on every peer ----------------
-  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", launcher: "exploded", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned" };
+  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", launcher: "exploded", rpg: "rocketed", frag: "fragged", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned" };
   function feedLine(html) {
     const el = document.createElement("div");
     el.innerHTML = html;
@@ -7603,7 +7721,7 @@
   function lifeLogReset() { lifeLog.dealt.clear(); lifeLog.taken.clear(); lifeLog.hits.clear(); }
   function deathRecap(k, m) {
     const lines = [];
-    const gun = WEAPONS[m.w] ? WEAPONS[m.w].name : m.knife ? "Knife" : "";
+    const gun = WEAPONS[m.w] ? WEAPONS[m.w].name : m.w === "frag" ? "Grenade" : m.knife ? "Knife" : "";
     let dist = null;
     if (k) dist = Math.hypot(k.x - yawObject.position.x, k.z - yawObject.position.z);
     lines.push((gun ? gun : "A hit") + (m.head && !m.knife ? " (headshot)" : "") + (dist !== null ? " from " + Math.round(dist) + " m" : ""));
@@ -7750,7 +7868,7 @@
       case "throw": {
         const o = vec3(m.o, 1000), v = vec3(m.v, 200);
         if (m.id !== net.id && o && v) {
-          if (m.b === 2) { spawnRemoteGrenade(o, v); playRemoteShot("launcher", _tmpV1.set(o[0], o[1], o[2]).distanceTo(yawObject.position)); }
+          if (BLAST_KIND[m.b]) { spawnRemoteGrenade(o, v, BLAST_KIND[m.b]); if (WEAPONS[BLAST_KIND[m.b]]) playRemoteShot(BLAST_KIND[m.b], _tmpV1.set(o[0], o[1], o[2]).distanceTo(yawObject.position)); }
           else spawnRemoteKnife(o, v, m.b === 1);
         }
         break;
@@ -7759,7 +7877,7 @@
       case "blast": {
         const o = vec3(m.o, 1000);
         if (!o || m.id === net.id) break;
-        showBlast(_tmpV1.set(o[0], o[1], o[2]));
+        showBlast(_tmpV1.set(o[0], o[1], o[2]), DAMAGE[m.k] && DAMAGE[m.k].blast ? DAMAGE[m.k].radius : 4.5);
         for (const g of grenades) if (g.state === "flying" && g.remote && g.mesh.position.distanceTo(_tmpV1) < 3) { retireGrenade(g); break; }
         break;
       }
@@ -7893,7 +8011,7 @@
     sendToHost({ t: "shot", g: vm.current, o: [r2(origin.x), r2(origin.y), r2(origin.z)], d: [r2(dir.x * 1000) / 1000, r2(dir.y * 1000) / 1000, r2(dir.z * 1000) / 1000], l: r2(dist) });
   }
   function mpSendThrow(pos, vel, bolt) {
-    sendToHost({ t: "throw", o: [r2(pos.x), r2(pos.y), r2(pos.z)], v: [r2(vel.x), r2(vel.y), r2(vel.z)], b: bolt === 2 ? 2 : bolt ? 1 : 0 });
+    sendToHost({ t: "throw", o: [r2(pos.x), r2(pos.y), r2(pos.z)], v: [r2(vel.x), r2(vel.y), r2(vel.z)], b: typeof bolt === "number" ? bolt : bolt ? 1 : 0 });
   }
   // a thrown knife from another player: it flies and sticks on every screen, but only its owner scores with it
   function spawnRemoteKnife(o, v, bolt) {
@@ -8199,12 +8317,13 @@
       case "throw": {
         const o = vec3(m.o, 1000), v = vec3(m.v, 200);
         const now = nowMs();
-        if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap) {
+        const nade = m.b === 2 || m.b === 3 || m.b === 4;
+        if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap && !(m.b === 3 && (net.gungame || now - (p.lastFragAt || -1e9) < 6000))) {
           if (now - p.lastThrowAt > THROW_WINDOW) p.knivesUp = 0;
-          if (m.b !== 1 && m.b !== 2) p.knivesUp = Math.min(p.knivesUp + 1, 4);   // (a crossbow bolt is claimed through its shot message, a grenade through its blast, not as a knife)
-          if (m.b === 2) { p.grenades = Math.min((p.grenades || 0) + 1, 4); p.lastGrenadeAt = now; p.lastGrenadeO = o; }
+          if (m.b !== 1 && !nade) p.knivesUp = Math.min(p.knivesUp + 1, 4);   // (a crossbow bolt is claimed through its shot message, a grenade through its blast, not as a knife)
+          if (nade) { p.grenades = Math.min((p.grenades || 0) + 1, 4); p.lastGrenadeAt = now; p.lastGrenadeO = o; if (m.b === 3) p.lastFragAt = now; }
           p.lastThrowAt = now; p.lastFireAt = now; p.protectUntil = 0;
-          hostBroadcast({ t: "throw", id: fromId, o, v, b: m.b === 2 ? 2 : m.b === 1 ? 1 : 0 });
+          hostBroadcast({ t: "throw", id: fromId, o, v, b: nade || m.b === 1 ? m.b : 0 });
         }
         break;
       }
@@ -8230,7 +8349,8 @@
         const L = p.lastGrenadeO;
         if (L && Math.hypot(o[0] - L[0], o[1] - L[1], o[2] - L[2]) > 160) break;
         p.grenades--;
-        hostBroadcast({ t: "blast", id: fromId, o });
+        const bk = m.k === "frag" || m.k === "rpg" ? m.k : "launcher";
+        hostBroadcast({ t: "blast", id: fromId, o, k: bk });
         const done = new Set();
         for (const h of (Array.isArray(m.h) ? m.h : []).slice(0, 8)) {
           const v = h && net.players.get(h.v);
@@ -8239,8 +8359,8 @@
           if (net.teams && v.team === p.team) continue;
           if (now < v.protectUntil) continue;
           const d = Math.hypot(v.x - o[0], v.y + 0.9 - o[1], v.z - o[2]);
-          if (d > DAMAGE.launcher.radius + 2) continue;   // (a little slack: the host's picture of a moving player is a bit old)
-          hostDealDamage(p, v, blastDamage(Math.min(d, DAMAGE.launcher.radius)), { g: "launcher", pts: Math.max(0, Math.min(Number(h.pts) || 0, 20000)), tags: Array.isArray(h.tags) ? h.tags : [], head: false });
+          if (d > DAMAGE[bk].radius + 2) continue;   // (a little slack: the host's picture of a moving player is a bit old)
+          hostDealDamage(p, v, blastDamage(Math.min(d, DAMAGE[bk].radius), bk), { g: bk, pts: Math.max(0, Math.min(Number(h.pts) || 0, 20000)), tags: Array.isArray(h.tags) ? h.tags : [], head: false });
         }
         break;
       }
@@ -8440,7 +8560,7 @@
   // bots go through the same health, damage, regeneration, kill feed and scoreboard as real players do.
   // Their positions are moved here; a shot is resolved by working out where its aim lands on the target.
   // ======================================================================
-  const BOT_GUNS = GUNS.filter((id) => id !== "launcher");   // (bots do not lob grenades)
+  const BOT_GUNS = GUNS.filter((id) => id !== "launcher" && id !== "rpg");   // (bots do not fire blast weapons)
   const BOT_NAMES = ["Rex", "Nova", "Blitz", "Echo", "Vega"];
   // react: seconds before a bot starts shooting at something it sees; err: aim error in degrees; turn: rad/s;
   // head: how often it goes for the head; speed: u/s; burst: shots per burst for automatics; pause: seconds between bursts
@@ -9516,7 +9636,7 @@
     const id = vm.current, w = WEAPONS[id], d = DAMAGE[id];
     let html = "<b>" + (w ? w.name : id) + "</b><br>";
     if (d && d.pellet) html += "per pellet " + d.pellet + " (" + Math.round(d.pellet * d.headMult) + " head) \u00b7 " + d.pellets + " pellets<br>full damage to " + d.near + " m, " + Math.round(d.farMult * 100) + "% by " + d.far + " m";
-    else if (d && d.blast) html += "blast " + d.max + " in the middle, " + d.min + " at " + d.radius + " m<br>goes off after about " + GREN_FUSE + " s or on a direct hit";
+    else if (d && d.blast) html += "blast " + d.max + " in the middle, " + d.min + " at " + d.radius + " m" + (BLAST[id] && BLAST[id].rocket ? "<br>flies fast and goes off on anything it touches" : "<br>goes off after about " + (BLAST[id] || BLAST.launcher).fuse + " s or on a direct hit");
     else if (d) html += "body " + d.body + " \u00b7 head " + d.head + "<br>" + Math.ceil(100 / d.body) + " body hit" + (Math.ceil(100 / d.body) === 1 ? "" : "s") + " or " + Math.ceil(100 / d.head) + " head hit" + (Math.ceil(100 / d.head) === 1 ? "" : "s") + " to kill" + (d.far ? "<br>full damage to " + d.near + " m, " + Math.round(d.farMult * 100) + "% by " + d.far + " m" : "");
     else if (id === "knife") html += "swing " + KNIFE_SWING_DMG + " \u00b7 throw " + KNIFE_THROW_DMG + " body, " + KNIFE_THROW_HEAD_DMG + " head";
     rangeInfoEl.innerHTML = html;
