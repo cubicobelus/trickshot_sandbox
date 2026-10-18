@@ -1067,17 +1067,17 @@ def test_launcher(browser, base):
         step(page, 40)
         hp = page.evaluate("""() => {
           const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
-          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0; bot.hp = 100;
-          bot.x = me.x + 12; bot.z = me.z; bot.y = me.y;
+          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0; bot.hp = 100; me.alive = true; me.hp = 100;
+          bot.x = me.x + 2; bot.z = me.z; bot.y = me.y;
           return bot.hp;
         }""")
         step(page, 2)
         page.evaluate("""() => {
           const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), g = D.grenades[3];
-          g.mesh.position.set(bot.x + 1, bot.y + 0.9, bot.z); g.from.copy(g.mesh.position);
+          g.mesh.position.set(bot.x - 1, bot.y + 0.9, bot.z); g.from.copy(g.mesh.position);
           g.vel.set(0, 0, 0); g.age = 0; g.remote = false; g.snap = D.stats && null; g.state = "flying"; g.mesh.visible = true;
         }""")
-        page.evaluate("""() => { const D = window.__dbg, me = D.net.players.get('you'); me.grenades = 1; me.lastGrenadeAt = 1e15; me.lastGrenadeO = [0, 0, 0]; }""")
+        page.evaluate("""() => { const D = window.__dbg, me = D.net.players.get('you'); me.grenades = 1; me.lastGrenadeAt = 1e15; me.alive = true; me.hp = 100; me.lastGrenadeO = [0, 0, 0]; }""")
         page.evaluate("window.__dbg.grenades[3].age = 1.79")
         step(page, 6)
         hp2 = page.evaluate("[...window.__dbg.net.players.values()].find((p) => p.bot).hp")
@@ -1144,11 +1144,11 @@ def test_blasts(browser, base):
         for kind, age, lo, hi in (("frag", 2.19, 68, 78), ("rpg", 3.99, 82, 92)):
             page.evaluate("""([kind, age]) => {
               const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
-              D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0; bot.hp = 100; bot.alive = true;
-              bot.x = me.x + 12; bot.z = me.z; bot.y = me.y;
-              me.grenades = 1; me.lastGrenadeAt = 1e15; me.lastGrenadeO = [0, 0, 0];
+              D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0; bot.hp = 100; me.alive = true; me.hp = 100; bot.alive = true;
+              bot.x = me.x + 2; bot.z = me.z; bot.y = me.y;
+              me.grenades = 1; me.lastGrenadeAt = 1e15; me.alive = true; me.hp = 100; me.lastGrenadeO = [0, 0, 0];
               const g = D.grenades[4];
-              g.kind = kind; g.mesh.position.set(bot.x + 1, bot.y + 0.9, bot.z); g.from.copy(g.mesh.position);
+              g.kind = kind; g.mesh.position.set(bot.x - 1, bot.y + 0.9, bot.z); g.from.copy(g.mesh.position);
               g.vel.set(0, 0, 0); g.age = age; g.remote = false; g.snap = null; g.state = "flying"; g.mesh.visible = true;
             }""", [kind, age])
             step(page, 4)

@@ -6751,7 +6751,7 @@
   }
   // the thrown grenade (G): an overarm lob on a cooldown, whatever you are holding
   let fragCd = 0, fragCharge = -1;   // fragCharge: seconds G has been held (-1: not charging); the longer you hold it, the further it goes
-  const FRAG_CHARGE_TIME = 1.1, FRAG_MIN_SPEED = 9, FRAG_MAX_SPEED = 36;
+  const FRAG_CHARGE_TIME = 1.1, FRAG_MIN_SPEED = 6, FRAG_MAX_SPEED = 36;
   const nadeChip = document.getElementById("nade-chip");
   function fragAllowed() { return !(replay.active || localDead || (net.active && (net.phase !== "play" || countingDown() || net.gungame))); }
   function startFragCharge() { if (fragCd <= 0 && fragAllowed()) fragCharge = 0; }
