@@ -1077,7 +1077,7 @@ def test_launcher(browser, base):
           g.mesh.position.set(bot.x + 1, bot.y + 0.9, bot.z); g.from.copy(g.mesh.position);
           g.vel.set(0, 0, 0); g.age = 0; g.remote = false; g.snap = D.stats && null; g.state = "flying"; g.mesh.visible = true;
         }""")
-        page.evaluate("""() => { const D = window.__dbg, me = D.net.players.get('you'); me.grenades = 1; me.lastGrenadeAt = performance.now(); me.lastGrenadeO = [0, 0, 0]; }""")
+        page.evaluate("""() => { const D = window.__dbg, me = D.net.players.get('you'); me.grenades = 1; me.lastGrenadeAt = 1e15; me.lastGrenadeO = [0, 0, 0]; }""")
         page.evaluate("window.__dbg.grenades[3].age = 1.79")
         step(page, 6)
         hp2 = page.evaluate("[...window.__dbg.net.players.values()].find((p) => p.bot).hp")
@@ -1110,8 +1110,13 @@ def test_blasts(browser, base):
         age = page.evaluate("Math.max(...window.__dbg.grenades.map((g) => g.age))")
         check("the rocket goes off on the first wall or floor it meets, well before its 4 s are up", page.evaluate("window.__dbg.grenades.every((g) => g.state === 'idle')") and age < 3.5, f"{age:.2f} s")
         # G throws a grenade, then waits
-        page.keyboard.press("KeyG")
+        page.keyboard.down("KeyG")
+        step(page, 20)
+        mid = page.inner_text("#nade-chip")
+        page.keyboard.up("KeyG")
         step(page, 3)
+        short_v = page.evaluate("(() => { const g = window.__dbg.grenades.find((q) => q.state === 'flying' && q.kind === 'frag'); return g ? Math.hypot(g.vel.x, g.vel.y, g.vel.z) : 0; })()")
+        check("holding G shows a charge bar and releasing throws", "release" in mid.lower() and short_v > 9, f"{mid.encode('ascii', 'replace').decode()} / {short_v:.1f} u/s")
         thrown = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying' && g.kind === 'frag').length")
         chip = page.inner_text("#nade-chip")
         check("G throws a grenade and the chip counts the cooldown down", thrown == 1 and "s" in chip.lower() and "ready" not in chip.lower(), f"{thrown}, {chip}")
@@ -1122,6 +1127,12 @@ def test_blasts(browser, base):
         step(page, 700)
         chip2 = page.inner_text("#nade-chip")
         check("after the cooldown the chip says READY", "ready" in chip2.lower(), chip2)
+        page.keyboard.down("KeyG")
+        step(page, 100)
+        page.keyboard.up("KeyG")
+        step(page, 2)
+        long_v = page.evaluate("(() => { const g = window.__dbg.grenades.find((q) => q.state === 'flying' && q.kind === 'frag'); return g ? Math.hypot(g.vel.x, g.vel.y, g.vel.z) : 0; })()")
+        check("a longer hold throws it much faster than a quick tap", long_v > short_v + 12, f"{short_v:.1f} -> {long_v:.1f} u/s")
         # in a room, each kind hurts a bot by its own numbers
         page.evaluate("__unlock()")
         step(page, 3)
@@ -1135,7 +1146,7 @@ def test_blasts(browser, base):
               const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
               D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0; bot.hp = 100; bot.alive = true;
               bot.x = me.x + 12; bot.z = me.z; bot.y = me.y;
-              me.grenades = 1; me.lastGrenadeAt = performance.now(); me.lastGrenadeO = [0, 0, 0];
+              me.grenades = 1; me.lastGrenadeAt = 1e15; me.lastGrenadeO = [0, 0, 0];
               const g = D.grenades[4];
               g.kind = kind; g.mesh.position.set(bot.x + 1, bot.y + 0.9, bot.z); g.from.copy(g.mesh.position);
               g.vel.set(0, 0, 0); g.age = age; g.remote = false; g.snap = null; g.state = "flying"; g.mesh.visible = true;

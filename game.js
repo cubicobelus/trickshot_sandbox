@@ -4720,7 +4720,7 @@
     jump() { jumpQueued = true; jumpQueueTimer = 0.12; },
     reload() { startReload(); },
     inspect() { startInspect(); },
-    grenade() { throwFrag(); },
+    grenade() { startFragCharge(); },
     gun() { if (ggKnife()) return; switchWeapon(SETTINGS.loadout); },
     knife() { switchWeapon("knife"); },
     swap(e, wheel) { if (ggKnife()) return; switchWeapon((wheel ? vm.pending || vm.current : vm.current) === "knife" ? SETTINGS.loadout : "knife"); },
@@ -4741,6 +4741,7 @@
     },
   };
   const onRelease = {
+    grenade() { releaseFrag(); },
     fire() { mouseHeld = false; },
     aim() {
       if (vm.wantADS && currentWeapon().canADS) playScopeSound(false);
@@ -6710,11 +6711,11 @@
     }
   }
   const blastDamage = (d, kind) => { const b = DAMAGE[kind] || DAMAGE.launcher; return b.max - (b.max - b.min) * Math.min(Math.max(d / b.radius, 0), 1); };
-  function launchBlast(kind, origin, dir) {
+  function launchBlast(kind, origin, dir, speed) {
     const B = BLAST[kind];
     const g = grenades.find((q) => q.state === "idle") || grenades.reduce((a, b) => (a.age > b.age ? a : b));
     g.kind = kind; g.mesh.position.copy(origin); g.from.copy(origin);
-    g.vel.copy(dir).multiplyScalar(B.speed);
+    g.vel.copy(dir).multiplyScalar(speed || B.speed);
     if (!B.rocket) g.vel.add(player.velocity);
     g.snap = trickState(); g.remote = false; g.age = 0; g.smokeT = 0; g.state = "flying";
     g.mesh.visible = true; g.rocket.visible = !!B.rocket; g.mesh.children[0].visible = !B.rocket;
@@ -6749,10 +6750,18 @@
     if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
   }
   // the thrown grenade (G): an overarm lob on a cooldown, whatever you are holding
-  let fragCd = 0;
+  let fragCd = 0, fragCharge = -1;   // fragCharge: seconds G has been held (-1: not charging); the longer you hold it, the further it goes
+  const FRAG_CHARGE_TIME = 1.1, FRAG_MIN_SPEED = 9, FRAG_MAX_SPEED = 36;
   const nadeChip = document.getElementById("nade-chip");
   function fragAllowed() { return !(replay.active || localDead || (net.active && (net.phase !== "play" || countingDown() || net.gungame))); }
-  function throwFrag() {
+  function startFragCharge() { if (fragCd <= 0 && fragAllowed()) fragCharge = 0; }
+  function releaseFrag() {
+    if (fragCharge < 0) return;
+    const power = Math.min(fragCharge / FRAG_CHARGE_TIME, 1);
+    fragCharge = -1;
+    throwFrag(FRAG_MIN_SPEED + (FRAG_MAX_SPEED - FRAG_MIN_SPEED) * power);
+  }
+  function throwFrag(speed) {
     if (fragCd > 0 || !fragAllowed()) return;
     fragCd = FRAG_COOLDOWN;
     camera.getWorldDirection(_thFwd);
@@ -6761,20 +6770,24 @@
     camera.getWorldPosition(_gLookAt).addScaledVector(_thFwd, 0.5).addScaledVector(_thRight, 0.12 * handSign());
     _gLookAt.y -= 0.12;
     _boltDir.copy(_thFwd); _boltDir.y += 0.14; _boltDir.normalize();   // a little lob
-    launchBlast("frag", _gLookAt, _boltDir);
+    launchBlast("frag", _gLookAt, _boltDir, speed || BLAST.frag.speed);
     tone("triangle", 330, 120, 0.12 * SETTINGS.volGear, 0.14, 0, 0.1);
     noiseHit(1800, 1.0, 0.10 * SETTINGS.volGear, 0.09, "highpass", 0, 0.1);
     if (run.state === "live") run.shots++;
   }
   function updateNadeChip(dt) {
     if (fragCd > 0) fragCd = Math.max(0, fragCd - dt);
+    if (fragCharge >= 0) { if (!pointerLocked || !fragAllowed() || fragCd > 0) fragCharge = -1; else fragCharge = Math.min(fragCharge + dt, FRAG_CHARGE_TIME); }
     if (!nadeChip) return;
     const show = fragAllowed();
     nadeChip.hidden = !show;
     if (!show) return;
     const label = bindLabel("grenade");
     nadeChip.className = fragCd > 0 ? "wait" : "ready";
-    nadeChip.textContent = label + " \u00b7 GRENADE " + (fragCd > 0 ? fragCd.toFixed(1) + "s" : "READY");
+    if (fragCharge >= 0) {   // charging: a bar that fills
+      const n = Math.round(fragCharge / FRAG_CHARGE_TIME * 10);
+      nadeChip.textContent = label + " · " + "■".repeat(n) + "□".repeat(10 - n) + " release to throw";
+    } else nadeChip.textContent = label + " · GRENADE " + (fragCd > 0 ? fragCd.toFixed(1) + "s" : "READY (hold to throw further)");
   }
   function spawnRemoteGrenade(o, v, kind) {
     const g = grenades.find((q) => q.state === "idle") || grenades.reduce((a, b) => (a.age > b.age ? a : b));
