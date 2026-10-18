@@ -1417,14 +1417,15 @@
   // up the side. Mirrored four ways: a flag yard at each end (z), a clear lane up the middle.
   const HARBOUR = { walls: [], decks: [], ramps: [], ladders: [], spawns: [] };
   {
-    // every container is the same size: 12 m long, 2.5 m wide, 2.6 m high (stacked ones 5.2). A container is a wall with a thin deck on its roof: the deck is what bots and ladders and ramps treat as a floor
-    const cbox = (x, z, w, d, col, y0, h) => [x, (y0 || 0) + (h || 2.6) / 2, z, w, h || 2.6, d, col];   // plain: cover you can still jump onto if low
-    const cont = (x, z, w, d, col, y0) => { const top = (y0 || 0) + 2.6; return { wall: [x, ((y0 || 0) + top - 0.5) / 2, z, w, top - 0.5 - (y0 || 0), d, col], deck: [x, top - 0.25, z, w, d, col, true] }; };
+    // every container is the same size: 12 m long, 2.5 m wide, 3.6 m high (stacked ones 7.2: taller than a real one, so a jump does not show you over it). A container is a wall with a thin deck on its roof: the deck is what bots and ladders and ramps treat as a floor
+    const CH = 3.6;
+    const cbox = (x, z, w, d, col, y0, h) => [x, (y0 || 0) + (h || CH) / 2, z, w, h || CH, d, col];   // plain: cover you can still jump onto if low
+    const cont = (x, z, w, d, col, y0) => { const top = (y0 || 0) + CH; return { wall: [x, ((y0 || 0) + top - 0.5) / 2, z, w, top - 0.5 - (y0 || 0), d, col], deck: [x, top - 0.25, z, w, d, col, true] }; };
     const quarter = {
       walls: [cbox(12, 29, 2.5, 12, "cred"), cbox(26, 10, 12, 2.5, "cgreen"), cbox(28, 24, 12, 2.5, "cyellow"), cbox(0, 38.5, 12, 2.5, "cred"), cbox(0, 14, 12, 2.5, "corange")],
-      conts: [cont(12, 14, 2.5, 12, "cblue"), cont(12, 29, 2.5, 12, "corange", 2.6)],
-      ramps: [[17.25, 14, "x", 3, 8, 2.35, -1]],
-      ladders: [[10.75, 29, -1, 0, 0.25, 5.2]],
+      conts: [cont(12, 14, 2.5, 12, "cblue"), cont(12, 29, 2.5, 12, "corange", CH)],
+      ramps: [[17.75, 14, "x", 3, 9, CH - 0.25, -1]],
+      ladders: [[10.75, 29, -1, 0, 0.25, CH * 2]],
       spawns: [[5, 27], [18, 33], [35, 35], [34, 16]],
     };
     for (const sx of [1, -1]) for (const sz of [1, -1]) {
