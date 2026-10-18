@@ -1335,6 +1335,67 @@ def test_gungame_bot_knife(browser, base):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_attach_extras(browser, base):
+    """The bipod, the sling and slugs: they show in the attachments window, change the gun's numbers, and a sling shortens the gun swap."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        page.keyboard.press("Backquote")
+        page.click('#dev-list button[data-dev="unlock"]')
+        page.keyboard.press("Backquote")
+        page.click("#attach-open")
+        page.wait_for_timeout(150)
+        def has(gun, opt):
+            page.click(f'#attach-guns button[data-gun="{gun}"]')
+            return page.query_selector(f'#attach-slots .at-opt[data-opt="{opt}"]') is not None
+        check("the LMG offers a bipod and a sling, the shotgun slugs, the AR a sling, the sniper neither",
+              has("lmg", "bipod") and has("lmg", "sling") and has("shotgun", "slug") and has("ar", "sling") and not has("rifle", "bipod"))
+        base_sg = page.evaluate("[window.__dbg.WEAPONS.shotgun.magSize, window.__dbg.WEAPONS.shotgun.spread]")
+        page.click('#attach-guns button[data-gun="shotgun"]')
+        page.click('#attach-slots .at-opt[data-opt="slug"]')
+        sg = page.evaluate("[window.__dbg.WEAPONS.shotgun.magSize, window.__dbg.WEAPONS.shotgun.spread]")
+        check("slugs hold 2 fewer shells and tighten the spread to a tenth", sg[0] == base_sg[0] - 2 and abs(sg[1] - base_sg[1] * 0.1) < 1e-6, f"{base_sg} -> {sg}")
+        page.click('#attach-slots .at-opt[data-opt="choke"]')   # another barrel replaces them
+        off = page.evaluate("window.__dbg.WEAPONS.shotgun.magSize")
+        check("another barrel replaces the slugs", off == base_sg[0], str(off))
+        page.click('#attach-guns button[data-gun="lmg"]')
+        page.click('#attach-slots .at-opt[data-opt="bipod"]')
+        page.click('#attach-slots .at-opt[data-opt="sling"]')
+        k = page.evaluate("[window.__dbg.WEAPONS.lmg.bipodK, window.__dbg.WEAPONS.lmg.swapK]")
+        check("the bipod and the sling set their numbers (steadier crouched, 35% faster swap)", abs(k[0] - 0.45) < 1e-6 and abs(k[1] - 0.65) < 1e-6, str(k))
+        page.click("#attach-close")
+        page.click("#start-btn")
+        step(page, 60)
+        page.keyboard.press("2")   # to the knife
+        step(page, 2)
+        dur = page.evaluate("window.__dbg.vm.switchDuration")
+        check("swapping to the knife takes 35% less time with a sling on the gun", abs(dur - 0.44 * 0.65) < 1e-6, str(dur))
+        check("the attachment extras run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_map_tips(browser, base):
+    """The first time you play a map, a one-line tip shows; the second time it does not."""
+    page, errors = open_page(browser, base + "/index.html", 800, 450)
+    page.click("#start-btn")
+    step(page, 20)
+    note = page.inner_text("#map-tip") if page.is_visible("#map-tip") else ""
+    check("the first play on a map shows its tip", "Arena" in note, note)
+    page.evaluate("__unlock()")
+    step(page, 3)
+    page.evaluate("document.getElementById('map-tip').hidden = true")
+    page.click("#start-btn")
+    step(page, 20)
+    check("the same map shows no tip the second time", not page.is_visible("#map-tip"))
+    seen = page.evaluate("localStorage.getItem('tsb-tips')")
+    check("the tip is remembered in this browser", seen is not None and "arena" in seen, str(seen))
+    check("no errors with map tips", not errors, "; ".join(errors[:2]))
+    page.close()
+
+
 def test_bot_extras(browser, base):
     """Bots sprint while travelling and walk in a fight; practice allows more bots on big maps and in a battle royale; capture the flag respawns stay on your side."""
     server, dbase, tmp = debug_site()
@@ -1528,7 +1589,7 @@ def test_spawns(browser, base):
           D.net.pendingCtf = false; D.net.pendingTeams = false;
           return out;
         }""")
-        check("capture the flag is on Courtyard, Foundry, Moonbase, Rooftops and Canyon only", sorted(r["id"] for r in ctf) == ["canyon", "courtyard", "foundry", "moonbase", "rooftops"], ", ".join(r["id"] for r in ctf))
+        check("capture the flag is on Courtyard, Foundry, Harbour, Moonbase, Rooftops and Canyon only", sorted(r["id"] for r in ctf) == ["canyon", "courtyard", "foundry", "harbour", "moonbase", "rooftops"], ", ".join(r["id"] for r in ctf))
         for r in ctf:
             check(f"{r['id']}: both teams open nearer their own flag, with no enemy within 10 m", r["wrong"] == 0 and r["nearEnemy"] >= 10, str(r))
             check(f"{r['id']}: a flag dropped in mid-air lands on the floor ({r['y']})", r["dropped"] and r["y"] == r["below"] and r["y"] < 11, str(r))
@@ -1594,10 +1655,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

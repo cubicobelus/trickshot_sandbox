@@ -510,6 +510,9 @@
     font: 12.5px 'Segoe UI', Arial, sans-serif; cursor: pointer; }
   .rp-buttons button:hover { border-color: #ffd24a; color: #fff; }
   #rp-exit { color: #ff9d3b; }
+  #map-tip { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); max-width: min(560px, 90vw); text-align: center; background: rgba(15,15,20,0.85);
+    border: 1px solid #ffd24a; color: #ffe9a8; padding: 6px 14px; border-radius: 6px; font-size: 13px; pointer-events: none; z-index: 5; }
+  #map-tip[hidden] { display: none; }
   #replay-note { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); background: rgba(15,15,20,0.85);
     border: 1px solid #ffd24a; color: #ffe9a8; padding: 6px 14px; border-radius: 6px; font-size: 13px; }
   #replay-note[hidden] { display: none; }

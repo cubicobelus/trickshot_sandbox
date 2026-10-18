@@ -643,6 +643,13 @@
       g.fillStyle = "rgba(0,0,0,0.45)";
       for (const [x, y] of [[0.08, 0.08], [0.92, 0.08], [0.08, 0.92], [0.92, 0.92]]) { g.beginPath(); g.arc(x * n, y * n, 4, 0, 7); g.fill(); }
     },
+    // a shipping container: corrugated ribs, a darker frame and a door end line
+    container(g, n, base) {
+      g.fillStyle = base || "#b3392f"; g.fillRect(0, 0, n, n);
+      for (let x = 0; x < n; x += 16) { g.fillStyle = "rgba(0,0,0,0.22)"; g.fillRect(x, 0, 5, n); g.fillStyle = "rgba(255,255,255,0.10)"; g.fillRect(x + 7, 0, 3, n); }
+      g.fillStyle = "rgba(0,0,0,0.38)"; g.fillRect(0, 0, n, 9); g.fillRect(0, n - 9, n, 9);
+      speckle(g, 500, n, 0.1, true);
+    },
     deck(g, n, base) {
       g.fillStyle = base || "#8d949c"; g.fillRect(0, 0, n, n);
       g.strokeStyle = "rgba(255,255,255,0.12)"; g.lineWidth = 2;
@@ -658,6 +665,7 @@
       g.restore();
     },
   };
+  for (const c of ["cred", "cblue", "cgreen", "corange", "cyellow"]) SURFACE_DRAW[c] = SURFACE_DRAW.container;   // (one painting, five paints: the map's palette gives the colour)
   const surfaceCanvases = {};
   // Materials a level makes are shared when they are the same (so identical walls and every tree use one), and cleared when the map changes
   const levelMats = new Map();
@@ -1403,6 +1411,45 @@
     ],
     spawns: [[-29, -27], [29, -27], [-29, 27], [29, 27], [-29, 0], [29, 0], [0, -21], [0, 21], [-13, -9], [13, -9], [-13, 9], [13, 9], [0, -4], [0, 4], [-30, -14], [30, 14], [-30, 14], [30, -14]],
     playerSpawn: [0, 26],
+  });
+
+  // Harbour: a container terminal. Rows of shipping containers make lanes and cover; some stand two high (ladders up), some have a ramp
+  // up the side. Mirrored four ways: a flag yard at each end (z), a clear lane up the middle.
+  const HARBOUR = { walls: [], decks: [], ramps: [], ladders: [], spawns: [] };
+  {
+    // a container is a wall with a thin deck on its roof: the deck is what bots and ladders and ramps treat as a floor
+    const cbox = (x, z, w, d, col, y0, h) => [x, (y0 || 0) + (h || 2.6) / 2, z, w, h || 2.6, d, col];   // plain: cover you can still jump onto if low
+    const cont = (x, z, w, d, col, y0) => { const top = (y0 || 0) + 2.6; return { wall: [x, ((y0 || 0) + top - 0.5) / 2, z, w, top - 0.5 - (y0 || 0), d, col], deck: [x, top - 0.25, z, w, d, col, true] }; };
+    const quarter = {
+      walls: [cbox(12, 29, 2.5, 12, "cred"), cbox(26, 10, 12, 2.5, "cgreen"), cbox(28, 24, 12, 2.5, "cyellow"), cbox(6, 35, 2.5, 8, "cred"), cbox(0, 14, 6, 2.5, "corange", 0, 1.4)],
+      conts: [cont(12, 14, 2.5, 12, "cblue"), cont(12, 29, 2.5, 12, "corange", 2.6)],
+      ramps: [[17.25, 14, "x", 3, 8, 2.35, -1]],
+      ladders: [[10.75, 29, -1, 0, 0.25, 5.2]],
+      spawns: [[5, 27], [18, 33], [35, 35], [34, 16]],
+    };
+    for (const sx of [1, -1]) for (const sz of [1, -1]) {
+      const mir = (w) => [w[0] * sx, w[1], w[2] * sz, w[3], w[4], w[5], w[6]];
+      for (const w of quarter.walls) if (!(w[0] === 0 && sx < 0)) HARBOUR.walls.push(mir(w));
+      for (const c of quarter.conts) { HARBOUR.walls.push(mir(c.wall)); HARBOUR.decks.push([c.deck[0] * sx, c.deck[1], c.deck[2] * sz, c.deck[3], c.deck[4], c.deck[5], true]); }
+      for (const r of quarter.ramps) HARBOUR.ramps.push([r[0] * sx, r[1] * sz, r[2], r[3], r[4], r[5], r[6] * sx]);
+      for (const l of quarter.ladders) HARBOUR.ladders.push([l[0] * sx, l[1] * sz, l[2] * sx, l[3] * sz, l[4], l[5]]);
+      for (const q of quarter.spawns) HARBOUR.spawns.push([q[0] * sx, q[1] * sz]);
+    }
+    HARBOUR.spawns.push([0, 24], [0, -24]);
+  }
+  defineMap({
+    flags: [[0, -35, 0.25], [0, 35, 0.25]],
+    id: "harbour", name: "Harbour", blurb: "A container terminal at sunset: rows of containers make lanes and cover, some stacked two high (ladders) and some with a ramp up the side. A flag yard at each end.",
+    half: 40, floor: "slab", wallH: 12, targetMaxY: 8,
+    theme: { skyTop: 0x4a7fc0, skyHorizon: 0xf7d9b4, fog: [45, 140], sunDir: [-40, 28, 30], sunColor: 0xffd9a8, sunIntensity: 1.0, hemi: [0xfbe3c8, 0x5e6368, 0.62],
+      surfaces: { slab: "#6d7378", concrete: "#a39d94", deck: "#7d848b", cred: "#b3392f", cblue: "#2f5f9e", cgreen: "#3a7d4f", corange: "#d9822b", cyellow: "#d6b13a" } },
+    walls: HARBOUR.walls,
+    decks: HARBOUR.decks,
+    ramps: HARBOUR.ramps,
+    pads: [],
+    ladders: HARBOUR.ladders,
+    spawns: HARBOUR.spawns,
+    playerSpawn: [0, 24],
   });
 
   const BASE_PHYS = { gravity: CFG.gravity, friction: CFG.friction, momentumFriction: CFG.momentumFriction, groundAccel: CFG.groundAccel, slideFriction: CFG.slideFriction, maxSpeed: CFG.maxSpeed, speedMultMax: CFG.speedMultMax };
@@ -2965,6 +3012,7 @@
     if (name === vm.current || vm.switchTimer > 0 || !WEAPONS[name]) return;
     vm.last = vm.current;
     vm.pending = name;
+    vm.switchDuration = 0.44 * Math.min(WEAPONS[vm.last].swapK || 1, WEAPONS[name].swapK || 1);   // a sling makes the swap quicker
     vm.switchTimer = vm.switchDuration;
     vm.swapped = false;
     vm.inspectTimer = 0;
@@ -3755,7 +3803,7 @@
   // ---- attachments: each gun has up to three slots; every option is a trade, and unlocks once you have landed `need` hits with that gun ----
   // fx: ads (aim-down-sights time), spread (hip), spreadAds, recoil, mag (size), reload (time), flash, sound (how loud), scopeFov (>1 wider)
   const ATTACH_SLOTS = {
-    optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip", barrel: "Barrel", mag: "Magazine", sights: "Sights",
+    optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip", barrel: "Barrel", mag: "Magazine", sights: "Sights", bipod: "Bipod", sling: "Sling",
   };
   const SUPPRESSOR = { id: "suppressor", name: "Suppressor", need: 20, fx: { flash: 0.2, sound: 0.45, recoil: 1.05 }, text: "Quieter, almost no flash; a touch more kick" };
   const AT_REDDOT = { id: "reddot", name: "Red dot", need: 10, fx: { ads: 0.85, spreadAds: 0.8 }, text: "Aims down sights 15% faster, tighter when aimed" };
@@ -3774,6 +3822,8 @@
     { id: "extmag", name: "Extended magazine", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "50% more rounds, slower reload" },
     { id: "fastmag", name: "Fast magazine", need: 80, fx: { reload: 0.8 }, text: "Reloads 20% faster" },
   ];
+  const AT_SLING = [{ id: "sling", name: "Sling", need: 25, fx: { swap: 0.65 }, text: "Switches to and from this gun 35% faster" }];
+  const AT_BIPOD = [{ id: "bipod", name: "Bipod", need: 35, fx: { bipod: 0.45, ads: 1.08 }, text: "Far steadier while crouched (the slide key), a touch slower to aim" }];
   const ATTACHMENTS = {
     rifle: {   // the sniper
       optic: [{ id: "scope-low", name: "Low-zoom scope", need: 10, fx: { ads: 0.8, scopeFov: 1.4 }, text: "Scopes in 20% faster, a wider view (a quickscope's friend)" },
@@ -3782,16 +3832,17 @@
       stock: [{ id: "stock-light", name: "Light stock", need: 30, fx: { ads: 0.9, recoil: 1.08 }, text: "Aims 10% faster, a little more kick" },
         { id: "stock-heavy", name: "Heavy stock", need: 65, fx: { recoil: 0.85, ads: 1.1 }, text: "Steadier, slower to aim" }],
     },
-    ar: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
-    ak: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
-    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
-    dmr: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS },
-    burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
-    lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: [{ id: "drum", name: "Big drum", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "A bigger drum: 150 rounds, slower reload" }] },
+    ar: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
+    ak: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
+    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
+    dmr: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS, bipod: AT_BIPOD, sling: AT_SLING },
+    burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
+    lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: [{ id: "drum", name: "Big drum", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "A bigger drum: 150 rounds, slower reload" }], bipod: AT_BIPOD, sling: AT_SLING },
     crossbow: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4] },
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
-        { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" }],
+        { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" },
+        { id: "slug", name: "Slugs", need: 60, fx: { spread: 0.1, spreadAds: 0.1, mag: 0.67 }, text: "Every pellet flies as one: a tight, heavy shot that carries, with 2 fewer shells" }],
       mag: [{ id: "tube", name: "Extended tube", need: 35, fx: { mag: 1.34, reload: 1.1 }, text: "Two more shells, slower to reload" }],
     },
     pistol: {   // the Deagle
@@ -3939,6 +3990,20 @@
         add(new THREE.BoxGeometry(0.03, 0.022, len * 0.8), AT_STEEL, 0, yc - h / 2 + 0.011, zb - len * 0.4);
         add(new THREE.BoxGeometry(0.05, h * 0.95, 0.03), AT_STEEL, 0, yc, zb - 0.015);
       }
+      else if (id === "bipod" && M.under) {   // a mount block under the fore-end and two legs swung forward and down
+        const [z, y] = M.under;
+        add(new THREE.BoxGeometry(0.04, 0.02, 0.045), AT_STEEL, 0, y - 0.008, z + 0.03);
+        for (const side of [-1, 1]) {
+          const leg = add(new THREE.CylinderGeometry(0.0055, 0.004, 0.11, 8), AT_STEEL, side * 0.02, y - 0.05, z - 0.01, 0.9);
+          leg.rotation.z = side * -0.12;
+        }
+      } else if (id === "sling" && M.under) {   // a swivel under the fore-end, a strap along it and a loop hanging down
+        const [z, y] = M.under;
+        add(new THREE.BoxGeometry(0.016, 0.014, 0.016), AT_STEEL, 0, y - 0.006, z - 0.03);
+        add(new THREE.BoxGeometry(0.02, 0.006, 0.22), AT_RUBBER, 0, y - 0.012, z + 0.08);
+        const loop = add(new THREE.TorusGeometry(0.04, 0.004, 6, 16), AT_RUBBER, 0, y - 0.05, z + 0.07);
+        loop.rotation.y = HP;
+      }
       else if (id === "tube" && M.tube) {   // the magazine tube runs on past its old end
         const [z, y, r] = M.tube;
         add(new THREE.CylinderGeometry(r, r, 0.08, 12), AT_STEEL, 0, y, z - 0.04, HP);
@@ -3987,7 +4052,7 @@
   }
   // each game the host rolls a setup for every gun: a sniper always has a scope, a marksman rifle or crossbow always an optic, the rest get
   // each slot with some chance, one option from the slot. Nothing needs unlocking, and everyone gets the same.
-  const GG_SLOT_CHANCE = { optic: 0.7, muzzle: 0.45, barrel: 0.3, grip: 0.5, mag: 0.4, stock: 0.4, sights: 0.5 };
+  const GG_SLOT_CHANCE = { sling: 0, bipod: 0.3, optic: 0.7, muzzle: 0.45, barrel: 0.3, grip: 0.5, mag: 0.4, stock: 0.4, sights: 0.5 };
   const GG_MUST_OPTIC = ["rifle", "dmr", "crossbow"];
   function makeGgPreset() {
     const parts = [];
@@ -4012,13 +4077,14 @@
   }
   function applyAttachments() {
     for (const id of GUNS) {
-      const w = WEAPONS[id], base = WEAPON_BASE[id], fx = { ads: 1, spread: 1, spreadAds: 1, recoil: 1, mag: 1, reload: 1, flash: 1, sound: 1, scopeFov: 1, zoom: 1 };
+      const w = WEAPONS[id], base = WEAPON_BASE[id], fx = { ads: 1, spread: 1, spreadAds: 1, recoil: 1, mag: 1, reload: 1, flash: 1, sound: 1, scopeFov: 1, zoom: 1, swap: 1, bipod: 1 };
       for (const o of chosenAttachments(id)) for (const k of Object.keys(o.fx)) fx[k] *= o.fx[k];
       w.magSize = Math.max(1, Math.round(base.mag * fx.mag));
       w.spread = base.spread * fx.spread; w.spreadAds = base.spreadAds * fx.spreadAds;
       w.recoil = base.recoil * fx.recoil; w.kick = base.kick * fx.recoil;
       w.flashScale = base.flash * fx.flash;
       for (const k of Object.keys(base.reload)) if (typeof base.reload[k] === "number") w.reload[k] = base.reload[k] * fx.reload;
+      w.swapK = fx.swap; w.bipodK = fx.bipod;
       w.adsMult = (w.adsBase || 1) * fx.ads; w.scopeFovMult = fx.scopeFov; w.zoomMult = fx.zoom; w.soundMult = fx.sound;
       if (w.ammo > w.magSize) w.ammo = w.magSize;
       if (w.atGroup) { w.group.remove(w.atGroup); w.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.atGroup = null; }
@@ -4480,7 +4546,7 @@
   }
   document.addEventListener("pointerlockchange", () => {
     pointerLocked = document.pointerLockElement === domEl;
-    if (pointerLocked) { hasPlayed = true; setSettingsPopup(false); }
+    if (pointerLocked) { hasPlayed = true; setSettingsPopup(false); showMapTip(); }
     if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; saveStats(); refreshTutorialUI(); }
     if (replay.active) return;   // a replay frees the mouse on purpose and runs its own screens
     showScreen(pointerLocked ? "play" : resultsEl.hidden ? "menu" : "results");
@@ -6029,7 +6095,7 @@
   document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
   // Back up and restore: everything the game keeps in this browser as one file. An imported file is checked key by key and
   // value by value before it replaces anything (and the game's own loaders check again when it starts).
-  const DATA_JSON_KEYS = ["tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-score-attack", "tsb-map-records"];
+  const DATA_JSON_KEYS = ["tsb-tips", "tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-score-attack", "tsb-map-records"];
   const DATA_KEYS = DATA_JSON_KEYS.concat(["tsb-tutorial", "tsb-name", "tsb-settings-seen"]);
   const importNoteEl = document.getElementById("data-import-note"), importApplyEl = document.getElementById("data-import-apply");
   let importClean = null;
@@ -6277,7 +6343,7 @@
     vm.burstShots = inBurst ? vm.burstShots + 1 : 0;
     vm.lastShotAt = elapsedTime;
     let steady = 1 - 0.2 * easeInOut(vm.adsProgress);   // aiming down sights steadies it a little
-    if (player.onGround && held("slide")) steady *= CFG.crouchRecoilMult;   // and so does crouching
+    if (player.onGround && held("slide")) steady *= CFG.crouchRecoilMult * (w.bipodK || 1);   // and so does crouching (a bipod makes that much steadier)
     vm.recoilPitch = Math.min(vm.recoilPitch + (R.up + R.grow * vm.burstShots) * steady, R.max);
     const side = R.side * (1 + vm.burstShots * 0.15) * steady;
     vm.recoilYaw = Math.max(-R.max * 0.5, Math.min(R.max * 0.5, vm.recoilYaw + (Math.random() * 2 - 1) * side));
@@ -10925,6 +10991,32 @@
     clearTimeout(replayNoteTimer);
     replayNoteTimer = setTimeout(() => { el.hidden = true; }, 4000);
   }
+  // one practical tip the first time you play each map (not during the tutorial), remembered in this browser
+  const MAP_TIPS = {
+    arena: "Arena: the kicker ramps and pads throw you into trickshots, and the tower is a sniper perch.",
+    courtyard: "Courtyard: the four gates slide open and shut. Shotguns and Deagles shine in here.",
+    foundry: "Foundry: stand on a launch strip to be thrown down the hall, and watch the sliding gates.",
+    moonbase: "Moonbase: low gravity, so jumps are huge, and the portals link opposite corners.",
+    icelake: "Ice Lake: nothing stops you here, so slide to build speed and plan your turns early.",
+    summit: "Summit: trails and ramps climb the hill and ladders finish the last cliff. The top is the hill.",
+    canyon: "Canyon: you can wade the river. Ramps and the mega pads reach the ledges, bridges cross the middle.",
+    rooftops: "Rooftops: hold forward at a ladder to climb it. Run off a roof pad to reach the tall roofs.",
+    harbour: "Harbour: ladders climb the double-stacked containers and ramps climb the single ones.",
+  };
+  function showMapTip() {
+    if (tut.active || replay.active || !currentMap || !MAP_TIPS[currentMap.id]) return;
+    let seen = {};
+    try { seen = JSON.parse(localStorage.getItem("tsb-tips") || "{}") || {}; } catch (e) { /* ignore */ }
+    if (seen[currentMap.id]) return;
+    seen[currentMap.id] = 1;
+    try { localStorage.setItem("tsb-tips", JSON.stringify(seen)); } catch (e) { /* ignore */ }
+    const el = document.getElementById("map-tip");
+    el.textContent = MAP_TIPS[currentMap.id];
+    el.hidden = false;
+    clearTimeout(mapTipTimer);
+    mapTipTimer = setTimeout(() => { el.hidden = true; }, 7000);
+  }
+  let mapTipTimer = 0;
   document.getElementById("rp-video").addEventListener("click", (e) => { e.currentTarget.blur(); saveReplayVideo(); });
   document.getElementById("rp-card").addEventListener("click", (e) => { e.currentTarget.blur(); saveShotCard(replay.clip); });
   document.getElementById("card-best").addEventListener("click", (e) => { e.stopPropagation(); saveShotCard(bestClip); });
