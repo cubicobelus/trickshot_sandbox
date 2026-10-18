@@ -12,7 +12,7 @@
 
   // ---- problems: anything the game throws is kept (the last few, with how often) and shown in a small bar, so a bug never passes
   // silently and a player can copy what happened. A repeating error (one thrown every frame) is counted, not shown again and again. ----
-  const GAME_VERSION = "2026.10.17c";   // bump with each push, so a report says which build it came from
+  const GAME_VERSION = "2026.10.18";   // bump with each push, so a report says which build it came from
   const problems = [];   // newest last: { msg, where, n }
   let problemTimer = 0, problemDismissed = false;
   function renderProblems() {
