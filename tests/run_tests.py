@@ -984,7 +984,7 @@ GUNS_JS = """() => {
     if (!w.sound || !(w.sound.rate > 0) || !(w.sound.length > 0)) bad(id + " has no usable sound profile");
     if (!(w.fireRate > 0) || !(w.magSize > 0) || !w.group || !w.muzzle) bad(id + " is missing fire rate, magazine, model or muzzle");
     if (w.action !== "pump" && (w.mag === undefined || w.magRestY === undefined)) bad(id + " has no magazine part for the reload");   // (the pump shotgun loads shells instead)
-    if (!D.GG_ORDER.includes(id)) bad(id + " is not on the gun game ladder");
+    if (!D.GG_ORDER.includes(id) && id !== "launcher") bad(id + " is not on the gun game ladder");   // (the launcher is kept out of the gun game, and bots never pick it)
   }
   const dm = (g, d, head) => D.hostDamage({ x: 0, z: 0 }, { x: d, z: 0 }, { head: !!head, n: 1, h: head ? 1 : 0 }, g);
   out.facts.smg = [dm("smg", 5), dm("smg", 12), dm("smg", 23.5), dm("smg", 35), dm("smg", 80), dm("smg", 5, true), dm("smg", 80, true)];
@@ -1013,6 +1013,76 @@ def test_guns(browser, base):
         check("gun game has ten guns before the knife", f["ggLen"] == 10, str(f["ggLen"]))
         check("the LMG holds 100 rounds and the burst rifle fires three rounds a pull", f["lmg"] == [100, 24, 34] and f["burst"] == [3, 28, 42], str(f["lmg"]) + " " + str(f["burst"]))
         check("the gun checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_launcher(browser, base):
+    """The grenade launcher: it lobs a grenade that goes off after its fuse, scores the targets in the blast, throws you about, and in a room hurts a bot through the host."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 900, 560)
+        pick_gun(page, "launcher")
+        page.click("#start-btn")
+        step(page, 60)
+        ammo0 = page.inner_text("#ammo-count")
+        page.mouse.click(450, 280)
+        step(page, 6)
+        ammo1 = page.inner_text("#ammo-count")
+        check("the launcher holds 4 grenades and a shot uses one", "4" in ammo0 and "3" in ammo1, f"{ammo0} -> {ammo1}")
+        flying = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying').length")
+        check("a shot sends a grenade flying", flying == 1, str(flying))
+        step(page, 150)
+        left = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying').length")
+        check("it goes off after its fuse", left == 0, str(left))
+        # a grenade beside a target scores it
+        res = page.evaluate("""() => {
+          const D = window.__dbg, t = D.targets.find((q) => q.userData.alive), g = D.grenades[1];
+          const before = D.stats.kinds ? JSON.stringify(D.stats.kinds) : "";
+          g.mesh.position.set(t.position.x + 1.5, t.position.y, t.position.z); g.from.copy(g.mesh.position);
+          g.vel.set(0, 0, 0); g.age = 1.79; g.remote = false; g.snap = null; g.state = "flying"; g.mesh.visible = true;
+          return { id: D.targets.indexOf(t), before };
+        }""")
+        step(page, 4)
+        alive = page.evaluate("(i) => window.__dbg.targets[i].userData.alive", res["id"])
+        check("a target inside the blast is knocked out", alive is False, str(alive))
+        # and you are thrown by a blast at your feet
+        v = page.evaluate("""() => {
+          const D = window.__dbg, g = D.grenades[2], y = D.yawObject.position;
+          D.player.velocity.set(0, 0, 0);
+          g.mesh.position.set(y.x + 1, D.player.feetY + 0.2, y.z); g.from.copy(g.mesh.position);
+          g.vel.set(0, 0, 0); g.age = 1.79; g.remote = false; g.snap = null; g.state = "flying"; g.mesh.visible = true;
+          return 0;
+        }""")
+        step(page, 2)
+        sp = page.evaluate("Math.hypot(window.__dbg.player.velocity.x, window.__dbg.player.velocity.y, window.__dbg.player.velocity.z)")
+        check("a blast at your feet throws you (a blast jump)", sp > 4, f"{sp:.1f} u/s")
+        page.evaluate("__unlock()")
+        step(page, 3)
+        page.click('#mode-tabs .tab[data-mode="mp"]')
+        start_practice(page, mode="dm", bots=1, level="easy")
+        page.click("#mp-play-btn")
+        step(page, 40)
+        hp = page.evaluate("""() => {
+          const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
+          D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0; bot.hp = 100;
+          bot.x = me.x + 12; bot.z = me.z; bot.y = me.y;
+          return bot.hp;
+        }""")
+        step(page, 2)
+        page.evaluate("""() => {
+          const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), g = D.grenades[3];
+          g.mesh.position.set(bot.x + 1, bot.y + 0.9, bot.z); g.from.copy(g.mesh.position);
+          g.vel.set(0, 0, 0); g.age = 0; g.remote = false; g.snap = D.stats && null; g.state = "flying"; g.mesh.visible = true;
+        }""")
+        page.evaluate("""() => { const D = window.__dbg, me = D.net.players.get('you'); me.grenades = 1; me.lastGrenadeAt = performance.now(); me.lastGrenadeO = [0, 0, 0]; }""")
+        page.evaluate("window.__dbg.grenades[3].age = 1.79")
+        step(page, 6)
+        hp2 = page.evaluate("[...window.__dbg.net.players.values()].find((p) => p.bot).hp")
+        check("in a room a grenade next to a bot hurts it through the host (about 75 of 100 a metre out)", 60 <= (100 - hp2) <= 100 or hp2 <= 0, f"{hp} -> {hp2}")
+        check("the launcher runs without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:
         server.shutdown()
@@ -1128,7 +1198,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
+            "hostStartRound, grenades, fireGrenade, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1655,10 +1725,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_launcher, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "launcher", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 
