@@ -7191,7 +7191,7 @@
     launcher: { blast: 1, max: 100, min: 25, radius: 4.5 },
     rpg: { blast: 1, max: 100, min: 30, radius: 5.2 },
     frag: { blast: 1, max: 90, min: 20, radius: 4 },   // the thrown grenade (G), not a gun
-    satchel: { blast: 1, max: 45, min: 15, radius: 4.5 },   // the blast pack (C): a launch for you, a bruise for the others   // splash: full damage in the middle of the blast, a quarter at its edge (a ball 4.5 m wide each way)
+    satchel: { blast: 1, max: 15, min: 5, radius: 4.5 },   // the blast pack (C): a launch for you, only a scratch for the others   // splash: full damage in the middle of the blast, a quarter at its edge (a ball 4.5 m wide each way)
     crossbow: { body: 55, head: 100 },   // like the Deagle: two body hits or one to the head; it flies, so it has to be led
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };

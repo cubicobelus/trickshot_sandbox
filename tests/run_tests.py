@@ -1219,7 +1219,7 @@ def test_satchel(browser, base):
             step(page, 5)
             res[kind] = page.evaluate("(() => { const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you'); return [100 - me.hp, 100 - bot.hp]; })()")
         check("in a room your own launcher blast hurts you", res["launcher"][0] > 20, str(res["launcher"]))
-        check("but your own blast pack does not hurt you, and bruises a bot (15 to 45)", res["satchel"][0] == 0 and 15 <= res["satchel"][1] <= 45, str(res["satchel"]))
+        check("but your own blast pack does not hurt you, and does a tiny bit of damage to a bot (5 to 15)", res["satchel"][0] == 0 and 5 <= res["satchel"][1] <= 15, str(res["satchel"]))
         check("the satchel checks run without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:
