@@ -273,7 +273,7 @@
     ["inspect", "Inspect weapon", ["KeyF"]], ["gun", "Switch to gun", ["Digit1"]],
     ["knife", "Switch to knife", ["Digit2"]], ["swap", "Swap gun / knife", ["KeyQ", "Wheel"]],
     ["replay", "Watch last hit", ["KeyP"]], ["grapple", "Grappling hook", ["KeyE"]],
-    ["map", "Show map (hold)", ["KeyM"]], ["leaderboard", "Show leaderboard (hold)", ["KeyL"]], ["grenade", "Throw grenade", ["KeyG"]],
+    ["map", "Show map (hold)", ["KeyM"]], ["leaderboard", "Show leaderboard (hold)", ["KeyL"]], ["grenade", "Throw grenade", ["KeyG"]], ["satchel", "Blast pack", ["KeyC"]],
   ];
   const ACTION_IDS = ACTIONS.map((a) => a[0]);
   const ACTION_NAMES = Object.fromEntries(ACTIONS.map((a) => [a[0], a[1]]));
@@ -4709,7 +4709,7 @@
     ["forward", (g) => (g.axes[1] || 0) < -0.35], ["back", (g) => (g.axes[1] || 0) > 0.35], ["left", (g) => (g.axes[0] || 0) < -0.35], ["right", (g) => (g.axes[0] || 0) > 0.35],
     ["jump", (g) => padBtn(g, 0)], ["slide", (g) => padBtn(g, 1)], ["reload", (g) => padBtn(g, 2)], ["swap", (g) => padBtn(g, 3)],
     ["grapple", (g) => padBtn(g, 4)], ["knife", (g) => padBtn(g, 5)], ["aim", (g) => padBtn(g, 6)], ["fire", (g) => padBtn(g, 7)],
-    ["sprint", (g) => padBtn(g, 10)], ["inspect", (g) => padBtn(g, 12)], ["leaderboard", (g) => padBtn(g, 8)], ["map", (g) => padBtn(g, 14)], ["grenade", (g) => padBtn(g, 11)],
+    ["sprint", (g) => padBtn(g, 10)], ["inspect", (g) => padBtn(g, 12)], ["leaderboard", (g) => padBtn(g, 8)], ["map", (g) => padBtn(g, 14)], ["grenade", (g) => padBtn(g, 11)], ["satchel", (g) => padBtn(g, 13)],
   ];
   const held = (action) => BINDS[action].some((b) => b && inputHeld(b)) || !!pad.held[action];
   // Ctrl+D (bookmark), Ctrl+S and friends would fire mid-game while Ctrl is a game key, so they're blocked then
@@ -4721,6 +4721,7 @@
     reload() { startReload(); },
     inspect() { startInspect(); },
     grenade() { startFragCharge(); },
+    satchel() { useSatchel(); },
     gun() { if (ggKnife()) return; switchWeapon(SETTINGS.loadout); },
     knife() { switchWeapon("knife"); },
     swap(e, wheel) { if (ggKnife()) return; switchWeapon((wheel ? vm.pending || vm.current : vm.current) === "knife" ? SETTINGS.loadout : "knife"); },
@@ -4833,7 +4834,7 @@
       k(move.every((l) => l.length === 1) ? move.join("") : move.join(" ")) + " move" + dot + k(L("jump")) + " jump" + dot +
       k(L("sprint")) + " sprint" + dot + k(L("slide")) + " slide" + dot + k(L("reload")) + " reload" + dot +
       k(L("inspect")) + " inspect" + dot + k(L("grapple")) + " grapple" + dot + k(L("replay")) + " replay last hit<br>" +
-      k(L("fire")) + " attack" + dot + k(L("aim")) + " aim / throw knife" + dot + k(L("grenade")) + " grenade" + dot + k(gunKnife) + " gun / knife";
+      k(L("fire")) + " attack" + dot + k(L("aim")) + " aim / throw knife" + dot + k(L("grenade")) + " grenade" + dot + k(L("satchel")) + " blast pack" + dot + k(gunKnife) + " gun / knife";
     loadoutWeapons().forEach((w, i) => {
       const el = hotbarSlots[w] && hotbarSlots[w].querySelector(".num");
       if (el) el.textContent = hotbarKey(i === 0 ? "gun" : "knife");
@@ -6661,9 +6662,10 @@
     launcher: { speed: 26, gravity: 16, fuse: 1.8, bounce: 0.45, push: 15 },
     frag: { speed: 22, gravity: 16, fuse: 2.2, bounce: 0.5, push: 12 },
     rpg: { speed: 44, gravity: 1.5, fuse: 4, rocket: true, push: 18 },
+    satchel: { speed: 22, gravity: 14, fuse: 10, sticky: true, push: 24 },   // the blast pack (C): sticks where it lands, goes off when you press C again (or after 10 s)
   };
-  const BLAST_CODE = { launcher: 2, frag: 3, rpg: 4 }, BLAST_KIND = { 2: "launcher", 3: "frag", 4: "rpg" };   // how a blast travels over the network
-  const GREN_RADIUS = 0.12, FRAG_COOLDOWN = 9;
+  const BLAST_CODE = { launcher: 2, frag: 3, rpg: 4, satchel: 5 }, BLAST_KIND = { 2: "launcher", 3: "frag", 4: "rpg", 5: "satchel" };   // how a blast travels over the network
+  const GREN_RADIUS = 0.12, FRAG_COOLDOWN = 9, PACK_COOLDOWN = 6;
   const grenades = [];
   const grenGeo = new THREE.SphereGeometry(GREN_RADIUS, 12, 8), grenMat = new THREE.MeshStandardMaterial({ color: 0x4a6342, roughness: 0.6, metalness: 0.3 });
   const grenBand = new THREE.MeshStandardMaterial({ color: 0xd9b43a, roughness: 0.6 });
@@ -6675,9 +6677,14 @@
     const rn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 10), accentMat); rn.rotation.x = -HALF_PI; rn.position.z = -0.29; rocket.add(rn);
     for (const rot of [0, HALF_PI]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.012, 0.1), metalDark); fin.position.z = 0.2; fin.rotation.z = rot; rocket.add(fin); }
     rocket.visible = false; mesh.add(rocket);
+    const pack = new THREE.Group();   // the blast pack: a flat yellow box with a dark strap and a red light
+    const pb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.09, 0.16), new THREE.MeshStandardMaterial({ color: 0xd9b43a, roughness: 0.6 })); pack.add(pb);
+    const ps = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.095, 0.165), metalDark); pack.add(ps);
+    const pl = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b30 })); pl.position.set(0.07, 0.055, 0); pack.add(pl);
+    pack.visible = false; mesh.add(pack);
     mesh.visible = false; mesh.frustumCulled = false;
     scene.add(mesh);
-    grenades.push({ mesh, rocket, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", remote: false, snap: null, kind: "launcher", smokeT: 0 });
+    grenades.push({ mesh, rocket, pack, stuck: false, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", remote: false, snap: null, kind: "launcher", smokeT: 0 });
   }
   const blastFx = [];   // expanding balls of light
   for (let i = 0; i < 4; i++) {
@@ -6686,7 +6693,13 @@
     scene.add(mesh);
     blastFx.push({ mesh, age: 99, r: 4.5 });
   }
-  function retireGrenade(g) { g.state = "idle"; g.mesh.visible = false; g.rocket.visible = false; }
+  function retireGrenade(g) { g.state = "idle"; g.mesh.visible = false; g.rocket.visible = false; g.pack.visible = false; g.stuck = false; }
+  function dressGrenade(g, kind) {   // which model: a ball, a rocket or a blast pack
+    const B = BLAST[kind];
+    g.mesh.children[0].visible = !B.rocket && !B.sticky; g.rocket.visible = !!B.rocket; g.pack.visible = !!B.sticky;
+    g.mesh.geometry = B.rocket || B.sticky ? emptyGeo : grenGeo;
+    g.mesh.rotation.set(0, 0, 0); g.stuck = false;
+  }
   function playBlastSound(pos, r) {
     const d = pos.distanceTo(yawObject.position), lvl = (1 / (1 + d / 22)) * (r > 5 ? 1.15 : 1);
     noiseHit(260, 0.7, 0.95 * SETTINGS.volGuns * lvl, 0.55, "lowpass", 0, 0.4, true);
@@ -6718,9 +6731,7 @@
     g.vel.copy(dir).multiplyScalar(speed || B.speed);
     if (!B.rocket) g.vel.add(player.velocity);
     g.snap = trickState(); g.remote = false; g.age = 0; g.smokeT = 0; g.state = "flying";
-    g.mesh.visible = true; g.rocket.visible = !!B.rocket; g.mesh.children[0].visible = !B.rocket;
-    g.mesh.geometry = B.rocket ? emptyGeo : grenGeo;
-    g.mesh.rotation.set(0, 0, 0);
+    g.mesh.visible = true; dressGrenade(g, kind);
     if (B.rocket) g.mesh.lookAt(_gLookAt.copy(origin).add(dir));
     if (net.active) mpSendThrow(g.mesh.position, g.vel, BLAST_CODE[kind]);
     return g;
@@ -6743,6 +6754,7 @@
     muzzleFlash.getWorldPosition(_muzzleWorld);
     _boltDir.copy(_boltAim).sub(_muzzleWorld).normalize();   // from the muzzle, toward where the crosshair points
     launchBlast(kind, _muzzleWorld, _boltDir);
+    if (kind === "rpg") { player.velocity.addScaledVector(_boltDir, -6.5); if (player.velocity.y > 2.5) { player.onGround = false; player.sliding = false; } }   // the backblast shoves you the other way
     if (run.state === "live") run.shots++;
     if (!net.active) { const gs = gunStat(kind); gs.shots++; stat("shots"); }
     w.lastFiredAt = elapsedTime;
@@ -6789,6 +6801,33 @@
       nadeChip.textContent = label + " · " + "■".repeat(n) + "□".repeat(10 - n) + " release to throw";
     } else nadeChip.textContent = label + " · GRENADE " + (fragCd > 0 ? fragCd.toFixed(1) + "s" : "READY (hold to throw further)");
   }
+  // the blast pack (C): throw it, it sticks where it lands, press C again to set it off. It launches you hard and only bruises others (no damage to you).
+  let packCd = 0, packOut = null;
+  const packChip = document.getElementById("pack-chip");
+  function useSatchel() {
+    if (!fragAllowed()) return;
+    if (packOut && packOut.state === "flying" && !packOut.remote) { explodeGrenade(packOut); return; }
+    if (packCd > 0) return;
+    camera.getWorldDirection(_thFwd);
+    camera.getWorldQuaternion(_camQuat);
+    _thRight.set(1, 0, 0).applyQuaternion(_camQuat);
+    camera.getWorldPosition(_gLookAt).addScaledVector(_thFwd, 0.5).addScaledVector(_thRight, 0.1 * handSign());
+    _gLookAt.y -= 0.1;
+    _boltDir.copy(_thFwd); _boltDir.y += 0.08; _boltDir.normalize();
+    packOut = launchBlast("satchel", _gLookAt, _boltDir);
+    tone("triangle", 260, 110, 0.12 * SETTINGS.volGear, 0.12, 0, 0.1);
+  }
+  function updatePackChip(dt) {
+    if (packCd > 0) packCd = Math.max(0, packCd - dt);
+    if (packOut && (packOut.state === "idle" || packOut.kind !== "satchel")) packOut = null;
+    if (packOut && !fragAllowed()) { retireGrenade(packOut); packOut = null; }   // (dying or a new round: it is gone, nothing goes off)
+    if (!packChip) return;
+    const show = fragAllowed();
+    packChip.hidden = !show;
+    if (!show) return;
+    packChip.className = packOut || packCd <= 0 ? "ready" : "wait";
+    packChip.textContent = bindLabel("satchel") + " \u00b7 " + (packOut ? "DETONATE" : packCd > 0 ? "BLAST PACK " + packCd.toFixed(1) + "s" : "BLAST PACK READY");
+  }
   function spawnRemoteGrenade(o, v, kind) {
     const g = grenades.find((q) => q.state === "idle") || grenades.reduce((a, b) => (a.age > b.age ? a : b));
     const B = BLAST[kind] || BLAST.launcher;
@@ -6796,9 +6835,7 @@
     g.mesh.position.set(o[0], o[1], o[2]); g.from.copy(g.mesh.position);
     g.vel.set(v[0], v[1], v[2]);
     g.snap = null; g.remote = true; g.age = 0; g.smokeT = 0; g.state = "flying";
-    g.mesh.visible = true; g.rocket.visible = !!B.rocket; g.mesh.children[0].visible = !B.rocket;
-    g.mesh.geometry = B.rocket ? emptyGeo : grenGeo;
-    g.mesh.rotation.set(0, 0, 0);
+    g.mesh.visible = true; dressGrenade(g, g.kind);
     if (B.rocket) g.mesh.lookAt(_gLookAt.copy(g.mesh.position).add(g.vel));
   }
   // the blast, for the thrower: what it hurts, scores and claims
@@ -6806,6 +6843,7 @@
   function explodeGrenade(g) {
     const pos = g.mesh.position.clone(), kind = g.kind, D = DAMAGE[kind], R = D.radius, B = BLAST[kind];
     retireGrenade(g);
+    if (kind === "satchel") { packCd = PACK_COOLDOWN; packOut = null; }
     showBlast(pos, R);
     const w = WEAPONS[kind] || WEAPONS.launcher;   // (a thrown grenade scores like the launcher's)
     let hitCount = 0;
@@ -6813,7 +6851,7 @@
     _blastC.set(yawObject.position.x, player.feetY + 0.9, yawObject.position.z).sub(pos);
     const pd = _blastC.length();
     if (pd < R * 1.4 && !localDead) {
-      _blastC.y += 0.35 * Math.max(pd, 0.5); _blastC.normalize();
+      _blastC.y += (kind === "satchel" ? 0.8 : 0.35) * Math.max(pd, 0.5); _blastC.normalize();
       const push = B.push * (1 - pd / (R * 1.4));
       player.velocity.addScaledVector(_blastC, push);
       if (player.velocity.y > 2.5) { player.onGround = false; player.sliding = false; }
@@ -6842,6 +6880,8 @@
       const hits = [];
       if (net.sub === "dm" && net.phase === "play") {
         const me = localPlayer();
+        if (kind !== "satchel" && !localDead && Math.hypot(yawObject.position.x - pos.x, player.feetY + 0.9 - pos.y, yawObject.position.z - pos.z) <= R
+          && botLineClear(pos.x, pos.y, pos.z, yawObject.position.x, player.feetY + 0.9, yawObject.position.z)) hits.push({ v: net.id, pts: 0, tags: [] });   // your own blast hurts you like anyone
         for (const q of net.players.values()) {
           if (q.id === net.id || !q.alive) continue;
           if (net.teams && me && q.team === me.team) continue;
@@ -6863,6 +6903,7 @@
   function updateGrenades(dt) {
     updateBlastFx(dt);
     updateNadeChip(dt);
+    updatePackChip(dt);
     if (!groundBoxes) groundBoxes = groundMeshes.map((m) => new THREE.Box3().setFromObject(m));
     for (const g of grenades) {
       if (g.state === "idle") continue;
@@ -6870,6 +6911,7 @@
       g.age += dt;
       if (g.remote) { if (g.age > B.fuse + 0.5) { retireGrenade(g); continue; } }   // (the thrower's blast message normally ends it)
       else if (g.age >= B.fuse) { explodeGrenade(g); continue; }
+      if (g.stuck) continue;   // a blast pack waits where it stuck
       g.vel.y -= B.gravity * dt;
       _grStep.copy(g.vel).multiplyScalar(dt);
       const len = _grStep.length();
@@ -6889,7 +6931,7 @@
         const t = (o.y - 0.25) / -d.y;
         if (t >= 0 && t < hitDist) { hitDist = t; kind = "wall"; _grHit.copy(o).addScaledVector(d, t); _grNormal.set(0, 1, 0); }
       }
-      if (!g.remote) {   // a direct hit sets it off at once
+      if (!g.remote && !B.sticky) {   // a direct hit sets it off at once
         let direct = false;
         for (const t of targets) {
           if (!t.userData.alive || (net.active && net.sub !== "race")) continue;
@@ -6906,6 +6948,12 @@
         if (direct) { o.addScaledVector(d, Math.max(hitDist, 0)); explodeGrenade(g); continue; }
       }
       if (kind === "wall" && hitDist <= len + rad) {
+        if (B.sticky) {   // a blast pack sticks to the wall or floor, its back to the surface
+          o.copy(_grHit).addScaledVector(_grNormal, 0.05);
+          g.vel.set(0, 0, 0); g.stuck = true;
+          g.mesh.lookAt(_gLookAt.copy(o).add(_grNormal));
+          continue;
+        }
         if (B.rocket) {   // a rocket goes off on whatever it touches
           o.copy(_grHit).addScaledVector(_grNormal, 0.15);
           if (g.remote) retireGrenade(g); else explodeGrenade(g);
@@ -6926,7 +6974,8 @@
         g.mesh.lookAt(_gLookAt.copy(o).add(g.vel));
         g.smokeT -= dt;
         if (g.smokeT <= 0) { g.smokeT = 0.03; spawnSmoke(o, 0, 0.3, 0, 0.9, 0.18, 0.8, 0.4); }
-      } else { g.mesh.rotation.x += dt * 9; g.mesh.rotation.z += dt * 5; }
+      } else if (B.sticky) { g.mesh.rotation.y += dt * 6; }
+      else { g.mesh.rotation.x += dt * 9; g.mesh.rotation.z += dt * 5; }
     }
   }
 
@@ -7141,7 +7190,8 @@
     lmg: { body: 24, head: 34 },
     launcher: { blast: 1, max: 100, min: 25, radius: 4.5 },
     rpg: { blast: 1, max: 100, min: 30, radius: 5.2 },
-    frag: { blast: 1, max: 90, min: 20, radius: 4 },   // the thrown grenade (G), not a gun   // splash: full damage in the middle of the blast, a quarter at its edge (a ball 4.5 m wide each way)
+    frag: { blast: 1, max: 90, min: 20, radius: 4 },   // the thrown grenade (G), not a gun
+    satchel: { blast: 1, max: 45, min: 15, radius: 4.5 },   // the blast pack (C): a launch for you, a bruise for the others   // splash: full damage in the middle of the blast, a quarter at its edge (a ball 4.5 m wide each way)
     crossbow: { body: 55, head: 100 },   // like the Deagle: two body hits or one to the head; it flies, so it has to be led
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
   };
@@ -7957,6 +8007,12 @@
         }
         const k = net.players.get(m.k), v = net.players.get(m.v);
         if (v) { v.alive = false; v.hp = 0; }
+        if (m.self || m.k === m.v) {   // caught in their own blast
+          feedLine("<b>" + esc(v ? v.name : "?") + "</b> blew themselves up");
+          if (m.v === net.id) { setLocalDead("your own blast", null, ["You were caught in your own blast"]); lifeLogReset(); }
+          else if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8);
+          break;
+        }
         if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res, true); playPlayerHit(!!m.head); spawnDamageNumber(v, Math.max(0, Math.min(Number(m.dmg) || 0, 999)), !!m.head, true); }   // the kill pays out
         pendingRes.delete(m.v);
         const tags = (Array.isArray(m.tags) ? m.tags : []).slice(0, 3).map((t) => String(t).slice(0, 40)).join(" · ");
@@ -8269,13 +8325,20 @@
   // damage lands on a player: the hit marker, or the kill if it was the last of their health. `info` carries
   // the points of the shot (paid only on a kill) and whether it was a headshot or a knife
   function hostDealDamage(p, v, dmg, info) {
-    const rules = net.rules || {};
+    const rules = net.rules || {}, self = p === v;   // (self: caught in your own blast)
+    if (self && (rules.oneShot || rules.headOnly)) return;
     if (rules.headOnly && !info.head && !info.knife) return;   // only headshots (and the knife) count
     if (rules.oneShot) dmg = Math.max(dmg, 1000);
-    p.dmg += Math.min(dmg, Math.max(v.hp, 0));   // damage actually dealt
+    if (!self) p.dmg += Math.min(dmg, Math.max(v.hp, 0));   // damage actually dealt
     v.hp -= dmg; v.lastDamageAt = nowMs();
-    if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
+    if (v.hp > 0) { hostBroadcast({ t: "hp", id: v.id, hp: Math.round(v.hp), by: self ? "" : p.id, head: !!info.head, dmg: Math.round(dmg) }); return; }
     v.hp = 0;
+    if (self) {   // blown up by your own blast: a death, but nobody scores
+      v.alive = false; v.diedAt = nowMs(); v.deaths++; v.respawnAt = net.br ? Infinity : nowMs() + (rules.fastResp ? 1000 : net.range ? 1200 : RESPAWN_MS); v.streak = 0;
+      hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts: 0, tags: [], head: false, knife: false, self: 1 });
+      hostBroadcastBoard();
+      return;
+    }
     const pts = Math.max(0, Math.min(Number(info.pts) || 0, 20000));   // only a kill scores
     v.alive = false; v.diedAt = nowMs(); v.deaths++; v.respawnAt = net.br ? Infinity : nowMs() + (rules.fastResp ? 1000 : net.range ? 1200 : RESPAWN_MS);
     p.kills++; p.score += pts;
@@ -8330,11 +8393,11 @@
       case "throw": {
         const o = vec3(m.o, 1000), v = vec3(m.v, 200);
         const now = nowMs();
-        const nade = m.b === 2 || m.b === 3 || m.b === 4;
-        if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap && !(m.b === 3 && (net.gungame || now - (p.lastFragAt || -1e9) < 6000))) {
+        const nade = m.b >= 2 && m.b <= 5;
+        if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap && !(m.b === 3 && (net.gungame || now - (p.lastFragAt || -1e9) < 6000)) && !(m.b === 5 && (net.gungame || now - (p.lastPackAt || -1e9) < 2500))) {
           if (now - p.lastThrowAt > THROW_WINDOW) p.knivesUp = 0;
           if (m.b !== 1 && !nade) p.knivesUp = Math.min(p.knivesUp + 1, 4);   // (a crossbow bolt is claimed through its shot message, a grenade through its blast, not as a knife)
-          if (nade) { p.grenades = Math.min((p.grenades || 0) + 1, 4); p.lastGrenadeAt = now; p.lastGrenadeO = o; if (m.b === 3) p.lastFragAt = now; }
+          if (nade) { p.grenades = Math.min((p.grenades || 0) + 1, 4); p.lastGrenadeAt = now; p.lastGrenadeO = o; if (m.b === 3) p.lastFragAt = now; if (m.b === 5) p.lastPackAt = now; }
           p.lastThrowAt = now; p.lastFireAt = now; p.protectUntil = 0;
           hostBroadcast({ t: "throw", id: fromId, o, v, b: nade || m.b === 1 ? m.b : 0 });
         }
@@ -8362,14 +8425,14 @@
         const L = p.lastGrenadeO;
         if (L && Math.hypot(o[0] - L[0], o[1] - L[1], o[2] - L[2]) > 160) break;
         p.grenades--;
-        const bk = m.k === "frag" || m.k === "rpg" ? m.k : "launcher";
+        const bk = m.k === "frag" || m.k === "rpg" || m.k === "satchel" ? m.k : "launcher";
         hostBroadcast({ t: "blast", id: fromId, o, k: bk });
         const done = new Set();
         for (const h of (Array.isArray(m.h) ? m.h : []).slice(0, 8)) {
           const v = h && net.players.get(h.v);
-          if (!v || v === p || !v.alive || done.has(v.id)) continue;
+          if (!v || !v.alive || done.has(v.id) || (v === p && bk === "satchel")) continue;   // (your own blast hurts you, except the blast pack)
           done.add(v.id);
-          if (net.teams && v.team === p.team) continue;
+          if (net.teams && v.team === p.team && v !== p) continue;
           if (now < v.protectUntil) continue;
           const d = Math.hypot(v.x - o[0], v.y + 0.9 - o[1], v.z - o[2]);
           if (d > DAMAGE[bk].radius + 2) continue;   // (a little slack: the host's picture of a moving player is a bit old)
@@ -11559,6 +11622,7 @@
     if (decalMesh) { for (let i = 0; i < DECAL_MAX; i++) decalMesh.setMatrixAt(i, _dM.makeScale(0, 0, 0)); decalMesh.instanceMatrix.needsUpdate = true; decalNext = 0; }
     for (const k of thrownPool) if (k.state !== "idle") retireKnife(k);
     for (const g of grenades) retireGrenade(g);
+    packOut = null;
     releaseHook(0);
     player.ladder = null;
     if (!opts.keepPlayer && !net.active) teleportLocal(PLAYER_SPAWN.x, PLAYER_SPAWN.z);
