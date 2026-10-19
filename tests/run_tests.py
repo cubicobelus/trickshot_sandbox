@@ -1616,6 +1616,13 @@ def test_attach_extras(browser, base):
             return page.query_selector(f'#attach-slots .at-opt[data-opt="{opt}"]') is not None
         check("the LMG offers a bipod and a sling, the shotgun slugs, the AR a sling, the sniper neither",
               has("lmg", "bipod") and has("lmg", "sling") and has("shotgun", "slug") and has("ar", "sling") and not has("rifle", "bipod"))
+        check("the launcher and the RPG have attachments now (loaders, slings, an optic on the RPG)",
+              has("launcher", "lbig") and has("launcher", "sling") and has("rpg", "rquick") and has("rpg", "optic-2x") and has("rpg", "reddot"))
+        page.click('#attach-guns button[data-gun="launcher"]')
+        page.click('#attach-slots .at-opt[data-opt="lbig"]')
+        lm = page.evaluate("window.__dbg.WEAPONS.launcher.magSize")
+        check("extra grenades make the launcher hold six", lm == 6, str(lm))
+        page.click('#attach-slots .at-opt[data-opt="lbig"]')
         base_sg = page.evaluate("[window.__dbg.WEAPONS.shotgun.magSize, window.__dbg.WEAPONS.shotgun.spread]")
         page.click('#attach-guns button[data-gun="shotgun"]')
         page.click('#attach-slots .at-opt[data-opt="slug"]')

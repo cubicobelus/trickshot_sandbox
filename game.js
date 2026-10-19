@@ -606,6 +606,11 @@
     grass(g, n, base) {
       g.fillStyle = base || "#6f9a52"; g.fillRect(0, 0, n, n);
       speckle(g, 2600, n, 0.16, true);
+      for (let i = 0; i < 7; i++) {   // faint darker and lighter patches (wrapped, so the tile edges do not show), so a big lawn is not one flat colour
+        g.fillStyle = i % 2 ? "rgba(20,50,10,0.055)" : "rgba(210,235,120,0.045)";
+        const cx = Math.random() * n, cy = Math.random() * n, rx = 34 + Math.random() * 50, ry = 26 + Math.random() * 40, rot = Math.random() * 3;
+        for (const [ox, oy] of [[0, 0], [n, 0], [-n, 0], [0, n], [0, -n]]) { g.beginPath(); g.ellipse(cx + ox, cy + oy, rx, ry, rot, 0, 7); g.fill(); }
+      }
       g.strokeStyle = "rgba(255,255,255,0.13)"; g.lineWidth = 3;
       g.strokeRect(0, 0, n, n);
     },
@@ -1188,7 +1193,7 @@
     maxBots: 11,   // (a big map holds more bots in practice)
     id: "arena", name: "Arena", blurb: "The trickshot arena: bounce corridors, kicker ramps, jump pads and a sniper tower.",
     half: 40, floor: "grass", wallH: 12, targetMaxY: 9.5,
-    theme: { skyTop: 0x3f7dc6, skyHorizon: 0xcfe2ee, fog: [45, 140], sunDir: [30, 50, 20], sunColor: 0xfff0d8, sunIntensity: 1.05, hemi: [0xdbe9ff, 0x56663f, 0.62], surfaces: {} },
+    theme: { skyTop: 0x3f7dc6, skyHorizon: 0xcfe2ee, fog: [45, 140], sunDir: [30, 50, 20], sunColor: 0xfff0d8, sunIntensity: 1.0, hemi: [0xd6e4f7, 0x4d5c3a, 0.58], surfaces: { grass: "#58853f" } },
     walls: [
       // bounce corridors: parallel walls to chain wall bounces down (the inner wall is 3.5 m lower so you can climb out over it)
       [-31, 5.75, -8, 1, 11.5, 22, "concrete"], [-25, 4, -8, 1, 8, 22, "concrete"],
@@ -2685,8 +2690,10 @@
   addPart(rpgGroup, new THREE.BoxGeometry(0.035, 0.07, 0.04), gripMat, 0, -0.08, -0.2, -0.1, 0, 0);                    // front hand grip
   addPart(rpgGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.062, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
   addPart(rpgGroup, new THREE.BoxGeometry(0.008, 0.04, 0.008), metalDark, 0, 0.075, -0.4);                             // front post
-  addPart(rpgGroup, new THREE.BoxGeometry(0.034, 0.008, 0.016), metalDark, 0, 0.058, 0.15);                             // rear sight base
-  for (const sx of [-1, 1]) addPart(rpgGroup, new THREE.BoxGeometry(0.008, 0.03, 0.016), metalDark, sx * 0.013, 0.071, 0.15);   // and its two posts (an open notch to aim through)
+  const rpgRear = new THREE.Group();   // folds away under an optic
+  rpgGroup.add(rpgRear);
+  addPart(rpgRear, new THREE.BoxGeometry(0.034, 0.008, 0.016), metalDark, 0, 0.058, 0.15);                              // rear sight base
+  for (const sx of [-1, 1]) addPart(rpgRear, new THREE.BoxGeometry(0.008, 0.03, 0.016), metalDark, sx * 0.013, 0.071, 0.15);   // and its two posts (an open notch to aim through)
   const rpgMag = new THREE.Group(); rpgMag.position.set(0, 0, -0.5); rpgGroup.add(rpgMag);
   addPart(rpgMag, new THREE.CylinderGeometry(0.04, 0.04, 0.12, 12), accentMat, 0, 0, 0, HALF_PI, 0, 0);                 // the warhead's body
   addPart(rpgMag, new THREE.ConeGeometry(0.04, 0.12, 12), accentMat, 0, 0, -0.12, -HALF_PI, 0, 0);                      // and its nose
@@ -3948,8 +3955,16 @@
     burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
     lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: [{ id: "drum", name: "Big drum", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "A bigger drum: 150 rounds, slower reload" }], bipod: AT_BIPOD, sling: AT_SLING },
     crossbow: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4] },
-    launcher: {},   // nothing to fit (yet)
-    rpg: {},
+    launcher: {
+      mag: [{ id: "lbig", name: "Extra grenades", need: 30, fx: { mag: 1.5, reload: 1.15 }, text: "Six grenades, a slower reload" },
+        { id: "lquick", name: "Quick loader", need: 60, fx: { reload: 0.7 }, text: "Reloads 30% faster" }],
+      sling: AT_SLING,
+    },
+    rpg: {
+      optic: [AT_REDDOT, AT_SCOPE2],
+      mag: [{ id: "rquick", name: "Quick loader", need: 30, fx: { reload: 0.7 }, text: "Reloads 30% faster" }],
+      sling: AT_SLING,
+    },
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
         { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" },
@@ -4009,8 +4024,8 @@
     burst: { muzzle: [-0.66, 0.014, 0.0155, 0.26], optic: [0.0, 0.063], under: [-0.30, -0.014], mag: [-0.075, 0, 0, 0.03, 0.066] },
     lmg: { muzzle: [-0.86, 0.012, 0.0185, 0.3], optic: [0.02, 0.067], under: [-0.40, -0.021] },
     crossbow: { optic: [0.0, 0.047] },
-    launcher: {},
-    rpg: {},
+    launcher: { under: [-0.12, -0.043] },
+    rpg: { optic: [0.12, 0.05], under: [-0.2, -0.05] },
     pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024], mag: [-0.06, 0, 0, 0.03, 0.045] },
   };
   const AV_MOUNT = {
@@ -4023,8 +4038,8 @@
     burst: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425], mag: [-0.24, -0.2, 0, 0.03, 0.05] },
     lmg: { muzzle: [-1.0, 0.005, 0.015, 0.26], optic: [-0.05, 0.05], under: [-0.55, -0.05] },
     crossbow: { optic: [-0.1, 0.0425] },
-    launcher: {},
-    rpg: {},
+    launcher: { under: [-0.2, -0.07] },
+    rpg: { optic: [0.0, 0.07], under: [-0.2, -0.07] },
     pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
   };
   // a laser's beam: thick and bright by the gun, thinner and fainter further out until it is gone (the materials are shared)
@@ -4311,6 +4326,7 @@
       if (id === "burst") burstRear.visible = !anyOptic;
       if (id === "lmg") { lmgRear.visible = !anyOptic; lmgMag.scale.setScalar(has("drum") ? 1.22 : 1); }
       if (id === "crossbow") crossbowRear.visible = !anyOptic;
+      if (id === "rpg") rpgRear.visible = !anyOptic;
     }
     updateAmmoHud();
   }
@@ -7587,16 +7603,42 @@
     return (p.ropeSet = { rope, head });
   }
 
+  // Another player: boots and legs that swing as they run, a belted torso with a vest plate and shoulders in their colour, a helmet with a visor,
+  // and two arms that reach for the gun (a two-bone solve each frame: see poseAvatarArms). The hit shape (capsule and head ball) is unchanged.
+  const AV_HAND_HOLD = {   // where each hand goes on the thing they hold, in its own space (the barrel runs along -z); l: null = the left arm hangs
+    default: { r: [0, -0.07, 0.1], l: [0, -0.05, -0.36] },
+    rifle: { r: [0, -0.06, 0.05], l: [0, -0.04, -0.36] }, smg: { r: [0, -0.07, 0.08], l: [0, -0.05, -0.3] }, dmr: { r: [0, -0.06, 0.1], l: [0, -0.04, -0.46] },
+    lmg: { r: [0, -0.08, 0.1], l: [0, -0.06, -0.46] }, shotgun: { r: [0, -0.06, 0.2], l: [0, -0.05, -0.55] }, pistol: { r: [0, -0.1, 0.06], l: [-0.01, -0.11, 0.05] },
+    crossbow: { r: [0, -0.08, 0.28], l: [0, -0.05, -0.36] }, launcher: { r: [0, -0.07, 0.1], l: [0, -0.1, -0.3] }, rpg: { r: [0, -0.1, 0.1], l: [0, -0.1, -0.18] },
+    knife: { r: [0, 0, 0.02], l: null }, grapple: { r: [0, -0.04, 0.02], l: null },
+  };
   function makeAvatar(p) {
     const g = new THREE.Group();
     const suit = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.7 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x2b2d33, roughness: 0.7 });
     const skin = new THREE.MeshStandardMaterial({ color: 0xe0b894, roughness: 0.8 });
-    addPart(g, new THREE.BoxGeometry(0.46, 0.7, 0.26), dark, 0, 0.38, 0);        // legs
-    addPart(g, new THREE.BoxGeometry(0.58, 0.72, 0.32), suit, 0, 1.05, 0);       // torso
+    const boot = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.85 });
+    const vest = new THREE.MeshStandardMaterial({ color: 0x3a3d45, roughness: 0.6, metalness: 0.2 });
+    const legs = [];
+    for (const sx of [-1, 1]) {   // each leg hangs from the hip so it can swing
+      const hip = new THREE.Group(); hip.position.set(sx * 0.12, 0.74, 0); g.add(hip);
+      addPart(hip, new THREE.BoxGeometry(0.2, 0.52, 0.22), dark, 0, -0.26, 0);
+      addPart(hip, new THREE.BoxGeometry(0.22, 0.2, 0.3), boot, 0, -0.64, -0.03);
+      legs.push(hip);
+    }
+    const torso = new THREE.Group(); torso.position.set(0, 0.74, 0); g.add(torso);
+    addPart(torso, new THREE.BoxGeometry(0.5, 0.18, 0.3), dark, 0, 0.08, 0);                 // hips and belt line
+    addPart(torso, new THREE.BoxGeometry(0.52, 0.04, 0.32), boot, 0, 0.19, 0);               // the belt
+    addPart(torso, new THREE.BoxGeometry(0.56, 0.5, 0.32), suit, 0, 0.47, 0);                // chest, in their colour
+    addPart(torso, new THREE.BoxGeometry(0.4, 0.36, 0.07), vest, 0, 0.47, -0.17);            // a vest plate on the front
+    addPart(torso, new THREE.BoxGeometry(0.34, 0.4, 0.12), vest, 0, 0.45, 0.2);              // and a pack on the back
+    for (const sx of [-1, 1]) addPart(torso, new THREE.BoxGeometry(0.16, 0.1, 0.26), suit, sx * 0.33, 0.68, 0);   // shoulders
     const headPivot = new THREE.Group();
     headPivot.position.set(0, 1.5, 0);
+    addPart(headPivot, new THREE.CylinderGeometry(0.075, 0.085, 0.1, 8), skin, 0, 0.0, 0);   // neck
     addPart(headPivot, new THREE.SphereGeometry(0.2, 12, 10), skin, 0, 0.14, 0);
+    addPart(headPivot, new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), suit, 0, 0.15, 0);   // a cap in their colour
+    addPart(headPivot, new THREE.BoxGeometry(0.3, 0.075, 0.07), dark, 0, 0.17, -0.175);       // a visor across the eyes: it shows which way they face
     const steel = new THREE.MeshStandardMaterial({ color: 0x4a4e57, roughness: 0.5, metalness: 0.5 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.8 });
     const guns = {};
@@ -7604,23 +7646,74 @@
     const launcher = new THREE.Group();   // the grapple, while they have it out
     addPart(launcher, new THREE.CylinderGeometry(0.03, 0.03, 0.5, 10), dark, 0, 0, -0.2, Math.PI / 2, 0, 0);
     addPart(launcher, new THREE.BoxGeometry(0.04, 0.1, 0.05), steel, 0, -0.07, 0.02);
-    launcher.position.set(0.24, -0.25, -0.1);
+    launcher.position.set(AV_GUN_X, -0.25, -0.1);
     launcher.visible = false;
     headPivot.add(launcher);
     const knife = new THREE.Group();
     addPart(knife, new THREE.BoxGeometry(0.035, 0.07, 0.3), metalMid, 0, 0, -0.2);
-    knife.position.set(0.24, -0.25, -0.1);
+    knife.position.set(AV_GUN_X, -0.25, -0.1);
     knife.visible = false;
     headPivot.add(knife);
+    for (const id of GUNS) guns[id].position.x = AV_GUN_X;
     g.add(headPivot);
+    // two arms: an upper arm in their colour, a forearm and a glove
+    const arms = [];
+    for (const sx of [-1, 1]) {
+      const upper = addPart(g, new THREE.BoxGeometry(0.11, 1, 0.11), suit, 0, 0, 0);
+      const fore = addPart(g, new THREE.BoxGeometry(0.09, 1, 0.09), dark, 0, 0, 0);
+      const hand = addPart(g, new THREE.SphereGeometry(0.055, 8, 6), skin, 0, 0, 0);
+      arms.push({ sx, upper, fore, hand, shoulder: new THREE.Vector3(sx * 0.34, 1.38, 0) });
+    }
     g.userData.pivot = headPivot;
     g.userData.guns = guns;
     g.userData.launcher = launcher;
     g.userData.knife = knife;
+    g.userData.legs = legs;
+    g.userData.torso = torso;
+    g.userData.arms = arms;
     g.userData.reloadK = 0;
+    g.userData.walk = 0; g.userData.spd = 0;
     g.add(makeNameTag(p.name, p.color));
     scene.add(g);
     return g;
+  }
+  const AV_GUN_X = 0.17;   // the held thing sits this far right of the neck line
+  // a two-bone arm: shoulder to hand, the elbow bending down and outwards
+  const _avS = new THREE.Vector3(), _avH = new THREE.Vector3(), _avD = new THREE.Vector3(), _avE = new THREE.Vector3(), _avPole = new THREE.Vector3(), _avQ = new THREE.Quaternion(), _avUp = new THREE.Vector3(0, 1, 0), _avM = new THREE.Vector3();
+  const AV_UPPER = 0.3, AV_FORE = 0.3;
+  function placeLimb(mesh, from, to, thick) {
+    _avD.subVectors(to, from);
+    const len = _avD.length() || 1e-4;
+    mesh.position.copy(from).add(to).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(_avUp, _avD.multiplyScalar(1 / len));
+    mesh.scale.set(1, len, 1);
+  }
+  function poseArm(arm, target) {   // target: where the hand goes, in the avatar's space
+    _avS.copy(arm.shoulder);
+    _avH.copy(target).sub(_avS);
+    let d = _avH.length();
+    const reach = (AV_UPPER + AV_FORE) * 0.98;
+    if (d > reach) { _avH.multiplyScalar(reach / d); d = reach; }
+    if (d < 0.08) { _avH.multiplyScalar(0.08 / Math.max(d, 1e-4)); d = 0.08; }
+    _avD.copy(_avH).multiplyScalar(1 / d);
+    const along = (AV_UPPER * AV_UPPER - AV_FORE * AV_FORE + d * d) / (2 * d), h = Math.sqrt(Math.max(AV_UPPER * AV_UPPER - along * along, 0));
+    _avPole.set(arm.sx * 0.6, -1, 0.25);
+    _avPole.addScaledVector(_avD, -_avPole.dot(_avD)).normalize();
+    _avE.copy(_avS).addScaledVector(_avD, along).addScaledVector(_avPole, h);
+    _avM.copy(_avS).add(_avH);
+    placeLimb(arm.upper, _avS, _avE);
+    placeLimb(arm.fore, _avE, _avM);
+    arm.hand.position.copy(_avM);
+  }
+  const _avHeld = new THREE.Vector3();
+  function poseAvatarArms(m, held, name) {   // after the gun has been moved this frame
+    const arms = m.userData.arms, hold = AV_HAND_HOLD[name] || AV_HAND_HOLD.default;
+    m.updateMatrixWorld(true);
+    for (const arm of arms) {
+      const pt = arm.sx > 0 ? hold.r : hold.l;
+      if (pt && held) { _avHeld.set(pt[0], pt[1], pt[2]); held.localToWorld(_avHeld); m.worldToLocal(_avHeld); poseArm(arm, _avHeld); }
+      else poseArm(arm, _avHeld.set(arm.sx * 0.38, 0.98, -0.02));   // hanging at the side
+    }
   }
 
   function ensureAvatar(p) {
@@ -7681,6 +7774,16 @@
       if (p.atBuilt !== p.at) refreshAvatarAttachments(p);
       const squash = p.sl ? 0.62 : 1;
       m.scale.y += (squash - m.scale.y) * k;
+      {   // legs: swing with how fast they are moving (the position we draw, over the time between frames)
+        const ud2 = m.userData, mv = Math.hypot(m.position.x - (ud2.lx === undefined ? m.position.x : ud2.lx), m.position.z - (ud2.lz === undefined ? m.position.z : ud2.lz)) / Math.max(dt, 1e-3);
+        ud2.lx = m.position.x; ud2.lz = m.position.z;
+        ud2.spd += (Math.min(mv, 12) - ud2.spd) * Math.min(1, dt * 10);
+        const run = p.sl ? 0 : Math.min(ud2.spd / 6, 1.2);
+        ud2.walk += ud2.spd * dt * 1.7;
+        ud2.legs[0].rotation.x = Math.sin(ud2.walk) * 0.75 * run;
+        ud2.legs[1].rotation.x = -Math.sin(ud2.walk) * 0.75 * run;
+        ud2.torso.rotation.x = -0.12 * run;   // a lean into the run
+      }
       const ud = m.userData, gid = WEAPON_ORDER[p.g] || "rifle", grap = p.gr > 0;
       for (const id of GUNS) ud.guns[id].visible = !grap && gid === id;
       ud.knife.visible = !grap && gid === "knife";
@@ -7694,6 +7797,7 @@
         const u = 1 - Math.max(p.swingT, 0) / 0.32;
         ud.knife.rotation.x = -1.2 + 2.4 * u; ud.knife.position.z = -0.1 - 0.25 * Math.sin(u * Math.PI);
       } else { ud.knife.rotation.x = 0; ud.knife.position.z = -0.1; }
+      poseAvatarArms(m, grap ? ud.launcher : gid === "knife" ? ud.knife : held, grap ? "grapple" : gid);
       // grapple: the rope runs from their hand to the spear
       if (p.gr === 2 && p.gh) {
         const set = ensureRope(p);
