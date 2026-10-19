@@ -248,7 +248,7 @@
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
     hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
-    quality: "auto", showFps: false, trickFeed: true, attach: {}, padOn: true, padLook: 1, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
+    quality: "auto", showFps: false, trickFeed: true, attach: {}, skin: {}, padOn: true, padLook: 1, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
@@ -4138,12 +4138,94 @@
     else return null;
     return g;
   }
-  const attachCode = () => { const ids = chosenAttachments(SETTINGS.loadout).map((o) => o.id); return ids.length ? SETTINGS.loadout + ":" + ids.join(",") : ""; };
-  const AT_CODE_OK = /^[a-z]{2,8}:[a-z0-9,\-]{1,50}$/;
+  // ---- gun skins: three recolours per gun on top of the base look, unlocked by hits with that gun (like attachments) ----
+  // A skin swaps the materials of a gun's parts by their role (the dark metal, the lighter metal, the grips, the wood, the accent, the steel): a part
+  // keeps its shape, only its paint changes. Parts with other materials (glass, brass, blades) are left alone.
+  const camoTexture = (colors) => {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const g = c.getContext("2d");
+    g.fillStyle = colors[0]; g.fillRect(0, 0, 64, 64);
+    let seed = colors.join("").length * 7919;
+    const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    for (let i = 0; i < 26; i++) {
+      g.fillStyle = colors[1 + Math.floor(rnd() * (colors.length - 1))];
+      g.beginPath(); g.ellipse(rnd() * 64, rnd() * 64, 4 + rnd() * 9, 3 + rnd() * 6, rnd() * 3, 0, 7); g.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  };
+  const SKIN_THEMES = {
+    desert: { name: "Desert", sw: ["#c2a56a", "#6b5a3a"], roles: {
+      dark: { camo: ["#a8895a", "#7a6340", "#5a4a30", "#c4ab7c"], metalness: 0.15, roughness: 0.8 }, mid: { color: 0x6f5f3d, metalness: 0.3, roughness: 0.6 },
+      grip: { color: 0x4a3f2a, metalness: 0.05, roughness: 0.9 }, wood: { color: 0x9a7a45, metalness: 0.05, roughness: 0.8 },
+      accent: { color: 0xd0a24a, metalness: 0.5, roughness: 0.5 }, steel: { color: 0x8a7a55, metalness: 0.6, roughness: 0.45 } } },
+    midnight: { name: "Midnight", sw: ["#1d2b57", "#22d3ee"], roles: {
+      dark: { color: 0x1c2a5c, metalness: 0.6, roughness: 0.35 }, mid: { color: 0x2f4a94, metalness: 0.6, roughness: 0.35 },
+      grip: { color: 0x0b1020, metalness: 0.1, roughness: 0.8 }, wood: { color: 0x25357a, metalness: 0.1, roughness: 0.6 },
+      accent: { color: 0x22d3ee, metalness: 0.4, roughness: 0.4, emissive: 0x0a6f85, emissiveIntensity: 0.8 }, steel: { color: 0x4560b0, metalness: 0.6, roughness: 0.3 } } },
+    gold: { name: "Gold", sw: ["#d9b04a", "#7a5a10"], roles: {
+      dark: { color: 0xb8892a, metalness: 0.95, roughness: 0.3 }, mid: { color: 0xd9b04a, metalness: 0.95, roughness: 0.25 },
+      grip: { color: 0x3b2a14, metalness: 0.1, roughness: 0.8 }, wood: { color: 0x5a3b18, metalness: 0.1, roughness: 0.6 },
+      accent: { color: 0xfff0b0, metalness: 0.6, roughness: 0.3, emissive: 0x7a5a10, emissiveIntensity: 0.5 }, steel: { color: 0xe8c860, metalness: 1, roughness: 0.2 } } },
+    arctic: { name: "Arctic", sw: ["#e9eef2", "#5fb4e8"], roles: {
+      dark: { camo: ["#e9eef2", "#b8c4cc", "#8f9ca6", "#dfe6eb"], metalness: 0.1, roughness: 0.75 }, mid: { color: 0x9aa8b3, metalness: 0.4, roughness: 0.5 },
+      grip: { color: 0x5c6670, metalness: 0.05, roughness: 0.9 }, wood: { color: 0xcfd6dc, metalness: 0.05, roughness: 0.7 },
+      accent: { color: 0x5fb4e8, metalness: 0.5, roughness: 0.4 }, steel: { color: 0xd6dde3, metalness: 0.8, roughness: 0.3 } } },
+    crimson: { name: "Crimson", sw: ["#8a1c22", "#ff5a3a"], roles: {
+      dark: { color: 0x5a0f14, metalness: 0.7, roughness: 0.35 }, mid: { color: 0x8a1c22, metalness: 0.6, roughness: 0.4 },
+      grip: { color: 0x1a0b0d, metalness: 0.05, roughness: 0.85 }, wood: { color: 0x7a2420, metalness: 0.05, roughness: 0.7 },
+      accent: { color: 0xff5a3a, metalness: 0.4, roughness: 0.4, emissive: 0x6a1a0a, emissiveIntensity: 0.6 }, steel: { color: 0xc23a40, metalness: 0.8, roughness: 0.3 } } },
+  };
+  // each gun's three skins, and the hits with that gun that open them
+  const GUN_SKINS = {
+    rifle: ["arctic", "midnight", "desert"], ar: ["desert", "midnight", "gold"], ak: ["crimson", "desert", "gold"], shotgun: ["crimson", "midnight", "gold"],
+    pistol: ["arctic", "midnight", "gold"], smg: ["arctic", "crimson", "midnight"], dmr: ["desert", "arctic", "gold"], burst: ["midnight", "crimson", "arctic"],
+    lmg: ["desert", "crimson", "gold"], crossbow: ["desert", "midnight", "arctic"], launcher: ["crimson", "desert", "gold"], rpg: ["midnight", "arctic", "crimson"],
+  };
+  const SKIN_NEED = [25, 75, 150];
+  const skinMats = new Map();
+  function skinMaterial(skinId, role) {
+    const key = skinId + "|" + role;
+    let m = skinMats.get(key);
+    if (!m) {
+      const d = SKIN_THEMES[skinId].roles[role];
+      const opts = { color: d.camo ? 0xffffff : d.color, metalness: Math.min(d.metalness, 0.6), roughness: Math.max(d.roughness, 0.35), envMapIntensity: 0.6 };   // (a very metallic paint reads black without a bright sky to reflect)
+      if (d.camo) opts.map = camoTexture(d.camo);
+      if (d.emissive !== undefined) { opts.emissive = d.emissive; opts.emissiveIntensity = d.emissiveIntensity; }
+      m = new THREE.MeshStandardMaterial(opts);
+      skinMats.set(key, m);
+    }
+    return m;
+  }
+  const SKIN_ROLE_OF = new Map([[metalDark, "dark"], [metalMid, "mid"], [gripMat, "grip"], [polymerMat, "grip"], [woodStock, "wood"], [accentMat, "accent"], [stainlessMat, "steel"], [stainlessDark, "steel"]]);
+  const skinBase = new WeakMap();   // a part -> its own material and role, from before any skin
+  function applyGunSkin(group, skinId) {
+    const id = SKIN_THEMES[skinId] ? skinId : "";
+    if ((group.userData.skinNow || "") === id) return;
+    group.userData.skinNow = id;
+    group.traverse((o) => {
+      if (!o.isMesh) return;
+      let b = skinBase.get(o);
+      if (!b) { b = { mat: o.material, role: o.userData.role || SKIN_ROLE_OF.get(o.material) || null }; skinBase.set(o, b); }
+      if (b.role) o.material = id ? skinMaterial(id, b.role) : b.mat;
+    });
+  }
+  const skinUnlocked = (gun, i) => devUnlockAll || ((stats.guns[gun] && stats.guns[gun].hits) || 0) >= SKIN_NEED[i];
+  function chosenSkin(gun) {   // the skin you picked for a gun, if it is open
+    const id = SETTINGS.skin && SETTINGS.skin[gun], list = GUN_SKINS[gun] || [], i = list.indexOf(id);
+    return i >= 0 && skinUnlocked(gun, i) ? id : "";
+  }
+  const attachCode = () => {
+    const ids = chosenAttachments(SETTINGS.loadout).map((o) => o.id), sk = chosenSkin(SETTINGS.loadout);
+    if (sk) ids.push("skin-" + sk);   // (the skin rides along in the attachment code, so other players see it)
+    return ids.length ? SETTINGS.loadout + ":" + ids.join(",") : "";
+  };
+  const AT_CODE_OK = /^[a-z]{2,8}:[a-z0-9,\-]{1,90}$/;
   function randomAttachCode(gun) {   // a bot's look: a few random attachments (they do not change how a bot shoots)
     if (net.gungame) { const ids = (ggParsePreset(net.ggp)[gun] || []).map((o) => o.id); return ids.length ? gun + ":" + ids.join(",") : ""; }   // (in a gun game, the game's setup)
     const ids = [];
     for (const opts of Object.values(ATTACHMENTS[gun] || {})) if (Math.random() < 0.4) ids.push(opts[Math.floor(Math.random() * opts.length)].id);
+    if (GUN_SKINS[gun] && Math.random() < 0.4) ids.push("skin-" + GUN_SKINS[gun][Math.floor(Math.random() * 3)]);
     return ids.length ? gun + ":" + ids.join(",") : "";
   }
   const WEAPON_BASE = {};   // what each gun is without attachments
@@ -4199,6 +4281,7 @@
       w.recoil = base.recoil * fx.recoil; w.kick = base.kick * fx.recoil;
       w.flashScale = base.flash * fx.flash;
       for (const k of Object.keys(base.reload)) if (typeof base.reload[k] === "number") w.reload[k] = base.reload[k] * fx.reload;
+      applyGunSkin(w.group, chosenSkin(id));
       w.swapK = fx.swap; w.bipodK = fx.bipod;
       w.adsMult = (w.adsBase || 1) * fx.ads; w.scopeFovMult = fx.scopeFov; w.zoomMult = fx.zoom; w.soundMult = fx.sound;
       if (w.ammo > w.magSize) w.ammo = w.magSize;
@@ -4441,6 +4524,7 @@
     if (typeof saved.unlimitedAmmo === "boolean") SETTINGS.unlimitedAmmo = saved.unlimitedAmmo;
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
+    if (saved.skin && typeof saved.skin === "object") for (const g of GUNS) if (typeof saved.skin[g] === "string" && (GUN_SKINS[g] || []).includes(saved.skin[g])) SETTINGS.skin[g] = saved.skin[g];
     if (saved.attach && typeof saved.attach === "object") {   // only what the catalogue has
       for (const g of GUNS) {
         let s = saved.attach[g];
@@ -7447,7 +7531,7 @@
   // simple per-gun shapes for other players: barrel runs along -z from the hand
   function makeAvatarGun(id, dark, steel, wood) {
     const g = new THREE.Group();
-    const P = (geo, mat, x, y, z, rx) => addPart(g, geo, mat, x, y, z, rx || 0, 0, 0);
+    const P = (geo, mat, x, y, z, rx) => { const m = addPart(g, geo, mat, x, y, z, rx || 0, 0, 0); m.userData.role = mat === dark ? "dark" : mat === steel ? "mid" : mat === wood ? "wood" : null; return m; };   // (the role is what a skin repaints)
     const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
     const HP = Math.PI / 2;
     if (id === "rifle") {            // sniper: long barrel, wooden stock, and a scope when one is fitted
@@ -7554,6 +7638,7 @@
     for (const id of GUNS) {
       const g = ud.guns[id];
       if (g && g.userData.atGroup) { g.remove(g.userData.atGroup); g.userData.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); g.userData.atGroup = null; }
+      if (g) applyGunSkin(g, "");
     }
     if (ud.guns.rifle.userData.scope) ud.guns.rifle.userData.scope.visible = false;
     if (ud.guns.rifle.userData.stock) ud.guns.rifle.userData.stock.visible = true;
@@ -7561,6 +7646,8 @@
     const [gun, list] = p.at.split(":"), mount = AV_MOUNT[gun], target = ud.guns[gun];
     if (!target || !mount) return;
     const known = new Set(Object.values(ATTACHMENTS[gun] || {}).flat().map((o) => o.id));
+    const sk = list.split(",").find((x) => x.startsWith("skin-")), skinId = sk && (GUN_SKINS[gun] || []).includes(sk.slice(5)) ? sk.slice(5) : "";
+    if (skinId) applyGunSkin(target, skinId);
     const ids = list.split(",").filter((x) => known.has(x));
     if (!ids.length) return;
     if (gun === "rifle" && target.userData.scope) {
@@ -10059,6 +10146,9 @@
     for (const opts of Object.values(ATTACHMENTS[gun] || {})) for (const o of opts) {
       if (o.need === hits) { achQueue.push({ name: "Unlocked: " + o.name, desc: WEAPONS[gun].name + " attachment" }); if (!achToastTimer) nextAchToast(); }
     }
+    (GUN_SKINS[gun] || []).forEach((id, i) => {
+      if (SKIN_NEED[i] === hits) { achQueue.push({ name: "Unlocked: " + SKIN_THEMES[id].name + " skin", desc: WEAPONS[gun].name + " skin" }); if (!achToastTimer) nextAchToast(); }
+    });
   }
   function gunStat(id) { return stats.guns[id] || (stats.guns[id] = { shots: 0, hits: 0, points: 0 }); }
   // "FLICK 80° x1.40" -> "FLICK", "HANG TIME 1.4s x1.16" -> "HANG TIME"; spins keep their size; streaks are counted apart
@@ -10590,6 +10680,29 @@
     document.getElementById("attach-name").textContent = WEAPONS[attachGun].name;
     renderAttachStats();
     const fitted = (SETTINGS.attach && SETTINGS.attach[attachGun]) || {};
+    {   // the skin row: the base look, then the gun's three skins
+      const sec = document.createElement("div"); sec.className = "at-slot";
+      sec.innerHTML = "<h3>Skin</h3>";
+      const grid = document.createElement("div"); grid.className = "at-opts at-skins";
+      const cur = chosenSkin(attachGun), list = GUN_SKINS[attachGun] || [];
+      const mk = (id, name, sw, locked, need) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.dataset.skin = id; b.className = "at-opt" + (id ? "" : " none") + (cur === id ? " active" : "") + (locked ? " locked" : "");
+        b.innerHTML = '<b><i class="sk-sw" style="background:linear-gradient(135deg,' + (sw ? sw[0] + " 50%," + sw[1] + " 50%" : "#3c3f45 50%,#232427 50%") + ')"></i>' + name + "</b><span>" + (id ? "A recolour, nothing else changes" : "The standard look") + "</span>" +
+          (locked ? '<i class="at-bar"><u style="width:' + Math.round(Math.min(1, hits / need) * 100) + '%"></u></i><em>' + hits + " / " + need + " hits</em>" : "");
+        b.addEventListener("mouseenter", () => apLook(""));
+        b.addEventListener("click", () => {
+          if (locked) return;
+          SETTINGS.skin = SETTINGS.skin || {};
+          if (id) SETTINGS.skin[attachGun] = id; else delete SETTINGS.skin[attachGun];
+          saveSettings(); applyAttachments(); renderAttach(); apLook("");
+        });
+        grid.appendChild(b);
+      };
+      mk("", "Base", null, false, 0);
+      list.forEach((id, i) => mk(id, SKIN_THEMES[id].name, SKIN_THEMES[id].sw, !skinUnlocked(attachGun, i), SKIN_NEED[i]));
+      sec.appendChild(grid); slotsEl.appendChild(sec);
+    }
     for (const [slot, opts] of Object.entries(ATTACHMENTS[attachGun] || {})) {
       const sec = document.createElement("div"); sec.className = "at-slot";
       sec.innerHTML = "<h3>" + (ATTACH_SLOTS[slot] || slot) + "</h3>";

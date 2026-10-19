@@ -785,12 +785,12 @@ def test_attachments(browser, base):
           all(page.query_selector(f'#attach-slots .at-opt[data-opt="{o}"]') is not None for o in ("longbarrel", "heavybarrel", "optic-2x")))
     page.click('#attach-slots .at-opt[data-opt="optic-2x"]')
     page.click('#attach-slots .at-opt[data-opt="longbarrel"]')
-    check("a scope and a barrel can be fitted together", page.eval_on_selector_all('#attach-slots .at-opt.active', "els => els.map(e => e.dataset.opt)").count("optic-2x") == 1)
+    check("a scope and a barrel can be fitted together", page.eval_on_selector_all('#attach-slots .at-opt[data-opt].active', "els => els.map(e => e.dataset.opt)").count("optic-2x") == 1)
     # a grip and a magazine can be fitted together, and an old save with the magazine in the grip slot still works
     page.click('#attach-guns button[data-gun="dmr"]')
     page.click('#attach-slots .at-opt[data-opt="vgrip"]')
     page.click('#attach-slots .at-opt[data-opt="extmag"]')
-    both = page.eval_on_selector_all('#attach-slots .at-opt.active', "els => els.map(e => e.dataset.opt)")
+    both = page.eval_on_selector_all('#attach-slots .at-opt[data-opt].active', "els => els.map(e => e.dataset.opt)")
     check("a vertical grip and an extended magazine can be fitted together", "vgrip" in both and "extmag" in both, ", ".join(both))
     page.evaluate("localStorage.setItem('tsb-settings', JSON.stringify({attach: {dmr: {grip: 'extmag'}}}))")
     page.reload()
@@ -1227,6 +1227,64 @@ def test_satchel(browser, base):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_skins(browser, base):
+    """Gun skins: three per gun plus the base, locked until hits with that gun, applied to the gun in your hands, remembered, sent to other players in the attachment code, and shown on their guns."""
+    import json
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 1100, 650)
+        page.click("#attach-open")
+        page.wait_for_timeout(300)
+        opts = page.eval_on_selector_all("#attach-slots .at-opt[data-skin]", "els => els.map(e => [e.dataset.skin, e.className.includes('locked')])")
+        check("the attachments window offers the base look and three skins for the sniper, all but the base locked at 0 hits", len(opts) == 4 and opts[0] == ["", False] and all(o[1] for o in opts[1:]), str(opts))
+        page.click('#attach-slots .at-opt[data-skin="arctic"]')
+        now = page.evaluate("window.__dbg.WEAPONS.rifle.group.userData.skinNow || ''")
+        check("clicking a locked skin does nothing", now == "", str(now))
+        page.keyboard.press("Escape")
+        stats = {"since": "2026-01-01", "kinds": {}, "guns": {"ar": {"shots": 300, "hits": 100, "points": 0}}, "tricks": {}}
+        page.evaluate("(s) => localStorage.setItem('tsb-stats', JSON.stringify(s))", stats)
+        page.reload()
+        page.wait_for_timeout(300)
+        page.click('#loadout button[data-gun="ar"]')
+        page.click("#attach-open")
+        page.wait_for_timeout(300)
+        opts = page.eval_on_selector_all("#attach-slots .at-opt[data-skin]", "els => els.map(e => [e.dataset.skin, e.className.includes('locked')])")
+        check("100 hits with the rifle open the first two skins (25 and 75) and not the third (150)", [o[1] for o in opts] == [False, False, False, True], str(opts))
+        page.click('#attach-slots .at-opt[data-skin="desert"]')
+        now = page.evaluate("window.__dbg.WEAPONS.ar.group.userData.skinNow || ''")
+        check("an open skin repaints the gun", now == "desert", str(now))
+        code = page.evaluate("window.__dbg.attachCode()")
+        check("the skin rides along in the attachment code other players receive", "skin-desert" in code, code)
+        page.keyboard.press("Escape")
+        page.reload()
+        page.wait_for_timeout(400)
+        again = page.evaluate("window.__dbg.WEAPONS.ar.group.userData.skinNow || ''")
+        check("the skin is remembered after a reload", again == "desert", str(again))
+        # another player's gun wears the skin its owner sent
+        page.click("#start-btn")
+        step(page, 30)
+        page.evaluate("__unlock()")
+        step(page, 3)
+        page.click('#mode-tabs .tab[data-mode="mp"]')
+        start_practice(page, mode="dm", bots=1, level="easy")
+        page.click("#mp-play-btn")
+        step(page, 40)
+        got = page.evaluate("""() => { const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot);
+          bot.at = 'ar:reddot,skin-gold'; return 1; }""")
+        step(page, 4)
+        sk = page.evaluate("(() => { const bot = [...window.__dbg.net.players.values()].find((p) => p.bot); return bot.mesh.userData.guns.ar.userData.skinNow || ''; })()")
+        check("another player's gun is painted with the skin in their code", sk == "gold", str(sk))
+        page.evaluate("[...window.__dbg.net.players.values()].find((p) => p.bot).at = 'ar:reddot'")
+        step(page, 4)
+        sk2 = page.evaluate("(() => { const bot = [...window.__dbg.net.players.values()].find((p) => p.bot); return bot.mesh.userData.guns.ar.userData.skinNow || ''; })()")
+        check("and goes back to the base look without it", sk2 == "", str(sk2))
+        check("the skin checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_crossbow(browser, base):
     """The crossbow's bolt flies, scores on a target, and hurts a dummy through the host's checks (55 body, a head kills); the bolt is gone until the reload brings the next one."""
     server, dbase, tmp = debug_site()
@@ -1336,7 +1394,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, hostDealDamage, grenades, throwFrag, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
+            "hostStartRound, hostDealDamage, grenades, throwFrag, attachCode, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")
@@ -1863,10 +1921,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 
