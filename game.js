@@ -678,7 +678,9 @@
       const t = surfaceCanvases[key].clone();
       t.needsUpdate = true;
       t.repeat.set(repeatX, repeatY);
-      return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.6 : kind === "ice" ? 0.15 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.3 : kind === "ice" ? 0.15 : 0 });
+      // (the sky's reflection turned shallow slopes flat white, so shiny surfaces reflect it at a lower strength)
+      return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.68 : kind === "ice" ? 0.15 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.2 : kind === "ice" ? 0.15 : 0,
+        envMapIntensity: kind === "deck" || kind === "slab" ? 0.55 : kind === "ice" ? 0.8 : 1 });
     });
   }
   // The still pieces of a level that share a material become one mesh each (a draw call per mesh is what costs, and a
@@ -940,6 +942,21 @@
     shape.moveTo(0, 0); shape.lineTo(length, 0); shape.lineTo(length, height); shape.closePath();
     const geo = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: false });
     geo.translate(-length / 2, 0, -width / 2);
+    {   // the texture goes on by metres of surface (the extruder's own mapping stretches it on a long, shallow slope)
+      const pos = geo.attributes.position, uv = geo.attributes.uv, k = Math.hypot(length, height) / length;
+      for (let t = 0; t + 2 < pos.count; t += 3) {
+        const ax = pos.getX(t + 1) - pos.getX(t), ay = pos.getY(t + 1) - pos.getY(t), az = pos.getZ(t + 1) - pos.getZ(t);
+        const bx = pos.getX(t + 2) - pos.getX(t), by = pos.getY(t + 2) - pos.getY(t), bz = pos.getZ(t + 2) - pos.getZ(t);
+        const nx = Math.abs(ay * bz - az * by), ny = Math.abs(az * bx - ax * bz), nz = Math.abs(ax * by - ay * bx), m = Math.max(nx, ny, nz) || 1;
+        for (let i = 0; i < 3; i++) {
+          const x = pos.getX(t + i), y = pos.getY(t + i), z = pos.getZ(t + i);
+          if (nz === m) uv.setXY(t + i, x, y);   // the two triangular sides
+          else if (nx === m) uv.setXY(t + i, z, y);   // the tall end
+          else uv.setXY(t + i, x * k, z);   // the slope and the underside
+        }
+      }
+      uv.needsUpdate = true;
+    }
     if (along === "x") { if (dir < 0) geo.rotateY(Math.PI); }
     else geo.rotateY(dir > 0 ? -Math.PI / 2 : Math.PI / 2);
     const mesh = new THREE.Mesh(geo, surfaceMaterial(rampKind, 0.25, 0.25, levelPalette[rampKind]));
@@ -1251,7 +1268,7 @@
     maxBots: 11,   // (a big map holds more bots in practice)
     id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals.",
     half: 45, floor: "moon", wallH: 18, targetMaxY: 18, physics: { gravity: 8.5 },
-    theme: { skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x33405c, 0x14151a, 0.38],
+    theme: { skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x5b6c92, 0x2a2d3a, 0.62],
       surfaces: { moon: "#8c8f96", concrete: "#767a82", brick: "#5b6470", deck: "#a0a6af", facade: "#8f969f", facadeb: "#6e7885", roof: "#6c7078" } },
     buildings: [[-22, -20, 12, 8, 4.5, "facade"], [22, 20, 12, 8, 4.5, "facade"], [22, -22, 8, 12, 6.5, "facadeb"], [-22, 22, 8, 12, 6.5, "facadeb"], [0, 0, 7, 7, 9.5, "facade"]],
     walls: [
@@ -1575,6 +1592,12 @@
   const TARGET_COLORS_DEFAULT = {}, TARGET_COLORS_SAFE = { normal: "#0072b2", moving: "#f0e442", small: "#cc79a7", tiny: "#009e73" };
   for (const kind of TARGET_ORDER) TARGET_COLORS_DEFAULT[kind] = TARGET_TYPES[kind].color;
   let targetPaletteSafe = false;
+  // the HUD grows with the window (1080p gets 1.15x, 1440p and up 1.4x), times the Accessibility size setting
+  function applyHudScale() {
+    const auto = Math.min(Math.max(Math.min(window.innerWidth / 1280, window.innerHeight / 720), 1), 1.5);
+    document.documentElement.style.setProperty("--hud-scale", String(+(SETTINGS.hudScale * (1 + (auto - 1) * 0.6)).toFixed(3)));
+  }
+  window.addEventListener("resize", applyHudScale);
   function applyTargetPalette() {
     if (targetPaletteSafe === !!SETTINGS.colorblindTargets) return;
     targetPaletteSafe = !!SETTINGS.colorblindTargets;
@@ -2124,8 +2147,8 @@
   // ======================================================================
   // VIEWMODELS
   // ======================================================================
-  const metalDark = new THREE.MeshStandardMaterial({ color: 0x232427, roughness: 0.4, metalness: 0.6 });
-  const metalMid = new THREE.MeshStandardMaterial({ color: 0x3c3f45, roughness: 0.5, metalness: 0.5 });
+  const metalDark = new THREE.MeshStandardMaterial({ color: 0x232427, roughness: 0.45, metalness: 0.6, envMapIntensity: 0.55 });
+  const metalMid = new THREE.MeshStandardMaterial({ color: 0x3c3f45, roughness: 0.5, metalness: 0.5, envMapIntensity: 0.55 });
   const woodStock = new THREE.MeshStandardMaterial({ color: 0x4b3a2a, roughness: 0.8, metalness: 0.05 });
   const scopeGlass = new THREE.MeshStandardMaterial({ color: 0x0b1820, emissive: 0x06202c, emissiveIntensity: 0.5, roughness: 0.05, metalness: 0.9 });
   const glintMat = new THREE.MeshBasicMaterial({ color: 0xbfe4ff, transparent: true, opacity: 0.35 });
@@ -2350,7 +2373,7 @@
   })();
 
 
-  const polymerMat = new THREE.MeshStandardMaterial({ color: 0x2b2c2f, roughness: 0.75, metalness: 0.15 });
+  const polymerMat = new THREE.MeshStandardMaterial({ color: 0x2b2c2f, roughness: 0.75, metalness: 0.15, envMapIntensity: 0.6 });
   // ---- assault rifle: flat-top carbine with a quad-rail handguard ----
   const arGroup = new THREE.Group();
   addPart(arGroup, new THREE.BoxGeometry(0.05, 0.06, 0.26), metalDark, 0, 0.02, 0);              // upper receiver
@@ -2648,8 +2671,9 @@
   addPart(launcherGroup, new THREE.BoxGeometry(0.045, 0.085, 0.2), polymerMat, 0, -0.005, 0.37);                       // stock
   addPart(launcherGroup, new THREE.BoxGeometry(0.05, 0.09, 0.02), gripMat, 0, -0.005, 0.48);                           // butt pad
   addPart(launcherGroup, new THREE.BoxGeometry(0.008, 0.035, 0.008), metalDark, 0, 0.065, -0.5);                       // front post
-  addPart(launcherGroup, new THREE.BoxGeometry(0.03, 0.03, 0.016), metalDark, 0, 0.058, 0.1);                          // rear sight block
-  const launcherMag = addPart(launcherGroup, new THREE.CylinderGeometry(0.02, 0.02, 0.1, 10), accentMat, 0, 0.055, -0.06, HALF_PI, 0, 0);   // the grenade in the breech (the "magazine")
+  addPart(launcherGroup, new THREE.BoxGeometry(0.034, 0.008, 0.016), metalDark, 0, 0.047, 0.1);                         // rear sight base
+  for (const sx of [-1, 1]) addPart(launcherGroup, new THREE.BoxGeometry(0.008, 0.03, 0.016), metalDark, sx * 0.013, 0.06, 0.1);   // and its two posts (an open notch to aim through)
+  const launcherMag = addPart(launcherGroup, new THREE.CylinderGeometry(0.02, 0.02, 0.1, 10), accentMat, 0, 0.046, -0.06, HALF_PI, 0, 0);   // the grenade in the breech (the "magazine")
   addPart(launcherMag, new THREE.SphereGeometry(0.02, 10, 6), accentMat, 0, 0.05, 0);
 
   // ---- RPG: a long tube with a flared rear, a pistol grip, a sight and a warhead poking out of the front (the "magazine": it goes after a shot and a new one is loaded) ----
@@ -2661,7 +2685,8 @@
   addPart(rpgGroup, new THREE.BoxGeometry(0.035, 0.07, 0.04), gripMat, 0, -0.08, -0.2, -0.1, 0, 0);                    // front hand grip
   addPart(rpgGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.062, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
   addPart(rpgGroup, new THREE.BoxGeometry(0.008, 0.04, 0.008), metalDark, 0, 0.075, -0.4);                             // front post
-  addPart(rpgGroup, new THREE.BoxGeometry(0.03, 0.035, 0.016), metalDark, 0, 0.07, 0.15);                              // rear sight block
+  addPart(rpgGroup, new THREE.BoxGeometry(0.034, 0.008, 0.016), metalDark, 0, 0.058, 0.15);                             // rear sight base
+  for (const sx of [-1, 1]) addPart(rpgGroup, new THREE.BoxGeometry(0.008, 0.03, 0.016), metalDark, sx * 0.013, 0.071, 0.15);   // and its two posts (an open notch to aim through)
   const rpgMag = new THREE.Group(); rpgMag.position.set(0, 0, -0.5); rpgGroup.add(rpgMag);
   addPart(rpgMag, new THREE.CylinderGeometry(0.04, 0.04, 0.12, 12), accentMat, 0, 0, 0, HALF_PI, 0, 0);                 // the warhead's body
   addPart(rpgMag, new THREE.ConeGeometry(0.04, 0.12, 12), accentMat, 0, 0, -0.12, -HALF_PI, 0, 0);                      // and its nose
@@ -2835,7 +2860,7 @@
     shotgun: {
       name: "SHOTGUN", group: shotgunGroup,
       restPos: new THREE.Vector3(0.26, -0.27, -0.55), restRot: new THREE.Euler(0.03, -0.07, 0.01),
-      adsPos: new THREE.Vector3(0.0, -0.049, -0.2), adsRot: new THREE.Euler(0, 0, 0),   // the stock drops away below the view
+      adsPos: new THREE.Vector3(0.0, -0.049, -0.34), adsRot: new THREE.Euler(0, 0, 0),   // the stock drops away below the view (pushed out so the receiver does not fill the screen)
       canADS: true, scope: false, adsZoom: 0.85, fireRate: 0.85, auto: false, isMelee: false, usesAmmo: true,
       magSize: 6, ammoLabel: "SHELLS", pellets: 9, spread: 0.065, spreadAds: 0.05, bloom: 0, bloomMax: 0, bloomRecover: 0,
       range: 70, scoreScale: 0.6, recoil: 1.15, kick: 0.9, flashScale: 1.25, brake: false, smoke: 1.1,
@@ -4380,7 +4405,7 @@
     TEAM_NAMES[1] = SETTINGS.colorblindTargets ? "Orange" : "Red";
     HILL_CONTESTED.c = SETTINGS.colorblindTargets ? 0xff4fd8 : 0xff4a3d; HILL_CONTESTED.css = SETTINGS.colorblindTargets ? "#ff7be3" : "#ff6a5e";
     document.body.classList.toggle("hc", !!SETTINGS.highContrast);
-    document.documentElement.style.setProperty("--hud-scale", String(SETTINGS.hudScale));
+    applyHudScale();
     if (decalMesh) decalMesh.visible = !!SETTINGS.bulletHoles;
     if (targetsReady) syncTargetCounts();
     if (SETTINGS.quality === "auto") { if (!gfxLevel) applyGraphics("high"); }

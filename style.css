@@ -281,7 +281,7 @@
 
   #speed {
     position: absolute; bottom: 18px; left: 18px; color: #fff;
-    font-size: 14px; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 6px;
+    font-size: 14px; background: rgba(8,8,12,0.66); padding: 6px 10px; border-radius: 6px;
   }
   #speed span { color: #ffd24a; font-weight: bold; }
   #speed .state { color: #7CFC00; font-size: 12px; }
@@ -510,12 +510,10 @@
     font: 12.5px 'Segoe UI', Arial, sans-serif; cursor: pointer; }
   .rp-buttons button:hover { border-color: #ffd24a; color: #fff; }
   #rp-exit { color: #ff9d3b; }
-  #nade-chip { position: absolute; left: 18px; bottom: 78px; background: rgba(15,15,20,0.7); border: 1px solid rgba(255,255,255,0.18); color: #cfd6de; padding: 4px 10px; border-radius: 6px; font-size: 12px; letter-spacing: 0.04em; pointer-events: none; }
-  #pack-chip { position: absolute; left: 18px; bottom: 110px; background: rgba(15,15,20,0.7); border: 1px solid rgba(255,255,255,0.18); color: #cfd6de; padding: 4px 10px; border-radius: 6px; font-size: 12px; letter-spacing: 0.04em; pointer-events: none; }
-  #pack-chip.ready { border-color: #ffd24a; color: #ffe9a8; }
-  #pack-chip[hidden] { display: none; }
-  #nade-chip.ready { border-color: #ffd24a; color: #ffe9a8; }
-  #nade-chip[hidden] { display: none; }
+  #chips { position: absolute; left: 0; bottom: calc(100% + 8px); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; white-space: nowrap; }
+  #nade-chip, #pack-chip { background: rgba(10,10,14,0.72); border: 1px solid rgba(255,255,255,0.22); color: #d6dce4; padding: 4px 10px; border-radius: 6px; font-size: 12px; letter-spacing: 0.04em; pointer-events: none; }
+  #nade-chip.ready, #pack-chip.ready { border-color: #ffd24a; color: #ffe9a8; }
+  #nade-chip[hidden], #pack-chip[hidden] { display: none; }
   #map-tip { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); max-width: min(560px, 90vw); text-align: center; background: rgba(15,15,20,0.85);
     border: 1px solid #ffd24a; color: #ffe9a8; padding: 6px 14px; border-radius: 6px; font-size: 13px; pointer-events: none; z-index: 5; }
   #map-tip[hidden] { display: none; }
@@ -616,6 +614,8 @@
   #dead-screen small { font-size: 16px; margin-top: 6px; color: #ddd; }
   #dead-screen #dead-recap { font-size: 13px; font-weight: normal; letter-spacing: 0.5px; text-shadow: 0 1px 3px #000; margin-top: 8px; line-height: 1.6; color: #ffe9a8; }
   #dead-screen #dead-recap:empty { display: none; }
+  #dead-screen #dead-recap div { font-size: 17px; font-weight: 600; letter-spacing: 0.4px; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,0.7); }   /* (the lines are divs too: without this they took the 44 px title style) */
+  #dead-screen #dead-recap div:first-child { font-size: 20px; color: #fff; }
 
   #scoreboard {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 25;
@@ -690,3 +690,10 @@
   #kill-banner.bad .kb-top { color: #ff6a5e; }
   #kill-banner.pop { animation: kill-pop 1.9s ease-out forwards; }
   @keyframes kill-pop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -62%) scale(1); } }
+
+  /* HUD readability on bright maps (ice, sand, sky): darker panels, brighter secondary text */
+  #speed, #score, #streak, #best, #ammo, #mp-timer, #killfeed div { background: rgba(8,8,12,0.68); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+  .slot { background: rgba(8,8,12,0.72); color: #bcbcc4; border-color: rgba(255,255,255,0.3); }
+  .slot.active { background: rgba(58,46,10,0.86); color: #fff; }
+  #ammo .count .max, #ammo .label { color: #b4b4bc; }
+  #ammo .label.reloading { color: #ffd24a; }
