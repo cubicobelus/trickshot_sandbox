@@ -10667,8 +10667,8 @@
       "<em>" + (all.length - locked.length) + " of " + all.length + " attachments unlocked</em></div>";
   }
   function renderAttach() {
-    const gunsEl = document.getElementById("attach-guns"), slotsEl = document.getElementById("attach-slots");
-    gunsEl.textContent = ""; slotsEl.textContent = "";
+    const gunsEl = document.getElementById("attach-guns"), slotsEl = document.getElementById("attach-slots"), skinsEl = document.getElementById("attach-skins");
+    gunsEl.textContent = ""; slotsEl.textContent = ""; skinsEl.textContent = "";
     for (const g of GUNS) {
       const b = document.createElement("button");
       b.type = "button"; b.dataset.gun = g; b.className = "lo-gun" + (g === attachGun ? " active" : "");
@@ -10680,7 +10680,7 @@
     document.getElementById("attach-name").textContent = WEAPONS[attachGun].name;
     renderAttachStats();
     const fitted = (SETTINGS.attach && SETTINGS.attach[attachGun]) || {};
-    {   // the skin row: the base look, then the gun's three skins
+    {   // the skins: the base look, then the gun's three skins (under the stats, apart from the attachments)
       const sec = document.createElement("div"); sec.className = "at-slot";
       sec.innerHTML = "<h3>Skin</h3>";
       const grid = document.createElement("div"); grid.className = "at-opts at-skins";
@@ -10688,7 +10688,7 @@
       const mk = (id, name, sw, locked, need) => {
         const b = document.createElement("button");
         b.type = "button"; b.dataset.skin = id; b.className = "at-opt" + (id ? "" : " none") + (cur === id ? " active" : "") + (locked ? " locked" : "");
-        b.innerHTML = '<b><i class="sk-sw" style="background:linear-gradient(135deg,' + (sw ? sw[0] + " 50%," + sw[1] + " 50%" : "#3c3f45 50%,#232427 50%") + ')"></i>' + name + "</b><span>" + (id ? "A recolour, nothing else changes" : "The standard look") + "</span>" +
+        b.innerHTML = '<b><i class="sk-sw" style="background:linear-gradient(135deg,' + (sw ? sw[0] + " 50%," + sw[1] + " 50%" : "#3c3f45 50%,#232427 50%") + ')"></i>' + name + "</b>" +
           (locked ? '<i class="at-bar"><u style="width:' + Math.round(Math.min(1, hits / need) * 100) + '%"></u></i><em>' + hits + " / " + need + " hits</em>" : "");
         b.addEventListener("mouseenter", () => apLook(""));
         b.addEventListener("click", () => {
@@ -10701,7 +10701,7 @@
       };
       mk("", "Base", null, false, 0);
       list.forEach((id, i) => mk(id, SKIN_THEMES[id].name, SKIN_THEMES[id].sw, !skinUnlocked(attachGun, i), SKIN_NEED[i]));
-      sec.appendChild(grid); slotsEl.appendChild(sec);
+      sec.appendChild(grid); skinsEl.appendChild(sec);
     }
     for (const [slot, opts] of Object.entries(ATTACHMENTS[attachGun] || {})) {
       const sec = document.createElement("div"); sec.className = "at-slot";

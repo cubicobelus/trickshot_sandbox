@@ -699,4 +699,10 @@
   #ammo .label.reloading { color: #ffd24a; }
 
   /* gun skins in the attachments window */
+  #attach-skins { margin-top: 10px; }
+  #attach-skins .at-slot h3 { margin-top: 0; }
+  .at-skins { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .at-skins .at-opt { padding: 7px 6px 6px; }
+  .at-skins .at-opt b { font-size: 12px; white-space: nowrap; }
+  .at-skins .at-opt em { font-size: 10px; }
   .at-skins .sk-sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; border: 1px solid rgba(255,255,255,0.35); }
