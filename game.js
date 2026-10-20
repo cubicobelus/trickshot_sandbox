@@ -2501,35 +2501,34 @@
   const pumpBody = addPart(shotgunPump, new THREE.CylinderGeometry(0.03, 0.03, 0.17, 12), polymerMat, 0, 0.002, 0, HALF_PI, 0, 0);
   pumpBody.scale.set(0.95, 1, 0.82);
   for (let i = 0; i < 7; i++) addPart(shotgunPump, new THREE.TorusGeometry(0.0285, 0.0028, 4, 14), gripMat, 0, 0.002, -0.066 + i * 0.022);
-  // ---- Desert Eagle: polished stainless, a long triangular barrel with a top rail over
-  // a short slide, a squared trigger guard and a chunky rubber grip ----
+  // ---- Desert Eagle: polished stainless, one long slab-sided slide over a frame (the sights sit on the slide, the barrel
+  // nose is fixed and shows when the slide kicks back), a squared trigger guard and a chunky rubber grip ----
   const stainlessMat = new THREE.MeshStandardMaterial({ color: 0xd4d8de, roughness: 0.22, metalness: 0.9 });
   const stainlessDark = new THREE.MeshStandardMaterial({ color: 0xa7acb3, roughness: 0.3, metalness: 0.85 });
   const pistolGroup = new THREE.Group();
-  addPart(pistolGroup, new THREE.BoxGeometry(0.036, 0.032, 0.21), stainlessDark, 0, -0.008, -0.03);    // frame
-  // barrel: a triangular prism, point down, flat face up, with the rail along the top
-  const deBarrel = addPart(pistolGroup, new THREE.CylinderGeometry(0.026, 0.026, 0.17, 3), stainlessMat, 0, 0.034, -0.1, HALF_PI, 0, 0);
-  deBarrel.rotation.order = "XZY"; deBarrel.rotation.set(HALF_PI, 0, Math.PI);   // flat side up
-  deBarrel.scale.set(1, 1, 0.75);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.014, 0.006, 0.16), stainlessDark, 0, 0.052, -0.1);       // top rail
-  addPart(pistolGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.004, 10), portMat, 0, 0.034, -0.186, HALF_PI, 0, 0);   // bore
-  addPart(pistolGroup, new THREE.BoxGeometry(0.005, 0.009, 0.012), stainlessDark, 0, 0.059, -0.175);    // front sight
-  // slide: the rear section, which kicks back on every shot
+  addPart(pistolGroup, new THREE.BoxGeometry(0.038, 0.03, 0.27), stainlessDark, 0, -0.012, -0.03);    // the frame, under the whole slide
+  for (let i = 0; i < 3; i++) addPart(pistolGroup, new THREE.BoxGeometry(0.034, 0.004, 0.008), metalDark, 0, -0.0275, -0.08 - i * 0.022);   // rail slots under the muzzle
+  addPart(pistolGroup, new THREE.CylinderGeometry(0.0125, 0.0125, 0.04, 12), stainlessMat, 0, 0.034, -0.19, HALF_PI, 0, 0);   // the barrel nose
+  addPart(pistolGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.004, 10), portMat, 0, 0.034, -0.2105, HALF_PI, 0, 0);   // bore
+  // slide: the whole top half, which kicks back on every shot
   const pistolSlide = new THREE.Group();
   pistolGroup.add(pistolSlide);
-  addPart(pistolSlide, new THREE.BoxGeometry(0.04, 0.042, 0.11), stainlessMat, 0, 0.028, 0.035);
-  for (let i = 0; i < 6; i++) addPart(pistolSlide, new THREE.BoxGeometry(0.042, 0.032, 0.0035), stainlessDark, 0, 0.026, 0.05 + i * 0.008);
+  addPart(pistolSlide, new THREE.BoxGeometry(0.04, 0.0455, 0.285), stainlessMat, 0, 0.0258, -0.0475);
+  addPart(pistolSlide, new THREE.BoxGeometry(0.012, 0.004, 0.2), stainlessDark, 0, 0.0505, -0.06);        // the ribbed top
+  for (let i = 0; i < 6; i++) addPart(pistolSlide, new THREE.BoxGeometry(0.042, 0.034, 0.0035), stainlessDark, 0, 0.026, 0.05 + i * 0.008);   // serrations at the back
+  addPart(pistolSlide, new THREE.BoxGeometry(0.004, 0.012, 0.045), portMat, 0.0205, 0.036, 0.0);          // the ejection port, on the right
+  addPart(pistolSlide, new THREE.BoxGeometry(0.005, 0.015, 0.012), stainlessDark, 0, 0.056, -0.175);      // front sight
   addPart(pistolSlide, new THREE.BoxGeometry(0.008, 0.009, 0.008), stainlessDark, -0.009, 0.053, 0.083);   // rear sight, two ears
   addPart(pistolSlide, new THREE.BoxGeometry(0.008, 0.009, 0.008), stainlessDark, 0.009, 0.053, 0.083);
-  // squared trigger guard, trigger, slide stop, hammer
+  // squared trigger guard, trigger, slide stop
   addPart(pistolGroup, new THREE.BoxGeometry(0.008, 0.032, 0.008), stainlessDark, 0, -0.036, -0.06);
   addPart(pistolGroup, new THREE.BoxGeometry(0.008, 0.008, 0.06), stainlessDark, 0, -0.05, -0.034);
   addPart(pistolGroup, new THREE.BoxGeometry(0.006, 0.024, 0.006), metalDark, 0, -0.032, -0.03, 0.25, 0, 0);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.004, 0.008, 0.03), stainlessDark, 0.02, 0.006, 0.0);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.014, 0.02, 0.014), stainlessDark, 0, 0.044, 0.096, -0.5, 0, 0);
+  addPart(pistolGroup, new THREE.BoxGeometry(0.004, 0.008, 0.03), stainlessDark, 0.02, -0.004, 0.0);
   addPart(pistolGroup, new THREE.BoxGeometry(0.04, 0.135, 0.058), gripMat, 0, -0.08, 0.06, 0.24, 0, 0);    // rubber grip
   const pistolMag = addPart(pistolGroup, new THREE.BoxGeometry(0.03, 0.12, 0.045), metalDark, 0, -0.09, 0.062, 0.24, 0, 0);
 
+  for (const side of [-1, 1]) addPart(pistolGroup, new THREE.BoxGeometry(0.002, 0.1, 0.042), metalDark, side * 0.0205, -0.082, 0.06, 0.24, 0, 0);   // inset panels on its sides
   // ---- SMG: a short boxy receiver with a vented shroud, a straight 32-round magazine and a folding wire stock ----
   // sights: the rear ring and the front post both sit 0.074 above the bore, which is what aiming lines up (see adsPos)
   const smgGroup = new THREE.Group();
@@ -2891,7 +2890,7 @@
       magSize: 7, ammoLabel: "ROUNDS", pellets: 1, spread: 0.0035, spreadAds: 0.001, bloom: 0.004, bloomMax: 0.012, bloomRecover: 0.05,
       scoreScale: 0.8, recoil: 0.75, kick: 0.55, flashScale: 0.7, brake: false, smoke: 0.5,
       action: "slide", ejectOnShot: true, casing: "magnum",
-      muzzle: new THREE.Vector3(0, 0.034, -0.2), eject: new THREE.Vector3(0.024, 0.04, 0.03),
+      muzzle: new THREE.Vector3(0, 0.034, -0.215), eject: new THREE.Vector3(0.024, 0.04, 0.03),
       sound: { recording: "pistol", rate: 1, lowcut: 60, length: 1.8, gain: 0.9 },
       recoilKick: { up: 0.03, grow: 0, side: 0.006, max: 0.05, recover: 8, hold: 0.05 },
       mag: pistolMag, magRestY: pistolMag.position.y,
