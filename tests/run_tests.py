@@ -348,12 +348,15 @@ def test_grapple(browser, base):
     page.click("#start-btn")
     step(page, 60)
     speed = lambda: float(page.inner_text("#speed-val"))
+    check("the bottom-left tiles show the grenade, blast pack and grapple, all lit and with only their key on them",
+          [ab_state(page, t) for t in ("ab-nade", "ab-pack", "ab-hook")] == ["ready"] * 3 and page.inner_text("#ab-hook").strip() == "E", str([ab_state(page, t) for t in ("ab-nade", "ab-pack", "ab-hook")]))
     page.keyboard.down("KeyW"); page.keyboard.down("ShiftLeft"); step(page, 90); page.keyboard.up("KeyW"); page.keyboard.up("ShiftLeft")   # close enough to the north wall to reach it
     before = speed()
     page.keyboard.down("KeyE"); step(page, 3); page.keyboard.up("KeyE"); step(page, 40)
     check("tapping E hooks the wall ahead and reels you in (leaves the ground, speeds up)",
           speed() > before + 6 and "AIR" in page.inner_text("#state-val"), f"{before} -> {speed()}")
     step(page, 10)
+    check("while the grapple recharges its tile is dim, not counting down", ab_state(page, "ab-hook") in ("cool", "active"), ab_state(page, "ab-hook"))
     page.evaluate("__unlock()")
     step(page, 5)
     check("no errors in the grapple test", not errors, "; ".join(errors[:3]))
@@ -1089,6 +1092,16 @@ def test_launcher(browser, base):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def ab_state(page, tile):
+    """The look of a bottom-left ability tile: ready, cool, charging, armed or active ('' when it is hidden)."""
+    return page.evaluate("(id) => { const e = document.getElementById(id); return e.hidden ? '' : e.dataset.state; }", tile)
+
+
+def bar_width(page, bar):
+    """How full a bar under the crosshair is (0 to 100), or -1 when it is hidden."""
+    return page.evaluate("(id) => { const e = document.getElementById(id); return e.offsetParent === null ? -1 : parseFloat(e.style.width) || 0; }", bar)
+
+
 def test_blasts(browser, base):
     """The RPG's rocket flies straight and goes off on the first thing it touches; G throws a grenade on a cooldown; in a room each kind hurts a bot by its own numbers."""
     server, dbase, tmp = debug_site()
@@ -1112,21 +1125,21 @@ def test_blasts(browser, base):
         # G throws a grenade, then waits
         page.keyboard.down("KeyG")
         step(page, 20)
-        mid = page.inner_text("#nade-chip")
+        mid_state, mid_bar, mid_cook = ab_state(page, "ab-nade"), bar_width(page, "tb-dist"), bar_width(page, "tb-cook")
         page.keyboard.up("KeyG")
         step(page, 3)
         short_v = page.evaluate("(() => { const g = window.__dbg.grenades.find((q) => q.state === 'flying' && q.kind === 'frag'); return g ? Math.hypot(g.vel.x, g.vel.y, g.vel.z) : 0; })()")
-        check("holding G shows a charge bar and releasing throws", "release" in mid.lower() and short_v > 9, f"{mid.encode('ascii', 'replace').decode()} / {short_v:.1f} u/s")
+        check("holding G lights the tile and fills a small bar under the crosshair (no cook bar yet), and releasing throws", mid_state == "charging" and 10 < mid_bar < 60 and mid_cook == -1 and short_v > 9, f"{mid_state}, bar {mid_bar:.0f}%, cook {mid_cook:.0f} / {short_v:.1f} u/s")
         thrown = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying' && g.kind === 'frag').length")
-        chip = page.inner_text("#nade-chip")
-        check("G throws a grenade and the chip counts the cooldown down", thrown == 1 and "s" in chip.lower() and "ready" not in chip.lower(), f"{thrown}, {chip}")
+        tile = ab_state(page, "ab-nade")
+        check("G throws a grenade, the bars go away and the tile dims for the cooldown (no timer)", thrown == 1 and tile == "cool" and bar_width(page, "tb-dist") == -1 and page.inner_text("#ab-nade").strip() in ("G", ""), f"{thrown}, {tile}")
         page.keyboard.press("KeyG")
         step(page, 3)
         again = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying' && g.kind === 'frag').length")
         check("a second press during the cooldown throws nothing", again == 1, str(again))
         step(page, 700)
-        chip2 = page.inner_text("#nade-chip")
-        check("after the cooldown the chip says READY", "ready" in chip2.lower(), chip2)
+        tile2 = ab_state(page, "ab-nade")
+        check("after the cooldown the tile is lit again", tile2 == "ready", tile2)
         page.keyboard.down("KeyG")
         step(page, 100)
         page.keyboard.up("KeyG")
@@ -1137,26 +1150,27 @@ def test_blasts(browser, base):
         step(page, 700)
         page.keyboard.down("KeyG")
         step(page, 69)   # about 1.1 s: the distance bar is full
-        cook_chip = page.inner_text("#nade-chip")
+        cook_bar, cook_dist = bar_width(page, "tb-cook"), bar_width(page, "tb-dist")
         page.keyboard.up("KeyG")
         step(page, 2)
         cooked_age = page.evaluate("(() => { const g = window.__dbg.grenades.find((q) => q.state === 'flying' && q.kind === 'frag'); return g ? g.age : -1; })()")
-        check("past halfway the chip shows a fuse and a cooked grenade has burned part of its fuse (0.55 s of 2.2 s at full distance)",
-              "fuse" in cook_chip.lower() and 0.45 < cooked_age < 0.75, f"{cook_chip.encode('ascii', 'replace').decode()} / age {cooked_age:.2f}")
+        check("past halfway a second bar (the fuse) shows under the first, nearly full, and a cooked grenade has burned part of its fuse (0.55 s of 2.2 s at full distance)",
+              cook_dist > 95 and 60 < cook_bar <= 100 and 0.45 < cooked_age < 0.75, f"distance {cook_dist:.0f}%, fuse {cook_bar:.0f}% / age {cooked_age:.2f}")
         step(page, 700)
         page.evaluate("window.__dbg.player.velocity.set(0, 0, 0)")
         page.keyboard.down("KeyG")
         step(page, 165)   # about 2.64 s: just short of 0.55 + 2.2 s, so the grenade is still in the hand
-        before = page.inner_text("#nade-chip")
+        before = bar_width(page, "tb-cook")
         peak = 0
         for _ in range(14):   # the shove is over in a few frames (the floor soon takes it), so watch for its peak
             step(page, 1)
             peak = max(peak, page.evaluate("Math.hypot(window.__dbg.player.velocity.x, window.__dbg.player.velocity.y, window.__dbg.player.velocity.z)"))
         in_hand = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying' && g.kind === 'frag').length")
-        after = page.inner_text("#nade-chip")
+        after = ab_state(page, "ab-nade")
+        gone_bars = bar_width(page, "tb-dist")
         page.keyboard.up("KeyG")
         check("held too long, a grenade goes off in your hand (nothing left flying, you are shoved, the cooldown starts)",
-              "fuse" in before.lower() and in_hand == 0 and peak > 5 and "ready" not in after.lower() and "grenade" in after.lower(), f"{in_hand} flying, peak {peak:.1f} u/s, {after.encode('ascii', 'replace').decode()}")
+              0 <= before < 20 and in_hand == 0 and peak > 5 and after == "cool" and gone_bars == -1, f"fuse {before:.0f}% left, {in_hand} flying, peak {peak:.1f} u/s, {after}")
         # in a room, each kind hurts a bot by its own numbers
         page.evaluate("__unlock()")
         step(page, 3)
@@ -1199,8 +1213,8 @@ def test_satchel(browser, base):
         check("C throws a blast pack", kind == "satchel", str(kind))
         step(page, 60)
         stuck = page.evaluate("(() => { const g = window.__dbg.grenades.find((q) => q.state === 'flying'); return g ? g.stuck : null; })()")
-        chip = page.inner_text("#pack-chip")
-        check("it sticks where it lands and the chip says DETONATE", stuck is True and "detonate" in chip.lower(), f"{stuck}, {chip.encode('ascii', 'replace').decode()}")
+        tile = ab_state(page, "ab-pack")
+        check("it sticks where it lands and its tile pulses (armed: press again to set it off)", stuck is True and tile == "armed", f"{stuck}, {tile}")
         page.keyboard.press("KeyC")
         step(page, 3)
         sp = page.evaluate("Math.hypot(window.__dbg.player.velocity.x, window.__dbg.player.velocity.y, window.__dbg.player.velocity.z)")
@@ -1216,7 +1230,7 @@ def test_satchel(browser, base):
         page.keyboard.press("KeyC")
         step(page, 3)
         again = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying').length")
-        check("then it recharges: a press straight after throws nothing", again == 0 and "s" in page.inner_text("#pack-chip").lower(), str(again))
+        check("then it recharges: a press straight after throws nothing, and the tile is dim", again == 0 and ab_state(page, "ab-pack") == "cool", f"{again}, {ab_state(page, 'ab-pack')}")
         # left alone, a pack sets itself off 4 s after the throw
         step(page, 400)   # (the recharge: 6 s)
         page.keyboard.press("KeyC")

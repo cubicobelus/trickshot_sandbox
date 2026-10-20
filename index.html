@@ -106,16 +106,20 @@
     <div class="dot"></div>
   </div></div>
   <div id="crosshair"></div>
+  <div id="throw-bars" hidden><div class="tb"><i id="tb-dist"></i></div><div class="tb tb-cook" id="tb-cook-box" hidden><i id="tb-cook"></i></div></div>   <!-- holding G: how far it will go, and once the pin is out how long the fuse has left -->
   <div id="range-info" hidden></div>
   <div id="sound-cues"></div>
   <div id="trick-feed"><div id="trick-chain"></div></div>
   <div id="hitmark"></div>
   <div id="speed">
-    Speed: <span id="speed-val">0</span> u/s <span class="state" id="state-val"></span>
+    <div id="abilities">   <!-- grenade, blast pack and grapple: one tile each, a look for every state, no writing but the key -->
+      <div class="ab" id="ab-nade" hidden><svg viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="14.2" rx="6" ry="7.6"/><rect x="9.6" y="2.6" width="4.8" height="3.4" rx="1"/><path d="M14.8 3.6 L19.4 5.8 L18.4 7.9 L14.6 6.1Z"/><rect x="5.6" y="13.4" width="12.8" height="1.6" fill="#000" opacity="0.45"/></svg><kbd></kbd></div>
+      <div class="ab" id="ab-pack" hidden><svg viewBox="0 0 24 24" fill="currentColor"><rect x="2.5" y="7" width="19" height="11" rx="2"/><rect x="10" y="6" width="4" height="13" fill="#000" opacity="0.45"/><circle cx="17.2" cy="10.8" r="1.5" fill="#ff3b30"/></svg><kbd></kbd><b class="ab-fuse"></b></div>
+      <div class="ab" id="ab-hook" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6.5 15a5.5 5.5 0 0 0 11 0M6.5 15l-2-2.5M17.5 15l2-2.5"/></svg><kbd></kbd></div>
+    </div>
+    <div class="sp-row"><span id="speed-val">0</span><small>u/s</small><span class="state" id="state-val"></span></div>
     <div id="speedbar"><div id="speedbar-fill"></div></div>
-    <div id="grapplebar" title="Grappling hook"><div id="grapplebar-fill"></div></div>
     <div id="hpbar" hidden title="Health"><div id="hpbar-fill"></div><span id="hpbar-text">100</span></div>
-    <div id="chips"><div id="pack-chip" hidden></div><div id="nade-chip" hidden></div></div>   <!-- grenade and blast pack timers: they sit on top of this panel, whatever its height -->
   </div>
   <div id="hud-right">
     <div id="score">Score<br><span id="score-val">0</span></div>

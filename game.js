@@ -3893,7 +3893,17 @@
   const speedlinesEl = document.getElementById("speedlines");
   const speedEl = document.getElementById("speed-val");
   const speedbarEl = document.getElementById("speedbar-fill");
-  const grappleFillEl = document.getElementById("grapplebar-fill");
+  // bottom left: a tile each for the grenade, the blast pack and the grapple (a look for each state, no writing but the key), and the two bars under the crosshair that show a throw
+  const abEls = { nade: document.getElementById("ab-nade"), pack: document.getElementById("ab-pack"), hook: document.getElementById("ab-hook") };
+  const abFuseEl = abEls.pack.querySelector(".ab-fuse");
+  const tbEls = { box: document.getElementById("throw-bars"), dist: document.getElementById("tb-dist"), cookBox: document.getElementById("tb-cook-box"), cook: document.getElementById("tb-cook") };
+  function setAb(el, state, action) {   // state: ready, cool, charging, armed or active; "" hides the tile
+    if (el.hidden !== !state) el.hidden = !state;
+    if (!state) return;
+    if (el.dataset.state !== state) el.dataset.state = state;
+    const key = bindLabel(action, true).split(" / ")[0], k = el.firstElementChild.nextElementSibling;
+    if (k.textContent !== key) k.textContent = key;
+  }
   const hpBarEl = document.getElementById("hpbar"), hpFillEl = document.getElementById("hpbar-fill"), hpTextEl = document.getElementById("hpbar-text");
   const stateEl = document.getElementById("state-val");
   const streakEl = document.getElementById("streak-val");
@@ -6903,7 +6913,6 @@
   let fragCd = 0, fragCharge = -1;   // fragCharge: seconds G has been held (-1: not charging); the longer you hold it, the further it goes, and from halfway the fuse burns too (cooking)
   const FRAG_CHARGE_TIME = 1.1, FRAG_MIN_SPEED = 6, FRAG_MAX_SPEED = 36;
   const FRAG_COOK_FROM = FRAG_CHARGE_TIME / 2;   // the pin is out from here: a full-power throw has burned 0.55 s of its 2.2 s fuse, so it still has 1.65 s in the air; held past 2.75 s it goes off in your hand
-  const nadeChip = document.getElementById("nade-chip");
   function fragAllowed() { return !(replay.active || localDead || (net.active && (net.phase !== "play" || countingDown() || net.gungame))); }
   function startFragCharge() { if (fragCd <= 0 && fragAllowed()) fragCharge = 0; }
   function releaseFrag() {
@@ -6937,22 +6946,19 @@
         if (fragCharge - FRAG_COOK_FROM >= BLAST.frag.fuse) { fragCharge = -1; throwFrag(FRAG_MIN_SPEED, BLAST.frag.fuse); }   // held too long: it goes off in your hand
       }
     }
-    if (!nadeChip) return;
-    const show = fragAllowed();
-    nadeChip.hidden = !show;
-    if (!show) return;
-    const label = bindLabel("grenade");
-    nadeChip.className = fragCd > 0 ? "wait" : "ready";
-    if (fragCharge >= 0) {   // charging: a bar that fills, and from halfway a fuse that burns down
-      const n = Math.round(Math.min(fragCharge / FRAG_CHARGE_TIME, 1) * 10), cook = Math.max(0, fragCharge - FRAG_COOK_FROM);
-      const left = Math.max(0, Math.ceil(8 * (1 - cook / BLAST.frag.fuse)));
-      nadeChip.className = cook > 0 ? "cook" : "ready";
-      nadeChip.textContent = label + " · " + "■".repeat(n) + "□".repeat(10 - n) + (cook > 0 ? " FUSE " + "●".repeat(left) + "○".repeat(8 - left) : "") + " release to throw";
-    } else nadeChip.textContent = label + " · GRENADE " + (fragCd > 0 ? fragCd.toFixed(1) + "s" : "READY (hold to throw further, then it cooks)");
+    const show = fragAllowed(), charging = show && fragCharge >= 0;
+    setAb(abEls.nade, !show ? "" : charging ? "charging" : fragCd > 0 ? "cool" : "ready", "grenade");
+    if (tbEls.box.hidden === charging) tbEls.box.hidden = !charging;   // the bars under the crosshair: how far it will go, then how long the fuse has left
+    if (charging) {
+      const cook = Math.max(0, fragCharge - FRAG_COOK_FROM), left = Math.max(0, 1 - cook / BLAST.frag.fuse);
+      tbEls.dist.style.width = (Math.min(fragCharge / FRAG_CHARGE_TIME, 1) * 100).toFixed(1) + "%";
+      if (tbEls.cookBox.hidden === (cook > 0)) tbEls.cookBox.hidden = !(cook > 0);
+      tbEls.cook.style.width = (left * 100).toFixed(1) + "%";
+      tbEls.cookBox.classList.toggle("low", left < 0.25);
+    }
   }
   // the blast pack (C): throw it, it sticks where it lands, press C again to set it off. It launches you hard and only bruises others (no damage to you).
   let packCd = 0, packOut = null;
-  const packChip = document.getElementById("pack-chip");
   function useSatchel() {
     if (!fragAllowed()) return;
     if (packOut && packOut.state === "flying" && !packOut.remote) { explodeGrenade(packOut); return; }
@@ -6970,12 +6976,9 @@
     if (packCd > 0) packCd = Math.max(0, packCd - dt);
     if (packOut && (packOut.state === "idle" || packOut.kind !== "satchel")) packOut = null;
     if (packOut && !fragAllowed()) { retireGrenade(packOut); packOut = null; }   // (dying or a new round: it is gone, nothing goes off)
-    if (!packChip) return;
     const show = fragAllowed();
-    packChip.hidden = !show;
-    if (!show) return;
-    packChip.className = packOut || packCd <= 0 ? "ready" : "wait";
-    packChip.textContent = bindLabel("satchel") + " \u00b7 " + (packOut ? "DETONATE" : packCd > 0 ? "BLAST PACK " + packCd.toFixed(1) + "s" : "BLAST PACK READY");
+    setAb(abEls.pack, !show ? "" : packOut ? "armed" : packCd > 0 ? "cool" : "ready", "satchel");
+    if (show && packOut) abFuseEl.style.transform = "scaleX(" + Math.max(0, 1 - packOut.age / BLAST.satchel.fuse).toFixed(2) + ")";   // (a line that burns down while it waits)
   }
   function spawnRemoteGrenade(o, v, kind) {
     const g = grenades.find((q) => q.state === "idle") || grenades.reduce((a, b) => (a.age > b.age ? a : b));
@@ -11888,8 +11891,7 @@
         speedEl.textContent = speed.toFixed(1);
         speedbarEl.style.width = Math.min(speed / CFG.maxSpeed * 100, 100).toFixed(0) + "%";
         const gReady = player.grappleCooldown <= 0, gUsed = !!player.hook || player.grappleWant;
-        grappleFillEl.style.width = (gUsed ? 0 : gReady ? 100 : (1 - player.grappleCooldown / player.grappleCooldownMax) * 100).toFixed(0) + "%";
-        grappleFillEl.classList.toggle("cooling", !gReady || gUsed);
+        setAb(abEls.hook, gUsed ? "active" : gReady ? "ready" : "cool", "grapple");
         const me = net.active && net.sub === "dm" && !localDead ? localPlayer() : null;   // health only matters in deathmatch
         hpBarEl.hidden = !me;
         if (me) {
