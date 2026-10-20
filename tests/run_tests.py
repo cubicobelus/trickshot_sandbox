@@ -1186,6 +1186,14 @@ def test_satchel(browser, base):
         step(page, 3)
         again = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying').length")
         check("then it recharges: a press straight after throws nothing", again == 0 and "s" in page.inner_text("#pack-chip").lower(), str(again))
+        # left alone, a pack sets itself off 4 s after the throw
+        step(page, 400)   # (the recharge: 6 s)
+        page.keyboard.press("KeyC")
+        step(page, 150)   # about 2.4 s after the throw
+        waiting = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying').length")
+        step(page, 150)   # about 4.8 s after the throw
+        gone2 = page.evaluate("window.__dbg.grenades.every((g) => g.state === 'idle')")
+        check("left alone, a pack waits a couple of seconds, then sets itself off at 4 s", waiting == 1 and gone2, f"{waiting} flying at 2.4 s, all gone at 4.8 s: {gone2}")
         # the RPG's backblast
         page.keyboard.press("Escape")
         step(page, 2)
@@ -1206,7 +1214,7 @@ def test_satchel(browser, base):
         page.click("#mp-play-btn")
         step(page, 40)
         res = {}
-        for kind, age in (("launcher", 1.79), ("satchel", 9.99)):
+        for kind, age in (("launcher", 1.79), ("satchel", 3.99)):
             page.evaluate("""([kind, age]) => {
               const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
               D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0; bot.hp = 100; me.alive = true; me.hp = 100; bot.alive = true;

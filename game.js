@@ -6787,7 +6787,7 @@
     launcher: { speed: 26, gravity: 16, fuse: 1.8, bounce: 0.45, push: 15 },
     frag: { speed: 22, gravity: 16, fuse: 2.2, bounce: 0.5, push: 12 },
     rpg: { speed: 44, gravity: 1.5, fuse: 4, rocket: true, push: 18 },
-    satchel: { speed: 22, gravity: 14, fuse: 10, sticky: true, push: 24 },   // the blast pack (C): sticks where it lands, goes off when you press C again (or after 10 s)
+    satchel: { speed: 22, gravity: 14, fuse: 4, sticky: true, push: 24 },   // the blast pack (C): sticks where it lands, goes off when you press C again (or after 4 s)
   };
   const BLAST_CODE = { launcher: 2, frag: 3, rpg: 4, satchel: 5 }, BLAST_KIND = { 2: "launcher", 3: "frag", 4: "rpg", 5: "satchel" };   // how a blast travels over the network
   const GREN_RADIUS = 0.12, FRAG_COOLDOWN = 9, PACK_COOLDOWN = 6;
