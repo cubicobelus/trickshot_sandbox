@@ -233,6 +233,8 @@
     grenadeJumpMult: 1.4,       // ...a thrown grenade's...
     packJumpMult: 1.3,          // ...and the blast pack's (the easiest to line up, so the smallest)
     blastJumpMinPush: 5,        // the shove has to be at least this many u/s (a blast further off than about 3 to 5 m does not count)
+    threadedMult: 1.5,          // THREADED: one railgun bolt through two or more targets or players
+    fanMult: 0.5,               // FANNED: a revolver shot from fanning the hammer (wide and quick, so worth half)
     // Realistic shooting (a setting, on by default): extra spread, in radians
     realisticAirSpread: 0.025,  // any gun, while you're in the air (on top of the moving spread)
     realisticMoveSpread: 0.016, // any gun on the ground: none standing still, growing with speed until...
@@ -2526,9 +2528,9 @@
   addPart(pistolGroup, new THREE.BoxGeometry(0.006, 0.024, 0.006), metalDark, 0, -0.032, -0.03, 0.25, 0, 0);
   addPart(pistolGroup, new THREE.BoxGeometry(0.004, 0.008, 0.03), stainlessDark, 0.02, -0.004, 0.0);
   addPart(pistolGroup, new THREE.BoxGeometry(0.04, 0.135, 0.058), gripMat, 0, -0.08, 0.06, 0.24, 0, 0);    // rubber grip
+  for (const side of [-1, 1]) addPart(pistolGroup, new THREE.BoxGeometry(0.002, 0.1, 0.042), metalDark, side * 0.0205, -0.082, 0.06, 0.24, 0, 0);   // inset panels on its sides
   const pistolMag = addPart(pistolGroup, new THREE.BoxGeometry(0.03, 0.12, 0.045), metalDark, 0, -0.09, 0.062, 0.24, 0, 0);
 
-  for (const side of [-1, 1]) addPart(pistolGroup, new THREE.BoxGeometry(0.002, 0.1, 0.042), metalDark, side * 0.0205, -0.082, 0.06, 0.24, 0, 0);   // inset panels on its sides
   // ---- SMG: a short boxy receiver with a vented shroud, a straight 32-round magazine and a folding wire stock ----
   // sights: the rear ring and the front post both sit 0.074 above the bore, which is what aiming lines up (see adsPos)
   const smgGroup = new THREE.Group();
@@ -2702,7 +2704,83 @@
   addPart(rpgMag, new THREE.CylinderGeometry(0.04, 0.04, 0.12, 12), accentMat, 0, 0, 0, HALF_PI, 0, 0);                 // the warhead's body
   addPart(rpgMag, new THREE.ConeGeometry(0.04, 0.12, 12), accentMat, 0, 0, -0.12, -HALF_PI, 0, 0);                      // and its nose
 
-  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup, launcherGroup, rpgGroup];
+  // ---- Revolver: a long barrel with a rib and an ejector rod under it, a six-chamber cylinder that turns a notch with every shot, a hammer and a wooden grip ----
+  const revolverGroup = new THREE.Group();
+  addPart(revolverGroup, new THREE.CylinderGeometry(0.0125, 0.0125, 0.24, 14), stainlessMat, 0, 0.034, -0.19, HALF_PI, 0, 0);   // barrel
+  addPart(revolverGroup, new THREE.BoxGeometry(0.008, 0.004, 0.24), stainlessDark, 0, 0.0505, -0.19);                             // the rib on top
+  addPart(revolverGroup, new THREE.BoxGeometry(0.022, 0.016, 0.16), stainlessDark, 0, 0.018, -0.2);                               // the lug under the barrel
+  addPart(revolverGroup, new THREE.CylinderGeometry(0.0045, 0.0045, 0.13, 8), stainlessMat, 0, 0.007, -0.215, HALF_PI, 0, 0);     // ejector rod
+  addPart(revolverGroup, new THREE.CylinderGeometry(0.0145, 0.0145, 0.008, 14), stainlessDark, 0, 0.034, -0.31, HALF_PI, 0, 0);   // muzzle crown
+  addPart(revolverGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.002, 10), portMat, 0, 0.034, -0.3145, HALF_PI, 0, 0);       // bore
+  addPart(revolverGroup, new THREE.BoxGeometry(0.034, 0.052, 0.165), stainlessDark, 0, 0.01, 0.0125);                              // frame
+  addPart(revolverGroup, new THREE.BoxGeometry(0.026, 0.01, 0.21), stainlessDark, 0, 0.0465, 0.0);                                 // top strap
+  const revCyl = new THREE.Group(); revCyl.position.set(0, 0.02, -0.045); revolverGroup.add(revCyl);
+  addPart(revCyl, new THREE.CylinderGeometry(0.022, 0.022, 0.068, 18), stainlessMat, 0, 0, 0, HALF_PI, 0, 0);
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    addPart(revCyl, new THREE.CylinderGeometry(0.0085, 0.0085, 0.002, 10), portMat, Math.cos(a) * 0.0135, Math.sin(a) * 0.0135, -0.035, HALF_PI, 0, 0);   // the chambers, on the front face
+    addPart(revCyl, new THREE.BoxGeometry(0.006, 0.006, 0.05), stainlessDark, Math.cos(a + 0.52) * 0.0225, Math.sin(a + 0.52) * 0.0225, 0);                // and the flutes between them
+  }
+  const revHammer = new THREE.Group(); revHammer.position.set(0, 0.04, 0.09); revolverGroup.add(revHammer);
+  addPart(revHammer, new THREE.BoxGeometry(0.008, 0.022, 0.012), stainlessDark, 0, 0.011, 0.004);
+  addPart(revolverGroup, new THREE.BoxGeometry(0.036, 0.115, 0.05), woodStock, 0, -0.06, 0.1, -0.3, 0, 0);                         // grip
+  addPart(revolverGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), stainlessDark, 0, -0.016, 0.045, 0, HALF_PI, Math.PI);   // trigger guard
+  addPart(revolverGroup, new THREE.BoxGeometry(0.005, 0.02, 0.006), metalDark, 0, -0.012, 0.03, 0.25, 0, 0);                       // trigger
+  addPart(revolverGroup, new THREE.BoxGeometry(0.005, 0.012, 0.012), stainlessDark, 0, 0.0575, -0.29);                             // front blade
+  for (const sx of [-1, 1]) addPart(revolverGroup, new THREE.BoxGeometry(0.007, 0.009, 0.008), stainlessDark, sx * 0.009, 0.056, 0.1);   // rear sight: two posts on the strap
+
+  // ---- Dual SMGs: two small boxy machine pistols, one in each hand, firing in turn; both magazines ride on one group so a reload drops them together ----
+  const dualGroup = new THREE.Group();
+  const dualGuns = [];
+  const dualMags = new THREE.Group(); dualGroup.add(dualMags);
+  for (const sx of [-1, 1]) {
+    const gun = new THREE.Group(); gun.position.set(sx * 0.15, 0, 0); dualGroup.add(gun); dualGuns.push(gun);
+    addPart(gun, new THREE.BoxGeometry(0.042, 0.052, 0.2), metalDark, 0, 0, 0);                                      // receiver
+    addPart(gun, new THREE.BoxGeometry(0.03, 0.008, 0.17), metalMid, 0, 0.03, 0);                                    // top cover
+    addPart(gun, new THREE.BoxGeometry(0.036, 0.04, 0.085), polymerMat, 0, 0, -0.14);                                // shroud
+    for (let i = 0; i < 3; i++) addPart(gun, new THREE.BoxGeometry(0.038, 0.006, 0.01), metalDark, 0, 0, -0.115 - i * 0.025);   // vents
+    addPart(gun, new THREE.CylinderGeometry(0.008, 0.008, 0.075, 8), metalDark, 0, 0, -0.22, HALF_PI, 0, 0);          // barrel
+    addPart(gun, new THREE.CylinderGeometry(0.0115, 0.0115, 0.03, 8), metalDark, 0, 0, -0.275, HALF_PI, 0, 0);       // flash hider
+    addPart(gun, new THREE.BoxGeometry(0.03, 0.09, 0.04), gripMat, 0, -0.065, 0.065, -0.25, 0, 0);                  // grip
+    addPart(gun, new THREE.BoxGeometry(0.005, 0.014, 0.005), metalDark, 0, 0.0385, -0.17);                           // front post
+    addPart(gun, new THREE.BoxGeometry(0.022, 0.008, 0.012), metalDark, 0, 0.0365, 0.075);                           // rear sight
+    addPart(dualMags, new THREE.BoxGeometry(0.028, 0.11, 0.042), metalDark, sx * 0.15, -0.075, -0.02);               // the magazine
+  }
+
+  // ---- Railgun: two rails with glowing coils round them, a capacitor on the side and an energy cell under the receiver; the glow rises as it charges ----
+  const railGlowMat = new THREE.MeshStandardMaterial({ color: 0x1a3a44, emissive: 0x22d3ee, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.2 });
+  const railgunGroup = new THREE.Group();
+  addPart(railgunGroup, new THREE.BoxGeometry(0.052, 0.07, 0.28), metalDark, 0, 0, 0.05);                              // receiver
+  for (const sx of [-1, 1]) addPart(railgunGroup, new THREE.BoxGeometry(0.011, 0.014, 0.52), metalMid, sx * 0.019, 0.016, -0.39);   // the two rails
+  addPart(railgunGroup, new THREE.BoxGeometry(0.008, 0.008, 0.5), railGlowMat, 0, 0.016, -0.39);                       // the glowing channel between them
+  for (let i = 0; i < 6; i++) addPart(railgunGroup, new THREE.TorusGeometry(0.032, 0.006, 6, 16), railGlowMat, 0, 0.016, -0.2 - i * 0.075);   // coils round the rails
+  addPart(railgunGroup, new THREE.BoxGeometry(0.046, 0.05, 0.03), metalMid, 0, 0.016, -0.66);                          // muzzle block
+  addPart(railgunGroup, new THREE.BoxGeometry(0.04, 0.085, 0.22), polymerMat, 0, -0.012, 0.3);                         // stock
+  addPart(railgunGroup, new THREE.BoxGeometry(0.036, 0.1, 0.045), gripMat, 0, -0.08, 0.12, 0.3, 0, 0);                 // grip
+  addPart(railgunGroup, new THREE.CylinderGeometry(0.02, 0.02, 0.12, 12), metalMid, -0.04, 0.05, 0.04, HALF_PI, 0, 0);   // capacitor
+  addPart(railgunGroup, new THREE.CylinderGeometry(0.0215, 0.0215, 0.016, 12), railGlowMat, -0.04, 0.05, 0.04, HALF_PI, 0, 0);   // its glowing band
+  const railCell = addPart(railgunGroup, new THREE.BoxGeometry(0.032, 0.07, 0.065), railGlowMat, 0, -0.075, -0.02);     // the energy cell (its "magazine")
+  addPart(railgunGroup, new THREE.BoxGeometry(0.005, 0.014, 0.006), metalDark, 0, 0.048, -0.665);                      // front post
+  for (const sx of [-1, 1]) addPart(railgunGroup, new THREE.BoxGeometry(0.007, 0.012, 0.008), metalDark, sx * 0.011, 0.041, 0.13);   // rear sight: two posts
+
+  // ---- Minigun: six barrels on a spindle that turns as it spins up, a motor housing, two handles and an ammunition box with a belt ----
+  const minigunGroup = new THREE.Group();
+  addPart(minigunGroup, new THREE.CylinderGeometry(0.048, 0.048, 0.22, 16), metalDark, 0, 0, 0, HALF_PI, 0, 0);          // motor housing
+  addPart(minigunGroup, new THREE.CylinderGeometry(0.056, 0.056, 0.03, 16), metalMid, 0, 0, -0.12, HALF_PI, 0, 0);       // front collar
+  const minigunBarrels = new THREE.Group(); minigunBarrels.position.set(0, 0, -0.38); minigunGroup.add(minigunBarrels);
+  addPart(minigunBarrels, new THREE.CylinderGeometry(0.014, 0.014, 0.5, 8), metalMid, 0, 0, 0, HALF_PI, 0, 0);            // spindle
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; addPart(minigunBarrels, new THREE.CylinderGeometry(0.0095, 0.0095, 0.5, 8), metalDark, Math.cos(a) * 0.03, Math.sin(a) * 0.03, 0, HALF_PI, 0, 0); }
+  for (const z of [-0.2, 0, 0.2]) addPart(minigunBarrels, new THREE.TorusGeometry(0.036, 0.0045, 6, 18), metalMid, 0, 0, z);   // clamp rings
+  addPart(minigunGroup, new THREE.TorusGeometry(0.044, 0.007, 6, 18), metalMid, 0, 0, -0.64);                            // the fixed muzzle ring
+  addPart(minigunGroup, new THREE.BoxGeometry(0.036, 0.11, 0.05), gripMat, 0, -0.085, 0.07, 0.25, 0, 0);                 // rear handle
+  addPart(minigunGroup, new THREE.BoxGeometry(0.03, 0.085, 0.04), gripMat, 0, -0.08, -0.12, -0.1, 0, 0);                 // front handle
+  addPart(minigunGroup, new THREE.BoxGeometry(0.02, 0.05, 0.22), metalMid, 0, 0.07, 0);                                  // carry handle
+  const minigunBox = new THREE.Group(); minigunBox.position.set(-0.085, -0.06, 0.08); minigunGroup.add(minigunBox);
+  addPart(minigunBox, new THREE.BoxGeometry(0.09, 0.1, 0.14), metalMid, 0, 0, 0);                                       // ammunition box (its "magazine")
+  addPart(minigunBox, new THREE.BoxGeometry(0.03, 0.01, 0.12), accentMat, 0, 0.055, 0);                                  // a stripe on the lid
+  for (let i = 0; i < 5; i++) addPart(minigunGroup, new THREE.BoxGeometry(0.016, 0.02, 0.018), accentMat, -0.06 + i * 0.012, -0.012 + i * 0.01, 0.03 - i * 0.012);   // the belt, box to housing
+
+  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup, launcherGroup, rpgGroup, revolverGroup, dualGroup, railgunGroup, minigunGroup];
   for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   // everything held sits under one root, so left-handed is a single mirror (three.js
   // flips face winding for negative scale, so the models still render correctly)
@@ -3097,9 +3175,99 @@
       },
       inspectDuration: 1.8, inspects: GUN_INSPECTS,
     },
+    revolver: {
+      name: "REVOLVER", group: revolverGroup,
+      restPos: new THREE.Vector3(0.18, -0.19, -0.4), restRot: new THREE.Euler(0.02, -0.06, 0),
+      adsPos: new THREE.Vector3(0.0, -0.06, -0.33), adsRot: new THREE.Euler(0, 0, 0),   // the front blade between the rear posts
+      canADS: true, scope: false, adsZoom: 0.8, fireRate: 0.5, auto: false, isMelee: false, usesAmmo: true,
+      fan: { after: 0.35, rate: 0.16, spread: 6 },   // hold the trigger past 0.35 s and the hammer is fanned: a shot every 0.16 s, six times as wide, and worth half
+      magSize: 6, ammoLabel: "ROUNDS", pellets: 1, spread: 0.002, spreadAds: 0.0005, bloom: 0.004, bloomMax: 0.012, bloomRecover: 0.05,
+      scoreScale: 1.0, recoil: 1.0, kick: 0.8, flashScale: 1.0, brake: false, smoke: 0.7,
+      action: "none", ejectOnShot: false, casing: "magnum",
+      muzzle: new THREE.Vector3(0, 0.034, -0.325), eject: new THREE.Vector3(0.02, 0.03, 0.03),
+      sound: { recording: "pistol", rate: 0.75, lowcut: 50, length: 2.0, gain: 1.0 },
+      recoilKick: { up: 0.045, grow: 0.01, side: 0.008, max: 0.09, recover: 7, hold: 0.06 },
+      reload: { style: "shells", start: 0.45, perShell: 0.34, end: 0.3, pose: { x: -0.04, y: 0.06, rx: 0.5, ry: 0.12, rz: -0.4 } },   // one round at a time, like the shotgun: fire to stop loading
+      inspectDuration: 1.7, inspects: GUN_INSPECTS, inspectReach: 0.5,
+    },
+    dual: {
+      name: "DUAL SMG", group: dualGroup, dual: true,   // two guns, firing in turn (the muzzle flash and the case move to the side that fired)
+      restPos: new THREE.Vector3(0.0, -0.2, -0.45), restRot: new THREE.Euler(0.03, 0, 0),
+      adsPos: new THREE.Vector3(0.0, -0.2, -0.45), adsRot: new THREE.Euler(0.03, 0, 0),   // (no aiming: a hip gun)
+      canADS: false, scope: false, adsZoom: 1, fireRate: 0.055, auto: true, isMelee: false, usesAmmo: true,
+      magSize: 40, ammoLabel: "ROUNDS", pellets: 1, spread: 0.02, spreadAds: 0.02, bloom: 0.003, bloomMax: 0.03, bloomRecover: 0.1,
+      scoreScale: 0.55, recoil: 0.25, kick: 0.15, flashScale: 0.5, brake: false, smoke: 0.25,
+      action: "none", ejectOnShot: true, casing: "small",
+      muzzle: new THREE.Vector3(0.15, 0, -0.29), eject: new THREE.Vector3(0.18, 0.03, 0.0),
+      sound: { recording: "ar", rate: 1.4, lowcut: 130, length: 0.35, gain: 0.7 },
+      recoilKick: { up: 0.004, grow: 0.0005, side: 0.004, max: 0.09, recover: 8, hold: 0.1 },
+      mag: dualMags, magRestY: dualMags.position.y, dropGeo: new THREE.BoxGeometry(0.028, 0.11, 0.042),
+      reload: {
+        time: 2.2, magOut: 0.2, magDrop: 0.36, magUp: 0.8, magSeat: 1.3, travel: 0.14, rise: 0.25, charge: 1.6,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.25,  0,     0.06,  0.20, 0,     0   ],
+          [0.80,  0,     0.05,  0.18, 0,     0   ],
+          [1.30,  0,     0.06,  0.20, 0,     0   ],
+          [1.60,  0,     0.02,  0.08, 0,     0   ],
+          [2.20,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 1.8, inspects: GUN_INSPECTS,
+    },
+    railgun: {
+      name: "RAILGUN", group: railgunGroup, charge: 0.6, pierce: 3,   // hold fire to charge for 0.6 s: it fires by itself when full (let go early and nothing happens), through up to 3 targets or players in a line
+      restPos: new THREE.Vector3(0.24, -0.25, -0.5), restRot: new THREE.Euler(0.03, -0.08, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.052, -0.32), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.7, fireRate: 1.0, auto: false, isMelee: false, usesAmmo: true,
+      magSize: 3, ammoLabel: "CELLS", pellets: 1, spread: 0.0015, spreadAds: 0.0002, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
+      scoreScale: 0.9, recoil: 1.2, kick: 1.0, flashScale: 0, brake: false, smoke: 0,
+      action: "none", ejectOnShot: false, casing: "small",
+      muzzle: new THREE.Vector3(0, 0.016, -0.68), eject: new THREE.Vector3(0.03, 0.03, 0.0),
+      sound: { recording: "rifle", rate: 1.7, lowcut: 300, length: 0.5, gain: 0.6 },
+      recoilKick: { up: 0.035, grow: 0, side: 0.003, max: 0.07, recover: 6, hold: 0.2 },
+      mag: railCell, magRestY: railCell.position.y,
+      reload: {
+        time: 2.6, magOut: 0.3, magDrop: 0.6, magUp: 1.5, magSeat: 2.0, travel: 0.15, rise: 0.2,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.35, -0.06,  0.06,  0.16, 0.12, -0.5 ],
+          [1.50, -0.06,  0.05,  0.12, 0.12, -0.55],
+          [2.00, -0.06,  0.07,  0.16, 0.12, -0.45],
+          [2.30, -0.02,  0.02,  0.08, 0.04,  0.15],
+          [2.60,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 1.8, inspects: GUN_INSPECTS,
+    },
+    minigun: {
+      name: "MINIGUN", group: minigunGroup, heavy: true, spinUp: 0.8, spinFireRate: 0.14,   // it has to spin up before it fires (the gap between shots falls from 0.14 s to fireRate as it does), and you move at 60% while it spins
+      restPos: new THREE.Vector3(0.22, -0.28, -0.55), restRot: new THREE.Euler(0.03, -0.08, 0.01),
+      adsPos: new THREE.Vector3(0.22, -0.28, -0.55), adsRot: new THREE.Euler(0.03, -0.08, 0.01),   // (no aiming: a hip gun)
+      canADS: false, scope: false, adsZoom: 1, fireRate: 0.06, auto: true, isMelee: false, usesAmmo: true,
+      magSize: 150, ammoLabel: "ROUNDS", pellets: 1, spread: 0.014, spreadAds: 0.014, bloom: 0.0015, bloomMax: 0.05, bloomRecover: 0.07,
+      scoreScale: 0.35, recoil: 0.35, kick: 0.2, flashScale: 0.9, brake: false, smoke: 0.4,
+      action: "none", ejectOnShot: true, casing: "rifle",
+      muzzle: new THREE.Vector3(0, 0, -0.66), eject: new THREE.Vector3(0.05, 0.03, 0.0),
+      sound: { recording: "ar", rate: 1.6, lowcut: 90, length: 0.25, gain: 0.8 },
+      recoilKick: { up: 0.003, grow: 0.0003, side: 0.004, max: 0.1, recover: 6, hold: 0.12 },
+      mag: minigunBox, magRestY: minigunBox.position.y, dropGeo: new THREE.BoxGeometry(0.09, 0.1, 0.14),
+      reload: {
+        time: 4.8, magOut: 0.4, magDrop: 0.9, magUp: 2.4, magSeat: 3.6, travel: 0.2, rise: 0.3, charge: 4.2,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.50, -0.08,  0.07,  0.16, 0.16, -0.62],
+          [2.40, -0.08,  0.05,  0.12, 0.16, -0.70],
+          [3.60, -0.08,  0.08,  0.18, 0.16, -0.58],
+          [4.10, -0.04,  0.03,  0.12, 0.06,  0.28],
+          [4.80,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 2.0, inspects: GUN_INSPECTS,
+    },
   };
   // (a gun travels over the network as its place in this list, so new guns go at the end, after the knife, never in the middle)
-  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg"];
+  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg", "revolver", "dual", "railgun", "minigun"];
   for (const id of WEAPON_ORDER) {
     const w = WEAPONS[id];
     w.id = id;
@@ -3122,6 +3290,10 @@
     recoilPitch: 0, recoilYaw: 0, burstShots: 0, burstQueue: 0, burstTimer: 0, lastShotAt: -99,   // recoil on the aim (where bullets go)
     viewRecoilPitch: 0, viewRecoilYaw: 0,                            // how much of it the view (crosshair) shows
     camKick: 0, camKickYaw: 0,
+    charge: 0, railFlash: 0,   // the railgun: seconds of charge (0 = not charging), and the flash of the last bolt
+    spin: 0, barrelAngle: 0,   // the minigun: how far it has spun up (0 to 1), and where its barrels are
+    fanning: false, cylTarget: 0, hammerT: 9,   // the revolver: this shot is fanned; where the cylinder is turning to; time since the shot
+    dualSide: 0, dualKick: [0, 0],   // the dual SMGs: which gun fires next, and how far back each is kicked
   };
 
   function currentWeapon() { return WEAPONS[vm.current]; }
@@ -3140,6 +3312,7 @@
     cancelPump();
     vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0;
     vm.burstShots = 0;
+    vm.charge = 0;
     vm.throwTimer = 0;
     vm.slashTimer = 0;
     vm.meleePending = false;
@@ -3423,6 +3596,19 @@
     if (lockedOpen && slideBack) slide = 1;
     pistolSlide.position.z = SLIDE_TRAVEL * slide;
 
+    // the revolver's cylinder turns a notch with every shot, and its hammer falls and is cocked again
+    revCyl.rotation.z += (vm.cylTarget - revCyl.rotation.z) * Math.min(1, dt * 30);
+    vm.hammerT += dt;
+    revHammer.rotation.x = 0.1 + 0.55 * easeInOut(Math.min(Math.max((vm.hammerT - 0.05) / 0.2, 0), 1));
+    // the dual SMGs: each gun kicks back on its own shots
+    for (let i = 0; i < 2; i++) { vm.dualKick[i] *= Math.max(0, 1 - dt * 14); dualGuns[i].position.z = vm.dualKick[i] * 0.05; dualGuns[i].rotation.x = -vm.dualKick[i] * 0.1; }
+    // the railgun glows brighter as it charges, and flashes when it fires
+    vm.railFlash = Math.max(0, vm.railFlash - dt * 3);
+    railGlowMat.emissiveIntensity = 0.5 + 2.5 * Math.min(vm.charge / WEAPONS.railgun.charge, 1) + 3 * vm.railFlash;
+    // the minigun's barrels turn as fast as it has spun up
+    vm.barrelAngle += vm.spin * 42 * dt;
+    minigunBarrels.rotation.z = vm.barrelAngle;
+
     // spread blooms while spraying and settles back when you stop
     for (const id of WEAPON_ORDER) {
       const g = WEAPONS[id];
@@ -3483,6 +3669,7 @@
       py + bobY + ipy + rl.y + thY + _swing[1] - holsterDrop + boltTilt * 0.015,
       pz + ipz + thZ + _swing[2] + vm.recoil * 0.16 + boltJolt * 0.012
     );
+    if (w.heavy && vm.spin > 0.4) w.group.position.x += (Math.random() - 0.5) * 0.004 * vm.spin;   // the minigun shakes while it spins
     w.group.rotation.set(
       rx + irx + rl.rx + thRX + _swing[3] - vm.recoil * 0.34 + holsterTilt + boltTilt * 0.08 - boltJolt * 0.03,
       ry + iry + rl.ry + _swing[4] + boltTilt * 0.10,
@@ -3925,6 +4112,10 @@
     launcher: '<rect x="2" y="10" width="10" height="4" rx="1"/><rect x="11" y="8.5" width="22" height="6.5" rx="1"/><rect x="30" y="7" width="26" height="8" rx="3"/><rect x="54" y="6" width="6" height="10" rx="1"/><rect x="18" y="14" width="5" height="7" rx="1"/><rect x="27" y="15" width="11" height="3.5" rx="1"/>',
     knife: '<path d="M5 13.5 L33 8.5 L41 11 L41 13.6 L33 15.4 L5 15.4 Z"/><rect x="41" y="8" width="3" height="9" rx="1"/><rect x="44" y="10.3" width="15" height="4.2" rx="2.1"/><circle cx="60.5" cy="12.4" r="2.4"/>',
   };
+  WEAPON_ICONS.revolver = '<rect x="2" y="6" width="30" height="3" rx="1"/><rect x="6" y="9.4" width="22" height="1.8" rx="0.8"/><rect x="29" y="4.6" width="11" height="8.6" rx="2.6"/><path d="M38 5.4 L46 5.4 L48 9 L48 12.8 L38 12.8 Z"/><path d="M45 3 L48.6 2.6 L49 6 L46 6.4 Z"/><path d="M40 13 L47 13 L52 23 L45 23.4 Z"/>';
+  WEAPON_ICONS.dual = '<g transform="translate(6 -1) scale(0.62)">' + WEAPON_ICONS.smg + '</g><g transform="translate(6 10) scale(0.62)">' + WEAPON_ICONS.smg + '</g>';
+  WEAPON_ICONS.railgun = '<rect x="1" y="8.2" width="38" height="2" rx="1"/><rect x="1" y="12.2" width="38" height="2" rx="1"/><rect x="6" y="6" width="2.2" height="10"/><rect x="13" y="6" width="2.2" height="10"/><rect x="20" y="6" width="2.2" height="10"/><rect x="27" y="6" width="2.2" height="10"/><rect x="38" y="6" width="12" height="10" rx="1.6"/><path d="M45 16 L48 16 L47 22 L43 22 Z"/><path d="M50 7 L62 9.4 L62 18 L50 15 Z"/>';
+  WEAPON_ICONS.minigun = '<rect x="1" y="6.6" width="28" height="1.8"/><rect x="1" y="9.6" width="28" height="1.8"/><rect x="1" y="12.6" width="28" height="1.8"/><rect x="28" y="4.5" width="14" height="11" rx="2.6"/><rect x="41" y="7.6" width="9" height="5.4"/><path d="M33 15.5 L38 15.5 L37 22 L32 22 Z"/><rect x="44" y="13" width="15" height="8" rx="1.4"/>';
   const iconSVG = (id) => '<svg viewBox="0 0 64 24" fill="currentColor">' + WEAPON_ICONS[id] + "</svg>";
 
   // ---- loadout: one gun plus the knife ----
@@ -3952,6 +4143,7 @@
     { id: "extmag", name: "Extended magazine", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "50% more rounds, slower reload" },
     { id: "fastmag", name: "Fast magazine", need: 80, fx: { reload: 0.8 }, text: "Reloads 20% faster" },
   ];
+  const AT_LASER = [{ id: "laser", name: "Laser", need: 30, fx: { spread: 0.8, spreadAds: 0.95 }, text: "A tighter spread from the hip" }];
   const AT_BIPOD = [{ id: "bipod", name: "Bipod", need: 35, fx: { bipod: 0.45, ads: 1.08 }, text: "Far steadier while crouched (the slide key), a touch slower to aim" }];
   const ATTACHMENTS = {
     rifle: {   // the sniper
@@ -3977,11 +4169,25 @@
       mag: [{ id: "rquick", name: "Quick loader", need: 30, fx: { reload: 0.7 }, text: "Reloads 30% faster" }],
     },
     shotgun: {
+      optic: [AT_REDDOT],
+      muzzle: [SUPPRESSOR],
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
         { id: "wide", name: "Wide barrel", need: 40, fx: { spread: 1.25, spreadAds: 1.25 }, text: "A wider spread, forgiving up close" },
         { id: "slug", name: "Slugs", need: 60, fx: { spread: 0.1, spreadAds: 0.1, mag: 0.67 }, text: "Every pellet flies as one: a tight, heavy shot that carries, with 2 fewer shells" }],
       mag: [{ id: "tube", name: "Extended tube", need: 35, fx: { mag: 1.34, reload: 1.1 }, text: "Two more shells, slower to reload" }],
     },
+    revolver: {
+      muzzle: [{ id: "comp", name: "Compensator", need: 15, fx: { recoil: 0.8 }, text: "20% less recoil" }, SUPPRESSOR],
+      barrel: AT_BARRELS,
+      sights: AT_LASER,
+    },
+    dual: { muzzle: [SUPPRESSOR], mag: AT_MAGS },
+    railgun: {
+      optic: [AT_REDDOT, AT_SCOPE2],
+      muzzle: [{ id: "ionizer", name: "Ionizer", need: 25, fx: { flash: 0.2, sound: 0.45 }, text: "Quieter, almost no flash" }],
+      mag: [{ id: "capacitor", name: "Quick capacitor", need: 40, fx: { reload: 0.75 }, text: "Reloads 25% faster" }],
+    },
+    minigun: { muzzle: [SUPPRESSOR], mag: AT_MAGS },
     pistol: {   // the Deagle
       muzzle: [{ id: "comp", name: "Compensator", need: 15, fx: { recoil: 0.8 }, text: "20% less recoil" }, SUPPRESSOR],
       sights: [{ id: "laser", name: "Laser", need: 25, fx: { spread: 0.75, spreadAds: 0.9 }, text: "A tighter spread from the hip" }],
@@ -3991,6 +4197,8 @@
   // what a fitted attachment looks like, built from where each gun's parts really are (see AT_MOUNT)
   const AT_STEEL = new THREE.MeshStandardMaterial({ color: 0x2b2f35, metalness: 0.7, roughness: 0.45 });
   const AT_RUBBER = new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.9 });
+  const AT_BRASS = new THREE.MeshStandardMaterial({ color: 0xc9a14a, metalness: 0.8, roughness: 0.35 });
+  const AT_GRENADE = new THREE.MeshStandardMaterial({ color: 0x4a6342, metalness: 0.3, roughness: 0.6 });
   const AT_DOT = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
   const AT_DOT_HALO = new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.24, depthWrite: false, blending: THREE.AdditiveBlending });
   const AT_LENS = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
@@ -4037,7 +4245,11 @@
     crossbow: { optic: [0.0, 0.047] },
     launcher: { under: [-0.12, -0.043], left: [-0.03, 0, 0] },
     rpg: { optic: [0.12, 0.05], under: [-0.2, -0.05] },
-    pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024], mag: [-0.06, 0, 0, 0.03, 0.045] },
+    pistol: { muzzle: [-0.21, 0.034, 0.016, 0.13], under: [-0.1, -0.027], mag: [-0.06, 0, 0, 0.03, 0.045] },
+    revolver: { muzzle: [-0.315, 0.034, 0.0125, 0.13], under: [-0.15, 0.009] },
+    dual: { xs: [-0.15, 0.15], muzzle: [-0.29, 0, 0.0115, 0.18], mag: [-0.13, -0.02, 0, 0.028, 0.042] },   // (xs: everything is built once for each gun)
+    railgun: { muzzle: [-0.675, 0.016, 0.02, 0.2], optic: [0.0, 0.035], left: [-0.026, 0.0, 0.05] },
+    minigun: { muzzle: [-0.645, 0, 0.03, 0.2], mag: [-0.05, 0, 0, 0.09, 0.14] },
   };
   const AV_MOUNT = {
     rifle: { muzzle: [-1.0, 0.01, 0.022, 0.32], butt: [0.3, -0.02, 0.1, 0.2] },   // (these models have no separate magazine, so mag is in the gun's space)
@@ -4051,7 +4263,11 @@
     crossbow: { optic: [-0.1, 0.0425] },
     launcher: { under: [-0.2, -0.07], left: [-0.0325, 0, -0.1] },
     rpg: { optic: [0.0, 0.07], under: [-0.2, -0.07] },
-    pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
+    pistol: { muzzle: [-0.29, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
+    revolver: { muzzle: [-0.32, 0.03, 0.02, 0.13], under: [-0.15, -0.0] },
+    dual: { xs: [-0.34, 0], muzzle: [-0.34, 0, 0.012, 0.18], mag: [-0.14, 0.0, -0.25, 0.03, 0.045] },
+    railgun: { muzzle: [-0.85, 0.02, 0.02, 0.2], optic: [-0.1, 0.045], left: [-0.035, 0, -0.05] },
+    minigun: { muzzle: [-0.85, 0, 0.045, 0.2] },
   };
   // a laser's beam: thick and bright by the gun, thinner and fainter further out until it is gone (the materials are shared)
   const AT_BEAM_SEGS = 14, AT_BEAM_LEN = 0.55;
@@ -4060,6 +4276,11 @@
   const beamMat = (opacity) => new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
   const AT_BEAM_MATS = AT_BEAM.map((b) => ({ core: beamMat(b.a), glow: beamMat(b.a * 0.22) }));
   function attachParts(ids, M) {
+    if (M.xs) {   // a gun that is really two (the dual SMGs): the same parts on each, at its own x
+      const both = new THREE.Group();
+      for (const x of M.xs) { const one = attachParts(ids, Object.assign({}, M, { xs: null })); one.position.x = x; both.add(one); }
+      return both;
+    }
     const g = new THREE.Group();
     const add = (geo, mat, x, y, z, rx) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx) m.rotation.x = rx; g.add(m); return m; };
     const HP = Math.PI / 2;
@@ -4086,6 +4307,27 @@
         for (const side of [-1, 1]) for (let i = 0; i < 2; i++) add(new THREE.BoxGeometry(0.003, w * 0.6, len * 0.16), AT_RUBBER, side * (w / 2 + 0.0005), mz[1], mz[0] - len * (0.3 + i * 0.36));
       } else if (id === "choke" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.15, mz[2] * 1.3, 0.05, 14), AT_STEEL, 0, mz[1], mz[0] - 0.025, HP);
       else if (id === "wide" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.7, mz[2] * 1.2, 0.045, 14), AT_STEEL, 0, mz[1], mz[0] - 0.022, HP);
+      else if (id === "slug" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.2, mz[2] * 1.2, 0.035, 14), AT_BRASS, 0, mz[1], mz[0] - 0.0175, HP);   // a brass collar at the muzzle: slugs are loaded
+      else if (id === "lbig" && M.left) {   // two spare grenades strapped along the left of the receiver
+        const [x, y, z] = M.left;
+        for (const dz of [-0.05, 0.05]) {
+          add(new THREE.CylinderGeometry(0.017, 0.017, 0.085, 10), AT_GRENADE, x - 0.017, y, z + dz, HP);
+          add(new THREE.CylinderGeometry(0.0125, 0.0125, 0.02, 10), AT_BRASS, x - 0.017, y, z + dz - 0.0525, HP);
+        }
+        add(new THREE.BoxGeometry(0.008, 0.045, 0.16), AT_RUBBER, x - 0.003, y, z);
+      } else if (id === "capacitor" && M.left) {   // a second capacitor on the left of the receiver, with a glowing band
+        const [x, y, z] = M.left;
+        add(new THREE.CylinderGeometry(0.018, 0.018, 0.11, 12), AT_STEEL, x - 0.018, y + 0.01, z, HP);
+        add(new THREE.CylinderGeometry(0.0195, 0.0195, 0.014, 12), railGlowMat, x - 0.018, y + 0.01, z - 0.02, HP);
+      } else if (id === "lquick" && M.left) {   // a speed loader: a pouch on the left with two rounds standing in it
+        const [x, y, z] = M.left;
+        add(new THREE.BoxGeometry(0.018, 0.07, 0.09), AT_STEEL, x - 0.009, y, z);
+        for (const dz of [-0.025, 0.025]) add(new THREE.CylinderGeometry(0.011, 0.011, 0.03, 8), AT_BRASS, x - 0.009, y + 0.05, z + dz);
+      } else if (id === "rquick" && M.under) {   // a spare warhead clipped under the tube
+        const [z, y] = M.under;
+        add(new THREE.CylinderGeometry(0.02, 0.02, 0.11, 10), AT_GRENADE, 0, y - 0.015, z + 0.02, HP);
+        add(new THREE.ConeGeometry(0.02, 0.05, 10), AT_BRASS, 0, y - 0.015, z - 0.06, -HP);
+      }
       else if ((id === "optic-2x" || id === "optic-4x") && M.optic) {   // a scope on a clamp: an open tube, a flared front with glass, an eyepiece ring (the frame you aim through) and a turret
         const [z, t] = M.optic, big = id === "optic-4x", len = big ? 0.17 : 0.11, r = big ? 0.0225 : 0.019, c = t + AT_DOT_RISE;
         add(new THREE.BoxGeometry(0.024, 0.015, 0.05), AT_STEEL, 0, t + 0.0075, z);
@@ -4143,13 +4385,19 @@
         const [z, y, r] = M.tube;
         add(new THREE.CylinderGeometry(r, r, 0.08, 12), AT_STEEL, 0, y, z - 0.04, HP);
         add(new THREE.CylinderGeometry(r * 1.1, r * 1.1, 0.02, 12), AT_STEEL, 0, y, z - 0.09, HP);
-  const AT_LASER = [{ id: "laser", name: "Laser", need: 30, fx: { spread: 0.8, spreadAds: 0.95 }, text: "A tighter spread from the hip" }];
       }
     }
     return g;
   }
   // extended and fast magazines, built at the magazine's bottom (M.mag), tilted with it
-  function magParts(ids, M) {
+  function magParts(ids, M) {   // (the dual SMGs have two magazines: the extension is built for each)
+    const one = magPartsOne(ids, M);
+    if (!one || !M.xs) return one;
+    const both = new THREE.Group();
+    for (const x of M.xs) { const c = one.clone(); c.position.x = x; both.add(c); }
+    return both;
+  }
+  function magPartsOne(ids, M) {
     if (!M.mag) return null;
     const [y, z, tilt, w, d] = M.mag, g = new THREE.Group();
     g.position.set(0, y, z); g.rotation.x = tilt;
@@ -4169,8 +4417,6 @@
     let seed = colors.join("").length * 7919;
     const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
     for (let i = 0; i < 26; i++) {
-      optic: [AT_REDDOT],
-      muzzle: [SUPPRESSOR],
       g.fillStyle = colors[1 + Math.floor(rnd() * (colors.length - 1))];
       g.beginPath(); g.ellipse(rnd() * 64, rnd() * 64, 4 + rnd() * 9, 3 + rnd() * 6, rnd() * 3, 0, 7); g.fill();
     }
@@ -4197,8 +4443,6 @@
     crimson: { name: "Crimson", sw: ["#8a1c22", "#ff5a3a"], roles: {
       dark: { color: 0x5a0f14, metalness: 0.7, roughness: 0.35 }, mid: { color: 0x8a1c22, metalness: 0.6, roughness: 0.4 },
       grip: { color: 0x1a0b0d, metalness: 0.05, roughness: 0.85 }, wood: { color: 0x7a2420, metalness: 0.05, roughness: 0.7 },
-  const AT_BRASS = new THREE.MeshStandardMaterial({ color: 0xc9a14a, metalness: 0.8, roughness: 0.35 });
-  const AT_GRENADE = new THREE.MeshStandardMaterial({ color: 0x4a6342, metalness: 0.3, roughness: 0.6 });
       accent: { color: 0xff5a3a, metalness: 0.4, roughness: 0.4, emissive: 0x6a1a0a, emissiveIntensity: 0.6 }, steel: { color: 0xc23a40, metalness: 0.8, roughness: 0.3 } } },
   };
   // each gun's three skins, and the hits with that gun that open them
@@ -4206,6 +4450,7 @@
     rifle: ["arctic", "midnight", "desert"], ar: ["desert", "midnight", "gold"], ak: ["crimson", "desert", "gold"], shotgun: ["crimson", "midnight", "gold"],
     pistol: ["arctic", "midnight", "gold"], smg: ["arctic", "crimson", "midnight"], dmr: ["desert", "arctic", "gold"], burst: ["midnight", "crimson", "arctic"],
     lmg: ["desert", "crimson", "gold"], crossbow: ["desert", "midnight", "arctic"], launcher: ["crimson", "desert", "gold"], rpg: ["midnight", "arctic", "crimson"],
+    revolver: ["gold", "arctic", "crimson"], dual: ["midnight", "desert", "gold"], railgun: ["midnight", "arctic", "crimson"], minigun: ["desert", "crimson", "gold"],
   };
   const SKIN_NEED = [25, 75, 150];
   const skinMats = new Map();
@@ -4307,27 +4552,6 @@
       w.flashScale = base.flash * fx.flash;
       for (const k of Object.keys(base.reload)) if (typeof base.reload[k] === "number") w.reload[k] = base.reload[k] * fx.reload;
       applyGunSkin(w.group, chosenSkin(id));
-      else if (id === "slug" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.2, mz[2] * 1.2, 0.035, 14), AT_BRASS, 0, mz[1], mz[0] - 0.0175, HP);   // a brass collar at the muzzle: slugs are loaded
-      else if (id === "lbig" && M.left) {   // two spare grenades strapped along the left of the receiver
-        const [x, y, z] = M.left;
-        for (const dz of [-0.05, 0.05]) {
-          add(new THREE.CylinderGeometry(0.017, 0.017, 0.085, 10), AT_GRENADE, x - 0.017, y, z + dz, HP);
-          add(new THREE.CylinderGeometry(0.0125, 0.0125, 0.02, 10), AT_BRASS, x - 0.017, y, z + dz - 0.0525, HP);
-        }
-        add(new THREE.BoxGeometry(0.008, 0.045, 0.16), AT_RUBBER, x - 0.003, y, z);
-      } else if (id === "capacitor" && M.left) {   // a second capacitor on the left of the receiver, with a glowing band
-        const [x, y, z] = M.left;
-        add(new THREE.CylinderGeometry(0.018, 0.018, 0.11, 12), AT_STEEL, x - 0.018, y + 0.01, z, HP);
-        add(new THREE.CylinderGeometry(0.0195, 0.0195, 0.014, 12), railGlowMat, x - 0.018, y + 0.01, z - 0.02, HP);
-      } else if (id === "lquick" && M.left) {   // a speed loader: a pouch on the left with two rounds standing in it
-        const [x, y, z] = M.left;
-        add(new THREE.BoxGeometry(0.018, 0.07, 0.09), AT_STEEL, x - 0.009, y, z);
-        for (const dz of [-0.025, 0.025]) add(new THREE.CylinderGeometry(0.011, 0.011, 0.03, 8), AT_BRASS, x - 0.009, y + 0.05, z + dz);
-      } else if (id === "rquick" && M.under) {   // a spare warhead clipped under the tube
-        const [z, y] = M.under;
-        add(new THREE.CylinderGeometry(0.02, 0.02, 0.11, 10), AT_GRENADE, 0, y - 0.015, z + 0.02, HP);
-        add(new THREE.ConeGeometry(0.02, 0.05, 10), AT_BRASS, 0, y - 0.015, z - 0.06, -HP);
-      }
       w.bipodK = fx.bipod;
       w.adsMult = (w.adsBase || 1) * fx.ads; w.scopeFovMult = fx.scopeFov; w.zoomMult = fx.zoom; w.soundMult = fx.sound;
       if (w.ammo > w.magSize) w.ammo = w.magSize;
@@ -4387,7 +4611,7 @@
       cancelReload(); cancelBoltCycle(); cancelPump();
       vm.switchTimer = 0; vm.pending = null; vm.swapped = true; vm.throwTimer = 0; vm.slashTimer = 0;
       vm.inspectTimer = 0; vm.wantADS = false; vm.adsProgress = 0;
-      vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0; vm.burstShots = 0; vm.burstQueue = 0;
+      vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0; vm.burstShots = 0; vm.burstQueue = 0; vm.charge = 0;
       currentWeapon().group.visible = false;
       vm.current = id;
       currentWeapon().group.visible = true;
@@ -4402,7 +4626,7 @@
   }
   // the menu shows a few favourites, plus your gun if it is not one of them, and a More button for the rest
   const QUICK_GUNS = ["rifle", "ar", "shotgun"];
-  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg"]], ["Machine guns", ["lmg"]], ["Specialty", ["crossbow", "launcher", "rpg"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol"]]];
+  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg", "dual"]], ["Machine guns", ["lmg", "minigun"]], ["Specialty", ["crossbow", "launcher", "rpg", "railgun"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol", "revolver"]]];
   const loadoutEl = document.getElementById("loadout"), loadoutPopupEl = document.getElementById("loadout-popup"), loadoutGroupsEl = document.getElementById("loadout-groups");
   const gunButton = (id) => {
     const b = document.createElement("button");
@@ -4723,7 +4947,7 @@
   // ======================================================================
   const keys = {};
   let pointerLocked = false;
-  let mouseHeld = false, attackPressed = false;
+  let mouseHeld = false, attackPressed = false, mouseDownAt = 0;
   let jumpQueued = false, jumpQueueTimer = 0;
 
   // raw mouse input where the browser offers it, so the OS's pointer acceleration doesn't bend your aim
@@ -4881,7 +5105,7 @@
     gun() { if (ggKnife()) return; switchWeapon(SETTINGS.loadout); },
     knife() { switchWeapon("knife"); },
     swap(e, wheel) { if (ggKnife()) return; switchWeapon((wheel ? vm.pending || vm.current : vm.current) === "knife" ? SETTINGS.loadout : "knife"); },
-    fire() { mouseHeld = true; attackPressed = true; },
+    fire() { mouseHeld = true; attackPressed = true; mouseDownAt = elapsedTime; },
     aim() {
       if (currentWeapon().isMelee) { throwKnife(); return; }
       if (currentWeapon().canADS && !vm.wantADS) { playScopeSound(true); vm.adsStartTime = elapsedTime; }
@@ -5146,12 +5370,12 @@
 
   // shotgun: tip it toward you and feed shells one at a time, with a push on each
   function shellReloadPose(t) {
-    const R = WEAPONS.shotgun.reload;
+    const R = WEAPONS[reload.weapon].reload, P = R.pose || { x: -0.05, y: 0.05, rx: 0.18, ry: 0.10, rz: -0.55 };
     const inK = easeInOut(Math.min(t / 0.25, 1));
     const outK = reload.endAt !== undefined ? easeInOut(Math.min(Math.max((t - reload.endAt + R.end) / R.end, 0), 1)) : 0;
     const k = inK * (1 - outK);
     const push = reload.lastShellAt >= 0 ? Math.exp(-(t - reload.lastShellAt) * 16) : 0;
-    _rlPose.x = -0.05 * k; _rlPose.y = (0.05 - 0.02 * push) * k; _rlPose.rx = (0.18 + 0.04 * push) * k; _rlPose.ry = 0.10 * k; _rlPose.rz = -0.55 * k;
+    _rlPose.x = P.x * k; _rlPose.y = (P.y - 0.02 * push) * k; _rlPose.rx = (P.rx + 0.04 * push) * k; _rlPose.ry = P.ry * k; _rlPose.rz = P.rz * k;
     return _rlPose;
   }
 
@@ -5187,7 +5411,7 @@
       reload.nextShell = w.reload.start;
       reload.lastShellAt = -1;
       reload.endAt = undefined;
-      reload.needsPump = w.ammo === 0;   // empty chamber: pump once the tube is loaded
+      reload.needsPump = w.action === "pump" && w.ammo === 0;   // empty chamber: pump once the tube is loaded
       reload.cues = [];
     } else {
       reload.shells = false;
@@ -5631,7 +5855,8 @@
     if (player.hook) applyGrapple(dt);
 
     const shiftHeld = held("sprint");
-    const sprinting = SETTINGS.autoSprint ? !shiftHeld : shiftHeld;
+    const heavyK = currentWeapon().heavy && vm.spin > 0.15 ? 0.6 : 1;   // the minigun: 60% speed, and no sprinting, while it spins
+    const sprinting = (SETTINGS.autoSprint ? !shiftHeld : shiftHeld) && heavyK === 1;
     const wantsCrouch = held("slide");
 
     _forward.set(-Math.sin(yawObject.rotation.y), 0, -Math.cos(yawObject.rotation.y));
@@ -5748,7 +5973,7 @@
       if (!player.sliding) {
         // crouched without a slide: a slow, quiet crouch-walk (no sprinting)
         const walkMult = wantsCrouch ? CFG.crouchWalkMult : sprinting ? CFG.sprintMultiplier : 1;
-        accelerate(player.velocity, _wishDir, CFG.groundMaxSpeed * walkMult, CFG.groundAccel, dt);
+        accelerate(player.velocity, _wishDir, CFG.groundMaxSpeed * walkMult * heavyK, CFG.groundAccel, dt);
       } else {
         accelerate(player.velocity, _wishDir, 2.0, 6, dt);
       }
@@ -6096,7 +6321,7 @@
   const trickSeen = new Set();   // the tricks landed so far this run (each new one adds to the shot)
   const COLLECTABLE = new Set(["AIR", "180\u00b0", "SPIN", "NO-SCOPE", "QUICKSCOPE", "FLICK", "SNAP FLICK", "SLIDING", "WALL BOUNCE", "GRAPPLE", "LAUNCHED", "RAMP LAUNCH",
     "MEGA LAUNCH", "REVERSE", "QUICK SWITCH", "PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "HANG TIME", "MICRO TARGET", "PINPOINT", "MOVING TARGET",
-    "LAST ROUND", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC", "ROCKET JUMP", "LAUNCHER JUMP", "GRENADE JUMP", "PACK JUMP"]);
+    "LAST ROUND", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC", "ROCKET JUMP", "LAUNCHER JUMP", "GRENADE JUMP", "PACK JUMP", "THREADED"]);
   const BLAST_JUMP = { rpg: ["ROCKET JUMP", "rocketJumpMult"], launcher: ["LAUNCHER JUMP", "launcherJumpMult"], frag: ["GRENADE JUMP", "grenadeJumpMult"], satchel: ["PACK JUMP", "packJumpMult"] };   // by blast kind: the tag, and its CFG value
   const collectKey = (tag) => { const k = trickKey(tag); return k && /SPIN$/.test(k) ? "SPIN" : k; };
 
@@ -6199,6 +6424,7 @@
     if (st.quickSwitch) add("QUICK SWITCH", CFG.quickSwitchMult);
     if (st.reverse) add("REVERSE", CFG.reverseMult);
     if (st.blast && BLAST_JUMP[st.blast]) add(BLAST_JUMP[st.blast][0], CFG[BLAST_JUMP[st.blast][1]]);
+    if (st.threaded >= 2) add("THREADED", CFG.threadedMult);
 
     // air combo: every hit from the same jump counts up
     if (!st.onGround && st.airId !== undefined) {
@@ -6242,6 +6468,7 @@
       const f = CFG.sprayMults[Math.min(n, CFG.sprayMults.length - 1)];
       if (f < 1) add("SPRAY", f);
     }
+    if (weapon && weapon.fannedNow) add("FANNED", CFG.fanMult);   // the revolver with its hammer fanned
     // the gun's share of a sniper's points is a multiplier too, so the total always equals points / 100
     if (weapon && weapon.scoreScale !== undefined && weapon.scoreScale < 1) add(weapon.name, weapon.scoreScale);
 
@@ -6277,6 +6504,7 @@
         ["FLICK", x(C.flickMult), "Turn your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
         ["SNAP FLICK", x(C.snapFlickMult), C.snapFlickAngle + "° or more in the last " + C.snapFlickWindow + " s: a faster, bigger flick (instead of FLICK)."],
         ["QUICK SWITCH", x(C.quickSwitchMult), "Hit within " + C.quickSwitchWindow + " s of finishing a weapon swap, with a gun that hadn't just fired."],
+        ["THREADED", x(C.threadedMult), "One railgun bolt through two or more targets or players: every one it hits pays it."],
         ["LAST ROUND", x(C.lastRoundMult), "The final round of a full magazine (not with unlimited ammo)."],
       ]],
       ["Knife", [
@@ -6301,6 +6529,7 @@
         ["ZERO-G", x(C.zeroGMult), "A hit after " + C.zeroGAirTime + " s in the air on a low-gravity map."],
         ["CHAIN", x(1 + C.chainMultPer) + " to " + x(C.chainMultMax), "Different movement tricks (slide, wall bounce, grapple, pad or ramp launch, portal, launch strip, lift, blast jump) within " + C.chainWindow + " s: +" + C.chainMultPer + "x for each one after the first."],
         ["NEW", "+" + C.newTrickMultPer + "x each, up to " + x(C.newTrickMultMax), "The first time in a run you land a trick you haven't landed yet this run. Variety pays."],
+        ["FANNED", x(C.fanMult), "A revolver shot from fanning the hammer (hold the trigger past a moment): quick and wide, so worth half."],
         ["UNREALISTIC", x(C.unrealisticMult), "Realistic shooting is turned off in Settings > Gameplay, so every shot lands exactly where you aim."],
         ["SPRAY", x(C.sprayMults[1]) + " / " + x(C.sprayMults[2]), "Rifle and AK: the 2nd shot of a full-auto spray, then every shot after. Tap-firing doesn't count."],
       ], true],
@@ -6566,7 +6795,12 @@
       cancelReload();
     }
 
-    fireCooldown = w.fireRate;
+    if (w.charge) {   // the railgun: holding the trigger charges it, and it fires by itself when it is full (updateGunStates)
+      if (vm.charge <= 0) { vm.charge = 0.0001; playRailCharge(w.charge); }
+      return;
+    }
+    if (w.spinUp && vm.spin < 0.35) return;   // the minigun: the barrels are not up to speed yet (holding the trigger spins them up)
+    fireCooldown = w.spinUp ? w.fireRate + (w.spinFireRate - w.fireRate) * Math.max(0, 1 - (vm.spin - 0.35) / 0.65) : vm.fanning && w.fan ? w.fan.rate : w.fireRate;
     vm.inspectTimer = 0;
     localProtectUntil = 0;
 
@@ -6591,6 +6825,131 @@
 
   const _aimDir = new THREE.Vector3(), _pelletDir = new THREE.Vector3();
 
+  // is the trigger really pulling: held, in game, no reload or swap in the way, and something to fire
+  function triggerLive(w) {
+    return mouseHeld && pointerLocked && vm.switchTimer <= 0 && vm.grappleOut <= 0.25 && !(reload.active && !reload.shells) && (w.ammo > 0 || SETTINGS.unlimitedAmmo)
+      && run.state !== "countdown" && run.state !== "done" && !(net.active && (localDead || net.phase !== "play" || countingDown()));
+  }
+  // the guns that build up before they fire: the minigun spins up while the trigger is held; the railgun charges and fires itself when full
+  function updateGunStates(dt, w) {
+    if (w.spinUp) {
+      const live = triggerLive(w);
+      if (live && vm.spin <= 0) playMinigunSpin(w.spinUp);
+      vm.spin = Math.min(1, Math.max(0, vm.spin + (live ? dt / w.spinUp : -dt / (w.spinUp * 1.4))));
+    } else vm.spin = Math.max(0, vm.spin - dt * 1.2);
+    if (vm.charge > 0) {
+      if (w.charge && triggerLive(w)) { vm.charge += dt; if (vm.charge >= w.charge) { vm.charge = 0; fireRail(w); } }
+      else vm.charge = 0;   // let go early (or something got in the way): nothing fires
+    }
+  }
+  function playRailCharge(dur) {
+    tone("sine", 200, 1500, 0.15 * SETTINGS.volGuns, dur, 0, 0.3);
+    tone("sawtooth", 100, 760, 0.05 * SETTINGS.volGuns, dur, 0, 0.25);
+  }
+  function playRailShot(level) {
+    const v = SETTINGS.volGuns * (level === undefined ? 1 : level);
+    noiseHit(3200, 0.6, 0.5 * v, 0.2, "highpass", 0, 0.35);
+    tone("sawtooth", 2200, 70, 0.32 * v, 0.4, 0, 0.3);
+    tone("sine", 90, 38, 0.55 * v, 0.45, 0, 0.3);
+  }
+  function playMinigunSpin(dur) { tone("sawtooth", 60, 360, 0.07 * SETTINGS.volGuns, dur, 0, 0.25); }
+
+  // the railgun's bolt of light: a bright core and a wider glow along the line, fading over half a second (pooled)
+  const railBeamGeo = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
+  railBeamGeo.rotateX(Math.PI / 2);   // its axis on +z, unit radius and length: scaled to fit
+  const RAIL_BEAMS = [];
+  for (let i = 0; i < 6; i++) {
+    const mk = (color) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const core = new THREE.Mesh(railBeamGeo, mk(0xcff8ff)), glow = new THREE.Mesh(railBeamGeo, mk(0x22d3ee));
+    core.visible = glow.visible = false; core.frustumCulled = glow.frustumCulled = false;
+    scene.add(core, glow);
+    RAIL_BEAMS.push({ core, glow, age: 9 });
+  }
+  function spawnRailBeam(origin, dir, len) {
+    const b = RAIL_BEAMS.reduce((a, c) => (a.age > c.age ? a : c));
+    b.age = 0;
+    _tracerMid.copy(origin).addScaledVector(dir, len / 2); _tracerTip.copy(origin).addScaledVector(dir, len);
+    for (const [m, r] of [[b.core, 0.012], [b.glow, 0.05]]) { m.position.copy(_tracerMid); m.lookAt(_tracerTip); m.scale.set(r, r, Math.max(len, 0.01)); m.visible = true; }
+  }
+  function updateRailBeams(dt) {
+    for (const b of RAIL_BEAMS) {
+      if (b.age >= 0.5) continue;
+      b.age += dt;
+      const k = Math.max(0, 1 - b.age / 0.5);
+      b.core.material.opacity = 0.9 * k; b.glow.material.opacity = 0.4 * k * k;
+      if (b.age >= 0.5) b.core.visible = b.glow.visible = false;
+    }
+  }
+  // one bolt through up to w.pierce targets or players in a line; a wall stops it. The claims to the host (one per player it went through) work like any shot's.
+  const _railOrigin = new THREE.Vector3(), _railEnd = new THREE.Vector3(), _railDir = new THREE.Vector3();
+  function fireRail(w) {
+    const ammoBefore = w.ammo;
+    if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); }
+    playRailShot(1);
+    vm.recoil = w.recoil; vm.camKick = w.kick; vm.camKickYaw = Math.random() * 2 - 1; vm.railFlash = 1;
+    fireCooldown = w.fireRate; vm.inspectTimer = 0; localProtectUntil = 0;
+    const ads = easeInOut(vm.adsProgress);
+    let cone = w.spread + (w.spreadAds - w.spread) * ads;
+    if (SETTINGS.realisticShooting) {
+      if (player.onGround) {
+        const moveK = Math.min(Math.max((Math.hypot(player.velocity.x, player.velocity.z) - 0.5) / (CFG.realisticMoveFullSpeed - 0.5), 0), 1);
+        cone += CFG.realisticMoveSpread * moveK * (1 - 0.5 * ads);
+      } else cone += CFG.realisticAirSpread + CFG.realisticMoveSpread * (1 - 0.5 * ads);
+    }
+    camera.getWorldDirection(_aimDir);
+    const extraPitch = vm.recoilPitch - vm.viewRecoilPitch, extraYaw = vm.recoilYaw - vm.viewRecoilYaw;
+    if (extraPitch || extraYaw) {
+      _sprRight.set(1, 0, 0).applyQuaternion(camera.getWorldQuaternion(_camQuat));
+      _aimDir.applyAxisAngle(_sprRight, extraPitch).applyAxisAngle(_worldUp, extraYaw);
+    }
+    spreadDirection(_aimDir, cone, _pelletDir);
+    raycaster.ray.origin.setFromMatrixPosition(camera.matrixWorld);
+    raycaster.ray.direction.copy(_pelletDir);
+    _railOrigin.copy(raycaster.ray.origin);
+    const maxD = CFG.maxShootDistance, occ = Math.min(occluderDistance(maxD), maxD);
+    const hits = [];
+    let consumed = 0;
+    for (let n = 0; n < w.pierce; n++) {   // look again from just past each thing it went through
+      raycaster.ray.origin.copy(_railOrigin).addScaledVector(_pelletDir, consumed);
+      const far = occ - consumed;
+      if (far <= 0) break;
+      const res = raycastTargets(far), pres = raycastPlayers(far);
+      const tD = res.target ? res.dist : Infinity, pD = pres.p ? pres.dist : Infinity;
+      if (tD === Infinity && pD === Infinity) break;
+      if (tD <= pD) { hits.push({ target: res.target, dist: consumed + tD }); consumed += tD + res.target.userData.hitRadius + 0.05; }
+      else { hits.push({ pres, dist: consumed + pD }); consumed += pD + 0.7; }
+    }
+    raycaster.ray.origin.copy(_railOrigin);
+    muzzleFlash.getWorldPosition(_muzzleWorld);
+    _railEnd.copy(_railOrigin).addScaledVector(_pelletDir, occ);
+    _railDir.copy(_railEnd).sub(_muzzleWorld);
+    const beamLen = _railDir.length();
+    spawnRailBeam(_muzzleWorld, _railDir.normalize(), beamLen);
+    recEvent({ type: "shot", w: vm.current, snd: true, o: v3(_muzzleWorld), d: [r4(_railDir.x), r4(_railDir.y), r4(_railDir.z)], l: r2(beamLen) });
+    lastShotOrigin.copy(_muzzleWorld);
+    if (net.active) mpSendShot(_muzzleWorld, _railDir, beamLen);
+    if (!hits.length && occ < maxD) {   // it ended on a wall or the floor: leave a mark
+      spawnDecal(_railEnd, _occNormal, 0.09); burst(_railEnd, 0x9fe8ff, 6);
+    }
+    const sn = trickState();
+    if (hits.length >= 2) sn.threaded = hits.length;
+    let targetHits = 0, playerHits = 0;
+    for (const h of hits) {
+      if (h.target) { targetHits++; scoreHit(h.target, h.dist, false, ammoBefore, sn, false, w); }
+      else { playerHits++; mpPvpHit(h.pres, false, ammoBefore, w, sn, false, 1, 0); }
+    }
+    if (!targetHits && !playerHits) breakStreak();
+    if (run.state === "live") { run.shots++; if (targetHits) run.shotsHit++; }
+    if (!net.active) {
+      const gs = gunStat(vm.current);
+      gs.shots++; stat("shots");
+      if (targetHits) { gs.hits++; stat("shotsHit"); announceUnlocks(vm.current, gs.hits); }
+    }
+    w.lastFiredAt = elapsedTime;
+    addRecoil(w);
+    if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
+  }
+
   // Recoil climbs the aim with every shot, more with each shot of a burst, and wanders sideways;
   // it settles back once you stop. Shots count as one burst while they come at the gun's rate.
   function addRecoil(w) {
@@ -6614,6 +6973,11 @@
 
   function fireGun(w) {
     const ammoBefore = w.ammo;
+    if (w.dual) {   // the guns fire in turn: the flash, the case and the kick go to this side
+      const side = vm.dualSide; vm.dualSide = 1 - side; vm.dualKick[side] = 1;
+      muzzleFlash.position.x = side ? 0.15 : -0.15; w.eject.x = side ? 0.18 : -0.18;
+    }
+    if (w.fan) { vm.cylTarget += Math.PI / 3; vm.hammerT = 0; w.fannedNow = vm.fanning; }
     if (ammoBefore >= w.magSize) w.lastRoundReady = true;   // LAST ROUND needs a full magazine emptied
     if (!SETTINGS.unlimitedAmmo) { w.ammo--; updateAmmoHud(); }
     playShotSound(w.sound, w.soundMult || 1);
@@ -6636,6 +7000,7 @@
     // aim, plus this gun's spread: tighter aiming down sights, wider while the AR blooms
     const ads = easeInOut(vm.adsProgress);
     let cone = (w.spread + (w.spreadAds - w.spread) * ads) + (w.bloomNow || 0);
+    if (w.fan && vm.fanning) cone *= w.fan.spread;   // a fanned shot goes wide
     if (SETTINGS.realisticShooting) {
       if (w.sniper) cone += CFG.realisticHipSpread * (1 - ads);
       if (player.onGround) {
@@ -6715,6 +7080,7 @@
     }
     if (ammoBefore === 1) w.lastRoundReady = false;
     w.lastFiredAt = elapsedTime;
+    w.fannedNow = false;
 
     addRecoil(w);   // after the shot: the next one is what gets kicked
     if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
@@ -7392,6 +7758,10 @@
     satchel: { blast: 1, max: 15, min: 5, radius: 4.5 },   // the blast pack (C): a launch for you, only a scratch for the others   // splash: full damage in the middle of the blast, a quarter at its edge (a ball 4.5 m wide each way)
     crossbow: { body: 55, head: 100 },   // like the Deagle: two body hits or one to the head; it flies, so it has to be led
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
+    revolver: { body: 75, head: 100 },   // two body hits or one to the head, like the Deagle, but each hit pays more
+    dual: { body: 14, head: 21, near: 10, far: 30, farMult: 0.5 },
+    railgun: { body: 90, head: 100 },   // two body hits or one head hit; it goes through up to three
+    minigun: { body: 11, head: 16, near: 15, far: 45, farMult: 0.6 },
   };
   const KNIFE_SWING_DMG = 100, KNIFE_THROW_DMG = 55, KNIFE_THROW_HEAD_DMG = 100;   // a thrown knife is like the Deagle: two body hits, or one to the head
   const GG_ORDER = ["smg", "ar", "ak", "burst", "lmg", "shotgun", "dmr", "crossbow", "pistol", "rifle"];   // gun game: ten guns, then the knife (level 11)
@@ -7658,9 +8028,19 @@
       P(new THREE.CylinderGeometry(0.03, 0.03, 0.95, 10), steel, 0, 0.02, -0.5, HP);
       P(new THREE.CylinderGeometry(0.035, 0.035, 0.7, 10), dark, 0, -0.03, -0.4, HP);
       P(B(0.07, 0.06, 0.2), wood, 0, -0.05, -0.55); P(B(0.06, 0.1, 0.3), wood, 0, -0.02, 0.2);
-    } else {                         // Deagle: a big pistol
-      P(B(0.055, 0.05, 0.32), steel, 0, 0.02, -0.12); P(B(0.05, 0.08, 0.26), steel, 0, -0.01, -0.1);
-      P(B(0.045, 0.12, 0.06), dark, 0, -0.09, 0.03, 0.2);
+    } else if (id === "revolver") {  // revolver: a long barrel, a fat cylinder, a small frame and a raked wooden grip
+      P(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 10), steel, 0, 0.03, -0.17, HP); P(new THREE.CylinderGeometry(0.04, 0.04, 0.1, 10), steel, 0, 0.02, -0.02, HP);
+      P(B(0.05, 0.075, 0.14), steel, 0, 0.01, 0.07); P(B(0.045, 0.12, 0.06), wood, 0, -0.07, 0.11, -0.3);
+    } else if (id === "dual") {      // dual SMGs: a small boxy gun in each hand (the left one sits 0.34 to the left of the right)
+      for (const x of [0, -0.34]) { P(B(0.05, 0.06, 0.26), dark, x, 0, -0.1); P(B(0.03, 0.1, 0.045), steel, x, -0.08, 0.03, -0.25); P(new THREE.CylinderGeometry(0.012, 0.012, 0.12, 8), steel, x, 0.005, -0.28, HP); }
+    } else if (id === "railgun") {   // railgun: two rails with a glowing channel, a block body and a stock
+      for (const sx of [-1, 1]) P(B(0.015, 0.02, 0.7), steel, sx * 0.025, 0.02, -0.5);
+      P(B(0.01, 0.01, 0.65), railGlowMat, 0, 0.02, -0.5); P(B(0.07, 0.09, 0.4), dark, 0, 0, -0.05); P(B(0.05, 0.1, 0.25), dark, 0, -0.01, 0.3);
+    } else if (id === "minigun") {   // minigun: a bundle of barrels, a motor housing and an ammunition box
+      P(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 12), dark, 0, 0, -0.05, HP); P(new THREE.CylinderGeometry(0.045, 0.045, 0.6, 10), steel, 0, 0, -0.55, HP); P(B(0.1, 0.12, 0.16), steel, -0.1, -0.08, 0.05);
+    } else {                         // Deagle: one long slide over a frame, a sight on top and a raked grip
+      P(B(0.05, 0.055, 0.34), steel, 0, 0.02, -0.12); P(B(0.046, 0.04, 0.3), dark, 0, -0.012, -0.1);
+      P(B(0.01, 0.014, 0.014), dark, 0, 0.055, -0.27); P(B(0.042, 0.13, 0.065), dark, 0, -0.09, 0.04, 0.22);
     }
     g.position.set(0.24, -0.25, -0.1);
     g.visible = false;
@@ -7681,8 +8061,10 @@
   const AV_HAND_HOLD = {   // where each hand goes on the thing they hold, in its own space (the barrel runs along -z); l: null = the left arm hangs
     default: { r: [0, -0.07, 0.1], l: [0, -0.05, -0.36] },
     rifle: { r: [0, -0.06, 0.05], l: [0, -0.04, -0.36] }, smg: { r: [0, -0.07, 0.08], l: [0, -0.05, -0.3] }, dmr: { r: [0, -0.06, 0.1], l: [0, -0.04, -0.46] },
-    lmg: { r: [0, -0.08, 0.1], l: [0, -0.06, -0.46] }, shotgun: { r: [0, -0.06, 0.2], l: [0, -0.05, -0.55] }, pistol: { r: [0, -0.1, 0.06], l: [-0.01, -0.11, 0.05] },
+    lmg: { r: [0, -0.08, 0.1], l: [0, -0.06, -0.46] }, shotgun: { r: [0, -0.06, 0.2], l: [0, -0.05, -0.55] }, pistol: { r: [0, -0.1, 0.05], l: [0, -0.15, 0.0] },
     crossbow: { r: [0, -0.08, 0.28], l: [0, -0.05, -0.36] }, launcher: { r: [0, -0.07, 0.1], l: [0, -0.1, -0.3] }, rpg: { r: [0, -0.1, 0.1], l: [0, -0.1, -0.18] },
+    revolver: { r: [0, -0.1, 0.1], l: [0, -0.15, 0.06] }, dual: { r: [0, -0.07, 0.07], l: [-0.34, -0.07, 0.07] },
+    railgun: { r: [0, -0.09, 0.1], l: [0, -0.06, -0.3] }, minigun: { r: [0, -0.1, 0.07], l: [0, -0.06, -0.25] },
     knife: { r: [0, 0, 0.02], l: null }, grapple: { r: [0, -0.04, 0.02], l: null },
   };
   function makeAvatar(p) {
@@ -7947,7 +8329,7 @@
   }
 
   // ---------------- events: what actually happens on every peer ----------------
-  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", launcher: "exploded", rpg: "rocketed", frag: "fragged", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned" };
+  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", launcher: "exploded", rpg: "rocketed", frag: "fragged", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned", revolver: "gunned down", dual: "perforated", railgun: "railed", minigun: "shredded" };
   function feedLine(html) {
     const el = document.createElement("div");
     el.innerHTML = html;
@@ -8256,7 +8638,8 @@
           _tmpV1.set(o[0], o[1], o[2]);
           _tmpV2.set(d[0], d[1], d[2]);
           const proj = !!(WEAPONS[m.g] && WEAPONS[m.g].projectile);   // a bolt flies as its own object: no instant tracer or mark
-          if (!proj) spawnTracer(_tmpV1, _tmpV2, Math.max(0, Math.min(l, 2000)));
+          if (m.g === "railgun") spawnRailBeam(_tmpV1, _tmpV2, Math.max(0, Math.min(l, 2000)));
+          else if (!proj) spawnTracer(_tmpV1, _tmpV2, Math.max(0, Math.min(l, 2000)));
           if (!proj && SETTINGS.bulletHoles && l > 0 && l < 249) {   // it ended on a wall or the floor: leave the mark
             raycaster.ray.origin.copy(_tmpV1); raycaster.ray.direction.copy(_tmpV2).normalize();
             const hit = occluderDistance(l + 0.5);
@@ -8371,7 +8754,7 @@
   function playRemoteShot(gun, dist) {
     const g = typeof gun === "string" && WEAPONS[gun] && !WEAPONS[gun].isMelee ? gun : "rifle";
     const level = Math.max(0.12, Math.min(1 / (1 + (dist || 0) / 16), 0.85));
-    playShotSound(WEAPONS[g].sound, level);
+    if (g === "railgun") playRailShot(level); else playShotSound(WEAPONS[g].sound, level);
   }
 
   // ---------------- local actions that need to reach the host ----------------
@@ -8590,7 +8973,8 @@
     }
     const sh = p.lastShot;
     if (!sh || now - p.lastShotAt > SHOT_WINDOW) return null;
-    p.lastShot = null;   // one shot, one claim
+    sh.claims = (sh.claims || 1) - 1;   // one shot, one claim (a railgun bolt may claim each target it went through)
+    if (sh.claims <= 0) p.lastShot = null;
     const len = Math.hypot(sh.d[0], sh.d[1], sh.d[2]) || 1;
     const dx = sh.d[0] / len, dy = sh.d[1] / len, dz = sh.d[2] / len;
     const qx = v.x - sh.o[0], qy = v.y + 0.9 - sh.o[1], qz = v.z - sh.o[2];
@@ -8687,7 +9071,7 @@
         const now = nowMs();
         if (p.alive && o && d && Number.isFinite(l) && g && now - p.lastFireAt >= WEAPONS[g].fireRate * 500) {   // faster than the gun can fire: dropped
           const len = Math.max(0, Math.min(l, 2000));
-          p.lastShot = { o, d, l: len, g }; p.lastShotAt = now; p.lastFireAt = now; p.protectUntil = 0;   // shooting ends spawn protection
+          p.lastShot = { o, d, l: len, g, claims: g === "railgun" ? WEAPONS.railgun.pierce : 1 }; p.lastShotAt = now; p.lastFireAt = now; p.protectUntil = 0;   // shooting ends spawn protection
           hostBroadcast({ t: "shot", id: fromId, g, o, d, l: len });
         }
         break;
@@ -8939,7 +9323,7 @@
   // bots go through the same health, damage, regeneration, kill feed and scoreboard as real players do.
   // Their positions are moved here; a shot is resolved by working out where its aim lands on the target.
   // ======================================================================
-  const BOT_GUNS = GUNS.filter((id) => id !== "launcher" && id !== "rpg");   // (bots do not fire blast weapons)
+  const BOT_GUNS = GUNS.filter((id) => !["launcher", "rpg", "revolver", "dual", "railgun", "minigun"].includes(id));   // (bots do not fire blast weapons, and the newer guns are for players)
   const BOT_NAMES = ["Rex", "Nova", "Blitz", "Echo", "Vega"];
   // react: seconds before a bot starts shooting at something it sees; err: aim error in degrees; turn: rad/s;
   // head: how often it goes for the head; speed: u/s; burst: shots per burst for automatics; pause: seconds between bursts
@@ -11870,6 +12254,7 @@
       updateProps(dt);
       updateParticles(dt);
       updateTracers(dt);
+      updateRailBeams(dt);
       updateSmoke(dt);
       clouds.rotation.y += dt * 0.004;
       updateJumpPads(dt);
@@ -11902,8 +12287,10 @@
       }
 
       const w = currentWeapon();
+      updateGunStates(dt, w);
       if (w.auto) { if (mouseHeld) attack(); }
-      else if (attackPressed) { attack(); }
+      else if (attackPressed) { vm.fanning = false; attack(); }
+      else if (w.fan && mouseHeld && elapsedTime - mouseDownAt >= w.fan.after && fireCooldown <= 0) { vm.fanning = true; attack(); }   // the revolver: held past a moment, the hammer is fanned
       attackPressed = false;
 
       const speed = Math.hypot(player.velocity.x, player.velocity.z);

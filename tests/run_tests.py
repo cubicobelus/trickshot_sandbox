@@ -137,7 +137,7 @@ def test_game(browser, base):
     check("the menu shows three favourite guns and a More button", quick == ["rifle", "ar", "shotgun"] and page.is_visible("#loadout-more"), ", ".join(quick))
     page.click("#loadout-more")
     guns = page.eval_on_selector_all("#loadout-popup button[data-gun]", "els => els.map(e => e.dataset.gun)")
-    check("the More popup lists all ten guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr", "burst", "lmg", "crossbow"]), ", ".join(guns))
+    check("the More popup lists all sixteen guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg", "revolver", "dual", "railgun", "minigun"]), ", ".join(guns))
     page.click("#loadout-popup button[data-gun=dmr]")
     check("picking from More closes it, keeps the gun in the row and selects it",
           not page.is_visible("#loadout-popup") and page.is_visible("#loadout button.active[data-gun=dmr]"))
@@ -148,7 +148,7 @@ def test_game(browser, base):
         step(page, 45)
         ammo_before = page.inner_text("#ammo-count")
         page.dispatch_event("body > canvas", "mousedown", {"button": 0})
-        step(page, 1)
+        step(page, {"railgun": 45, "minigun": 25}.get(gun, 1))   # (the railgun charges for 0.6 s and the minigun spins up before they fire)
         page.dispatch_event("body > canvas", "mouseup", {"button": 0})
         step(page, 3)
         ammo_after = page.inner_text("#ammo-count")
@@ -986,8 +986,8 @@ GUNS_JS = """() => {
     if (!D.ATTACHMENTS[id]) bad(id + " has no attachments");
     if (!w.sound || !(w.sound.rate > 0) || !(w.sound.length > 0)) bad(id + " has no usable sound profile");
     if (!(w.fireRate > 0) || !(w.magSize > 0) || !w.group || !w.muzzle) bad(id + " is missing fire rate, magazine, model or muzzle");
-    if (w.action !== "pump" && (w.mag === undefined || w.magRestY === undefined)) bad(id + " has no magazine part for the reload");   // (the pump shotgun loads shells instead)
-    if (!D.GG_ORDER.includes(id) && id !== "launcher" && id !== "rpg") bad(id + " is not on the gun game ladder");   // (the launcher is kept out of the gun game, and bots never pick it)
+    if (w.action !== "pump" && !(w.reload && w.reload.style === "shells") && (w.mag === undefined || w.magRestY === undefined)) bad(id + " has no magazine part for the reload");   // (the pump shotgun and the revolver load rounds instead)
+    if (!D.GG_ORDER.includes(id) && !["launcher", "rpg", "revolver", "dual", "railgun", "minigun"].includes(id)) bad(id + " is not on the gun game ladder");   // (the launcher, the RPG and the four newest guns are kept out of the gun game, and bots never pick them)
   }
   const dm = (g, d, head) => D.hostDamage({ x: 0, z: 0 }, { x: d, z: 0 }, { head: !!head, n: 1, h: head ? 1 : 0 }, g);
   out.facts.smg = [dm("smg", 5), dm("smg", 12), dm("smg", 23.5), dm("smg", 35), dm("smg", 80), dm("smg", 5, true), dm("smg", 80, true)];
@@ -1316,6 +1316,86 @@ def test_avatar_reactions(browser, base):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_new_guns(browser, base):
+    """The revolver (a tap, or hold to fan the hammer), the dual SMGs (firing in turn), the railgun (charge, cancel, one bolt through three targets) and the minigun (spin up, a rate cap, slow movement)."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 900, 560)
+        AMMO = "(g) => window.__dbg.WEAPONS[g].ammo"
+        # the revolver
+        pick_gun(page, "revolver"); page.click("#start-btn"); step(page, 60)
+        page.mouse.move(450, 280)
+        page.mouse.down(); step(page, 5); page.mouse.up(); step(page, 40)
+        tap = page.evaluate(AMMO, "revolver")
+        check("the revolver holds 6 rounds and a tap fires one", tap == 5, str(tap))
+        step(page, 40)
+        page.mouse.down(); step(page, 45)   # about 0.7 s: the aimed shot, then the hammer is fanned
+        fan = page.evaluate("[window.__dbg.WEAPONS.revolver.ammo, window.__dbg.vm.fanning]")
+        page.mouse.up(); step(page, 3)
+        check("holding the trigger fans the hammer: three more rounds go in the same time", fan[1] is True and fan[0] <= 3, str(fan))
+        pen = page.evaluate("""(() => { const D = window.__dbg, st = D.trickState(), w = Object.assign({}, D.WEAPONS.revolver, { fannedNow: true });
+          const r = D.computeMultipliers({ userData: { type: 'normal', moving: false } }, 30, false, 5, st, false, w); return r.pens.filter((t) => /FANNED/.test(t)); })()""")
+        check("a fanned shot carries a FANNED x0.50 penalty", len(pen) == 1 and pen[0].startswith("FANNED x0.50"), str(pen))
+        page.evaluate("__unlock()"); step(page, 3)
+        # the dual SMGs
+        pick_gun(page, "dual"); page.click("#start-btn"); step(page, 60)
+        sides = []
+        page.mouse.down()
+        for _ in range(6):
+            step(page, 4)
+            sides.append(page.evaluate("window.__dbg.vm.dualSide"))
+        page.mouse.up()
+        left = page.evaluate(AMMO, "dual")
+        check("the dual SMGs fire in turn (the side flips) and empty 40 rounds quickly", len(set(sides)) == 2 and 40 - left >= 6, f"{sides}, {left} left")
+        page.evaluate("__unlock()"); step(page, 3)
+        # the railgun
+        pick_gun(page, "railgun"); page.click("#start-btn"); step(page, 60)
+        page.mouse.move(450, 280)
+        page.mouse.down(); step(page, 20)   # 0.32 s
+        mid = page.evaluate("[window.__dbg.vm.charge, window.__dbg.WEAPONS.railgun.ammo]")
+        page.mouse.up(); step(page, 5)
+        cancel = page.evaluate("[window.__dbg.vm.charge, window.__dbg.WEAPONS.railgun.ammo]")
+        check("the railgun charges while the trigger is held, and letting go early fires nothing", 0.2 < mid[0] < 0.5 and mid[1] == 3 and cancel == [0, 3], f"{mid} / {cancel}")
+        page.evaluate("""() => { const D = window.__dbg, p = D.yawObject.position; p.set(0, p.y, 26); D.player.feetY = 0.25; D.yawObject.rotation.y = 0; D.pitchObject.rotation.x = 0; D.player.velocity.set(0, 0, 0); }""")
+        step(page, 3)
+        page.evaluate("""() => { const D = window.__dbg, y0 = D.camera.getWorldPosition(D.yawObject.position.clone()).y;
+          D.targets.slice(0, 4).forEach((t, i) => { const u = t.userData; u.motion = null; u.moving = false; u.alive = true; t.visible = true; u.base.set(0, y0, 20 - i * 6); t.position.copy(u.base); }); }""")
+        page.mouse.down(); step(page, 45)   # about 0.7 s: charged, and it fires itself
+        page.mouse.up(); step(page, 2)
+        dead = page.evaluate("window.__dbg.targets.slice(0, 4).map((t) => !t.userData.alive)")
+        used = page.evaluate(AMMO, "railgun")
+        check("one railgun bolt goes through three targets in a line (and no further), using one cell", dead == [True, True, True, False] and used == 2, f"{dead}, {used} cells")
+        thr = page.evaluate("""(() => { const D = window.__dbg, st = Object.assign(D.trickState(), { threaded: 3 });
+          return D.computeMultipliers({ userData: { type: 'normal', moving: false } }, 30, false, 3, st, false, D.WEAPONS.railgun).tags.filter((t) => /THREADED/.test(t)); })()""")
+        check("a bolt through two or more scores THREADED x1.50", len(thr) == 1 and thr[0].startswith("THREADED x1.50"), str(thr))
+        page.evaluate("__unlock()"); step(page, 3)
+        # the minigun
+        pick_gun(page, "minigun"); page.click("#start-btn"); step(page, 60)
+        page.mouse.move(450, 280)
+        SPEED = "Math.hypot(window.__dbg.player.velocity.x, window.__dbg.player.velocity.z)"
+        page.evaluate("""() => { const D = window.__dbg, p = D.yawObject.position; p.set(0, p.y, 26); D.player.feetY = 0.25; D.yawObject.rotation.y = 0; D.pitchObject.rotation.x = 0; D.player.velocity.set(0, 0, 0); }""")
+        page.keyboard.down("KeyW"); step(page, 90)
+        v_free = page.evaluate(SPEED)
+        page.mouse.down(); step(page, 12)   # 0.19 s: the barrels are still spinning up
+        early = page.evaluate("[window.__dbg.WEAPONS.minigun.ammo, window.__dbg.vm.spin]")
+        step(page, 78)   # up to speed by now
+        spun = page.evaluate("[window.__dbg.WEAPONS.minigun.ammo, window.__dbg.vm.spin]")
+        v_spun = page.evaluate(SPEED)
+        step(page, 20)
+        rate = (spun[0] - page.evaluate(AMMO, "minigun")) / 0.32
+        page.mouse.up(); step(page, 80)
+        v_after = page.evaluate(SPEED)
+        page.keyboard.up("KeyW")
+        check("the minigun does not fire until its barrels are spinning (nothing in the first 0.2 s)", early[0] == 150 and early[1] < 0.35, str(early))
+        check("it fires at most about 16 rounds a second once spun up", spun[1] > 0.99 and 10 <= rate <= 18, f"spin {spun[1]:.2f}, {rate:.1f} rounds a second")
+        check("you move at about 60% speed while it spins, and get your speed back after", v_spun < v_free * 0.75 and v_after > v_spun * 1.3, f"{v_free:.1f} -> {v_spun:.1f} -> {v_after:.1f} u/s")
+        check("the new gun checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_skins(browser, base):
     """Gun skins: three per gun plus the base, locked until hits with that gun, applied to the gun in your hands, remembered, sent to other players in the attachment code, and shown on their guns."""
     import json
@@ -1481,7 +1561,7 @@ def debug_site():
     with open(path, encoding="utf-8", newline="") as fh:
         src = fh.read().replace("\r\n", "\n")
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
-            "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
+            "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, SETTINGS, applyAttachments, setLoadout, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
             "hostStartRound, hostDealDamage, grenades, throwFrag, explodeGrenade, trickState, computeMultipliers, attachCode, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
@@ -1724,6 +1804,15 @@ def test_attach_extras(browser, base):
         page.click('#attach-slots .at-opt[data-opt="bipod"]')
         k = page.evaluate("window.__dbg.WEAPONS.lmg.bipodK")
         check("the bipod sets its number (steadier crouched)", abs(k - 0.45) < 1e-6, str(k))
+        check("lasers are on the SMG, rifle, AK, burst rifle and revolver; the shotgun has a suppressor and a red dot; the railgun an ionizer",
+              all(has(g, "laser") for g in ("smg", "ar", "ak", "burst", "revolver")) and has("shotgun", "suppressor") and has("shotgun", "reddot") and has("railgun", "ionizer") and not has("lmg", "laser"))
+        shown = {}
+        for gun, opt in (("shotgun", "slug"), ("launcher", "lbig"), ("launcher", "lquick"), ("rpg", "rquick"), ("smg", "laser"), ("railgun", "capacitor"), ("dual", "suppressor")):
+            page.click(f'#attach-guns button[data-gun="{gun}"]')
+            page.click(f'#attach-slots .at-opt[data-opt="{opt}"]')
+            shown[gun + "/" + opt] = page.evaluate("(g) => { const a = window.__dbg.WEAPONS[g].atGroup; let n = 0; if (a) a.traverse((o) => { if (o.isMesh) n++; }); return n; }", gun)
+            page.click(f'#attach-slots .at-opt[data-opt="{opt}"]')   # (off again)
+        check("each of them shows on the gun when fitted (slugs, extra grenades, quick loaders, lasers, a capacitor, a suppressor on both dual guns)", all(n > 0 for n in shown.values()) and shown["dual/suppressor"] >= 4, str(shown))
         page.click("#attach-close")
         check("the attachment extras run without errors", not errors, "; ".join(errors[:2]))
         page.close()
@@ -2010,10 +2099,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_avatar_reactions, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_avatar_reactions, test_new_guns, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "avatar_reactions", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "avatar_reactions", "new_guns", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 
