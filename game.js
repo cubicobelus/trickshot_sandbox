@@ -6783,11 +6783,19 @@
   const BLAST_CODE = { launcher: 2, frag: 3, rpg: 4, satchel: 5 }, BLAST_KIND = { 2: "launcher", 3: "frag", 4: "rpg", 5: "satchel" };   // how a blast travels over the network
   const GREN_RADIUS = 0.12, FRAG_COOLDOWN = 9, PACK_COOLDOWN = 6;
   const grenades = [];
-  const grenGeo = new THREE.SphereGeometry(GREN_RADIUS, 12, 8), grenMat = new THREE.MeshStandardMaterial({ color: 0x4a6342, roughness: 0.6, metalness: 0.3 });
+  const grenGeo = new THREE.SphereGeometry(1, 14, 10), grenMat = new THREE.MeshStandardMaterial({ color: 0x4a6342, roughness: 0.6, metalness: 0.3 });
+  grenGeo.scale(0.085, 0.13, 0.085); grenGeo.computeVertexNormals();   // an egg: longer than it is wide, like the real thing (the hit sphere stays round)
   const grenBand = new THREE.MeshStandardMaterial({ color: 0xd9b43a, roughness: 0.6 });
   for (let i = 0; i < 10; i++) {
     const mesh = new THREE.Mesh(grenGeo, grenMat);
-    mesh.add(new THREE.Mesh(new THREE.TorusGeometry(GREN_RADIUS * 0.98, 0.012, 6, 14), grenBand));
+    const nade = new THREE.Group();   // what sits on the egg: grooves round it, a fuse cap on top and the safety lever down one side
+    for (const y of [-0.06, 0, 0.06]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.085 * Math.sqrt(1 - (y / 0.13) * (y / 0.13)) + 0.002, 0.008, 6, 14), y === 0 ? grenBand : metalDark);
+      ring.rotation.x = HALF_PI; ring.position.y = y; nade.add(ring);
+    }
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.036, 0.05, 10), metalMid); cap.position.y = 0.135; nade.add(cap);
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.141, 0.026), metalMid); lever.position.set(0.0575, 0.065, 0); lever.rotation.z = 0.4; nade.add(lever);
+    mesh.add(nade);
     const rocket = new THREE.Group();   // a rocket points down -Z
     const rb = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.45, 10), metalMid); rb.rotation.x = HALF_PI; rocket.add(rb);
     const rn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 10), accentMat); rn.rotation.x = -HALF_PI; rn.position.z = -0.29; rocket.add(rn);
@@ -6800,7 +6808,7 @@
     pack.visible = false; mesh.add(pack);
     mesh.visible = false; mesh.frustumCulled = false;
     scene.add(mesh);
-    grenades.push({ mesh, rocket, pack, stuck: false, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", remote: false, snap: null, kind: "launcher", smokeT: 0 });
+    grenades.push({ mesh, rocket, pack, stuck: false, spin: new THREE.Vector3(), rollAt: 0, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", remote: false, snap: null, kind: "launcher", smokeT: 0 });
   }
   const blastFx = [];   // expanding balls of light
   for (let i = 0; i < 4; i++) {
@@ -6826,6 +6834,9 @@
     r = r || 4.5;
     burst(pos, 0xffa020, 26); burst(pos, 0xffe08a, 10); burst(pos, 0x555555, 12);
     const fx = blastFx.reduce((a, b) => (a.age > b.age ? a : b));
+    g.rollAt = 0;
+    if (B.rocket || B.sticky) g.spin.set(0, 0, 0);
+    else g.spin.set(g.vel.z, 0, -g.vel.x).multiplyScalar(0.35);   // end over end, about the line across the throw: a faster throw turns faster
     fx.age = 0; fx.r = r; fx.mesh.position.copy(pos); fx.mesh.visible = true;
     playBlastSound(pos, r);
   }
@@ -7043,6 +7054,8 @@
         const dist = o.distanceTo(p);
         if (dist < hitDist) { hitDist = dist; kind = "wall"; _grHit.copy(p); if (box.round && p.y < box.max.y - 0.02) _grNormal.set(p.x - box.round.x, 0, p.z - box.round.z).normalize(); else boxFaceNormal(box, p, _grNormal); }
       }
+  const _grAxis = new THREE.Vector3(), _grSlide = new THREE.Vector3(), _grQ = new THREE.Quaternion();
+  const ROLL_DRAG = 2.2, ROLL_SPIN_MAX = 25;   // a grenade on the floor rolls on (it loses a bit over two tenths of its speed each tenth of a second) and rolls down a slope; the turn it shows is capped so it still reads
       if (d.y < 0) {
         const t = (o.y - 0.25) / -d.y;
         if (t >= 0 && t < hitDist) { hitDist = t; kind = "wall"; _grHit.copy(o).addScaledVector(d, t); _grNormal.set(0, 1, 0); }
@@ -7078,10 +7091,21 @@
         o.copy(_grHit).addScaledVector(_grNormal, rad + 0.01);   // a grenade bounces
         const vn = g.vel.dot(_grNormal);
         if (vn < 0) {
-          g.vel.addScaledVector(_grNormal, -(1 + B.bounce) * vn);
-          _grTmp.copy(g.vel).addScaledVector(_grNormal, -g.vel.dot(_grNormal));   // the sliding part
-          g.vel.addScaledVector(_grTmp, -0.2);
-          if (_grNormal.y > 0.6 && Math.abs(vn) < 2.2) { g.vel.y = 0; g.vel.x *= 0.85; g.vel.z *= 0.85; }   // settles on the floor
+          if (_grNormal.y > 0.6 && Math.abs(vn) < 2.2) {   // too slow to bounce: it rolls (and what gravity adds along a slope stays, so it rolls downhill)
+            g.vel.addScaledVector(_grNormal, -vn).multiplyScalar(Math.max(0, 1 - ROLL_DRAG * Math.min(g.age - g.rollAt, 0.12)));   // (it touches down every few frames: the drag is for the time since the last touch)
+          } else {
+            // an egg does not bounce true: how it lands, its long axis against the surface, sets how much it keeps and which way it kicks
+            _grAxis.set(0, 1, 0).applyQuaternion(g.mesh.quaternion);
+            const an = _grAxis.dot(_grNormal);   // 1: on an end, 0: flat on its side
+            _grAxis.addScaledVector(_grNormal, -an);   // the long axis along the surface
+            g.vel.addScaledVector(_grNormal, -(1 + B.bounce * (1 - 0.3 * (1 - an * an))) * vn);
+            g.vel.addScaledVector(_grAxis, -vn * an * 0.8);
+            _grSlide.copy(g.vel).addScaledVector(_grNormal, -g.vel.dot(_grNormal));   // the sliding part
+            g.vel.addScaledVector(_grSlide, -0.2);
+          }
+          g.rollAt = g.age;
+          _grSlide.copy(g.vel).addScaledVector(_grNormal, -g.vel.dot(_grNormal));
+          g.spin.crossVectors(_grNormal, _grSlide).multiplyScalar(1 / GREN_RADIUS).clampLength(0, ROLL_SPIN_MAX);   // it turns the way it travels along the surface
         }
         continue;
       }
@@ -7091,7 +7115,10 @@
         g.smokeT -= dt;
         if (g.smokeT <= 0) { g.smokeT = 0.03; spawnSmoke(o, 0, 0.3, 0, 0.9, 0.18, 0.8, 0.4); }
       } else if (B.sticky) { g.mesh.rotation.y += dt * 6; }
-      else { g.mesh.rotation.x += dt * 9; g.mesh.rotation.z += dt * 5; }
+      else if (g.spin.lengthSq() > 1e-6) {
+        const w = g.spin.length();
+        g.mesh.quaternion.premultiply(_grQ.setFromAxisAngle(_grAxis.copy(g.spin).divideScalar(w), w * dt));
+      }
     }
   }
 
