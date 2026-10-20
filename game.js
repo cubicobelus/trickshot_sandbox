@@ -7282,7 +7282,7 @@
     g.kind = kind; g.mesh.position.copy(origin); g.from.copy(origin);
     g.vel.copy(dir).multiplyScalar(speed || B.speed);
     if (!B.rocket) g.vel.add(player.velocity);
-    g.snap = trickState(); g.remote = false; g.age = 0; g.smokeT = 0; g.state = "flying";
+    g.snap = trickState(); g.remote = false; g.age = 0; g.smokeT = 0; g.state = "flying"; g.inHand = false;
     g.mesh.visible = true; dressGrenade(g, kind);
     if (B.rocket) g.mesh.lookAt(_gLookAt.copy(origin).add(dir));
     if (net.active) mpSendThrow(g.mesh.position, g.vel, BLAST_CODE[kind]);
@@ -7325,7 +7325,7 @@
     fragCharge = -1;
     throwFrag(FRAG_MIN_SPEED + (FRAG_MAX_SPEED - FRAG_MIN_SPEED) * power, cooked);
   }
-  function throwFrag(speed, cooked) {
+  function throwFrag(speed, cooked, inHand) {
     if (fragCd > 0 || !fragAllowed()) return;
     fragCd = FRAG_COOLDOWN;
     camera.getWorldDirection(_thFwd);
@@ -7334,7 +7334,9 @@
     camera.getWorldPosition(_gLookAt).addScaledVector(_thFwd, 0.5).addScaledVector(_thRight, 0.12 * handSign());
     _gLookAt.y -= 0.12;
     _boltDir.copy(_thFwd); _boltDir.y += 0.14; _boltDir.normalize();   // a little lob
-    launchBlast("frag", _gLookAt, _boltDir, speed || BLAST.frag.speed).age = cooked || 0;   // (a cooked grenade has already burned part of its fuse)
+    const fg = launchBlast("frag", _gLookAt, _boltDir, speed || BLAST.frag.speed);
+    fg.age = cooked || 0;   // (a cooked grenade has already burned part of its fuse)
+    fg.inHand = !!inHand;   // (one that goes off in your hand: in a room it kills you)
     tone("triangle", 330, 120, 0.12 * SETTINGS.volGear, 0.14, 0, 0.1);
     noiseHit(1800, 1.0, 0.10 * SETTINGS.volGear, 0.09, "highpass", 0, 0.1);
     if (run.state === "live") run.shots++;
@@ -7347,7 +7349,7 @@
         const before = fragCharge;
         fragCharge += dt;
         if (before < FRAG_COOK_FROM && fragCharge >= FRAG_COOK_FROM) tone("square", 1100, 1100, 0.05 * SETTINGS.volGear, 0.05, 0, 0.1);   // the pin is out
-        if (fragCharge - FRAG_COOK_FROM >= BLAST.frag.fuse) { fragCharge = -1; throwFrag(FRAG_MIN_SPEED, BLAST.frag.fuse); }   // held too long: it goes off in your hand
+        if (fragCharge - FRAG_COOK_FROM >= BLAST.frag.fuse) { fragCharge = -1; throwFrag(FRAG_MIN_SPEED, BLAST.frag.fuse, true); }   // held too long: it goes off in your hand
       }
     }
     const show = fragAllowed(), charging = show && fragCharge >= 0;
@@ -7397,7 +7399,7 @@
   // the blast, for the thrower: what it hurts, scores and claims
   const _blastC = new THREE.Vector3();
   function explodeGrenade(g) {
-    const pos = g.mesh.position.clone(), kind = g.kind, D = DAMAGE[kind], R = D.radius, B = BLAST[kind];
+    const pos = g.mesh.position.clone(), kind = g.kind, D = DAMAGE[kind], R = D.radius, B = BLAST[kind], inHand = !!g.inHand;
     retireGrenade(g);
     if (kind === "satchel") { packCd = PACK_COOLDOWN; packOut = null; }
     showBlast(pos, R);
@@ -7441,8 +7443,8 @@
       const hits = [];
       if (net.sub === "dm" && net.phase === "play") {
         const me = localPlayer();
-        if (kind !== "satchel" && !localDead && Math.hypot(yawObject.position.x - pos.x, player.feetY + 0.9 - pos.y, yawObject.position.z - pos.z) <= R
-          && botLineClear(pos.x, pos.y, pos.z, yawObject.position.x, player.feetY + 0.9, yawObject.position.z)) hits.push({ v: net.id, pts: 0, tags: [] });   // your own blast hurts you like anyone
+        if (kind !== "satchel" && !localDead && (inHand || (Math.hypot(yawObject.position.x - pos.x, player.feetY + 0.9 - pos.y, yawObject.position.z - pos.z) <= R
+          && botLineClear(pos.x, pos.y, pos.z, yawObject.position.x, player.feetY + 0.9, yawObject.position.z)))) hits.push({ v: net.id, pts: 0, tags: [] });   // your own blast hurts you like anyone (and one in your hand always does)
         for (const q of net.players.values()) {
           if (q.id === net.id || !q.alive) continue;
           if (net.teams && me && q.team === me.team) continue;
@@ -7455,7 +7457,7 @@
           hitCount++;
         }
       }
-      sendToHost({ t: "blast", k: kind, o: [r2(pos.x), r2(pos.y), r2(pos.z)], h: hits });
+      sendToHost({ t: "blast", k: kind, o: [r2(pos.x), r2(pos.y), r2(pos.z)], h: hits, hand: inHand ? 1 : 0 });
     }
     if (!hitCount) breakStreak();
     else flashCrosshair();
@@ -9136,7 +9138,8 @@
           if (now < v.protectUntil) continue;
           const d = Math.hypot(v.x - o[0], v.y + 0.9 - o[1], v.z - o[2]);
           if (d > DAMAGE[bk].radius + 2) continue;   // (a little slack: the host's picture of a moving player is a bit old)
-          hostDealDamage(p, v, blastDamage(Math.min(d, DAMAGE[bk].radius), bk), { g: bk, pts: Math.max(0, Math.min(Number(h.pts) || 0, 20000)), tags: Array.isArray(h.tags) ? h.tags : [], head: false });
+          // (a grenade cooked until it went off in your own hand takes all 100)
+          hostDealDamage(p, v, m.hand === 1 && v === p && bk === "frag" ? 100 : blastDamage(Math.min(d, DAMAGE[bk].radius), bk), { g: bk, pts: Math.max(0, Math.min(Number(h.pts) || 0, 20000)), tags: Array.isArray(h.tags) ? h.tags : [], head: false });
         }
         break;
       }

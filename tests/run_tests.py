@@ -1203,6 +1203,16 @@ def test_blasts(browser, base):
             step(page, 4)
             got[kind] = 100 - page.evaluate("[...window.__dbg.net.players.values()].find((p) => p.bot).hp")
             check(f"in a room a {kind} a metre from a bot does about {lo}-{hi} damage", lo <= got[kind] <= hi, f"{got[kind]:.1f}")
+        # a grenade that goes off in your hand is not an ordinary blast: in a room it takes all 100 of your health
+        page.evaluate("""() => { const D = window.__dbg, me = D.net.players.get('you'), bot = [...D.net.players.values()].find((p) => p.bot);
+          D.net.cd = 0; me.protectUntil = 0; me.alive = true; me.hp = 100; bot.alive = true; bot.hp = 100; bot.x = me.x + 30; bot.z = me.z;
+          me.grenades = 1; me.lastGrenadeAt = 1e15; me.lastGrenadeO = [0, 0, 0];
+          const g = D.grenades[7];
+          g.kind = 'frag'; g.mesh.position.set(me.x, me.y + 1.4, me.z - 0.5); g.from.copy(g.mesh.position);
+          g.vel.set(0, 0, 0); g.age = 2.19; g.remote = false; g.snap = null; g.state = 'flying'; g.stuck = false; g.mesh.visible = true; g.inHand = true; }""")
+        step(page, 4)
+        mine = page.evaluate("(() => { const me = window.__dbg.net.players.get('you'); return [me.hp, me.alive]; })()")
+        check("a grenade that goes off in your hand takes all 100 of your health in a room (one a metre away takes about 70)", mine[0] == 0 and mine[1] is False, str(mine))
         check("the blast checks run without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:
