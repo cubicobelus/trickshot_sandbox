@@ -4083,10 +4083,14 @@
   const abEls = { nade: document.getElementById("ab-nade"), pack: document.getElementById("ab-pack"), hook: document.getElementById("ab-hook") };
   const abFuseEl = abEls.pack.querySelector(".ab-fuse");
   const tbEls = { box: document.getElementById("throw-bars"), dist: document.getElementById("tb-dist"), cookBox: document.getElementById("tb-cook-box"), cook: document.getElementById("tb-cook") };
-  function setAb(el, state, action) {   // state: ready, cool, charging, armed or active; "" hides the tile
+  function setAb(el, state, action, progress) {   // state: ready, cool, charging, armed or active; "" hides the tile. progress: how far a recharge has got, 0 to 1 (the grey ring)
     if (el.hidden !== !state) el.hidden = !state;
     if (!state) return;
     if (el.dataset.state !== state) el.dataset.state = state;
+    if (state === "cool") {
+      const off = (100.53 * (1 - Math.min(Math.max(progress || 0, 0), 1))).toFixed(1);
+      if (el.ringOff !== off) { el.ringOff = off; el.querySelector(".ab-ring .fill").style.strokeDashoffset = off; }
+    }
     const key = bindLabel(action, true).split(" / ")[0], k = el.firstElementChild.nextElementSibling;
     if (k.textContent !== key) k.textContent = key;
   }
@@ -7338,7 +7342,7 @@
       }
     }
     const show = fragAllowed(), charging = show && fragCharge >= 0;
-    setAb(abEls.nade, !show ? "" : charging ? "charging" : fragCd > 0 ? "cool" : "ready", "grenade");
+    setAb(abEls.nade, !show ? "" : charging ? "charging" : fragCd > 0 ? "cool" : "ready", "grenade", 1 - fragCd / FRAG_COOLDOWN);
     if (tbEls.box.hidden === charging) tbEls.box.hidden = !charging;   // the bars under the crosshair: how far it will go, then how long the fuse has left
     if (charging) {
       const cook = Math.max(0, fragCharge - FRAG_COOK_FROM), left = Math.max(0, 1 - cook / BLAST.frag.fuse);
@@ -7368,7 +7372,7 @@
     if (packOut && (packOut.state === "idle" || packOut.kind !== "satchel")) packOut = null;
     if (packOut && !fragAllowed()) { retireGrenade(packOut); packOut = null; }   // (dying or a new round: it is gone, nothing goes off)
     const show = fragAllowed();
-    setAb(abEls.pack, !show ? "" : packOut ? "armed" : packCd > 0 ? "cool" : "ready", "satchel");
+    setAb(abEls.pack, !show ? "" : packOut ? "armed" : packCd > 0 ? "cool" : "ready", "satchel", 1 - packCd / PACK_COOLDOWN);
     if (show && packOut) abFuseEl.style.transform = "scaleX(" + Math.max(0, 1 - packOut.age / BLAST.satchel.fuse).toFixed(2) + ")";   // (a line that burns down while it waits)
   }
   function spawnRemoteGrenade(o, v, kind) {
@@ -12303,7 +12307,7 @@
         speedEl.textContent = speed.toFixed(1);
         speedbarEl.style.width = Math.min(speed / CFG.maxSpeed * 100, 100).toFixed(0) + "%";
         const gReady = player.grappleCooldown <= 0, gUsed = !!player.hook || player.grappleWant;
-        setAb(abEls.hook, gUsed ? "active" : gReady ? "ready" : "cool", "grapple");
+        setAb(abEls.hook, gUsed ? "active" : gReady ? "ready" : "cool", "grapple", 1 - player.grappleCooldown / Math.max(player.grappleCooldownMax, 0.01));
         const me = net.active && net.sub === "dm" && !localDead ? localPlayer() : null;   // health only matters in deathmatch
         hpBarEl.hidden = !me;
         if (me) {

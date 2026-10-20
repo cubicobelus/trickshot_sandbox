@@ -1097,6 +1097,13 @@ def ab_state(page, tile):
     return page.evaluate("(id) => { const e = document.getElementById(id); return e.hidden ? '' : e.dataset.state; }", tile)
 
 
+def ring_progress(page, tile):
+    """How far the grey recharge ring on an ability tile has got (0 to 1), or -1 when the ring is not showing."""
+    return page.evaluate("""(id) => { const e = document.getElementById(id), r = e.querySelector('.ab-ring .fill');
+      if (e.hidden || r.parentElement.getBoundingClientRect().width === 0) return -1;
+      return 1 - parseFloat(getComputedStyle(r).strokeDashoffset) / 100.53; }""", tile)
+
+
 def bar_width(page, bar):
     """How full a bar under the crosshair is (0 to 100), or -1 when it is hidden."""
     return page.evaluate("(id) => { const e = document.getElementById(id); return e.offsetParent === null ? -1 : parseFloat(e.style.width) || 0; }", bar)
@@ -1137,9 +1144,13 @@ def test_blasts(browser, base):
         step(page, 3)
         again = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying' && g.kind === 'frag').length")
         check("a second press during the cooldown throws nothing", again == 1, str(again))
+        ring0 = ring_progress(page, "ab-nade")
+        step(page, 300)   # about 4.8 s later
+        ring1 = ring_progress(page, "ab-nade")
+        check("while it recharges a grey ring fills round the tile (about half of it after 5 s of the 9)", 0 <= ring0 < 0.1 and 0.4 < ring1 < 0.7, f"{ring0:.2f} -> {ring1:.2f}")
         step(page, 700)
         tile2 = ab_state(page, "ab-nade")
-        check("after the cooldown the tile is lit again", tile2 == "ready", tile2)
+        check("after the cooldown the tile is lit again and the ring is gone", tile2 == "ready" and ring_progress(page, "ab-nade") == -1, f"{tile2}, ring {ring_progress(page, 'ab-nade')}")
         page.keyboard.down("KeyG")
         step(page, 100)
         page.keyboard.up("KeyG")
