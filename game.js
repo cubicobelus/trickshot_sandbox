@@ -3961,11 +3961,11 @@
       stock: [{ id: "stock-light", name: "Light stock", need: 30, fx: { ads: 0.9, recoil: 1.08 }, text: "Aims 10% faster, a little more kick" },
         { id: "stock-heavy", name: "Heavy stock", need: 65, fx: { recoil: 0.85, ads: 1.1 }, text: "Steadier, slower to aim" }],
     },
-    ar: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
-    ak: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
-    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    ar: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sights: AT_LASER },
+    ak: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sights: AT_LASER },
+    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sights: AT_LASER },
     dmr: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS, bipod: AT_BIPOD },
-    burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sights: AT_LASER },
     lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: [{ id: "drum", name: "Big drum", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "A bigger drum: 150 rounds, slower reload" }], bipod: AT_BIPOD },
     crossbow: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4] },
     launcher: {
@@ -4029,13 +4029,13 @@
     rifle: { muzzle: [-1.035, 0.005, 0.034, 0.34], butt: [0.555, -0.03, 0.15, 0.32] },
     ar: { muzzle: [-0.64, 0.015, 0.015, 0.26], optic: [-0.03, 0.062], under: [-0.3, -0.016], mag: [-0.075, 0, 0, 0.03, 0.065] },
     ak: { muzzle: [-0.545, 0, 0.014, 0.24], optic: [0.04, 0.047], under: [-0.23, -0.032], mag: [-0.158, -0.058, 0.55, 0.028, 0.055] },
-    shotgun: { muzzle: [-0.75, 0.022, 0.016, 0.2], tube: [-0.671, -0.018, 0.0145] },
+    shotgun: { muzzle: [-0.75, 0.022, 0.016, 0.2], tube: [-0.671, -0.018, 0.0145], optic: [-0.02, 0.043] },
     smg: { muzzle: [-0.4175, 0.012, 0.014, 0.24], optic: [0.0, 0.056], under: [-0.23, -0.02], mag: [-0.085, 0, 0, 0.03, 0.056] },
     dmr: { muzzle: [-0.79, 0.012, 0.0145, 0.3], optic: [0.0, 0.062], under: [-0.36, -0.018], mag: [-0.06, 0, 0, 0.034, 0.075] },
     burst: { muzzle: [-0.66, 0.014, 0.0155, 0.26], optic: [0.0, 0.063], under: [-0.30, -0.014], mag: [-0.075, 0, 0, 0.03, 0.066] },
     lmg: { muzzle: [-0.86, 0.012, 0.0185, 0.3], optic: [0.02, 0.067], under: [-0.40, -0.021] },
     crossbow: { optic: [0.0, 0.047] },
-    launcher: { under: [-0.12, -0.043] },
+    launcher: { under: [-0.12, -0.043], left: [-0.03, 0, 0] },
     rpg: { optic: [0.12, 0.05], under: [-0.2, -0.05] },
     pistol: { muzzle: [-0.186, 0.034, 0.016, 0.13], under: [-0.1, -0.024], mag: [-0.06, 0, 0, 0.03, 0.045] },
   };
@@ -4043,13 +4043,13 @@
     rifle: { muzzle: [-1.0, 0.01, 0.022, 0.32], butt: [0.3, -0.02, 0.1, 0.2] },   // (these models have no separate magazine, so mag is in the gun's space)
     ar: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425], mag: [-0.24, -0.2, 0, 0.03, 0.05] },
     ak: { muzzle: [-0.76, 0, 0.018, 0.24], optic: [-0.05, 0.0425], under: [-0.55, -0.035], mag: [-0.253, -0.188, 0.35, 0.03, 0.05] },
-    shotgun: { muzzle: [-0.975, 0.02, 0.03, 0.2], tube: [-0.75, -0.03, 0.035] },
+    shotgun: { muzzle: [-0.975, 0.02, 0.03, 0.2], tube: [-0.75, -0.03, 0.035], optic: [-0.1, 0.05] },
     smg: { muzzle: [-0.65, 0.005, 0.013, 0.22], optic: [-0.05, 0.0425], under: [-0.35, -0.0425], mag: [-0.23, -0.1, 0, 0.03, 0.05] },
     dmr: { muzzle: [-1.1, 0.005, 0.014, 0.26], optic: [-0.1, 0.0425], under: [-0.6, -0.0425], mag: [-0.19, -0.15, 0, 0.03, 0.05] },
     burst: { muzzle: [-0.875, 0.005, 0.013, 0.24], optic: [-0.05, 0.0425], under: [-0.45, -0.0425], mag: [-0.24, -0.2, 0, 0.03, 0.05] },
     lmg: { muzzle: [-1.0, 0.005, 0.015, 0.26], optic: [-0.05, 0.05], under: [-0.55, -0.05] },
     crossbow: { optic: [-0.1, 0.0425] },
-    launcher: { under: [-0.2, -0.07] },
+    launcher: { under: [-0.2, -0.07], left: [-0.0325, 0, -0.1] },
     rpg: { optic: [0.0, 0.07], under: [-0.2, -0.07] },
     pistol: { muzzle: [-0.28, 0.02, 0.02, 0.13], under: [-0.17, -0.05], mag: [-0.149, 0.018, 0.2, 0.045, 0.06] },
   };
@@ -4076,7 +4076,7 @@
       for (const f of [0.2, 0.8]) add(new THREE.CylinderGeometry(r * 1.08, r * 1.08, 0.012, 14), AT_RUBBER, 0, mz[1], zc - len / 2 + len * f, HP);
     }
     for (const id of ids) {
-      if (id === "suppressor" && mz) {   // a can twice the barrel's width, from the muzzle forward
+      if ((id === "suppressor" || id === "ionizer") && mz) {   // a can twice the barrel's width, from the muzzle forward
         const r = Math.max(mz[2] * 1.9, 0.024), len = mz[3];
         add(new THREE.CylinderGeometry(r, r, len, 14), AT_STEEL, 0, mz[1], mz[0] - len / 2, HP);
         add(new THREE.CylinderGeometry(r * 0.45, r * 0.45, 0.004, 10), AT_RUBBER, 0, mz[1], mz[0] - len - 0.002, HP);
@@ -4143,6 +4143,7 @@
         const [z, y, r] = M.tube;
         add(new THREE.CylinderGeometry(r, r, 0.08, 12), AT_STEEL, 0, y, z - 0.04, HP);
         add(new THREE.CylinderGeometry(r * 1.1, r * 1.1, 0.02, 12), AT_STEEL, 0, y, z - 0.09, HP);
+  const AT_LASER = [{ id: "laser", name: "Laser", need: 30, fx: { spread: 0.8, spreadAds: 0.95 }, text: "A tighter spread from the hip" }];
       }
     }
     return g;
@@ -4168,6 +4169,8 @@
     let seed = colors.join("").length * 7919;
     const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
     for (let i = 0; i < 26; i++) {
+      optic: [AT_REDDOT],
+      muzzle: [SUPPRESSOR],
       g.fillStyle = colors[1 + Math.floor(rnd() * (colors.length - 1))];
       g.beginPath(); g.ellipse(rnd() * 64, rnd() * 64, 4 + rnd() * 9, 3 + rnd() * 6, rnd() * 3, 0, 7); g.fill();
     }
@@ -4194,6 +4197,8 @@
     crimson: { name: "Crimson", sw: ["#8a1c22", "#ff5a3a"], roles: {
       dark: { color: 0x5a0f14, metalness: 0.7, roughness: 0.35 }, mid: { color: 0x8a1c22, metalness: 0.6, roughness: 0.4 },
       grip: { color: 0x1a0b0d, metalness: 0.05, roughness: 0.85 }, wood: { color: 0x7a2420, metalness: 0.05, roughness: 0.7 },
+  const AT_BRASS = new THREE.MeshStandardMaterial({ color: 0xc9a14a, metalness: 0.8, roughness: 0.35 });
+  const AT_GRENADE = new THREE.MeshStandardMaterial({ color: 0x4a6342, metalness: 0.3, roughness: 0.6 });
       accent: { color: 0xff5a3a, metalness: 0.4, roughness: 0.4, emissive: 0x6a1a0a, emissiveIntensity: 0.6 }, steel: { color: 0xc23a40, metalness: 0.8, roughness: 0.3 } } },
   };
   // each gun's three skins, and the hits with that gun that open them
@@ -4302,6 +4307,27 @@
       w.flashScale = base.flash * fx.flash;
       for (const k of Object.keys(base.reload)) if (typeof base.reload[k] === "number") w.reload[k] = base.reload[k] * fx.reload;
       applyGunSkin(w.group, chosenSkin(id));
+      else if (id === "slug" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.2, mz[2] * 1.2, 0.035, 14), AT_BRASS, 0, mz[1], mz[0] - 0.0175, HP);   // a brass collar at the muzzle: slugs are loaded
+      else if (id === "lbig" && M.left) {   // two spare grenades strapped along the left of the receiver
+        const [x, y, z] = M.left;
+        for (const dz of [-0.05, 0.05]) {
+          add(new THREE.CylinderGeometry(0.017, 0.017, 0.085, 10), AT_GRENADE, x - 0.017, y, z + dz, HP);
+          add(new THREE.CylinderGeometry(0.0125, 0.0125, 0.02, 10), AT_BRASS, x - 0.017, y, z + dz - 0.0525, HP);
+        }
+        add(new THREE.BoxGeometry(0.008, 0.045, 0.16), AT_RUBBER, x - 0.003, y, z);
+      } else if (id === "capacitor" && M.left) {   // a second capacitor on the left of the receiver, with a glowing band
+        const [x, y, z] = M.left;
+        add(new THREE.CylinderGeometry(0.018, 0.018, 0.11, 12), AT_STEEL, x - 0.018, y + 0.01, z, HP);
+        add(new THREE.CylinderGeometry(0.0195, 0.0195, 0.014, 12), railGlowMat, x - 0.018, y + 0.01, z - 0.02, HP);
+      } else if (id === "lquick" && M.left) {   // a speed loader: a pouch on the left with two rounds standing in it
+        const [x, y, z] = M.left;
+        add(new THREE.BoxGeometry(0.018, 0.07, 0.09), AT_STEEL, x - 0.009, y, z);
+        for (const dz of [-0.025, 0.025]) add(new THREE.CylinderGeometry(0.011, 0.011, 0.03, 8), AT_BRASS, x - 0.009, y + 0.05, z + dz);
+      } else if (id === "rquick" && M.under) {   // a spare warhead clipped under the tube
+        const [z, y] = M.under;
+        add(new THREE.CylinderGeometry(0.02, 0.02, 0.11, 10), AT_GRENADE, 0, y - 0.015, z + 0.02, HP);
+        add(new THREE.ConeGeometry(0.02, 0.05, 10), AT_BRASS, 0, y - 0.015, z - 0.06, -HP);
+      }
       w.bipodK = fx.bipod;
       w.adsMult = (w.adsBase || 1) * fx.ads; w.scopeFovMult = fx.scopeFov; w.zoomMult = fx.zoom; w.soundMult = fx.sound;
       if (w.ammo > w.magSize) w.ammo = w.magSize;
