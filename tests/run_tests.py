@@ -520,8 +520,8 @@ def test_scoring_extras(browser, base):
     page.click("#glossary-open")
     page.wait_for_timeout(150)
     text = page.evaluate("document.getElementById('glossary').textContent.toUpperCase()")
-    missing = [k for k in ("PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "NEW") if k not in text]
-    check("the trickshot list includes the portal, strip, platform, zero-g, chain and new-trick bonuses", not missing, ", ".join(missing))
+    missing = [k for k in ("PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "NEW", "ROCKET / LAUNCHER / GRENADE / PACK JUMP") if k not in text]
+    check("the trickshot list includes the portal, strip, platform, zero-g, blast jump, chain and new-trick bonuses", not missing, ", ".join(missing))
     check("a no-scope is a sniper hit from the hip (the sniper has iron sights unless a scope is fitted)", "SNIPER, FIRED FROM THE HIP" in text)
     page.keyboard.press("Escape")
     # a saved best shot (made up here) is enough for the card
@@ -1206,6 +1206,13 @@ def test_satchel(browser, base):
         sp = page.evaluate("Math.hypot(window.__dbg.player.velocity.x, window.__dbg.player.velocity.y, window.__dbg.player.velocity.z)")
         gone = page.evaluate("window.__dbg.grenades.every((g) => g.state === 'idle')")
         check("a second press sets it off and launches you", gone and sp > 8, f"{sp:.1f} u/s")
+        tags = page.evaluate("""(() => { const D = window.__dbg, st = D.trickState();
+          const r = D.computeMultipliers({ userData: { type: 'normal', moving: false } }, 30, false, 5, st, false, D.WEAPONS.ar);
+          return [st.blast, r.tags.filter((t) => /JUMP/.test(t))]; })()""")
+        check("a hit while still flying from your blast pack scores PACK JUMP x1.30", tags[0] == "satchel" and any(t.startswith("PACK JUMP x1.30") for t in tags[1]), str(tags))
+        step(page, 300)   # about 4.8 s: back on the ground
+        blast_after = page.evaluate("window.__dbg.trickState().blast")
+        check("the bonus ends when you land", blast_after is None, str(blast_after))
         page.keyboard.press("KeyC")
         step(page, 3)
         again = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying').length")
@@ -1426,7 +1433,7 @@ def debug_site():
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
             "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
-            "hostStartRound, hostDealDamage, grenades, throwFrag, attachCode, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
+            "hostStartRound, hostDealDamage, grenades, throwFrag, explodeGrenade, trickState, computeMultipliers, attachCode, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
             "get SPAWNS() { return SPAWNS; } };\n")
     i = src.rindex("  animate();\n})();")

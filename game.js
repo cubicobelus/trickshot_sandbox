@@ -228,6 +228,11 @@
     megaLaunchMult: 1.4,
     reverseSpeed: 8,            // moving at least this fast...
     reverseMult: 1.4,           // ...away from where you're aiming
+    rocketJumpMult: 1.5,        // a hit while still in the air from the shove of your own blast: the RPG's...
+    launcherJumpMult: 1.4,      // ...the launcher's...
+    grenadeJumpMult: 1.4,       // ...a thrown grenade's...
+    packJumpMult: 1.3,          // ...and the blast pack's (the easiest to line up, so the smallest)
+    blastJumpMinPush: 5,        // the shove has to be at least this many u/s (a blast further off than about 3 to 5 m does not count)
     // Realistic shooting (a setting, on by default): extra spread, in radians
     realisticAirSpread: 0.025,  // any gun, while you're in the air (on top of the moving spread)
     realisticMoveSpread: 0.016, // any gun on the ground: none standing still, growing with speed until...
@@ -5215,6 +5220,7 @@
     groundedAt: 0,   // last moment on the ground; also tells one jump from the next for air combos
     launch: null,    // "pad", "mega" or "ramp" while airborne from a launch, cleared on landing or a wall bounce
     launchRun: 0,    // horizontal speed when that launch fired
+    blastKind: null, blastAirId: -1,   // the kind of blast that last threw you into the air, and which jump (groundedAt) it was: a rocket jump and its kin
     wallImpactSpeed: 0, wallImpactAt: -99,   // the last time a wall stopped us, and how fast we hit it
     viewRoll: 0,
     ladder: null, ladderCool: 0,   // the ladder being climbed
@@ -6055,7 +6061,8 @@
   const trickSeen = new Set();   // the tricks landed so far this run (each new one adds to the shot)
   const COLLECTABLE = new Set(["AIR", "180\u00b0", "SPIN", "NO-SCOPE", "QUICKSCOPE", "FLICK", "SNAP FLICK", "SLIDING", "WALL BOUNCE", "GRAPPLE", "LAUNCHED", "RAMP LAUNCH",
     "MEGA LAUNCH", "REVERSE", "QUICK SWITCH", "PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "HANG TIME", "MICRO TARGET", "PINPOINT", "MOVING TARGET",
-    "LAST ROUND", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC"]);
+    "LAST ROUND", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC", "ROCKET JUMP", "LAUNCHER JUMP", "GRENADE JUMP", "PACK JUMP"]);
+  const BLAST_JUMP = { rpg: ["ROCKET JUMP", "rocketJumpMult"], launcher: ["LAUNCHER JUMP", "launcherJumpMult"], frag: ["GRENADE JUMP", "grenadeJumpMult"], satchel: ["PACK JUMP", "packJumpMult"] };   // by blast kind: the tag, and its CFG value
   const collectKey = (tag) => { const k = trickKey(tag); return k && /SPIN$/.test(k) ? "SPIN" : k; };
 
   // what the player is doing right now, for scoring. A thrown knife takes this
@@ -6103,6 +6110,7 @@
       launch: !player.onGround && player.velocity.y > 0 ? player.launch : null,
       // anywhere in a pad or ramp flight you ran onto, so it isn't "standing still"
       launched: !player.onGround && !!player.launch && player.launchRun >= CFG.standingStillSpeed,
+      blast: !player.onGround && player.blastKind && player.blastAirId === player.groundedAt ? player.blastKind : null,   // still in the air from your own blast
       flick: recentTurn(CFG.flickWindow),
       snapFlick: recentTurn(CFG.snapFlickWindow),
       quickSwitch: elapsedTime - vm.switchDoneAt <= CFG.quickSwitchWindow &&
@@ -6155,6 +6163,7 @@
     }
     if (st.quickSwitch) add("QUICK SWITCH", CFG.quickSwitchMult);
     if (st.reverse) add("REVERSE", CFG.reverseMult);
+    if (st.blast && BLAST_JUMP[st.blast]) add(BLAST_JUMP[st.blast][0], CFG[BLAST_JUMP[st.blast][1]]);
 
     // air combo: every hit from the same jump counts up
     if (!st.onGround && st.airId !== undefined) {
@@ -6222,6 +6231,8 @@
         ["FAST / BLAZING / SONIC", "up to " + x(Math.min(1 + (C.maxSpeed - C.speedFrom) * C.speedMultPer, C.speedMultMax)), "+" + C.speedMultPer + "x per u/s over " + C.speedFrom + " u/s; the tag shows your speed." +
           (MAPS.icelake && MAPS.icelake.physics.maxSpeed ? " Ice Lake lets you go faster (" + MAPS.icelake.physics.maxSpeed + " u/s), so its top is x" + MAPS.icelake.physics.speedMultMax.toFixed(2) + "." : "")],
         ["REVERSE", x(C.reverseMult), "In the air, having turned 90°+ since takeoff, flying at " + C.reverseSpeed + "+ u/s away from where you aim. Backpedalling doesn't count."],
+        ["ROCKET / LAUNCHER / GRENADE / PACK JUMP", x(C.rocketJumpMult) + " / " + x(C.launcherJumpMult) + " / " + x(C.grenadeJumpMult) + " / " + x(C.packJumpMult),
+          "Hit while still in the air from the shove of your own blast (RPG, launcher grenade, thrown grenade, blast pack). It has to throw you at least " + C.blastJumpMinPush + " u/s, so stand close."],
       ]],
       ["Aim", [
         ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per meter past " + C.distanceFrom + " m: " +
@@ -6253,7 +6264,7 @@
         ["STRIP SHOT", x(C.stripMult), "A hit within " + C.stripScoreWindow + " s of a launch strip throwing you."],
         ["PLATFORM SHOT", x(C.platformMult), "A hit while riding a lift or the shuttle."],
         ["ZERO-G", x(C.zeroGMult), "A hit after " + C.zeroGAirTime + " s in the air on a low-gravity map."],
-        ["CHAIN", x(1 + C.chainMultPer) + " to " + x(C.chainMultMax), "Different movement tricks (slide, wall bounce, grapple, pad or ramp launch, portal, launch strip, lift) within " + C.chainWindow + " s: +" + C.chainMultPer + "x for each one after the first."],
+        ["CHAIN", x(1 + C.chainMultPer) + " to " + x(C.chainMultMax), "Different movement tricks (slide, wall bounce, grapple, pad or ramp launch, portal, launch strip, lift, blast jump) within " + C.chainWindow + " s: +" + C.chainMultPer + "x for each one after the first."],
         ["NEW", "+" + C.newTrickMultPer + "x each, up to " + x(C.newTrickMultMax), "The first time in a run you land a trick you haven't landed yet this run. Variety pays."],
         ["UNREALISTIC", x(C.unrealisticMult), "Realistic shooting is turned off in Settings > Gameplay, so every shot lands exactly where you aim."],
         ["SPRAY", x(C.sprayMults[1]) + " / " + x(C.sprayMults[2]), "Rifle and AK: the 2nd shot of a full-auto spray, then every shot after. Tap-firing doesn't count."],
@@ -6993,6 +7004,11 @@
       const push = B.push * (1 - pd / (R * 1.4));
       player.velocity.addScaledVector(_blastC, push);
       if (player.velocity.y > 2.5) { player.onGround = false; player.sliding = false; }
+      if (push >= CFG.blastJumpMinPush && player.velocity.y > 2.5 && BLAST_JUMP[kind]) {   // a blast jump: a trick for whatever you hit while you are still flying
+        player.blastKind = kind; player.blastAirId = player.groundedAt;
+        noteTrick("blast", BLAST_JUMP[kind][0]);
+        if (g.snap) g.snap.blast = kind;   // (this blast's own hits count it too)
+      }
     }
     // targets in the single player and race games
     if (!net.active || net.sub === "race") {
