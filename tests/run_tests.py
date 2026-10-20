@@ -1266,6 +1266,42 @@ def test_satchel(browser, base):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_avatar_reactions(browser, base):
+    """Other players flinch when they are hit, fall over backwards when they are shot dead, lie there a moment, then vanish; they stand up again on respawn."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        page.click('#mode-tabs .tab[data-mode="mp"]')
+        start_practice(page, mode="dm", bots=1, level="easy")
+        page.click("#mp-play-btn")
+        step(page, 40)
+        BOT = "[...window.__dbg.net.players.values()].find((p) => p.bot)"
+        page.evaluate("(() => { const b = " + BOT + "; window.__dbg.net.cd = 0; b.alive = true; b.hp = 100; b.respawnAt = Infinity; })()")
+        step(page, 4)
+        page.evaluate(BOT + ".hp = 60")
+        step(page, 3)
+        fl = page.evaluate(BOT + ".mesh.userData.flinch")
+        step(page, 40)
+        fl2 = page.evaluate(BOT + ".mesh.userData.flinch")
+        check("a player who is hit flinches, then settles", fl > 0.3 and fl2 < 0.05, f"{fl:.2f} -> {fl2:.2f}")
+        page.evaluate("(() => { const b = " + BOT + "; b.alive = false; b.hp = 0; b.respawnAt = Infinity; })()")
+        step(page, 50)   # about 0.8 s
+        rx, vis = page.evaluate("[" + BOT + ".mesh.rotation.x, " + BOT + ".mesh.visible]")
+        check("a player shot dead falls over backwards and is still there", rx > 1.3 and vis is True, f"{rx:.2f}, {vis}")
+        step(page, 130)   # past 2 s
+        vis2 = page.evaluate(BOT + ".mesh.visible")
+        check("then they are gone", vis2 is False, str(vis2))
+        page.evaluate("(() => { const b = " + BOT + "; b.alive = true; b.hp = 100; })()")
+        step(page, 5)
+        rx2, vis3 = page.evaluate("[" + BOT + ".mesh.rotation.x, " + BOT + ".mesh.visible]")
+        check("and they stand up again when they respawn", rx2 == 0 and vis3 is True, f"{rx2:.2f}, {vis3}")
+        check("the avatar checks run without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_skins(browser, base):
     """Gun skins: three per gun plus the base, locked until hits with that gun, applied to the gun in your hands, remembered, sent to other players in the attachment code, and shown on their guns."""
     import json
@@ -1960,10 +1996,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_avatar_reactions, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "avatar_reactions", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

@@ -6834,6 +6834,9 @@
     g.mesh.children[0].visible = !B.rocket && !B.sticky; g.rocket.visible = !!B.rocket; g.pack.visible = !!B.sticky;
     g.mesh.geometry = B.rocket || B.sticky ? emptyGeo : grenGeo;
     g.mesh.rotation.set(0, 0, 0); g.stuck = false;
+    g.rollAt = 0;
+    if (B.rocket || B.sticky) g.spin.set(0, 0, 0);
+    else g.spin.set(g.vel.z, 0, -g.vel.x).multiplyScalar(0.35);   // end over end, about the line across the throw: a faster throw turns faster
   }
   function playBlastSound(pos, r) {
     const d = pos.distanceTo(yawObject.position), lvl = (1 / (1 + d / 22)) * (r > 5 ? 1.15 : 1);
@@ -6845,9 +6848,6 @@
     r = r || 4.5;
     burst(pos, 0xffa020, 26); burst(pos, 0xffe08a, 10); burst(pos, 0x555555, 12);
     const fx = blastFx.reduce((a, b) => (a.age > b.age ? a : b));
-    g.rollAt = 0;
-    if (B.rocket || B.sticky) g.spin.set(0, 0, 0);
-    else g.spin.set(g.vel.z, 0, -g.vel.x).multiplyScalar(0.35);   // end over end, about the line across the throw: a faster throw turns faster
     fx.age = 0; fx.r = r; fx.mesh.position.copy(pos); fx.mesh.visible = true;
     playBlastSound(pos, r);
   }
@@ -6902,6 +6902,7 @@
   // the thrown grenade (G): an overarm lob on a cooldown, whatever you are holding
   let fragCd = 0, fragCharge = -1;   // fragCharge: seconds G has been held (-1: not charging); the longer you hold it, the further it goes, and from halfway the fuse burns too (cooking)
   const FRAG_CHARGE_TIME = 1.1, FRAG_MIN_SPEED = 6, FRAG_MAX_SPEED = 36;
+  const FRAG_COOK_FROM = FRAG_CHARGE_TIME / 2;   // the pin is out from here: a full-power throw has burned 0.55 s of its 2.2 s fuse, so it still has 1.65 s in the air; held past 2.75 s it goes off in your hand
   const nadeChip = document.getElementById("nade-chip");
   function fragAllowed() { return !(replay.active || localDead || (net.active && (net.phase !== "play" || countingDown() || net.gungame))); }
   function startFragCharge() { if (fragCd <= 0 && fragAllowed()) fragCharge = 0; }
@@ -6913,7 +6914,6 @@
   }
   function throwFrag(speed, cooked) {
     if (fragCd > 0 || !fragAllowed()) return;
-  const FRAG_COOK_FROM = FRAG_CHARGE_TIME / 2;   // the pin is out from here: a full-power throw has burned 0.55 s of its 2.2 s fuse, so it still has 1.65 s in the air; held past 2.75 s it goes off in your hand
     fragCd = FRAG_COOLDOWN;
     camera.getWorldDirection(_thFwd);
     camera.getWorldQuaternion(_camQuat);
@@ -7054,6 +7054,8 @@
     else flashCrosshair();
   }
   const _grRay = new THREE.Ray(), _grStep = new THREE.Vector3(), _grHit = new THREE.Vector3(), _grTmp = new THREE.Vector3(), _grNormal = new THREE.Vector3();
+  const _grAxis = new THREE.Vector3(), _grSlide = new THREE.Vector3(), _grQ = new THREE.Quaternion();
+  const ROLL_DRAG = 2.2, ROLL_SPIN_MAX = 25;   // a grenade on the floor rolls on (it loses a bit over two tenths of its speed each tenth of a second) and rolls down a slope; the turn it shows is capped so it still reads
   function updateGrenades(dt) {
     updateBlastFx(dt);
     updateNadeChip(dt);
@@ -7081,8 +7083,6 @@
         const dist = o.distanceTo(p);
         if (dist < hitDist) { hitDist = dist; kind = "wall"; _grHit.copy(p); if (box.round && p.y < box.max.y - 0.02) _grNormal.set(p.x - box.round.x, 0, p.z - box.round.z).normalize(); else boxFaceNormal(box, p, _grNormal); }
       }
-  const _grAxis = new THREE.Vector3(), _grSlide = new THREE.Vector3(), _grQ = new THREE.Quaternion();
-  const ROLL_DRAG = 2.2, ROLL_SPIN_MAX = 25;   // a grenade on the floor rolls on (it loses a bit over two tenths of its speed each tenth of a second) and rolls down a slope; the turn it shows is capped so it still reads
       if (d.y < 0) {
         const t = (o.y - 0.25) / -d.y;
         if (t >= 0 && t < hitDist) { hitDist = t; kind = "wall"; _grHit.copy(o).addScaledVector(d, t); _grNormal.set(0, 1, 0); }
@@ -7659,6 +7659,7 @@
   };
   function makeAvatar(p) {
     const g = new THREE.Group();
+    g.rotation.order = "YXZ";   // turn first, then tip: a hit player falls over backwards from the feet
     const suit = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.7 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x2b2d33, roughness: 0.7 });
     const skin = new THREE.MeshStandardMaterial({ color: 0xe0b894, roughness: 0.8 });
@@ -7718,11 +7719,12 @@
     g.userData.arms = arms;
     g.userData.reloadK = 0;
     g.userData.walk = 0; g.userData.spd = 0;
-    g.add(makeNameTag(p.name, p.color));
+    g.userData.tag = makeNameTag(p.name, p.color);
+    g.add(g.userData.tag);
     scene.add(g);
     return g;
   }
-  const AV_GUN_X = 0.17;   // the held thing sits this far right of the neck line
+  const AV_GUN_X = 0.17, AV_DEATH_TIME = 2;   // seconds a player who has been shot lies there before they vanish   // the held thing sits this far right of the neck line
   // a two-bone arm: shoulder to hand, the elbow bending down and outwards
   const _avS = new THREE.Vector3(), _avH = new THREE.Vector3(), _avD = new THREE.Vector3(), _avE = new THREE.Vector3(), _avPole = new THREE.Vector3(), _avQ = new THREE.Quaternion(), _avUp = new THREE.Vector3(0, 1, 0), _avM = new THREE.Vector3();
   const AV_UPPER = 0.3, AV_FORE = 0.3;
@@ -7804,9 +7806,21 @@
     const k = 1 - Math.exp(-dt * 18);
     for (const p of net.players.values()) {
       if (p.id === net.id || !p.mesh) continue;
-      const m = p.mesh;
-      m.visible = p.alive;
-      if (!p.alive) { if (p.ropeSet) p.ropeSet.rope.visible = p.ropeSet.head.visible = false; continue; }
+      const m = p.mesh, fu = m.userData;
+      if (!p.alive) {   // shot dead: they fall over backwards, lie there a moment, then go
+        if (p.ropeSet) p.ropeSet.rope.visible = p.ropeSet.head.visible = false;
+        if (fu.deadT === undefined) { fu.deadT = 0; fu.deadRoll = (Math.random() - 0.5) * 0.8; fu.tag.visible = false; }
+        fu.deadT += dt;
+        m.visible = fu.deadT < AV_DEATH_TIME;
+        const u = Math.min(fu.deadT / 0.5, 1);
+        m.rotation.x = 1.5 * (1 - (1 - u) * (1 - u)); m.rotation.z = fu.deadRoll * u;
+        continue;
+      }
+      if (fu.deadT !== undefined) { fu.deadT = undefined; m.rotation.x = m.rotation.z = 0; fu.tag.visible = true; p.snap = true; }   // back on their feet, at the new spot
+      m.visible = true;
+      if (fu.lastHp !== undefined && p.hp < fu.lastHp - 0.5) fu.flinch = 1;   // a hit: the body jerks back and the head and gun kick up, then settle
+      fu.lastHp = p.hp;
+      fu.flinch = Math.max(0, (fu.flinch || 0) - dt * 4);
       if (p.snap) {
         m.position.set(p.x, p.y, p.z); m.rotation.y = p.yaw; p.snap = false;
       } else {
@@ -7815,7 +7829,7 @@
         m.position.z += (p.z - m.position.z) * k;
         m.rotation.y += wrapAngle(p.yaw - m.rotation.y) * k;
       }
-      m.userData.pivot.rotation.x = p.pitch;
+      m.userData.pivot.rotation.x = p.pitch + fu.flinch * 0.3;
       if (p.atBuilt !== p.at) refreshAvatarAttachments(p);
       const squash = p.sl ? 0.62 : 1;
       m.scale.y += (squash - m.scale.y) * k;
@@ -7827,7 +7841,7 @@
         ud2.walk += ud2.spd * dt * 1.7;
         ud2.legs[0].rotation.x = Math.sin(ud2.walk) * 0.75 * run;
         ud2.legs[1].rotation.x = -Math.sin(ud2.walk) * 0.75 * run;
-        ud2.torso.rotation.x = -0.12 * run;   // a lean into the run
+        ud2.torso.rotation.x = -0.12 * run + fu.flinch * 0.45;   // a lean into the run, and a jerk back when hit
       }
       const ud = m.userData, gid = WEAPON_ORDER[p.g] || "rifle", grap = p.gr > 0;
       for (const id of GUNS) ud.guns[id].visible = !grap && gid === id;
