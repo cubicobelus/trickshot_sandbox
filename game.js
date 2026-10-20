@@ -2763,22 +2763,31 @@
   addPart(railgunGroup, new THREE.BoxGeometry(0.005, 0.014, 0.006), metalDark, 0, 0.048, -0.665);                      // front post
   for (const sx of [-1, 1]) addPart(railgunGroup, new THREE.BoxGeometry(0.007, 0.012, 0.008), metalDark, sx * 0.011, 0.041, 0.13);   // rear sight: two posts
 
-  // ---- Minigun: six barrels on a spindle that turns as it spins up, a motor housing, two handles and an ammunition box with a belt ----
+  // ---- Minigun: six steel barrels on a spindle that turns as it spins up, a lighter motor housing with a red band, an arched carry handle, two handles, and an ammunition box on the left feeding a brass belt through a short chute ----
+  const minigunBrass = new THREE.MeshStandardMaterial({ color: 0xc9a14a, metalness: 0.8, roughness: 0.35 });
   const minigunGroup = new THREE.Group();
-  addPart(minigunGroup, new THREE.CylinderGeometry(0.048, 0.048, 0.22, 16), metalDark, 0, 0, 0, HALF_PI, 0, 0);          // motor housing
-  addPart(minigunGroup, new THREE.CylinderGeometry(0.056, 0.056, 0.03, 16), metalMid, 0, 0, -0.12, HALF_PI, 0, 0);       // front collar
-  const minigunBarrels = new THREE.Group(); minigunBarrels.position.set(0, 0, -0.38); minigunGroup.add(minigunBarrels);
-  addPart(minigunBarrels, new THREE.CylinderGeometry(0.014, 0.014, 0.5, 8), metalMid, 0, 0, 0, HALF_PI, 0, 0);            // spindle
-  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; addPart(minigunBarrels, new THREE.CylinderGeometry(0.0095, 0.0095, 0.5, 8), metalDark, Math.cos(a) * 0.03, Math.sin(a) * 0.03, 0, HALF_PI, 0, 0); }
-  for (const z of [-0.2, 0, 0.2]) addPart(minigunBarrels, new THREE.TorusGeometry(0.036, 0.0045, 6, 18), metalMid, 0, 0, z);   // clamp rings
-  addPart(minigunGroup, new THREE.TorusGeometry(0.044, 0.007, 6, 18), metalMid, 0, 0, -0.64);                            // the fixed muzzle ring
-  addPart(minigunGroup, new THREE.BoxGeometry(0.036, 0.11, 0.05), gripMat, 0, -0.085, 0.07, 0.25, 0, 0);                 // rear handle
-  addPart(minigunGroup, new THREE.BoxGeometry(0.03, 0.085, 0.04), gripMat, 0, -0.08, -0.12, -0.1, 0, 0);                 // front handle
-  addPart(minigunGroup, new THREE.BoxGeometry(0.02, 0.05, 0.22), metalMid, 0, 0.07, 0);                                  // carry handle
-  const minigunBox = new THREE.Group(); minigunBox.position.set(-0.085, -0.06, 0.08); minigunGroup.add(minigunBox);
-  addPart(minigunBox, new THREE.BoxGeometry(0.09, 0.1, 0.14), metalMid, 0, 0, 0);                                       // ammunition box (its "magazine")
-  addPart(minigunBox, new THREE.BoxGeometry(0.03, 0.01, 0.12), accentMat, 0, 0.055, 0);                                  // a stripe on the lid
-  for (let i = 0; i < 5; i++) addPart(minigunGroup, new THREE.BoxGeometry(0.016, 0.02, 0.018), accentMat, -0.06 + i * 0.012, -0.012 + i * 0.01, 0.03 - i * 0.012);   // the belt, box to housing
+  addPart(minigunGroup, new THREE.CylinderGeometry(0.04, 0.04, 0.17, 16), metalMid, 0, 0, 0, HALF_PI, 0, 0);               // motor housing
+  addPart(minigunGroup, new THREE.CylinderGeometry(0.0415, 0.0415, 0.022, 16), accentMat, 0, 0, 0.03, HALF_PI, 0, 0);      // its red band
+  addPart(minigunGroup, new THREE.CylinderGeometry(0.033, 0.033, 0.03, 16), metalDark, 0, 0, 0.1, HALF_PI, 0, 0);         // rear cap
+  addPart(minigunGroup, new THREE.CylinderGeometry(0.05, 0.05, 0.06, 16), metalMid, 0, 0, -0.115, HALF_PI, 0, 0);          // front gear housing
+  addPart(minigunGroup, new THREE.TorusGeometry(0.05, 0.006, 6, 18), stainlessDark, 0, 0, -0.147);                         // a bright ring in front of it
+  const minigunBarrels = new THREE.Group(); minigunBarrels.position.set(0, 0, -0.34); minigunGroup.add(minigunBarrels);
+  addPart(minigunBarrels, new THREE.CylinderGeometry(0.013, 0.013, 0.38, 8), stainlessDark, 0, 0, 0, HALF_PI, 0, 0);       // spindle
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; addPart(minigunBarrels, new THREE.CylinderGeometry(0.011, 0.011, 0.38, 8), stainlessMat, Math.cos(a) * 0.028, Math.sin(a) * 0.028, 0, HALF_PI, 0, 0); }
+  for (const z of [-0.15, 0, 0.15]) addPart(minigunBarrels, new THREE.TorusGeometry(0.037, 0.005, 6, 18), metalDark, 0, 0, z);   // clamp rings
+  addPart(minigunGroup, new THREE.TorusGeometry(0.043, 0.008, 6, 18), stainlessDark, 0, 0, -0.55);                         // the fixed muzzle ring
+  const carry = addPart(minigunGroup, new THREE.TorusGeometry(0.07, 0.007, 6, 14, Math.PI), metalMid, 0, 0.034, 0, 0, HALF_PI, 0); carry.scale.y = 0.45;   // an arched carry handle
+  addPart(minigunGroup, new THREE.BoxGeometry(0.034, 0.1, 0.045), gripMat, 0, -0.075, 0.065, 0.25, 0, 0);                  // rear handle
+  addPart(minigunGroup, new THREE.BoxGeometry(0.028, 0.08, 0.036), gripMat, 0, -0.07, -0.1, -0.1, 0, 0);                   // front handle
+  addPart(minigunGroup, new THREE.BoxGeometry(0.05, 0.03, 0.045), metalMid, -0.05, 0.005, 0.045, 0, 0, 0.3);               // the feed chute, from the box up to the housing
+  const minigunBox = new THREE.Group(); minigunBox.position.set(-0.092, -0.055, 0.045); minigunBox.rotation.z = 0.25; minigunGroup.add(minigunBox);
+  addPart(minigunBox, new THREE.BoxGeometry(0.075, 0.085, 0.12), metalMid, 0, 0, 0);                                      // ammunition box (its "magazine")
+  addPart(minigunBox, new THREE.BoxGeometry(0.06, 0.008, 0.1), accentMat, 0, 0.0465, 0);                                    // a stripe on its lid
+  addPart(minigunBox, new THREE.BoxGeometry(0.003, 0.045, 0.07), accentMat, -0.0385, 0, 0);                                // and a plate on its side
+  for (let i = 0; i < 6; i++) {   // the belt: brass rounds lying across the gun, climbing from the box to the chute
+    const k = i / 5;
+    addPart(minigunGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.034, 8), minigunBrass, -0.095 + k * 0.045, -0.01 + k * 0.025, 0.045, HALF_PI, 0, 0);
+  }
 
   const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup, launcherGroup, rpgGroup, revolverGroup, dualGroup, railgunGroup, minigunGroup];
   for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
@@ -3242,16 +3251,16 @@
     },
     minigun: {
       name: "MINIGUN", group: minigunGroup, heavy: true, spinUp: 0.8, spinFireRate: 0.14,   // it has to spin up before it fires (the gap between shots falls from 0.14 s to fireRate as it does), and you move at 60% while it spins
-      restPos: new THREE.Vector3(0.22, -0.28, -0.55), restRot: new THREE.Euler(0.03, -0.08, 0.01),
-      adsPos: new THREE.Vector3(0.22, -0.28, -0.55), adsRot: new THREE.Euler(0.03, -0.08, 0.01),   // (no aiming: a hip gun)
+      restPos: new THREE.Vector3(0.26, -0.3, -0.64), restRot: new THREE.Euler(0.03, -0.1, 0.01),
+      adsPos: new THREE.Vector3(0.26, -0.3, -0.64), adsRot: new THREE.Euler(0.03, -0.1, 0.01),   // (no aiming: a hip gun)
       canADS: false, scope: false, adsZoom: 1, fireRate: 0.06, auto: true, isMelee: false, usesAmmo: true,
       magSize: 150, ammoLabel: "ROUNDS", pellets: 1, spread: 0.014, spreadAds: 0.014, bloom: 0.0015, bloomMax: 0.05, bloomRecover: 0.07,
       scoreScale: 0.35, recoil: 0.35, kick: 0.2, flashScale: 0.9, brake: false, smoke: 0.4,
       action: "none", ejectOnShot: true, casing: "rifle",
-      muzzle: new THREE.Vector3(0, 0, -0.66), eject: new THREE.Vector3(0.05, 0.03, 0.0),
+      muzzle: new THREE.Vector3(0, 0, -0.57), eject: new THREE.Vector3(0.05, 0.03, 0.0),
       sound: { recording: "ar", rate: 1.6, lowcut: 90, length: 0.25, gain: 0.8 },
       recoilKick: { up: 0.003, grow: 0.0003, side: 0.004, max: 0.1, recover: 6, hold: 0.12 },
-      mag: minigunBox, magRestY: minigunBox.position.y, dropGeo: new THREE.BoxGeometry(0.09, 0.1, 0.14),
+      mag: minigunBox, magRestY: minigunBox.position.y, dropGeo: new THREE.BoxGeometry(0.075, 0.085, 0.12),
       reload: {
         time: 4.8, magOut: 0.4, magDrop: 0.9, magUp: 2.4, magSeat: 3.6, travel: 0.2, rise: 0.3, charge: 4.2,
         keys: [
@@ -4253,7 +4262,7 @@
     revolver: { muzzle: [-0.315, 0.034, 0.0125, 0.13], under: [-0.15, 0.009] },
     dual: { xs: [-0.15, 0.15], muzzle: [-0.29, 0, 0.0115, 0.18], mag: [-0.13, -0.02, 0, 0.028, 0.042] },   // (xs: everything is built once for each gun)
     railgun: { muzzle: [-0.675, 0.016, 0.02, 0.2], optic: [0.0, 0.035], left: [-0.026, 0.0, 0.05] },
-    minigun: { muzzle: [-0.645, 0, 0.03, 0.2], mag: [-0.05, 0, 0, 0.09, 0.14] },
+    minigun: { muzzle: [-0.565, 0, 0.03, 0.2], mag: [-0.043, 0, 0, 0.075, 0.12] },
   };
   const AV_MOUNT = {
     rifle: { muzzle: [-1.0, 0.01, 0.022, 0.32], butt: [0.3, -0.02, 0.1, 0.2] },   // (these models have no separate magazine, so mag is in the gun's space)
