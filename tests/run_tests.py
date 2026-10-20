@@ -1610,7 +1610,7 @@ def test_gungame_bot_knife(browser, base):
 
 
 def test_attach_extras(browser, base):
-    """The bipod, the sling and slugs: they show in the attachments window, change the gun's numbers, and a sling shortens the gun swap."""
+    """The bipod and slugs: they show in the attachments window and change the gun's numbers; the sling is gone."""
     server, dbase, tmp = debug_site()
     try:
         page, errors = open_page(browser, dbase + "/index.html", 800, 450)
@@ -1622,10 +1622,10 @@ def test_attach_extras(browser, base):
         def has(gun, opt):
             page.click(f'#attach-guns button[data-gun="{gun}"]')
             return page.query_selector(f'#attach-slots .at-opt[data-opt="{opt}"]') is not None
-        check("the LMG offers a bipod and a sling, the shotgun slugs, the AR a sling, the sniper neither",
-              has("lmg", "bipod") and has("lmg", "sling") and has("shotgun", "slug") and has("ar", "sling") and not has("rifle", "bipod"))
-        check("the launcher and the RPG have attachments now (loaders, slings, an optic on the RPG)",
-              has("launcher", "lbig") and has("launcher", "sling") and has("rpg", "rquick") and has("rpg", "optic-2x") and has("rpg", "reddot"))
+        check("the LMG offers a bipod, the shotgun slugs, the sniper no bipod, and no gun offers a sling any more",
+              has("lmg", "bipod") and has("shotgun", "slug") and not has("rifle", "bipod") and not any(has(g, "sling") for g in ("ar", "lmg", "launcher", "rpg")))
+        check("the launcher and the RPG have attachments now (loaders, an optic on the RPG)",
+              has("launcher", "lbig") and has("rpg", "rquick") and has("rpg", "optic-2x") and has("rpg", "reddot"))
         page.click('#attach-guns button[data-gun="launcher"]')
         page.click('#attach-slots .at-opt[data-opt="lbig"]')
         lm = page.evaluate("window.__dbg.WEAPONS.launcher.magSize")
@@ -1641,16 +1641,9 @@ def test_attach_extras(browser, base):
         check("another barrel replaces the slugs", off == base_sg[0], str(off))
         page.click('#attach-guns button[data-gun="lmg"]')
         page.click('#attach-slots .at-opt[data-opt="bipod"]')
-        page.click('#attach-slots .at-opt[data-opt="sling"]')
-        k = page.evaluate("[window.__dbg.WEAPONS.lmg.bipodK, window.__dbg.WEAPONS.lmg.swapK]")
-        check("the bipod and the sling set their numbers (steadier crouched, 35% faster swap)", abs(k[0] - 0.45) < 1e-6 and abs(k[1] - 0.65) < 1e-6, str(k))
+        k = page.evaluate("window.__dbg.WEAPONS.lmg.bipodK")
+        check("the bipod sets its number (steadier crouched)", abs(k - 0.45) < 1e-6, str(k))
         page.click("#attach-close")
-        page.click("#start-btn")
-        step(page, 60)
-        page.keyboard.press("2")   # to the knife
-        step(page, 2)
-        dur = page.evaluate("window.__dbg.vm.switchDuration")
-        check("swapping to the knife takes 35% less time with a sling on the gun", abs(dur - 0.44 * 0.65) < 1e-6, str(dur))
         check("the attachment extras run without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:

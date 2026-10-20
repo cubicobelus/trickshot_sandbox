@@ -3126,7 +3126,7 @@
     if (name === vm.current || vm.switchTimer > 0 || !WEAPONS[name]) return;
     vm.last = vm.current;
     vm.pending = name;
-    vm.switchDuration = 0.44 * Math.min(WEAPONS[vm.last].swapK || 1, WEAPONS[name].swapK || 1);   // a sling makes the swap quicker
+    vm.switchDuration = 0.44;
     vm.switchTimer = vm.switchDuration;
     vm.swapped = false;
     vm.inspectTimer = 0;
@@ -3919,7 +3919,7 @@
   // ---- attachments: each gun has up to three slots; every option is a trade, and unlocks once you have landed `need` hits with that gun ----
   // fx: ads (aim-down-sights time), spread (hip), spreadAds, recoil, mag (size), reload (time), flash, sound (how loud), scopeFov (>1 wider)
   const ATTACH_SLOTS = {
-    optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip", barrel: "Barrel", mag: "Magazine", sights: "Sights", bipod: "Bipod", sling: "Sling",
+    optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip", barrel: "Barrel", mag: "Magazine", sights: "Sights", bipod: "Bipod",
   };
   const SUPPRESSOR = { id: "suppressor", name: "Suppressor", need: 20, fx: { flash: 0.2, sound: 0.45, recoil: 1.05 }, text: "Quieter, almost no flash; a touch more kick" };
   const AT_REDDOT = { id: "reddot", name: "Red dot", need: 10, fx: { ads: 0.85, spreadAds: 0.8 }, text: "Aims down sights 15% faster, tighter when aimed" };
@@ -3938,7 +3938,6 @@
     { id: "extmag", name: "Extended magazine", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "50% more rounds, slower reload" },
     { id: "fastmag", name: "Fast magazine", need: 80, fx: { reload: 0.8 }, text: "Reloads 20% faster" },
   ];
-  const AT_SLING = [{ id: "sling", name: "Sling", need: 25, fx: { swap: 0.65 }, text: "Switches to and from this gun 35% faster" }];
   const AT_BIPOD = [{ id: "bipod", name: "Bipod", need: 35, fx: { bipod: 0.45, ads: 1.08 }, text: "Far steadier while crouched (the slide key), a touch slower to aim" }];
   const ATTACHMENTS = {
     rifle: {   // the sniper
@@ -3948,22 +3947,20 @@
       stock: [{ id: "stock-light", name: "Light stock", need: 30, fx: { ads: 0.9, recoil: 1.08 }, text: "Aims 10% faster, a little more kick" },
         { id: "stock-heavy", name: "Heavy stock", need: 65, fx: { recoil: 0.85, ads: 1.1 }, text: "Steadier, slower to aim" }],
     },
-    ar: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
-    ak: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
-    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
-    dmr: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS, bipod: AT_BIPOD, sling: AT_SLING },
-    burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS, sling: AT_SLING },
-    lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: [{ id: "drum", name: "Big drum", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "A bigger drum: 150 rounds, slower reload" }], bipod: AT_BIPOD, sling: AT_SLING },
+    ar: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    ak: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    smg: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    dmr: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: AT_MAGS, bipod: AT_BIPOD },
+    burst: { optic: [AT_REDDOT, AT_SCOPE2], muzzle: [SUPPRESSOR, { id: "comp", name: "Compensator", need: 55, fx: { recoil: 0.85 }, text: "15% less recoil" }], barrel: AT_BARRELS, grip: AT_GRIPS, mag: AT_MAGS },
+    lmg: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4], muzzle: [SUPPRESSOR, AT_BRAKE], grip: AT_GRIPS, mag: [{ id: "drum", name: "Big drum", need: 40, fx: { mag: 1.5, reload: 1.15 }, text: "A bigger drum: 150 rounds, slower reload" }], bipod: AT_BIPOD },
     crossbow: { optic: [AT_REDDOT, AT_SCOPE2, AT_SCOPE4] },
     launcher: {
       mag: [{ id: "lbig", name: "Extra grenades", need: 30, fx: { mag: 1.5, reload: 1.15 }, text: "Six grenades, a slower reload" },
         { id: "lquick", name: "Quick loader", need: 60, fx: { reload: 0.7 }, text: "Reloads 30% faster" }],
-      sling: AT_SLING,
     },
     rpg: {
       optic: [AT_REDDOT, AT_SCOPE2],
       mag: [{ id: "rquick", name: "Quick loader", need: 30, fx: { reload: 0.7 }, text: "Reloads 30% faster" }],
-      sling: AT_SLING,
     },
     shotgun: {
       barrel: [{ id: "choke", name: "Choke", need: 15, fx: { spread: 0.7, spreadAds: 0.7 }, text: "A tighter spread, harder to land from close up" },
@@ -4127,12 +4124,6 @@
           const leg = add(new THREE.CylinderGeometry(0.0055, 0.004, 0.11, 8), AT_STEEL, side * 0.02, y - 0.05, z - 0.01, 0.9);
           leg.rotation.z = side * -0.12;
         }
-      } else if (id === "sling" && M.under) {   // a swivel under the fore-end, a strap along it and a loop hanging down
-        const [z, y] = M.under;
-        add(new THREE.BoxGeometry(0.016, 0.014, 0.016), AT_STEEL, 0, y - 0.006, z - 0.03);
-        add(new THREE.BoxGeometry(0.02, 0.006, 0.22), AT_RUBBER, 0, y - 0.012, z + 0.08);
-        const loop = add(new THREE.TorusGeometry(0.04, 0.004, 6, 16), AT_RUBBER, 0, y - 0.05, z + 0.07);
-        loop.rotation.y = HP;
       }
       else if (id === "tube" && M.tube) {   // the magazine tube runs on past its old end
         const [z, y, r] = M.tube;
@@ -4264,7 +4255,7 @@
   }
   // each game the host rolls a setup for every gun: a sniper always has a scope, a marksman rifle or crossbow always an optic, the rest get
   // each slot with some chance, one option from the slot. Nothing needs unlocking, and everyone gets the same.
-  const GG_SLOT_CHANCE = { sling: 0, bipod: 0.3, optic: 0.7, muzzle: 0.45, barrel: 0.3, grip: 0.5, mag: 0.4, stock: 0.4, sights: 0.5 };
+  const GG_SLOT_CHANCE = { bipod: 0.3, optic: 0.7, muzzle: 0.45, barrel: 0.3, grip: 0.5, mag: 0.4, stock: 0.4, sights: 0.5 };
   const GG_MUST_OPTIC = ["rifle", "dmr", "crossbow"];
   function makeGgPreset() {
     const parts = [];
@@ -4289,7 +4280,7 @@
   }
   function applyAttachments() {
     for (const id of GUNS) {
-      const w = WEAPONS[id], base = WEAPON_BASE[id], fx = { ads: 1, spread: 1, spreadAds: 1, recoil: 1, mag: 1, reload: 1, flash: 1, sound: 1, scopeFov: 1, zoom: 1, swap: 1, bipod: 1 };
+      const w = WEAPONS[id], base = WEAPON_BASE[id], fx = { ads: 1, spread: 1, spreadAds: 1, recoil: 1, mag: 1, reload: 1, flash: 1, sound: 1, scopeFov: 1, zoom: 1, bipod: 1 };
       for (const o of chosenAttachments(id)) for (const k of Object.keys(o.fx)) fx[k] *= o.fx[k];
       w.magSize = Math.max(1, Math.round(base.mag * fx.mag));
       w.spread = base.spread * fx.spread; w.spreadAds = base.spreadAds * fx.spreadAds;
@@ -4297,7 +4288,7 @@
       w.flashScale = base.flash * fx.flash;
       for (const k of Object.keys(base.reload)) if (typeof base.reload[k] === "number") w.reload[k] = base.reload[k] * fx.reload;
       applyGunSkin(w.group, chosenSkin(id));
-      w.swapK = fx.swap; w.bipodK = fx.bipod;
+      w.bipodK = fx.bipod;
       w.adsMult = (w.adsBase || 1) * fx.ads; w.scopeFovMult = fx.scopeFov; w.zoomMult = fx.zoom; w.soundMult = fx.sound;
       if (w.ammo > w.magSize) w.ammo = w.magSize;
       if (w.atGroup) { w.group.remove(w.atGroup); w.atGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); w.atGroup = null; }
