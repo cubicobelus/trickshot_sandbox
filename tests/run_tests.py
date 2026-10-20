@@ -1133,6 +1133,30 @@ def test_blasts(browser, base):
         step(page, 2)
         long_v = page.evaluate("(() => { const g = window.__dbg.grenades.find((q) => q.state === 'flying' && q.kind === 'frag'); return g ? Math.hypot(g.vel.x, g.vel.y, g.vel.z) : 0; })()")
         check("a longer hold throws it much faster than a quick tap", long_v > short_v + 12, f"{short_v:.1f} -> {long_v:.1f} u/s")
+        # cooking: past halfway the fuse burns; a full-distance hold has burned a quarter of it, and held too long it goes off in the hand
+        step(page, 700)
+        page.keyboard.down("KeyG")
+        step(page, 69)   # about 1.1 s: the distance bar is full
+        cook_chip = page.inner_text("#nade-chip")
+        page.keyboard.up("KeyG")
+        step(page, 2)
+        cooked_age = page.evaluate("(() => { const g = window.__dbg.grenades.find((q) => q.state === 'flying' && q.kind === 'frag'); return g ? g.age : -1; })()")
+        check("past halfway the chip shows a fuse and a cooked grenade has burned part of its fuse (0.55 s of 2.2 s at full distance)",
+              "fuse" in cook_chip.lower() and 0.45 < cooked_age < 0.75, f"{cook_chip.encode('ascii', 'replace').decode()} / age {cooked_age:.2f}")
+        step(page, 700)
+        page.evaluate("window.__dbg.player.velocity.set(0, 0, 0)")
+        page.keyboard.down("KeyG")
+        step(page, 165)   # about 2.64 s: just short of 0.55 + 2.2 s, so the grenade is still in the hand
+        before = page.inner_text("#nade-chip")
+        peak = 0
+        for _ in range(14):   # the shove is over in a few frames (the floor soon takes it), so watch for its peak
+            step(page, 1)
+            peak = max(peak, page.evaluate("Math.hypot(window.__dbg.player.velocity.x, window.__dbg.player.velocity.y, window.__dbg.player.velocity.z)"))
+        in_hand = page.evaluate("window.__dbg.grenades.filter((g) => g.state === 'flying' && g.kind === 'frag').length")
+        after = page.inner_text("#nade-chip")
+        page.keyboard.up("KeyG")
+        check("held too long, a grenade goes off in your hand (nothing left flying, you are shoved, the cooldown starts)",
+              "fuse" in before.lower() and in_hand == 0 and peak > 5 and "ready" not in after.lower() and "grenade" in after.lower(), f"{in_hand} flying, peak {peak:.1f} u/s, {after.encode('ascii', 'replace').decode()}")
         # in a room, each kind hurts a bot by its own numbers
         page.evaluate("__unlock()")
         step(page, 3)

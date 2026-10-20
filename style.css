@@ -515,6 +515,7 @@
   #chips { position: absolute; left: 0; bottom: calc(100% + 8px); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; white-space: nowrap; }
   #nade-chip, #pack-chip { background: rgba(10,10,14,0.72); border: 1px solid rgba(255,255,255,0.22); color: #d6dce4; padding: 4px 10px; border-radius: 6px; font-size: 12px; letter-spacing: 0.04em; pointer-events: none; }
   #nade-chip.ready, #pack-chip.ready { border-color: #ffd24a; color: #ffe9a8; }
+  #nade-chip.cook { border-color: #ff6a4f; color: #ffb4a8; }   /* the pin is out: the fuse is burning */
   #nade-chip[hidden], #pack-chip[hidden] { display: none; }
   #map-tip { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); max-width: min(560px, 90vw); text-align: center; background: rgba(15,15,20,0.85);
     border: 1px solid #ffd24a; color: #ffe9a8; padding: 6px 14px; border-radius: 6px; font-size: 13px; pointer-events: none; z-index: 5; }

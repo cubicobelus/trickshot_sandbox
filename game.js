@@ -6889,19 +6889,20 @@
     if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
   }
   // the thrown grenade (G): an overarm lob on a cooldown, whatever you are holding
-  let fragCd = 0, fragCharge = -1;   // fragCharge: seconds G has been held (-1: not charging); the longer you hold it, the further it goes
+  let fragCd = 0, fragCharge = -1;   // fragCharge: seconds G has been held (-1: not charging); the longer you hold it, the further it goes, and from halfway the fuse burns too (cooking)
   const FRAG_CHARGE_TIME = 1.1, FRAG_MIN_SPEED = 6, FRAG_MAX_SPEED = 36;
   const nadeChip = document.getElementById("nade-chip");
   function fragAllowed() { return !(replay.active || localDead || (net.active && (net.phase !== "play" || countingDown() || net.gungame))); }
   function startFragCharge() { if (fragCd <= 0 && fragAllowed()) fragCharge = 0; }
   function releaseFrag() {
     if (fragCharge < 0) return;
-    const power = Math.min(fragCharge / FRAG_CHARGE_TIME, 1);
+    const power = Math.min(fragCharge / FRAG_CHARGE_TIME, 1), cooked = Math.max(0, fragCharge - FRAG_COOK_FROM);
     fragCharge = -1;
-    throwFrag(FRAG_MIN_SPEED + (FRAG_MAX_SPEED - FRAG_MIN_SPEED) * power);
+    throwFrag(FRAG_MIN_SPEED + (FRAG_MAX_SPEED - FRAG_MIN_SPEED) * power, cooked);
   }
-  function throwFrag(speed) {
+  function throwFrag(speed, cooked) {
     if (fragCd > 0 || !fragAllowed()) return;
+  const FRAG_COOK_FROM = FRAG_CHARGE_TIME / 2;   // the pin is out from here: a full-power throw has burned 0.55 s of its 2.2 s fuse, so it still has 1.65 s in the air; held past 2.75 s it goes off in your hand
     fragCd = FRAG_COOLDOWN;
     camera.getWorldDirection(_thFwd);
     camera.getWorldQuaternion(_camQuat);
@@ -6909,24 +6910,34 @@
     camera.getWorldPosition(_gLookAt).addScaledVector(_thFwd, 0.5).addScaledVector(_thRight, 0.12 * handSign());
     _gLookAt.y -= 0.12;
     _boltDir.copy(_thFwd); _boltDir.y += 0.14; _boltDir.normalize();   // a little lob
-    launchBlast("frag", _gLookAt, _boltDir, speed || BLAST.frag.speed);
+    launchBlast("frag", _gLookAt, _boltDir, speed || BLAST.frag.speed).age = cooked || 0;   // (a cooked grenade has already burned part of its fuse)
     tone("triangle", 330, 120, 0.12 * SETTINGS.volGear, 0.14, 0, 0.1);
     noiseHit(1800, 1.0, 0.10 * SETTINGS.volGear, 0.09, "highpass", 0, 0.1);
     if (run.state === "live") run.shots++;
   }
   function updateNadeChip(dt) {
     if (fragCd > 0) fragCd = Math.max(0, fragCd - dt);
-    if (fragCharge >= 0) { if (!pointerLocked || !fragAllowed() || fragCd > 0) fragCharge = -1; else fragCharge = Math.min(fragCharge + dt, FRAG_CHARGE_TIME); }
+    if (fragCharge >= 0) {
+      if (!pointerLocked || !fragAllowed() || fragCd > 0) fragCharge = -1;
+      else {
+        const before = fragCharge;
+        fragCharge += dt;
+        if (before < FRAG_COOK_FROM && fragCharge >= FRAG_COOK_FROM) tone("square", 1100, 1100, 0.05 * SETTINGS.volGear, 0.05, 0, 0.1);   // the pin is out
+        if (fragCharge - FRAG_COOK_FROM >= BLAST.frag.fuse) { fragCharge = -1; throwFrag(FRAG_MIN_SPEED, BLAST.frag.fuse); }   // held too long: it goes off in your hand
+      }
+    }
     if (!nadeChip) return;
     const show = fragAllowed();
     nadeChip.hidden = !show;
     if (!show) return;
     const label = bindLabel("grenade");
     nadeChip.className = fragCd > 0 ? "wait" : "ready";
-    if (fragCharge >= 0) {   // charging: a bar that fills
-      const n = Math.round(fragCharge / FRAG_CHARGE_TIME * 10);
-      nadeChip.textContent = label + " · " + "■".repeat(n) + "□".repeat(10 - n) + " release to throw";
-    } else nadeChip.textContent = label + " · GRENADE " + (fragCd > 0 ? fragCd.toFixed(1) + "s" : "READY (hold to throw further)");
+    if (fragCharge >= 0) {   // charging: a bar that fills, and from halfway a fuse that burns down
+      const n = Math.round(Math.min(fragCharge / FRAG_CHARGE_TIME, 1) * 10), cook = Math.max(0, fragCharge - FRAG_COOK_FROM);
+      const left = Math.max(0, Math.ceil(8 * (1 - cook / BLAST.frag.fuse)));
+      nadeChip.className = cook > 0 ? "cook" : "ready";
+      nadeChip.textContent = label + " · " + "■".repeat(n) + "□".repeat(10 - n) + (cook > 0 ? " FUSE " + "●".repeat(left) + "○".repeat(8 - left) : "") + " release to throw";
+    } else nadeChip.textContent = label + " · GRENADE " + (fragCd > 0 ? fragCd.toFixed(1) + "s" : "READY (hold to throw further, then it cooks)");
   }
   // the blast pack (C): throw it, it sticks where it lands, press C again to set it off. It launches you hard and only bruises others (no damage to you).
   let packCd = 0, packOut = null;
