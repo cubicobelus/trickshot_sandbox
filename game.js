@@ -2880,6 +2880,88 @@
     addPart(minigunGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.034, 8), minigunBrass, -0.095 + k * 0.045, -0.01 + k * 0.025, 0.045, HALF_PI, 0, 0);
   }
 
+  // ---- Combat shotgun: a semi-automatic with a polymer stock, a pistol grip, a tube under the barrel and a rail on top ----
+  const combatGroup = new THREE.Group();
+  addPart(combatGroup, new THREE.BoxGeometry(0.058, 0.078, 0.27), metalDark, 0, 0, 0.02);                                  // receiver
+  addPart(combatGroup, new THREE.BoxGeometry(0.02, 0.008, 0.22), metalMid, 0, 0.043, 0.02);                                // top rail
+  addPart(combatGroup, new THREE.CylinderGeometry(0.0165, 0.0165, 0.5, 12), metalDark, 0, 0.022, -0.39, HALF_PI, 0, 0);    // barrel
+  addPart(combatGroup, new THREE.CylinderGeometry(0.0145, 0.0145, 0.42, 12), metalMid, 0, -0.022, -0.35, HALF_PI, 0, 0);   // magazine tube
+  addPart(combatGroup, new THREE.BoxGeometry(0.052, 0.046, 0.2), polymerMat, 0, -0.012, -0.36);                            // fore-end
+  addPart(combatGroup, new THREE.BoxGeometry(0.04, 0.09, 0.26), polymerMat, 0, -0.01, 0.3);                                // stock
+  addPart(combatGroup, new THREE.BoxGeometry(0.036, 0.1, 0.045), gripMat, 0, -0.085, 0.13, 0.3, 0, 0);                    // pistol grip
+  addPart(combatGroup, new THREE.BoxGeometry(0.004, 0.03, 0.08), portMat, 0.0302, 0.012, -0.03);                           // ejection port
+  addPart(combatGroup, new THREE.BoxGeometry(0.005, 0.014, 0.006), metalDark, 0, 0.0535, -0.62);                           // front post
+  for (const sx of [-1, 1]) addPart(combatGroup, new THREE.BoxGeometry(0.007, 0.014, 0.008), metalDark, sx * 0.012, 0.0535, 0.12);   // rear sight: two posts
+  addPart(combatGroup, new THREE.BoxGeometry(0.02, 0.008, 0.075), metalMid, 0, -0.044, 0.05);                              // trigger guard
+  addPart(combatGroup, new THREE.BoxGeometry(0.006, 0.026, 0.006), metalDark, 0, -0.056, 0.055, 0.25, 0, 0);               // trigger
+
+  // ---- Sawed-off: two short barrels side by side on a breech block, a wooden fore-end and a short raked grip ----
+  const sawedGroup = new THREE.Group();
+  for (const sx of [-1, 1]) addPart(sawedGroup, new THREE.CylinderGeometry(0.0165, 0.0165, 0.32, 12), metalDark, sx * 0.0175, 0.02, -0.19, HALF_PI, 0, 0);   // the two barrels
+  addPart(sawedGroup, new THREE.BoxGeometry(0.012, 0.008, 0.3), metalMid, 0, 0.0395, -0.19);                               // the rib between them
+  addPart(sawedGroup, new THREE.BoxGeometry(0.066, 0.058, 0.1), metalDark, 0, 0.012, 0.01);                                // breech block
+  addPart(sawedGroup, new THREE.CylinderGeometry(0.008, 0.008, 0.07, 8), metalMid, 0, 0.012, -0.035, 0, 0, HALF_PI);       // hinge pin
+  addPart(sawedGroup, new THREE.BoxGeometry(0.05, 0.036, 0.13), woodStock, 0, -0.016, -0.12);                              // fore-end
+  addPart(sawedGroup, new THREE.BoxGeometry(0.04, 0.12, 0.05), woodStock, 0, -0.07, 0.09, 0.45, 0, 0);                     // grip
+  for (const sx of [-1, 1]) addPart(sawedGroup, new THREE.BoxGeometry(0.012, 0.022, 0.012), metalDark, sx * 0.016, 0.046, 0.06, -0.5, 0, 0);   // the two hammers
+  addPart(sawedGroup, new THREE.BoxGeometry(0.02, 0.008, 0.06), metalMid, 0, -0.044, 0.035);                               // trigger guard
+  addPart(sawedGroup, new THREE.BoxGeometry(0.006, 0.026, 0.006), metalDark, 0, -0.054, 0.04, 0.25, 0, 0);                 // trigger
+  addPart(sawedGroup, new THREE.SphereGeometry(0.005, 8, 8), metalMid, 0, 0.047, -0.345);                                  // front bead
+
+  // ---- Machine pistol: a boxy slide over a polymer frame, vented at the front, with a long straight magazine ----
+  const mpistolGroup = new THREE.Group();
+  addPart(mpistolGroup, new THREE.BoxGeometry(0.032, 0.04, 0.2), metalDark, 0, 0.02, -0.04);                               // slide
+  addPart(mpistolGroup, new THREE.BoxGeometry(0.02, 0.006, 0.1), metalMid, 0, 0.043, -0.06);                               // its top
+  for (let i = 0; i < 3; i++) addPart(mpistolGroup, new THREE.BoxGeometry(0.034, 0.004, 0.008), portMat, 0, 0.0262, -0.1 - i * 0.016);   // vents at the front
+  addPart(mpistolGroup, new THREE.CylinderGeometry(0.0095, 0.0095, 0.03, 8), metalMid, 0, 0.02, -0.155, HALF_PI, 0, 0);    // barrel nose
+  addPart(mpistolGroup, new THREE.BoxGeometry(0.034, 0.03, 0.17), polymerMat, 0, -0.005, -0.03);                           // frame
+  addPart(mpistolGroup, new THREE.BoxGeometry(0.034, 0.11, 0.045), gripMat, 0, -0.08, 0.04, 0.2, 0, 0);                    // grip
+  const mpMag = addPart(mpistolGroup, new THREE.BoxGeometry(0.028, 0.15, 0.04), metalDark, 0, -0.11, 0.046, 0.2, 0, 0);    // the long magazine
+  addPart(mpistolGroup, new THREE.BoxGeometry(0.018, 0.006, 0.05), metalMid, 0, -0.03, -0.04);                             // trigger guard
+  addPart(mpistolGroup, new THREE.BoxGeometry(0.005, 0.02, 0.005), metalDark, 0, -0.026, -0.015, 0.25, 0, 0);              // trigger
+  addPart(mpistolGroup, new THREE.BoxGeometry(0.005, 0.01, 0.01), metalDark, 0, 0.047, -0.125);                            // front post
+  addPart(mpistolGroup, new THREE.BoxGeometry(0.018, 0.01, 0.01), metalDark, 0, 0.046, 0.05);                              // rear sight
+
+  // ---- Compound bow: a riser with a stabiliser, two limbs with a cam at each tip, a string that draws back and an arrow on the rest ----
+  const bowGroup = new THREE.Group();
+  const BOW_LIMB = 0.26, BOW_ANG = 0.45, BOW_PIV = 0.09;
+  addPart(bowGroup, new THREE.BoxGeometry(0.036, 0.2, 0.05), metalDark, 0, 0, 0);                                          // the riser
+  addPart(bowGroup, new THREE.BoxGeometry(0.034, 0.09, 0.044), gripMat, 0, -0.02, 0.012);                                  // the grip
+  addPart(bowGroup, new THREE.CylinderGeometry(0.008, 0.008, 0.24, 8), metalMid, 0, -0.05, -0.15, HALF_PI, 0, 0);          // the stabiliser rod
+  addPart(bowGroup, new THREE.SphereGeometry(0.014, 8, 8), accentMat, 0, -0.05, -0.27);                                    // its weight
+  addPart(bowGroup, new THREE.BoxGeometry(0.03, 0.008, 0.07), metalMid, -0.012, 0.012, -0.03);                              // the arrow rest
+  addPart(bowGroup, new THREE.BoxGeometry(0.006, 0.03, 0.006), accentMat, -0.025, 0.06, -0.025);                           // a pin sight
+  const bowTop = new THREE.Group(), bowBot = new THREE.Group();
+  bowTop.position.set(0, BOW_PIV, 0); bowBot.position.set(0, -BOW_PIV, 0); bowGroup.add(bowTop, bowBot);
+  addPart(bowTop, new THREE.BoxGeometry(0.02, BOW_LIMB, 0.014), polymerMat, 0, BOW_LIMB / 2, 0);                           // the limbs
+  addPart(bowBot, new THREE.BoxGeometry(0.02, BOW_LIMB, 0.014), polymerMat, 0, -BOW_LIMB / 2, 0);
+  addPart(bowTop, new THREE.CylinderGeometry(0.022, 0.022, 0.012, 10), metalMid, 0, BOW_LIMB, 0, 0, 0, HALF_PI);           // a cam at each tip
+  addPart(bowBot, new THREE.CylinderGeometry(0.022, 0.022, 0.012, 10), metalMid, 0, -BOW_LIMB, 0, 0, 0, HALF_PI);
+  const bowStringMat = new THREE.MeshBasicMaterial({ color: 0xe8e4d8 });
+  const bowStrTop = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.003, 1), bowStringMat), bowStrBot = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.003, 1), bowStringMat);
+  bowGroup.add(bowStrTop, bowStrBot);
+  const bowArrow = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.006, 1), woodStock); bowGroup.add(bowArrow);              // the shaft, stretched to fit the draw
+  const bowHead = addPart(bowGroup, new THREE.ConeGeometry(0.01, 0.045, 8), metalMid, -0.025, 0.015, -0.14, -HALF_PI, 0, 0);    // the arrowhead
+  const _bowA = new THREE.Vector3(), _bowB = new THREE.Vector3(), _bowN = new THREE.Vector3(), _bowZ = new THREE.Vector3(0, 0, 1);
+  function bowSegment(mesh, a, b) {   // a thin box from a to b
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    _bowB.copy(b).sub(a);
+    mesh.scale.set(1, 1, _bowB.length());
+    mesh.quaternion.setFromUnitVectors(_bowZ, _bowB.normalize());
+  }
+  function updateBowModel(f, loaded) {   // f: how far the string is drawn, 0 to 1
+    const a = BOW_ANG - 0.2 * f;
+    bowTop.rotation.x = a; bowBot.rotation.x = -a;
+    const ty = BOW_PIV + BOW_LIMB * Math.cos(a), tz = BOW_LIMB * Math.sin(a);
+    _bowN.set(-0.025, 0.015, tz + 0.22 * f);   // the nock rides the string
+    bowSegment(bowStrTop, _bowA.set(0, ty, tz), _bowN);
+    bowSegment(bowStrBot, _bowA.set(0, -ty, tz), _bowN);
+    bowArrow.scale.z = _bowN.z + 0.12;
+    bowArrow.position.set(-0.025, 0.015, (_bowN.z - 0.12) / 2);
+    bowArrow.visible = bowHead.visible = loaded;
+  }
+  updateBowModel(0, true);
+
   // ---- first-person hands: a gloved fist round the grip, a support hand under the fore-end, and a sleeve running back toward the camera ----
   const gloveMat = new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.9, metalness: 0.05 });
   const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x3d4636, roughness: 0.95, metalness: 0.0 });
@@ -2923,8 +3005,12 @@
   HANDS.set(dualGroup, dualGuns.flatMap((g) => HANDS.get(g)));
   addHands(railgunGroup, [0, -0.085, 0.12], [0, -0.05, -0.28]);
   addHands(minigunGroup, [0, -0.08, 0.065], [0, -0.075, -0.1]);
+  addHands(combatGroup, [0, -0.085, 0.13], [0, -0.05, -0.36]);
+  addHands(sawedGroup, [0, -0.075, 0.09], [0, -0.035, -0.12]);
+  addHands(mpistolGroup, [0, -0.08, 0.04]);
+  addHands(bowGroup, [0, -0.03, 0.012]);
 
-  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup, launcherGroup, rpgGroup, revolverGroup, dualGroup, railgunGroup, minigunGroup];
+  const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup, launcherGroup, rpgGroup, revolverGroup, dualGroup, railgunGroup, minigunGroup, sawedGroup, combatGroup, mpistolGroup, bowGroup];
   for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   // everything held sits under one root, so left-handed is a single mirror (three.js
   // flips face winding for negative scale, so the models still render correctly)
@@ -3468,9 +3554,78 @@
     },
   };
   // (a gun travels over the network as its place in this list, so new guns go at the end, after the knife, never in the middle)
-  for (const k of ["pistol", "smg", "revolver", "dual"]) WEAPONS[k].inspects = LIGHT_INSPECTS;   // the light guns get the tosses and twirls too
+  Object.assign(WEAPONS, {
+    sawed: {
+      name: "SAWED-OFF", group: sawedGroup,
+      restPos: new THREE.Vector3(0.2, -0.22, -0.42), restRot: new THREE.Euler(0.03, -0.07, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.05, -0.3), adsRot: new THREE.Euler(0, 0, 0),   // the bead over the rib
+      canADS: true, scope: false, adsZoom: 0.88, fireRate: 0.22, auto: false, isMelee: false, usesAmmo: true,   // both barrels can go one after the other
+      magSize: 2, ammoLabel: "SHELLS", pellets: 10, spread: 0.1, spreadAds: 0.085, bloom: 0, bloomMax: 0, bloomRecover: 0,
+      range: 45, scoreScale: 0.5, recoil: 1.7, kick: 1.3, flashScale: 1.5, brake: false, smoke: 1.3,
+      action: "none", ejectOnShot: false, casing: "shell",
+      muzzle: new THREE.Vector3(0, 0.02, -0.355), eject: new THREE.Vector3(0.03, 0.02, 0.02),
+      sound: { recording: "shotgun", rate: 0.8, lowcut: 40, length: 1.3, gain: 1.15 },
+      recoilKick: { up: 0.06, grow: 0.01, side: 0.01, max: 0.1, recover: 5, hold: 0.1 },
+      reload: { style: "shells", start: 0.5, perShell: 0.55, end: 0.35, pose: { x: -0.04, y: 0.06, rx: 0.5, ry: 0.12, rz: -0.4 } },
+      inspectDuration: 1.7, inspects: GUN_INSPECTS, inspectReach: 0.55,
+    },
+    combat: {
+      name: "AUTO SHOTGUN", group: combatGroup,
+      restPos: new THREE.Vector3(0.26, -0.27, -0.55), restRot: new THREE.Euler(0.03, -0.07, 0.01),
+      adsPos: new THREE.Vector3(0.0, -0.057, -0.34), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.85, fireRate: 0.32, auto: false, isMelee: false, usesAmmo: true,
+      magSize: 8, ammoLabel: "SHELLS", pellets: 8, spread: 0.075, spreadAds: 0.06, bloom: 0, bloomMax: 0, bloomRecover: 0,
+      range: 60, scoreScale: 0.5, recoil: 0.9, kick: 0.7, flashScale: 1.1, brake: false, smoke: 1.0,
+      action: "none", ejectOnShot: true, casing: "shell",
+      muzzle: new THREE.Vector3(0, 0.022, -0.66), eject: new THREE.Vector3(0.04, 0.02, 0.02),
+      sound: { recording: "shotgun", rate: 1.15, lowcut: 50, length: 1.1, gain: 0.95 },
+      recoilKick: { up: 0.035, grow: 0.004, side: 0.006, max: 0.07, recover: 6, hold: 0.08 },
+      reload: { style: "shells", start: 0.4, perShell: 0.4, end: 0.3 },
+      inspectDuration: 1.9, inspects: GUN_INSPECTS,
+    },
+    mpistol: {
+      name: "MACHINE PISTOL", group: mpistolGroup,
+      restPos: new THREE.Vector3(0.18, -0.19, -0.38), restRot: new THREE.Euler(0.02, -0.06, 0),
+      adsPos: new THREE.Vector3(0.0, -0.05, -0.3), adsRot: new THREE.Euler(0, 0, 0),
+      canADS: true, scope: false, adsZoom: 0.85, fireRate: 0.075, auto: true, isMelee: false, usesAmmo: true,
+      magSize: 20, ammoLabel: "ROUNDS", pellets: 1, spread: 0.018, spreadAds: 0.012, bloom: 0.004, bloomMax: 0.035, bloomRecover: 0.1,
+      scoreScale: 0.5, recoil: 0.4, kick: 0.3, flashScale: 0.55, brake: false, smoke: 0.3,
+      action: "none", ejectOnShot: true, casing: "small",
+      muzzle: new THREE.Vector3(0, 0.02, -0.172), eject: new THREE.Vector3(0.02, 0.04, 0.0),
+      sound: { recording: "ar", rate: 1.3, lowcut: 110, length: 0.4, gain: 0.75 },
+      recoilKick: { up: 0.006, grow: 0.0008, side: 0.005, max: 0.1, recover: 8, hold: 0.08 },
+      mag: mpMag, magRestY: mpMag.position.y,
+      reload: {
+        time: 1.5, magOut: 0.12, magDrop: 0.26, magUp: 0.55, magSeat: 0.9, travel: 0.08, rise: 0.2,
+        keys: [
+          [0.00,  0,     0,     0,    0,     0   ],
+          [0.18, -0.04,  0.06,  0.22, 0.10, -0.40],
+          [0.75, -0.04,  0.05,  0.18, 0.10, -0.45],
+          [0.95, -0.04,  0.07,  0.24, 0.10, -0.38],
+          [1.15, -0.02,  0.02,  0.05, 0.05,  0.10],
+          [1.50,  0,     0,     0,    0,     0   ],
+        ],
+      },
+      inspectDuration: 1.7, inspects: GUN_INSPECTS, inspectReach: 0.45,
+    },
+    bow: {
+      name: "BOW", group: bowGroup, draw: 0.7,   // hold the trigger to draw for 0.7 s, let go to loose the arrow (let go early and nothing flies); you walk at half speed while it is drawn or aimed
+      restPos: new THREE.Vector3(0.16, -0.19, -0.55), restRot: new THREE.Euler(0.02, -0.06, 0.12),
+      adsPos: new THREE.Vector3(0.025, -0.05, -0.44), adsRot: new THREE.Euler(0, 0, 0),   // the pin sight over the arrow, the riser beside it
+      canADS: true, scope: false, adsZoom: 0.7, fireRate: 0.45, auto: false, isMelee: false, usesAmmo: true,
+      magSize: 5, ammoLabel: "ARROWS", pellets: 1, spread: 0.002, spreadAds: 0.0004, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
+      scoreScale: 1.0, recoil: 0.25, kick: 0.3, flashScale: 0.1, brake: false, smoke: 0,
+      action: "none", ejectOnShot: false, casing: "small",
+      muzzle: new THREE.Vector3(0, 0.015, -0.14), eject: new THREE.Vector3(0.03, 0.03, 0.0),
+      sound: { recording: "pistol", rate: 2.4, lowcut: 1100, length: 0.22, gain: 0.35 },
+      recoilKick: { up: 0.012, grow: 0, side: 0.002, max: 0.04, recover: 6, hold: 0.15 },
+      reload: { style: "shells", start: 0.3, perShell: 0.45, end: 0.2, pose: { x: -0.05, y: 0.05, rx: 0.3, ry: 0.1, rz: -0.3 } },   // one arrow at a time
+      inspectDuration: 1.8, inspects: GUN_INSPECTS,
+    },
+  });
+  for (const k of ["pistol", "smg", "revolver", "dual", "mpistol"]) WEAPONS[k].inspects = LIGHT_INSPECTS;   // the light guns get the tosses and twirls too
 
-  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg", "revolver", "dual", "railgun", "minigun"];
+  const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg", "revolver", "dual", "railgun", "minigun", "sawed", "combat", "mpistol", "bow"];
   for (const id of WEAPON_ORDER) {
     const w = WEAPONS[id];
     w.id = id;
@@ -3493,7 +3648,8 @@
     recoilPitch: 0, recoilYaw: 0, burstShots: 0, burstQueue: 0, burstTimer: 0, lastShotAt: -99,   // recoil on the aim (where bullets go)
     viewRecoilPitch: 0, viewRecoilYaw: 0,                            // how much of it the view (crosshair) shows
     camKick: 0, camKickYaw: 0,
-    charge: 0, railFlash: 0,   // the railgun: seconds of charge (0 = not charging), and the flash of the last bolt
+    charge: 0, draw: 0, railFlash: 0,   // draw: the bow, seconds drawn (0 = not drawn)
+      // the railgun: seconds of charge (0 = not charging), and the flash of the last bolt
     spin: 0, barrelAngle: 0,   // the minigun: how far it has spun up (0 to 1), and where its barrels are
     fanning: false, cylTarget: 0, hammerT: 9,   // the revolver: this shot is fanned; where the cylinder is turning to; time since the shot
     dualSide: 0, dualKick: [0, 0],   // the dual SMGs: which gun fires next, and how far back each is kicked
@@ -3515,7 +3671,7 @@
     cancelPump();
     vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0;
     vm.burstShots = 0;
-    vm.charge = 0;
+    vm.charge = 0; vm.draw = 0;
     vm.throwTimer = 0;
     vm.slashTimer = 0;
     vm.meleePending = false;
@@ -3813,6 +3969,7 @@
     // the minigun's barrels turn as fast as it has spun up
     vm.barrelAngle += vm.spin * 42 * dt;
     minigunBarrels.rotation.z = vm.barrelAngle;
+    if (vm.current === "bow") updateBowModel(Math.min(vm.draw / WEAPONS.bow.draw, 1), WEAPONS.bow.ammo > 0);   // the string and the arrow follow the draw
 
     // spread blooms while spraying and settles back when you stop
     for (const id of WEAPON_ORDER) {
@@ -4328,6 +4485,10 @@
   WEAPON_ICONS.dual = '<g transform="translate(6 -1) scale(0.62)">' + WEAPON_ICONS.smg + '</g><g transform="translate(6 10) scale(0.62)">' + WEAPON_ICONS.smg + '</g>';
   WEAPON_ICONS.railgun = '<rect x="1" y="8.2" width="38" height="2" rx="1"/><rect x="1" y="12.2" width="38" height="2" rx="1"/><rect x="6" y="6" width="2.2" height="10"/><rect x="13" y="6" width="2.2" height="10"/><rect x="20" y="6" width="2.2" height="10"/><rect x="27" y="6" width="2.2" height="10"/><rect x="38" y="6" width="12" height="10" rx="1.6"/><path d="M45 16 L48 16 L47 22 L43 22 Z"/><path d="M50 7 L62 9.4 L62 18 L50 15 Z"/>';
   WEAPON_ICONS.minigun = '<rect x="1" y="6.6" width="28" height="1.8"/><rect x="1" y="9.6" width="28" height="1.8"/><rect x="1" y="12.6" width="28" height="1.8"/><rect x="28" y="4.5" width="14" height="11" rx="2.6"/><rect x="41" y="7.6" width="9" height="5.4"/><path d="M33 15.5 L38 15.5 L37 22 L32 22 Z"/><rect x="44" y="13" width="15" height="8" rx="1.4"/>';
+  WEAPON_ICONS.sawed = '<rect x="6" y="8" width="26" height="2.5" rx="1"/><rect x="6" y="11" width="26" height="2.5" rx="1"/><rect x="30" y="7.5" width="12" height="8" rx="1.5"/><path d="M40 9 L55 15 L52 22 L40 16 Z"/><path d="M33 15.5 L37 15.5 L36 19 L33 18 Z"/>';
+  WEAPON_ICONS.combat = '<rect x="3" y="8.4" width="38" height="2.4" rx="1"/><rect x="7" y="11.4" width="30" height="2.2" rx="1"/><rect x="36" y="7.5" width="14" height="7.5" rx="1.2"/><rect x="26" y="10.6" width="9" height="4" rx="1.2"/><path d="M49 9 L63 11 L62 17.5 L48 15 Z"/><path d="M40 15 L44.5 15 L43.5 21 L39.5 20 Z"/>';
+  WEAPON_ICONS.mpistol = '<g transform="translate(12 0)"><rect x="4" y="5" width="34" height="5.5" rx="1"/><rect x="6" y="3.4" width="26" height="1.6" rx="0.4"/><path d="M8 10.5 L19 10.5 L17.5 18 L9.5 17 Z"/><rect x="19" y="10.5" width="6" height="12" rx="1"/><path d="M27 10.5 L32 10.5 L30.5 14.5 L27 14.5 Z"/></g>';
+  WEAPON_ICONS.bow = '<path d="M22 2 Q42 12 22 22" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M22 2 L22 22" stroke="currentColor" stroke-width="0.8"/><rect x="6" y="11.2" width="52" height="1.4"/><path d="M58 9.8 L63 11.9 L58 14 Z"/><rect x="24" y="9.6" width="5" height="4.4" rx="1"/><path d="M6 9.6 L10 11.9 L6 14.2 Z"/>';
   const iconSVG = (id) => '<svg viewBox="0 0 64 24" fill="currentColor">' + WEAPON_ICONS[id] + "</svg>";
 
   // ---- loadout: one gun plus the knife ----
@@ -4357,6 +4518,8 @@
   ];
   const AT_LASER = [{ id: "laser", name: "Laser", need: 30, fx: { spread: 0.8, spreadAds: 0.95 }, text: "A tighter spread from the hip" }];
   const AT_BIPOD = [{ id: "bipod", name: "Bipod", need: 35, fx: { bipod: 0.45, ads: 1.08 }, text: "Far steadier while crouched (the slide key), a touch slower to aim" }];
+  const CHOKE = { id: "choke", name: "Choke", need: 20, fx: { spread: 0.75, spreadAds: 0.8 }, text: "A tighter pattern at range" };
+  const PIN_SIGHT = { id: "pin", name: "Pin sight", need: 15, fx: { ads: 0.85, spreadAds: 0.6 }, text: "Aims faster and truer" };
   const ATTACHMENTS = {
     rifle: {   // the sniper
       optic: [{ id: "scope-low", name: "Low-zoom scope", need: 10, fx: { ads: 0.8, scopeFov: 1.4 }, text: "Scopes in 20% faster, a wider view (a quickscope's friend)" },
@@ -4394,6 +4557,10 @@
       sights: AT_LASER,
     },
     dual: { muzzle: [SUPPRESSOR], mag: AT_MAGS },
+    sawed: { muzzle: [CHOKE] },
+    combat: { optic: [AT_REDDOT], muzzle: [SUPPRESSOR, CHOKE] },
+    mpistol: { muzzle: [SUPPRESSOR] },
+    bow: { sights: [PIN_SIGHT] },
     railgun: {
       optic: [AT_REDDOT, AT_SCOPE2],
       muzzle: [{ id: "ionizer", name: "Ionizer", need: 25, fx: { flash: 0.2, sound: 0.45 }, text: "Quieter, almost no flash" }],
@@ -4462,6 +4629,10 @@
     dual: { xs: [-0.15, 0.15], muzzle: [-0.29, 0, 0.0115, 0.18], mag: [-0.13, -0.02, 0, 0.028, 0.042] },   // (xs: everything is built once for each gun)
     railgun: { muzzle: [-0.675, 0.016, 0.02, 0.2], optic: [0.0, 0.035], left: [-0.026, 0.0, 0.05] },
     minigun: { muzzle: [-0.565, 0, 0.03, 0.2], mag: [-0.043, 0, 0, 0.075, 0.12] },
+    sawed: { muzzle: [-0.35, 0.02, 0.0165, 0.1] },
+    combat: { muzzle: [-0.64, 0.022, 0.0165, 0.2], optic: [0.0, 0.047] },
+    mpistol: { muzzle: [-0.17, 0.02, 0.0095, 0.1] },
+    bow: {},
   };
   const AV_MOUNT = {
     rifle: { muzzle: [-1.0, 0.01, 0.022, 0.32], butt: [0.3, -0.02, 0.1, 0.2] },   // (these models have no separate magazine, so mag is in the gun's space)
@@ -4480,6 +4651,10 @@
     dual: { xs: [-0.34, 0], muzzle: [-0.34, 0, 0.012, 0.18], mag: [-0.14, 0.0, -0.25, 0.03, 0.045] },
     railgun: { muzzle: [-0.85, 0.02, 0.02, 0.2], optic: [-0.1, 0.045], left: [-0.035, 0, -0.05] },
     minigun: { muzzle: [-0.85, 0, 0.045, 0.2] },
+    sawed: { muzzle: [-0.55, 0.02, 0.025, 0.1] },
+    combat: { muzzle: [-0.975, 0.02, 0.03, 0.2], optic: [-0.1, 0.05] },
+    mpistol: { muzzle: [-0.29, 0.02, 0.02, 0.13] },
+    bow: {},
   };
   // a laser's beam: thick and bright by the gun, thinner and fainter further out until it is gone (the materials are shared)
   const AT_BEAM_SEGS = 14, AT_BEAM_LEN = 0.55;
@@ -4663,6 +4838,7 @@
     pistol: ["arctic", "midnight", "gold"], smg: ["arctic", "crimson", "midnight"], dmr: ["desert", "arctic", "gold"], burst: ["midnight", "crimson", "arctic"],
     lmg: ["desert", "crimson", "gold"], crossbow: ["desert", "midnight", "arctic"], launcher: ["crimson", "desert", "gold"], rpg: ["midnight", "arctic", "crimson"],
     revolver: ["gold", "arctic", "crimson"], dual: ["midnight", "desert", "gold"], railgun: ["midnight", "arctic", "crimson"], minigun: ["desert", "crimson", "gold"],
+    sawed: ["crimson", "desert", "gold"], combat: ["midnight", "desert", "arctic"], mpistol: ["arctic", "crimson", "gold"], bow: ["desert", "midnight", "gold"],
   };
   const SKIN_NEED = [25, 75, 150];
   const skinMats = new Map();
@@ -4823,7 +4999,7 @@
       cancelReload(); cancelBoltCycle(); cancelPump();
       vm.switchTimer = 0; vm.pending = null; vm.swapped = true; vm.throwTimer = 0; vm.slashTimer = 0;
       vm.inspectTimer = 0; vm.wantADS = false; vm.adsProgress = 0;
-      vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0; vm.burstShots = 0; vm.burstQueue = 0; vm.charge = 0;
+      vm.recoilPitch = vm.recoilYaw = vm.viewRecoilPitch = vm.viewRecoilYaw = 0; vm.burstShots = 0; vm.burstQueue = 0; vm.charge = 0; vm.draw = 0;
       currentWeapon().group.visible = false;
       vm.current = id;
       currentWeapon().group.visible = true;
@@ -4838,7 +5014,7 @@
   }
   // the menu shows a few favourites, plus your gun if it is not one of them, and a More button for the rest
   const QUICK_GUNS = ["rifle", "ar", "shotgun"];
-  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg", "dual"]], ["Machine guns", ["lmg", "minigun"]], ["Specialty", ["crossbow", "launcher", "rpg", "railgun"]], ["Shotguns", ["shotgun"]], ["Pistols", ["pistol", "revolver"]]];
+  const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg", "dual", "mpistol"]], ["Machine guns", ["lmg", "minigun"]], ["Specialty", ["crossbow", "bow", "launcher", "rpg", "railgun"]], ["Shotguns", ["shotgun", "combat", "sawed"]], ["Pistols", ["pistol", "revolver"]]];
   const loadoutEl = document.getElementById("loadout"), loadoutPopupEl = document.getElementById("loadout-popup"), loadoutGroupsEl = document.getElementById("loadout-groups");
   const gunButton = (id) => {
     const b = document.createElement("button");
@@ -6067,7 +6243,8 @@
     if (player.hook) applyGrapple(dt);
 
     const shiftHeld = held("sprint");
-    const heavyK = currentWeapon().heavy && vm.spin > 0.15 ? 0.6 : 1;   // the minigun: 60% speed, and no sprinting, while it spins
+    const cw = currentWeapon();
+    const heavyK = cw.heavy && vm.spin > 0.15 ? 0.6 : cw.draw && (vm.draw > 0 || vm.wantADS) ? 0.5 : 1;   // the minigun: 60% speed, and no sprinting, while it spins; the bow: half speed while it is drawn or aimed
     const sprinting = (SETTINGS.autoSprint ? !shiftHeld : shiftHeld) && heavyK === 1;
     const wantsCrouch = held("slide");
 
@@ -7011,6 +7188,10 @@
       if (vm.charge <= 0) { vm.charge = 0.0001; playRailCharge(w.charge); }
       return;
     }
+    if (w.draw) {   // the bow: holding the trigger draws it, and letting go looses the arrow (updateGunStates)
+      if (vm.draw <= 0) { vm.draw = 0.0001; playBowDraw(w.draw); }
+      return;
+    }
     if (w.spinUp && vm.spin < 0.35) return;   // the minigun: the barrels are not up to speed yet (holding the trigger spins them up)
     fireCooldown = w.spinUp ? w.fireRate + (w.spinFireRate - w.fireRate) * Math.max(0, 1 - (vm.spin - 0.35) / 0.65) : vm.fanning && w.fan ? w.fan.rate : w.fireRate;
     vm.inspectTimer = 0;
@@ -7053,6 +7234,25 @@
       if (w.charge && triggerLive(w)) { vm.charge += dt; if (vm.charge >= w.charge) { vm.charge = 0; fireRail(w); } }
       else vm.charge = 0;   // let go early (or something got in the way): nothing fires
     }
+    if (w.draw && vm.draw > 0) {
+      if (!mouseHeld) {   // let go: the arrow flies if the string was drawn all the way, else nothing
+        const full = vm.draw >= w.draw;
+        vm.draw = 0;
+        if (full && fireCooldown <= 0 && vm.switchTimer <= 0 && vm.grappleOut <= 0.25 && !reload.active && pointerLocked && (w.ammo > 0 || SETTINGS.unlimitedAmmo)
+          && run.state !== "countdown" && run.state !== "done" && !(net.active && (localDead || net.phase !== "play" || countingDown()))) releaseBow(w);
+      } else if (triggerLive(w)) vm.draw = Math.min(w.draw, vm.draw + dt);
+      else vm.draw = 0;
+    }
+  }
+  function releaseBow(w) {
+    fireCooldown = w.fireRate; vm.inspectTimer = 0; localProtectUntil = 0;
+    camera.getWorldDirection(raycaster.ray.direction);
+    raycaster.ray.origin.setFromMatrixPosition(camera.matrixWorld);
+    fireGun(w);
+  }
+  function playBowDraw(dur) {   // the creak of a drawing string
+    tone("triangle", 140, 330, 0.05 * SETTINGS.volGuns, dur, 0, 0.3);
+    noiseHit(900, 0.5, 0.03 * SETTINGS.volGuns, dur * 0.9, "bandpass", 0, 0.3);
   }
   function playRailCharge(dur) {
     tone("sine", 200, 1500, 0.15 * SETTINGS.volGuns, dur, 0, 0.3);
@@ -7977,6 +8177,10 @@
     dual: { body: 14, head: 21, near: 10, far: 30, farMult: 0.5 },
     railgun: { body: 90, head: 100 },   // two body hits or one head hit; it goes through up to three
     minigun: { body: 11, head: 16, near: 15, far: 45, farMult: 0.6 },
+    sawed: { pellet: 13, headMult: 1.4, near: 5, far: 20, farMult: 0.1, pellets: 10 },   // ten pellets: a kill from the hip at close range, nothing at range
+    combat: { pellet: 7, headMult: 1.5, near: 7, far: 34, farMult: 0.25, pellets: 8 },   // weaker than the pump, but one pull after another
+    mpistol: { body: 14, head: 20, near: 8, far: 25, farMult: 0.5 },
+    bow: { body: 80, head: 100 },   // two body hits or one to the head, but only after a full draw
   };
   const KNIFE_SWING_DMG = 100, KNIFE_THROW_DMG = 55, KNIFE_THROW_HEAD_DMG = 100;   // a thrown knife is like the Deagle: two body hits, or one to the head
   // Gun game: a ladder of guns (up to GG_RUNGS), then the knife as the last level. The host rolls a new ladder every game from the guns
@@ -8280,6 +8484,18 @@
     } else if (id === "railgun") {   // railgun: two rails with a glowing channel, a block body and a stock
       for (const sx of [-1, 1]) P(B(0.015, 0.02, 0.7), steel, sx * 0.025, 0.02, -0.5);
       P(B(0.01, 0.01, 0.65), railGlowMat, 0, 0.02, -0.5); P(B(0.07, 0.09, 0.4), dark, 0, 0, -0.05); P(B(0.05, 0.1, 0.25), dark, 0, -0.01, 0.3);
+    } else if (id === "sawed") {     // sawed-off: two short barrels and a wooden grip
+      for (const sx of [-1, 1]) P(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 10), steel, sx * 0.022, 0.02, -0.25, HP);
+      P(B(0.06, 0.07, 0.14), dark, 0, 0, 0.0); P(B(0.045, 0.12, 0.06), wood, 0, -0.08, 0.08, 0.4);
+    } else if (id === "combat") {    // auto shotgun: a boxy receiver, a barrel with a tube under it and a stock
+      P(B(0.065, 0.085, 0.4), dark, 0, 0, -0.05); P(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 10), steel, 0, 0.02, -0.5, HP);
+      P(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 10), dark, 0, -0.03, -0.45, HP); P(B(0.06, 0.1, 0.3), dark, 0, -0.02, 0.25);
+    } else if (id === "mpistol") {   // machine pistol: a boxy slide and a long magazine
+      P(B(0.05, 0.06, 0.28), steel, 0, 0.02, -0.1); P(B(0.045, 0.04, 0.24), dark, 0, -0.012, -0.08);
+      P(B(0.04, 0.12, 0.06), dark, 0, -0.09, 0.04, 0.2); P(B(0.03, 0.2, 0.05), steel, 0, -0.14, 0.02, 0.2);
+    } else if (id === "bow") {       // bow: a riser, two limbs and a string
+      P(B(0.04, 0.3, 0.06), dark, 0, 0, 0); P(B(0.025, 0.32, 0.02), steel, 0, 0.3, -0.06, -0.45); P(B(0.025, 0.32, 0.02), steel, 0, -0.3, -0.06, 0.45);
+      P(B(0.01, 0.01, 0.5), steel, 0, 0.02, -0.25);
     } else if (id === "minigun") {   // minigun: a bundle of barrels, a motor housing and an ammunition box
       P(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 12), dark, 0, 0, -0.05, HP); P(new THREE.CylinderGeometry(0.045, 0.045, 0.6, 10), steel, 0, 0, -0.55, HP); P(B(0.1, 0.12, 0.16), steel, -0.1, -0.08, 0.05);
     } else {                         // Deagle: one long slide over a frame, a sight on top and a raked grip
@@ -8309,6 +8525,7 @@
     crossbow: { r: [0, -0.08, 0.28], l: [0, -0.05, -0.36] }, launcher: { r: [0, -0.07, 0.1], l: [0, -0.1, -0.3] }, rpg: { r: [0, -0.1, 0.1], l: [0, -0.1, -0.18] },
     revolver: { r: [0, -0.1, 0.1], l: [0, -0.15, 0.06] }, dual: { r: [0, -0.07, 0.07], l: [-0.34, -0.07, 0.07] },
     railgun: { r: [0, -0.09, 0.1], l: [0, -0.06, -0.3] }, minigun: { r: [0, -0.1, 0.07], l: [0, -0.06, -0.25] },
+    sawed: { r: [0, -0.1, 0.08], l: [0, -0.04, -0.16] }, combat: { r: [0, -0.07, 0.15], l: [0, -0.05, -0.45] }, mpistol: { r: [0, -0.1, 0.04], l: [0, -0.15, 0.0] }, bow: { r: [0, -0.02, 0.0], l: [0, 0.0, 0.3] },
     knife: { r: [0, 0, 0.02], l: null }, grapple: { r: [0, -0.04, 0.02], l: null },
   };
   function makeAvatar(p) {
@@ -8573,7 +8790,7 @@
   }
 
   // ---------------- events: what actually happens on every peer ----------------
-  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", launcher: "exploded", rpg: "rocketed", frag: "fragged", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned", revolver: "gunned down", dual: "perforated", railgun: "railed", minigun: "shredded" };
+  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", launcher: "exploded", rpg: "rocketed", frag: "fragged", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned", revolver: "gunned down", dual: "perforated", railgun: "railed", minigun: "shredded", sawed: "blew away", combat: "peppered", mpistol: "stitched", bow: "skewered" };
   function feedLine(html) {
     const el = document.createElement("div");
     el.innerHTML = html;
@@ -9585,7 +9802,7 @@
   // standing still or running straight at a bot is easy to hit, strafing is hard, and flat-out strafing and jumping is only rarely hit
   BOT_LEVELS.easy.lag = 0.30; BOT_LEVELS.medium.lag = 0.20; BOT_LEVELS.hard.lag = 0.13;
   BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
-  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32, revolver: 16, dual: 9, railgun: 40, minigun: 18, knife: 1.6 };   // the distance each gun likes to fight at (the knife: right up close)
+  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32, revolver: 16, dual: 9, railgun: 40, minigun: 18, sawed: 5, combat: 8, mpistol: 9, bow: 30, knife: 1.6 };   // the distance each gun likes to fight at (the knife: right up close)
   // What a mode asks of its bots, on top of their level (L3). Hill bots defend the hill harder: on it they react and aim a fifth better.
   // Battle royale bots are more cautious: they get well inside the circle early, hang back from fights, and fall back when hurt.
   const BOT_MODE = { koth: { holdReact: 0.8, holdErr: 0.8 }, br: { margin: 12, prefer: 1.3, retreatHp: 45 } };
@@ -10164,7 +10381,7 @@
       if (Math.random() < 0.85) hostDealDamage(p, tgt, KNIFE_SWING_DMG, { pts: 100, tags: [], head: false, knife: true, g: "knife" });
       return;
     }
-    const warm = w.spinUp || w.charge;   // the minigun spins up and the railgun charges before the first shot of a burst
+    const warm = w.spinUp || w.charge || w.draw;   // the minigun spins up, the railgun charges and the bow draws before the first shot of a burst
     if (warm && now - (ai.lastShotAt || -1e9) > 1500 && !ai.warming) { ai.warming = true; ai.fireT = warm; return; }
     ai.warming = false; ai.lastShotAt = now;
     ai.ammo--; p.lastFireAt = now; p.protectUntil = 0;

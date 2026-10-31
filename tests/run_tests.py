@@ -137,7 +137,7 @@ def test_game(browser, base):
     check("the menu shows three favourite guns and a More button", quick == ["rifle", "ar", "shotgun"] and page.is_visible("#loadout-more"), ", ".join(quick))
     page.click("#loadout-more")
     guns = page.eval_on_selector_all("#loadout-popup button[data-gun]", "els => els.map(e => e.dataset.gun)")
-    check("the More popup lists all sixteen guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg", "revolver", "dual", "railgun", "minigun"]), ", ".join(guns))
+    check("the More popup lists all twenty guns", sorted(guns) == sorted(["rifle", "ar", "ak", "shotgun", "pistol", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg", "revolver", "dual", "railgun", "minigun", "sawed", "combat", "mpistol", "bow"]), ", ".join(guns))
     page.click("#loadout-popup button[data-gun=dmr]")
     check("picking from More closes it, keeps the gun in the row and selects it",
           not page.is_visible("#loadout-popup") and page.is_visible("#loadout button.active[data-gun=dmr]"))
@@ -148,7 +148,7 @@ def test_game(browser, base):
         step(page, 45)
         ammo_before = page.inner_text("#ammo-count")
         page.dispatch_event("body > canvas", "mousedown", {"button": 0})
-        step(page, {"railgun": 45, "minigun": 25}.get(gun, 1))   # (the railgun charges for 0.6 s and the minigun spins up before they fire)
+        step(page, {"railgun": 45, "minigun": 25, "bow": 50}.get(gun, 1))   # (the railgun charges for 0.6 s, the minigun spins up and the bow is drawn for 0.7 s before they fire)
         page.dispatch_event("body > canvas", "mouseup", {"button": 0})
         step(page, 3)
         ammo_after = page.inner_text("#ammo-count")
@@ -1582,7 +1582,7 @@ def debug_site():
     with open(path, encoding="utf-8", newline="") as fh:
         src = fh.read().replace("\r\n", "\n")
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
-            "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, ggOrder, ggDefaultPool, makeGgLadder, makeGgPreset, ATTACHMENTS, WEAPON_ICONS, hostDamage, SETTINGS, applyAttachments, setLoadout, "
+            "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, BOT_GUNS, ggOrder, ggDefaultPool, makeGgLadder, makeGgPreset, ATTACHMENTS, WEAPON_ICONS, hostDamage, SETTINGS, applyAttachments, setLoadout, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
             "hostStartRound, hostDealDamage, grenades, throwFrag, explodeGrenade, trickState, computeMultipliers, attachCode, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
@@ -1840,6 +1840,70 @@ def test_gungame_ladder(browser, base):
         check("the round's setup string starts with the ladder, and the game uses it", g["ggp"] == "L:" + ",".join(g["ladder"]) and g["len"] == 10, str(g))
         check("you start on the first gun of the ladder", g["held"] == g["ladder"][0], g["held"])
         check("the ladder runs without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_more_guns(browser, base):
+    """The sawed-off (two shells, ten pellets), the auto shotgun (one pull, one shot), the machine pistol (automatic), the bow (draw, loose, half speed), and bots that use the newer guns."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 800, 450)
+        AMMO = "(g) => window.__dbg.WEAPONS[g].ammo"
+        dm = lambda g, d, n=1: page.evaluate("([g, d, n]) => window.__dbg.hostDamage({ x: 0, z: 0 }, { x: d, z: 0 }, { head: false, n, h: 0 }, g)", [g, d, n])
+        w = page.evaluate("""() => { const W = window.__dbg.WEAPONS; return ['sawed', 'combat', 'mpistol', 'bow'].map((g) => [W[g].magSize, W[g].pellets, !!W[g].auto]); }""")
+        check("the sawed-off holds two shells and ten pellets, the auto shotgun eight and eight, the machine pistol twenty rounds and is automatic, the bow five arrows",
+              w == [[2, 10, False], [8, 8, False], [20, 1, True], [5, 1, False]], str(w))
+        check("a sawed-off kills from the hip up close and does little at range", dm("sawed", 3, 10) >= 100 and dm("sawed", 30, 10) < 40, f"{dm('sawed', 3, 10)} / {dm('sawed', 30, 10)}")
+        check("the auto shotgun is weaker per pull than the pump but kills in two", dm("combat", 3, 8) < dm("shotgun", 3, 9) and dm("combat", 3, 8) * 2 >= 100, f"{dm('combat', 3, 8)} vs {dm('shotgun', 3, 9)}")
+        # the sawed-off: two pulls empty it
+        pick_gun(page, "sawed"); page.click("#start-btn"); step(page, 45)
+        for _ in range(2):
+            page.dispatch_event("body > canvas", "mousedown", {"button": 0}); step(page, 1)
+            page.dispatch_event("body > canvas", "mouseup", {"button": 0}); step(page, 20)
+        check("two pulls empty the sawed-off", page.evaluate(AMMO, "sawed") == 0, str(page.evaluate(AMMO, "sawed")))
+        page.evaluate("__unlock()"); step(page, 3)
+        # the auto shotgun: holding the trigger is still one shot
+        pick_gun(page, "combat"); page.click("#start-btn"); step(page, 45)
+        page.mouse.down(); step(page, 12); page.mouse.up(); step(page, 2)
+        check("the auto shotgun fires once per pull, not while held", page.evaluate(AMMO, "combat") == 7, str(page.evaluate(AMMO, "combat")))
+        page.evaluate("__unlock()"); step(page, 3)
+        # the machine pistol: held, it sprays
+        pick_gun(page, "mpistol"); page.click("#start-btn"); step(page, 45)
+        page.mouse.down(); step(page, 30); page.mouse.up(); step(page, 2)
+        used = 20 - page.evaluate(AMMO, "mpistol")
+        check("the machine pistol sprays while the trigger is held", used >= 5, str(used))
+        page.evaluate("__unlock()"); step(page, 3)
+        # the bow
+        pick_gun(page, "bow"); page.click("#start-btn"); step(page, 45)
+        sp = lambda: page.evaluate("Math.hypot(window.__dbg.player.velocity.x, window.__dbg.player.velocity.z)")
+        page.keyboard.down("KeyW"); step(page, 40); free = sp()
+        page.mouse.down(); step(page, 20)
+        mid = page.evaluate("window.__dbg.vm.draw"); drawn = sp()
+        step(page, 30)
+        full = page.evaluate("window.__dbg.vm.draw")
+        page.mouse.up(); step(page, 3)
+        page.keyboard.up("KeyW")
+        check("holding the trigger draws the bow, to a full draw of 0.7 s", 0.2 < mid < 0.5 and abs(full - 0.7) < 0.01, f"{mid} / {full}")
+        check("you walk at about half speed while the bow is drawn", drawn < free * 0.6, f"{free} -> {drawn}")
+        check("letting go after a full draw looses one arrow", page.evaluate(AMMO, "bow") == 4, str(page.evaluate(AMMO, "bow")))
+        step(page, 40)
+        page.mouse.down(); step(page, 8); page.mouse.up(); step(page, 4)
+        check("letting go early fires nothing", page.evaluate(AMMO, "bow") == 4 and page.evaluate("window.__dbg.vm.draw") == 0, str(page.evaluate(AMMO, "bow")))
+        page.evaluate("__unlock()"); step(page, 3)
+        # bots use the newer guns too (and still never the launcher or RPG)
+        bg = page.evaluate("window.__dbg.BOT_GUNS")
+        need = {"revolver", "dual", "railgun", "minigun", "sawed", "combat", "mpistol", "bow"}
+        check("bots may carry every gun but the launcher and RPG", need <= set(bg) and "launcher" not in bg and "rpg" not in bg, ", ".join(bg))
+        start_practice(page, mode="dm", bots=2, level="hard")
+        page.click("#mp-play-btn"); step(page, 30)
+        for g in ["revolver", "dual", "railgun", "minigun", "sawed", "combat", "mpistol", "bow"]:
+            page.evaluate("""(g) => { const D = window.__dbg; D.net.cd = 0;
+              for (const p of D.net.players.values()) if (p.bot) { p.protectUntil = 0; p.ai.gun = g; p.g = D.WEAPON_ORDER.indexOf(g); p.ai.ammo = D.WEAPONS[g].magSize; p.ai.fireT = 0; } }""", g)
+            step(page, 60)
+        check("bots holding each new gun run without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:
         server.shutdown()
@@ -2175,10 +2239,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_gungame_ladder, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_avatar_reactions, test_new_guns, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_gungame_ladder, test_more_guns, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_avatar_reactions, test_new_guns, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "gungame_ladder", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "avatar_reactions", "new_guns", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "gungame_ladder", "more_guns", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "avatar_reactions", "new_guns", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 
