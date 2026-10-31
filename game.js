@@ -1759,26 +1759,54 @@
   const TARGET_ORDER = ["normal", "moving", "small", "tiny"];
   const targets = [];
   let targetsReady = false;   // set once startup is done; settings changes before then are just stored
-  // A steel plate painted with a bullseye in the target type's colour, held in a steel rim.
+  // A steel plate painted with the target type's face (its colour and its mark), held in a steel rim.
   // When it's hit the whole plate punches out and falls, leaving the empty rim hanging for a
   // moment.
   const plateGeo = new THREE.CylinderGeometry(0.97, 0.97, 0.07, 40);
   plateGeo.rotateX(Math.PI / 2);   // faces +Z
   const plateRimGeo = new THREE.TorusGeometry(1, 0.06, 8, 40);
   const plateSteel = new THREE.MeshStandardMaterial({ color: 0x8e959d, roughness: 0.45, metalness: 0.7 });
-  function bullseyeMaterial(color) {
+  // The painted face: a wide band of the type's colour round a pale field, with the type's own mark in the middle, so a
+  // type reads by shape as well as colour (a dot in a ring, side chevrons for the sliding one, a diamond, a star),
+  // white sighting notches on the band and a little wear
+  const TARGET_MARKS = { normal: "ring", moving: "chevrons", small: "diamond", tiny: "star" };
+  function targetFaceMaterial(kind, color) {
     const tex = canvasTexture(256, (g, n) => {
-      const rings = [color, "#f4f4f2", color, "#f4f4f2", color];
-      rings.forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (1 - i * 0.19), 0, Math.PI * 2); g.fill(); });
-      g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
-      for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(n / 2, n / 2, (n / 2) * (1 - i * 0.19) - 1, 0, Math.PI * 2); g.stroke(); }
+      const c = n / 2, R = n / 2;
+      g.fillStyle = color; g.beginPath(); g.arc(c, c, R, 0, 7); g.fill();
+      g.fillStyle = "#f1efe8"; g.beginPath(); g.arc(c, c, R * 0.72, 0, 7); g.fill();
+      speckle(g, 500, n, 0.07, false);
+      g.fillStyle = "#f1efe8";
+      for (let k = 0; k < 4; k++) { g.save(); g.translate(c, c); g.rotate(k * Math.PI / 2); g.fillRect(-R * 0.035, -R * 0.99, R * 0.07, R * 0.2); g.restore(); }
+      g.fillStyle = color; g.strokeStyle = color; g.lineJoin = "round";
+      g.save(); g.translate(c, c); g.rotate(-Math.PI / 2); g.translate(-c, -c);   // (the plate shows the canvas a quarter turn round)
+      const mark = TARGET_MARKS[kind];
+      if (mark === "ring") {
+        g.lineWidth = R * 0.09; g.beginPath(); g.arc(c, c, R * 0.46, 0, 7); g.stroke();
+        g.beginPath(); g.arc(c, c, R * 0.2, 0, 7); g.fill();
+      } else if (mark === "chevrons") {
+        g.lineWidth = R * 0.11; g.lineCap = "round";
+        for (const sgn of [-1, 1]) for (const off of [0.24, 0.46]) {
+          g.beginPath(); g.moveTo(c + sgn * R * (off - 0.1), c - R * 0.2); g.lineTo(c + sgn * R * off, c); g.lineTo(c + sgn * R * (off - 0.1), c + R * 0.2); g.stroke();
+        }
+        g.beginPath(); g.arc(c, c, R * 0.08, 0, 7); g.fill();
+      } else if (mark === "diamond") {
+        g.beginPath(); g.moveTo(c, c - R * 0.42); g.lineTo(c + R * 0.42, c); g.lineTo(c, c + R * 0.42); g.lineTo(c - R * 0.42, c); g.closePath(); g.fill();
+      } else {
+        g.beginPath();
+        for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? R * 0.2 : R * 0.48; g.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r); }
+        g.closePath(); g.fill();
+      }
+      g.restore();
+      g.strokeStyle = "rgba(0,0,0,0.3)"; g.lineWidth = 2;
+      for (const r of [R - 1, R * 0.72]) { g.beginPath(); g.arc(c, c, r, 0, 7); g.stroke(); }
     });
     // a touch of glow so a plate in shadow still reads against the sky
     return new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.38, roughness: 0.55, metalness: 0.1 });
   }
   // plate materials for its [edge, front, back]
   const TARGET_LOOKS = {};
-  for (const kind of TARGET_ORDER) TARGET_LOOKS[kind] = [plateSteel, bullseyeMaterial(TARGET_TYPES[kind].color), plateSteel];
+  for (const kind of TARGET_ORDER) TARGET_LOOKS[kind] = [plateSteel, targetFaceMaterial(kind, TARGET_TYPES[kind].color), plateSteel];
   // the colourblind-friendly set (Okabe-Ito): blue, yellow, pink and green never lean on red against orange
   const TARGET_COLORS_DEFAULT = {}, TARGET_COLORS_SAFE = { normal: "#0072b2", moving: "#f0e442", small: "#cc79a7", tiny: "#009e73" };
   for (const kind of TARGET_ORDER) TARGET_COLORS_DEFAULT[kind] = TARGET_TYPES[kind].color;
@@ -1794,7 +1822,7 @@
     targetPaletteSafe = !!SETTINGS.colorblindTargets;
     for (const kind of TARGET_ORDER) {
       TARGET_TYPES[kind].color = (targetPaletteSafe ? TARGET_COLORS_SAFE : TARGET_COLORS_DEFAULT)[kind];
-      TARGET_LOOKS[kind] = [plateSteel, bullseyeMaterial(TARGET_TYPES[kind].color), plateSteel];
+      TARGET_LOOKS[kind] = [plateSteel, targetFaceMaterial(kind, TARGET_TYPES[kind].color), plateSteel];
     }
     for (const t of targets) if (t.children[0] && t.userData.type) t.children[0].material = TARGET_LOOKS[t.userData.type];
   }
