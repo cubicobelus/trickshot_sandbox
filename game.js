@@ -461,8 +461,9 @@
         "  c = mix(c, horizon * 0.82, clamp(-h * 3.0, 0.0, 1.0));",          // a little darker below the horizon
         "  float s = max(dot(normalize(vDir), sunDir), 0.0);",
         "  c += vec3(1.0, 0.92, 0.75) * (pow(s, 400.0) * 1.2 + pow(s, 12.0) * 0.18);",  // sun disc and halo
-        "  gl_FragColor = vec4(c, 1.0);",
-        "  #include <tonemapping_fragment>",   // the same output as everything else, so fog meets the sky without a seam
+        // tone mapped like everything else near the horizon, so fog meets the sky without a seam; higher up the sky keeps
+        // the theme's own colour (filmic tone mapping greys a blue sky)
+        "  gl_FragColor = vec4(mix(toneMapping(c), c, smoothstep(0.02, 0.3, h)), 1.0);",
         "  #include <encodings_fragment>",
         "}",
       ].join("\n"),
