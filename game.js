@@ -70,7 +70,7 @@
     try { return !localStorage.getItem("tsb-tutorial") && !localStorage.getItem("tsb-stats") && !localStorage.getItem("tsb-settings"); } catch (e) { return false; }
   })();
   let tutOffered = false, hasPlayed = false;
-  if (FIRST_VISIT) { const h = document.getElementById("howto"); if (h) h.open = true; }   // the how-to starts open for a new player
+  // (How to play starts closed even for a new player: the first-visit tutorial teaches the same controls one at a time)
 
   // ======================================================================
   // CONFIG
@@ -5818,12 +5818,15 @@
     const L = (a) => bindLabel(a);
     const move = ["forward", "left", "back", "right"].map((a) => inputLabel(BINDS[a][0]));
     const gunKnife = Array.from(new Set([].concat(BINDS.gun, BINDS.knife, BINDS.swap).filter(Boolean))).map((b) => inputLabel(b)).join(" / ") || "unbound";
-    const dot = " &nbsp;•&nbsp; ";
-    controlsHintEl.innerHTML =
-      k(move.every((l) => l.length === 1) ? move.join("") : move.join(" ")) + " move" + dot + k(L("jump")) + " jump" + dot +
-      k(L("sprint")) + " sprint" + dot + k(L("slide")) + " slide" + dot + k(L("reload")) + " reload" + dot +
-      k(L("inspect")) + " inspect" + dot + k(L("grapple")) + " grapple" + dot + k(L("replay")) + " replay last hit<br>" +
-      k(L("fire")) + " attack" + dot + k(L("aim")) + " aim / throw knife" + dot + k(L("grenade")) + " grenade" + dot + k(L("satchel")) + " blast pack" + dot + k(gunKnife) + " gun / knife";
+    // a grid of key chips, each with what it does (the same bindings, read at a glance instead of as a sentence)
+    const chip = (key, what) => '<span class="kc">' + k(key) + "<i>" + what + "</i></span>";
+    const S = (a) => bindLabel(a, true), gunKnifeShort = Array.from(new Set([].concat(BINDS.gun, BINDS.knife, BINDS.swap).filter(Boolean))).map((b) => inputLabel(b, true)).join(" ") || "unbound";
+    controlsHintEl.innerHTML = [
+      chip(move.every((l) => l.length === 1) ? move.join("") : move.join(" "), "move"), chip(S("jump"), "jump"), chip(S("sprint"), "sprint"),
+      chip(S("slide"), "slide"), chip(S("fire"), "attack"), chip(S("aim"), "aim, throw knife"), chip(S("reload"), "reload"),
+      chip(S("grapple"), "grapple"), chip(S("grenade"), "grenade"), chip(S("satchel"), "blast pack"), chip(gunKnifeShort, "gun / knife"),
+      chip(S("inspect"), "inspect"), chip(S("replay"), "replay a hit"),
+    ].join("");
     loadoutWeapons().forEach((w, i) => {
       const el = hotbarSlots[w] && hotbarSlots[w].querySelector(".num");
       if (el) el.textContent = hotbarKey(i === 0 ? "gun" : "knife");
