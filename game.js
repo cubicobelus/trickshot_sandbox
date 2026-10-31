@@ -595,17 +595,34 @@
       for (let i = 0; i < 6; i++) g.fillRect(Math.random() * n, Math.random() * n, 40 + Math.random() * 60, 20 + Math.random() * 40);
       g.strokeStyle = "rgba(255,255,255,0.1)"; g.lineWidth = 3; g.strokeRect(0, 0, n, n);
     },
-    // pale lake ice with cracks
+    // lake ice: blue-grey with darker clear patches where the ice is thick, frost and blown snow in drifts, skate scratches,
+    // and cracks drawn twice (a dark line with a bright edge beside it) so they read from standing height
     ice(g, n, base) {
-      g.fillStyle = base || "#bfe3f2"; g.fillRect(0, 0, n, n); speckle(g, 700, n, 0.08, true);
-      g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = 1.5;
-      for (let i = 0; i < 5; i++) {
-        let x = Math.random() * n, y = Math.random() * n;
-        g.beginPath(); g.moveTo(x, y);
-        for (let k = 0; k < 4; k++) { x += (Math.random() - 0.5) * 70; y += (Math.random() - 0.5) * 70; g.lineTo(x, y); }
-        g.stroke();
+      g.fillStyle = base || "#8fbcd2"; g.fillRect(0, 0, n, n);
+      const blob = (x, y, r, col) => {
+        for (const dx of [-n, 0, n]) for (const dy of [-n, 0, n]) {   // wrapped so the tile repeats cleanly
+          const grad = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+          grad.addColorStop(0, col); grad.addColorStop(1, "rgba(0,0,0,0)");
+          g.fillStyle = grad; g.beginPath(); g.arc(x + dx, y + dy, r, 0, 7); g.fill();
+        }
+      };
+      for (let i = 0; i < 5; i++) blob(Math.random() * n, Math.random() * n, n * (0.18 + Math.random() * 0.2), "rgba(30,78,112,0.32)");   // clear, thick ice
+      for (let i = 0; i < 4; i++) blob(Math.random() * n, Math.random() * n, n * (0.12 + Math.random() * 0.16), "rgba(240,248,252,0.4)");   // frost
+      speckle(g, 900, n, 0.07, true);
+      g.strokeStyle = "rgba(255,255,255,0.22)"; g.lineWidth = 1;   // skate scratches, mostly one way
+      for (let i = 0; i < 22; i++) {
+        const x = Math.random() * n, y = Math.random() * n, a = 0.5 + (Math.random() - 0.5) * 0.7, l = 20 + Math.random() * 60;
+        g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + 6, y + Math.sin(a) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
       }
-      g.strokeStyle = "rgba(120,170,200,0.35)"; g.lineWidth = 2; g.strokeRect(0, 0, n, n);
+      for (let i = 0; i < 4; i++) {
+        let x = Math.random() * n, y = Math.random() * n;
+        const pts = [[x, y]];
+        for (let k = 0; k < 5; k++) { x += (Math.random() - 0.5) * 80; y += (Math.random() - 0.5) * 80; pts.push([x, y]); }
+        for (const [col, w, off] of [["rgba(20,52,76,0.55)", 1.6, 0], ["rgba(255,255,255,0.6)", 1, 1.4]]) {
+          g.strokeStyle = col; g.lineWidth = w; g.beginPath();
+          pts.forEach(([px, py], k) => (k ? g.lineTo(px + off, py + off) : g.moveTo(px + off, py + off))); g.stroke();
+        }
+      }
     },
     // moon dust with craters: a dark bowl, a bright rim on the sunny side, a shadow on the other, and a ring of throw-out
     moon(g, n, base) {
@@ -1556,8 +1573,9 @@
     maxBots: 11,   // (a big map holds more bots in practice)
     id: "icelake", name: "Ice Lake", blurb: "A frozen lake where nothing stops: slides never end and turning is slow. Ice pillars, snowbanks, an iceberg with a ramp up.",
     half: 40, floor: "ice", wallH: 7, targetMaxY: 9, physics: { friction: 0.7, momentumFriction: 0.25, groundAccel: 3.2, slideFriction: 0.22, maxSpeed: 25, speedMultMax: 2.085 },   // the speed cap is 25 here, and the speed bonus reaches x2.085 with it (a map's own maxSpeed and speedMultMax)
-    theme: { skyTop: 0x5f9bd6, skyHorizon: 0xe4f1fb, fog: [50, 170], sunDir: [20, 45, -35], sunColor: 0xfff6e6, sunIntensity: 1.0, hemi: [0xe6f3ff, 0x9fb4c4, 0.8],
-      surfaces: { ice: "#bfe3f2", concrete: "#dfeaf2", brick: "#9fd0e8", deck: "#c9d9e6", facade: "#dfeaf2", facadeb: "#9fd0e8", roof: "#d6e4ee" } },
+    boundary: "rock",   // grey cliffs round the lake, so the snow and the ice are not one more pale wall
+    theme: { skyTop: 0x4f8fd0, skyHorizon: 0xdcebf6, fog: [60, 180], sunDir: [20, 40, -35], sunColor: 0xfff1dc, sunIntensity: 1.05, hemi: [0xd6e8f8, 0x6f8494, 0.7], exposure: 0.92,
+      surfaces: { ice: "#86b6cf", concrete: "#eef3f6", brick: "#6fa8c8", deck: "#c9d9e6", facade: "#dfeaf2", facadeb: "#9fd0e8", roof: "#d6e4ee", rock: "#7d8792" } },
     walls: [
       wallAt(-25, -20, 3, 3, 6, "brick"), wallAt(25, -20, 3, 3, 6, "brick"), wallAt(-25, 20, 3, 3, 6, "brick"), wallAt(25, 20, 3, 3, 6, "brick"), wallAt(0, -30, 3, 3, 6, "brick"), wallAt(0, 30, 3, 3, 6, "brick"),
       wallAt(-12, -8, 10, 1.5, 1.3, "concrete"), wallAt(12, 8, 10, 1.5, 1.3, "concrete"),
