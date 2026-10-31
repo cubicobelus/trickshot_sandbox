@@ -676,7 +676,14 @@
     // concrete panels with seams
     concrete(g, n, base) {
       g.fillStyle = base || "#a5afb9"; g.fillRect(0, 0, n, n);
+      for (const [x, y] of [[0, 0], [0.5, 0], [0, 0.5], [0.5, 0.5]]) { g.fillStyle = Math.random() < 0.5 ? "rgba(0,0,0," + (Math.random() * 0.06).toFixed(3) + ")" : "rgba(255,255,255," + (Math.random() * 0.06).toFixed(3) + ")"; g.fillRect(x * n, y * n, n / 2, n / 2); }
+      for (let i = 0; i < 14; i++) {   // rain streaks running down from the top edge
+        const x = Math.random() * n, w = 2 + Math.random() * 7, len = n * (0.15 + Math.random() * 0.5);
+        const grad = g.createLinearGradient(0, 0, 0, len); grad.addColorStop(0, "rgba(30,34,40,0.16)"); grad.addColorStop(1, "rgba(30,34,40,0)");
+        g.fillStyle = grad; g.fillRect(x, 0, w, len);
+      }
       speckle(g, 1400, n, 0.08, true);
+      g.strokeStyle = "rgba(40,48,58,0.18)"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, n / 2); g.lineTo(n, n / 2); g.moveTo(n / 2, 0); g.lineTo(n / 2, n); g.stroke();
       g.strokeStyle = "rgba(40,48,58,0.35)"; g.lineWidth = 3;
       g.strokeRect(1.5, 1.5, n - 3, n - 3);
       g.fillStyle = "rgba(40,48,58,0.25)";
@@ -771,6 +778,29 @@
   const levelMats = new Map();
   const waterAnim = [];   // the drifting glints on every pond and river: { tex, vx, vy }
   const sharedMat = (key, make) => { let m = levelMats.get(key); if (!m) { m = make(); levelMats.set(key, m); } return m; };
+  // Weathering on every level surface: soft lighter and darker patches a few metres across, in world space, so a big
+  // floor or wall is not one tile repeated; and shade at the foot of walls where they meet the ground
+  const WEATHER_GLSL = [
+    "varying vec3 vWPos; varying vec3 vWNor;",
+    "float wHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }",
+    "float wNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);",
+    "  return mix(mix(wHash(i), wHash(i + vec2(1.0, 0.0)), f.x), mix(wHash(i + vec2(0.0, 1.0)), wHash(i + vec2(1.0, 1.0)), f.x), f.y); }",
+  ].join("\n");
+  function weather(mat) {
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWPos; varying vec3 vWNor;")
+        .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n  vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWNor = normalize(mat3(modelMatrix) * objectNormal);");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + WEATHER_GLSL)
+        .replace("#include <map_fragment>", "#include <map_fragment>\n  {" +
+          " vec2 q = vWPos.xz + vec2(vWPos.y * 0.6);" +
+          " float m = wNoise(q * 0.12) * 0.65 + wNoise(q * 0.41 + 7.0) * 0.35;" +
+          " diffuseColor.rgb *= 0.87 + 0.22 * m;" +
+          " float wall = smoothstep(0.35, 0.05, abs(vWNor.y));" +
+          " diffuseColor.rgb *= mix(1.0, 0.66 + 0.34 * smoothstep(0.0, 0.85, vWPos.y - " + FLOOR_Y.toFixed(2) + "), wall); }");
+    };
+    mat.customProgramCacheKey = () => "weather";
+    return mat;
+  }
   function surfaceMaterial(kind, repeatX, repeatY, base) {
     const key = kind + (base || "");
     return sharedMat("surf|" + key + "|" + repeatX.toFixed(3) + "|" + repeatY.toFixed(3), () => {
@@ -779,8 +809,8 @@
       t.needsUpdate = true;
       t.repeat.set(repeatX, repeatY);
       // (the sky's reflection turned shallow slopes flat white, so shiny surfaces reflect it at a lower strength)
-      return new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.68 : kind === "ice" ? 0.15 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.2 : kind === "ice" ? 0.15 : 0,
-        envMapIntensity: kind === "deck" || kind === "slab" ? 0.55 : kind === "ice" ? 0.8 : 1 });
+      return weather(new THREE.MeshStandardMaterial({ map: t, roughness: kind === "deck" ? 0.68 : kind === "ice" ? 0.15 : 0.9, metalness: kind === "deck" || kind === "slab" ? 0.2 : kind === "ice" ? 0.15 : 0,
+        envMapIntensity: kind === "deck" || kind === "slab" ? 0.55 : kind === "ice" ? 0.8 : 1 }));
     });
   }
   // The still pieces of a level that share a material become one mesh each (a draw call per mesh is what costs, and a
