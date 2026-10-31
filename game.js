@@ -833,17 +833,19 @@
       const geos = list.map((o) => { o.updateMatrixWorld(true); const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); return g; });
       let total = 0;
       for (const g of geos) total += g.attributes.position.count;
-      const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2);
+      const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2), col = mat.vertexColors ? new Float32Array(total * 3) : null;
       let off = 0;
       for (const g of geos) {
         pos.set(g.attributes.position.array, off * 3); nor.set(g.attributes.normal.array, off * 3);
         if (g.attributes.uv) uv.set(g.attributes.uv.array, off * 2);
+        if (col && g.attributes.color) col.set(g.attributes.color.array, off * 3);   // (trees and rocks are shaded by vertex colour)
         off += g.attributes.position.count;
       }
       const merged = new THREE.BufferGeometry();
       merged.setAttribute("position", new THREE.BufferAttribute(pos, 3));
       merged.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
       merged.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+      if (col) merged.setAttribute("color", new THREE.BufferAttribute(col, 3));
       const mesh = new THREE.Mesh(merged, mat);
       mesh.castShadow = list.some((o) => o.castShadow); mesh.receiveShadow = list.some((o) => o.receiveShadow);
       levelGroup.add(mesh);
@@ -1204,6 +1206,77 @@
     });
   }
   function updateWater(t) { for (const a of waterAnim) a.tex.offset.set((t * a.vx) % 1, (t * a.vy) % 1); }
+  // a pine's crown as one mesh: four tiers, each a skirt of drooping branch tips with notches between them, tucked
+  // under at the bottom, shaded dark inside and low down and lighter at the tips. A few variants per map, shared
+  function pineCrownGeo(variant) {
+    let seed = 7919 * (variant + 1);
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const S = 12, pos = [], col = [], idx = [];
+    const dark = new THREE.Color(0x1d3d24), mid = new THREE.Color(0x2f6234), tip = new THREE.Color(0x5d8a45), c = new THREE.Color();
+    const vert = (x, y, z, k) => {
+      c.copy(dark).lerp(mid, Math.min(k, 1) * 1.0); if (k > 1) c.lerp(tip, k - 1);
+      const j = 0.9 + rand() * 0.2;
+      pos.push(x, y, z); col.push(c.r * j, c.g * j, c.b * j); return pos.length / 3 - 1;
+    };
+    const tiers = 4;
+    for (let t = 0; t < tiers; t++) {
+      const f = t / (tiers - 1), r = 2.15 - f * 1.35 + (rand() - 0.5) * 0.15, h = 2.1 - f * 0.55, y0 = 1.9 + t * 1.25 + (rand() - 0.5) * 0.12;
+      const lean = (rand() - 0.5) * 0.12, spin = rand() * 6.28;
+      const under = vert(lean, y0 + h * 0.3, 0, 0);
+      const apex = vert(lean * 2, y0 + h, 0, 1.6);
+      const ring = [], midRing = [];
+      for (let i = 0; i < S; i++) {
+        const a = spin + (i / S) * Math.PI * 2, out = i % 2 === 0, rr = r * (out ? 1 + (rand() - 0.5) * 0.18 : 0.68 + rand() * 0.08);
+        const droop = out ? -0.1 - rand() * 0.18 : 0.14;
+        ring.push(vert(Math.cos(a) * rr + lean, y0 + droop, Math.sin(a) * rr, out ? 1.85 : 0.6));
+        const rm = r * (0.52 + rand() * 0.06);
+        midRing.push(vert(Math.cos(a) * rm + lean * 1.5, y0 + h * 0.46, Math.sin(a) * rm, 1.2));
+      }
+      for (let i = 0; i < S; i++) {
+        const n = (i + 1) % S;
+        idx.push(under, ring[i], ring[n]);                       // the underside, facing down
+        idx.push(ring[i], midRing[i], ring[n], ring[n], midRing[i], midRing[n]);
+        idx.push(midRing[i], apex, midRing[n]);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    geo.setIndex(idx); geo.computeVertexNormals();
+    return geo;
+  }
+  // a boulder: a round rock knocked about by noise, then cut by a few flat planes (broken faces), sat flat on its base.
+  // Normals are part smooth and part per face, so it reads as stone, not as a blob or a gem
+  function boulderGeo(variant) {
+    let seed = 104729 * (variant + 3);
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const src = new THREE.IcosahedronGeometry(1, 2), p = src.attributes.position, v = new THREE.Vector3();
+    const bumps = []; for (let i = 0; i < 7; i++) bumps.push([new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize(), (rand() - 0.5) * 0.36]);
+    const cuts = []; for (let i = 0; i < 6; i++) cuts.push([new THREE.Vector3(rand() - 0.5, rand() * 0.9 - 0.15, rand() - 0.5).normalize(), 0.5 + rand() * 0.2]);
+    const col = [], base = new THREE.Color(0xffffff), lo = new THREE.Color(0x6a655e), c = new THREE.Color();
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      let r = 1; for (const [d, a] of bumps) r += a * Math.pow(Math.max(0, v.dot(d)), 3);
+      v.multiplyScalar(r);
+      for (const [n, dist] of cuts) { const s = v.dot(n); if (s > dist) v.addScaledVector(n, -(s - dist)); }
+      if (v.y < -0.35) v.y = -0.35 + (v.y + 0.35) * 0.15;   // a flat seat on the ground
+      p.setXYZ(i, v.x, v.y, v.z);
+    }
+    // smooth normals by shared corner, then lean them back toward each face's own
+    src.computeVertexNormals();
+    const fn = src.attributes.normal, key = (i) => p.getX(i).toFixed(3) + "," + p.getY(i).toFixed(3) + "," + p.getZ(i).toFixed(3);
+    const sum = new Map();
+    for (let i = 0; i < p.count; i++) { const k = key(i), s = sum.get(k) || [0, 0, 0]; s[0] += fn.getX(i); s[1] += fn.getY(i); s[2] += fn.getZ(i); sum.set(k, s); }
+    const nn = new THREE.Vector3(), fv = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      const s = sum.get(key(i)); nn.set(s[0], s[1], s[2]).normalize(); fv.fromBufferAttribute(fn, i);
+      nn.multiplyScalar(0.35).addScaledVector(fv, 0.65).normalize(); fn.setXYZ(i, nn.x, nn.y, nn.z);
+      const h = Math.min(Math.max((p.getY(i) + 0.35) / 1.2, 0), 1), j = 0.92 + rand() * 0.12;   // darker toward the ground
+      c.copy(lo).lerp(base, 0.35 + 0.65 * Math.sqrt(h)); col.push(c.r * j, c.g * j, c.b * j);
+    }
+    src.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    return src;
+  }
   function addDecor(d) {   // ["mast", x, roof height, z] ["tank", x, roof height, z] ["door", x, z, facing x, facing z]
     const kind = d[0];
     if (kind === "mast") {
@@ -1229,15 +1302,16 @@
       wallBoxes.push(box); bounceBoxes.push(box);
     } else if (kind === "tree") {   // ["tree", x, z, scale, height of the ground]
       const sc = d[3] || 1, gy = d[4] === undefined ? FLOOR_Y : d[4];
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * sc, 0.3 * sc, 3.4 * sc, 7), sharedMat("trunk", () => new THREE.MeshStandardMaterial({ color: 0x5b4331, roughness: 1 })));
-      trunk.position.set(d[1], gy + 1.7 * sc, d[2]); trunk.castShadow = true;
+      const trunk = new THREE.Mesh(sharedMat("trunkgeo", () => new THREE.CylinderGeometry(0.13, 0.32, 5.2, 9).translate(0, 2.6, 0)), sharedMat("trunk", () => new THREE.MeshStandardMaterial({ color: 0x4a3626, roughness: 1 })));
+      trunk.scale.setScalar(sc); trunk.position.set(d[1], gy - 0.05, d[2]); trunk.castShadow = true;
       levelGroup.add(trunk);
-      const bucket = Math.floor((Math.abs(d[1] * 7 + d[2] * 13) % 10) / 2.5), tint = 0.85 + bucket * 0.1;   // four shades of green, so the trees can share materials
-      for (let k = 0; k < 3; k++) {
-        const cone = new THREE.Mesh(new THREE.ConeGeometry((2.1 - k * 0.5) * sc, (2.6 - k * 0.2) * sc, 8), sharedMat("cone" + bucket, () => new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2f6a35).multiplyScalar(tint), roughness: 1, flatShading: true })));
-        cone.position.set(d[1], gy + (2.6 + k * 1.45) * sc, d[2]);
-        levelGroup.add(cone);
-      }
+      const bucket = Math.floor((Math.abs(d[1] * 7 + d[2] * 13) % 10) / 2.5), tint = 0.88 + bucket * 0.08;   // four shades of green and four shapes, so the trees can share
+      const crown = new THREE.Mesh(sharedMat("crowngeo" + bucket, () => pineCrownGeo(bucket)),
+        sharedMat("crown" + bucket, () => new THREE.MeshStandardMaterial({ color: new THREE.Color(tint, tint, tint), vertexColors: true, roughness: 0.95 })));
+      crown.scale.set(sc * (0.92 + (bucket % 2) * 0.12), sc * (0.95 + ((bucket + 1) % 3) * 0.06), sc * (0.92 + (bucket % 2) * 0.12));
+      crown.rotation.y = (d[1] * 1.3 + d[2] * 0.7) % 6.28;
+      crown.position.set(d[1], gy - 0.4 * sc, d[2]); crown.castShadow = true;
+      levelGroup.add(crown);
       const box = new THREE.Box3(new THREE.Vector3(d[1] - 0.35 * sc, gy, d[2] - 0.35 * sc), new THREE.Vector3(d[1] + 0.35 * sc, gy + 5 * sc, d[2] + 0.35 * sc));
       wallBoxes.push(box); bounceBoxes.push(box);
     } else if (kind === "palm") {   // ["palm", x, z, scale]: a potted palm, a slim trunk you can take cover behind
@@ -1258,10 +1332,12 @@
       wallBoxes.push(box); bounceBoxes.push(box);
     } else if (kind === "boulder") {   // ["boulder", x, z, size, height of the ground]: something to take cover behind or jump onto
       const sz = d[3] || 2, gy = d[4] === undefined ? FLOOR_Y : d[4];
-      const geo = new THREE.IcosahedronGeometry(sz * 0.62, 0);
-      const mesh = new THREE.Mesh(geo, sharedMat("boulder", () => new THREE.MeshStandardMaterial({ color: 0x8d887e, roughness: 1, flatShading: true })));
-      mesh.scale.set(1.1, 0.78, 0.95); mesh.rotation.y = (d[1] * 3.1 + d[2] * 1.7) % 6.28;
-      mesh.position.set(d[1], gy + sz * 0.4, d[2]); mesh.castShadow = true; mesh.receiveShadow = true;
+      const variant = Math.abs(Math.round(d[1] * 3 + d[2] * 5)) % 4;
+      const mesh = new THREE.Mesh(sharedMat("bouldergeo" + variant, () => boulderGeo(variant)),
+        sharedMat("boulder", () => weather(new THREE.MeshStandardMaterial({ color: new THREE.Color(levelPalette.boulder || "#9a958b"), vertexColors: true, roughness: 0.95 }))));
+      const k = sz * 0.62;
+      mesh.scale.set(1.1 * k, 0.95 * k, 0.95 * k); mesh.rotation.y = (d[1] * 3.1 + d[2] * 1.7) % 6.28;
+      mesh.position.set(d[1], gy + 0.3 * k, d[2]); mesh.castShadow = true; mesh.receiveShadow = true;
       levelGroup.add(mesh);
       const half = sz * 0.58, top = gy + sz * 0.78;
       const box = new THREE.Box3(new THREE.Vector3(d[1] - half, gy, d[2] - half), new THREE.Vector3(d[1] + half, top, d[2] + half));
@@ -1522,7 +1598,7 @@
     id: "canyon", name: "Canyon", blurb: "A desert canyon with a river down the middle: long sight lines, a flag spot at each end, ledges up both sides (take the ramps or the mega pads) and two bridges.",
     half: 50, floor: "dirt", wallH: 24, targetMaxY: 12, boundary: "rock", rampSurface: "dirt",
     theme: { skyTop: 0x6aa4da, skyHorizon: 0xf3dcb4, fog: [75, 230], sunDir: [-35, 50, 25], sunColor: 0xfff0d0, sunIntensity: 1.05, hemi: [0xf5e6d0, 0x8a6a4a, 0.6],
-      surfaces: { dirt: "#c9a46b", rock: "#b8714a", concrete: "#b8714a", deck: "#a8814f" } },
+      surfaces: { dirt: "#c9a46b", rock: "#b8714a", concrete: "#b8714a", deck: "#a8814f", boulder: "#c0987a" } },
     walls: CANYON_LEDGES.map((t) => t.wall).concat([wallAt(-18, -8, 3, 3, 9, "rock"), wallAt(18, 8, 3, 3, 9, "rock"), wallAt(-12, 18, 3, 3, 7, "rock"), wallAt(12, -18, 3, 3, 7, "rock")]),
     decks: CANYON_LEDGES.map((t) => t.deck).concat([[0, 2.25, -25, 12, 6, "dirt", true], [0, 2.25, 25, 12, 6, "dirt", true]]),
     ramps: [
