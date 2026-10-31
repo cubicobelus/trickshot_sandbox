@@ -8942,25 +8942,45 @@
     const boot = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.85 });
     const vest = new THREE.MeshStandardMaterial({ color: 0x3a3d45, roughness: 0.6, metalness: 0.2 });
     const legs = [];
+    // a body of tapered, rounded pieces (not boxes): it reads as a person in gear at any distance
+    const AVG = AV_GEO || (AV_GEO = {
+      thigh: new THREE.CylinderGeometry(0.105, 0.085, 0.38, 10), shin: new THREE.CylinderGeometry(0.082, 0.064, 0.36, 10),
+      knee: new THREE.SphereGeometry(0.075, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.6), boot: bevelBox(0.15, 0.13, 0.29, 0.04),
+      pelvis: new THREE.CylinderGeometry(0.25, 0.22, 0.2, 12).scale(1, 1, 0.66), belt: new THREE.CylinderGeometry(0.262, 0.262, 0.05, 14).scale(1, 1, 0.68),
+      chest: new THREE.CylinderGeometry(0.29, 0.23, 0.48, 14).scale(1, 1, 0.62), plate: bevelBox(0.36, 0.32, 0.06, 0.025), pack: bevelBox(0.3, 0.36, 0.13, 0.04),
+      pouch: bevelBox(0.09, 0.09, 0.06, 0.018), collar: new THREE.TorusGeometry(0.12, 0.035, 6, 14), shoulder: new THREE.SphereGeometry(0.11, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      band: new THREE.CylinderGeometry(0.068, 0.068, 0.06, 10),
+      neck: new THREE.CylinderGeometry(0.07, 0.08, 0.1, 10), head: new THREE.SphereGeometry(0.17, 16, 12),
+      helmet: new THREE.SphereGeometry(0.2, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52), brim: new THREE.TorusGeometry(0.198, 0.016, 6, 24),
+      visor: new THREE.CylinderGeometry(0.182, 0.182, 0.07, 16, 1, true, -0.85, 1.7), ear: bevelBox(0.03, 0.08, 0.07, 0.01),
+      upper: new THREE.CylinderGeometry(0.062, 0.054, 1, 10), fore: new THREE.CylinderGeometry(0.052, 0.042, 1, 10), glove: bevelBox(0.07, 0.09, 0.1, 0.025),
+    });
+    const lens = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.15, metalness: 0.6 });
     for (const sx of [-1, 1]) {   // each leg hangs from the hip so it can swing
       const hip = new THREE.Group(); hip.position.set(sx * 0.12, 0.74, 0); g.add(hip);
-      addPart(hip, bevelBox(0.2, 0.52, 0.22), dark, 0, -0.26, 0);
-      addPart(hip, bevelBox(0.22, 0.2, 0.3), boot, 0, -0.64, -0.03);
+      addPart(hip, AVG.thigh, dark, 0, -0.18, 0);
+      addPart(hip, AVG.knee, vest, 0, -0.39, -0.045, -1.35, 0, 0);   // a knee pad
+      addPart(hip, AVG.shin, dark, 0, -0.52, 0.01);
+      addPart(hip, AVG.boot, boot, 0, -0.67, -0.04);
       legs.push(hip);
     }
     const torso = new THREE.Group(); torso.position.set(0, 0.74, 0); g.add(torso);
-    addPart(torso, bevelBox(0.5, 0.18, 0.3), dark, 0, 0.08, 0);                 // hips and belt line
-    addPart(torso, bevelBox(0.52, 0.04, 0.32), boot, 0, 0.19, 0);               // the belt
-    addPart(torso, bevelBox(0.56, 0.5, 0.32), suit, 0, 0.47, 0);                // chest, in their colour
-    addPart(torso, bevelBox(0.4, 0.36, 0.07), vest, 0, 0.47, -0.17);            // a vest plate on the front
-    addPart(torso, bevelBox(0.34, 0.4, 0.12), vest, 0, 0.45, 0.2);              // and a pack on the back
-    for (const sx of [-1, 1]) addPart(torso, bevelBox(0.16, 0.1, 0.26), suit, sx * 0.33, 0.68, 0);   // shoulders
+    addPart(torso, AVG.pelvis, dark, 0, 0.08, 0);                // hips
+    addPart(torso, AVG.belt, boot, 0, 0.19, 0);                  // the belt, with pouches
+    for (const px of [-0.15, 0, 0.15]) addPart(torso, AVG.pouch, vest, px, 0.17, -0.18);
+    addPart(torso, AVG.chest, suit, 0, 0.45, 0);                 // chest, in their colour, narrower at the waist
+    addPart(torso, AVG.plate, vest, 0, 0.47, -0.17);             // a vest plate on the front
+    addPart(torso, AVG.pack, vest, 0, 0.45, 0.19);               // and a pack on the back
+    addPart(torso, AVG.collar, dark, 0, 0.7, 0, HALF_PI, 0, 0);
+    for (const sx of [-1, 1]) addPart(torso, AVG.shoulder, suit, sx * 0.31, 0.64, 0);   // round shoulders
     const headPivot = new THREE.Group();
     headPivot.position.set(0, 1.5, 0);
-    addPart(headPivot, new THREE.CylinderGeometry(0.075, 0.085, 0.1, 8), skin, 0, 0.0, 0);   // neck
-    addPart(headPivot, new THREE.SphereGeometry(0.2, 12, 10), skin, 0, 0.14, 0);
-    addPart(headPivot, new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), suit, 0, 0.15, 0);   // a cap in their colour
-    addPart(headPivot, bevelBox(0.3, 0.075, 0.07), dark, 0, 0.17, -0.175);       // a visor across the eyes: it shows which way they face
+    addPart(headPivot, AVG.neck, skin, 0, 0.0, 0);
+    addPart(headPivot, AVG.head, skin, 0, 0.14, 0).scale.set(1, 1.08, 1.05);
+    for (const sx of [-1, 1]) addPart(headPivot, AVG.ear, skin, sx * 0.17, 0.13, 0);
+    addPart(headPivot, AVG.helmet, suit, 0, 0.16, 0.01);        // a helmet in their colour, with a rim
+    addPart(headPivot, AVG.brim, dark, 0, 0.165, 0.01, HALF_PI, 0, 0);
+    addPart(headPivot, AVG.visor, lens, 0, 0.13, 0.005, 0, Math.PI, 0);   // goggles across the eyes: they show which way they face
     const steel = new THREE.MeshStandardMaterial({ color: 0x4a4e57, roughness: 0.5, metalness: 0.5 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.8 });
     const guns = {};
@@ -8981,9 +9001,9 @@
     // two arms: an upper arm in their colour, a forearm and a glove
     const arms = [];
     for (const sx of [-1, 1]) {
-      const upper = addPart(g, bevelBox(0.11, 1, 0.11), suit, 0, 0, 0);
-      const fore = addPart(g, bevelBox(0.09, 1, 0.09), dark, 0, 0, 0);
-      const hand = addPart(g, new THREE.SphereGeometry(0.055, 8, 6), skin, 0, 0, 0);
+      const upper = addPart(g, AVG.upper, suit, 0, 0, 0);
+      const fore = addPart(g, AVG.fore, dark, 0, 0, 0);
+      const hand = addPart(g, AVG.glove, boot, 0, 0, 0);
       arms.push({ sx, upper, fore, hand, shoulder: new THREE.Vector3(sx * 0.34, 1.38, 0) });
     }
     g.userData.pivot = headPivot;
@@ -9000,6 +9020,7 @@
     scene.add(g);
     return g;
   }
+  let AV_GEO = null;   // the body shapes, shared by every avatar
   const AV_GUN_X = 0.17, AV_DEATH_TIME = 2;   // seconds a player who has been shot lies there before they vanish   // the held thing sits this far right of the neck line
   // a two-bone arm: shoulder to hand, the elbow bending down and outwards
   const _avS = new THREE.Vector3(), _avH = new THREE.Vector3(), _avD = new THREE.Vector3(), _avE = new THREE.Vector3(), _avPole = new THREE.Vector3(), _avQ = new THREE.Quaternion(), _avUp = new THREE.Vector3(0, 1, 0), _avM = new THREE.Vector3();
