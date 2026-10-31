@@ -5,7 +5,7 @@ absurd trickshots for a big score multiplier. Plain HTML and JavaScript, no buil
 
 ## Play
 
-**[▶ Play in your browser](https://cubicobelus.github.io/trickshot_sandbox/)** — nothing to download or install.
+**[▶ Play in your browser](https://cubicobelus.github.io/trickshot_sandbox/)**: nothing to download or install.
 Click the link, then click **Click to play**. Press **Esc** for the menu. Needs a keyboard and mouse.
 
 <details>
@@ -47,9 +47,33 @@ hit, with a **bullet cam** that rides the shot to the target. Press **P** while 
 hit (P again to carry on). Your best trickshot's replay is kept in your browser. **Save video** in the replay bar
 saves it as a video you can post anywhere (.webm, or .mp4 in Safari), and **Save card** (also in the menu and on the results screen) makes a picture of your best shot: the map with the shot drawn on it, the points and every trick.
 
-**Loadout:** pick one gun in the menu (three favourites sit in the row, and **More guns** opens the rest: sniper, rifle, AK, burst rifle, SMG, LMG, marksman rifle, crossbow, shotgun, Deagle, the grenade launcher, the RPG, the revolver, the dual SMGs, the railgun, the minigun, the sawed-off, the auto shotgun, the machine pistol and the bow); you always carry the knife too. The **sawed-off** holds two shells and ten pellets: a kill from the hip up close, nothing at range. The **auto shotgun** fires one shot per pull, weaker than the pump but quicker. The **machine pistol** is a fast automatic with a 20-round magazine. The **bow** is drawn by holding the trigger (0.7 s) and looses an arrow when you let go (let go early and nothing flies); you walk at half speed while it is drawn or aimed. The **launcher** lobs a grenade that bounces and goes off after about two seconds or on touching a target or player: the blast scores every target in it, hurts everyone but you (full damage in the middle, a quarter at 4.5 m) and throws you away from it, so you can blast jump. The **RPG** fires one fast rocket that goes off on the first thing it touches (a wider blast, a long reload), and **G** throws a grenade from any gun (hold it to throw further, and from halfway the fuse starts burning, so you can cook it for a quicker blast; hold it too long and it goes off in your hand, which kills you in a room) on a 9 second cooldown (it is off in the gun game). **C** throws a blast pack (a Raze-style satchel): it sticks where it lands and goes off when you press C again, flinging you away from it and only scratching other players (5 to 15 damage) (no damage to you; 6 second recharge). The bottom left shows a small tile for the grenade, the blast pack and the grapple (lit when ready; while it recharges it goes dim and a thin grey ring fills round it, with no numbers; pulsing while a pack waits for you to set it off), and holding G puts two tiny bars under the crosshair: how far the throw will go, and once the pin is out, how much fuse is left. In a room your own grenade, launcher and RPG blasts hurt you like anyone else, and the RPG kicks you backwards when it fires. The launcher takes a bigger load or a quick loader; the RPG a red dot or 2x scope, or a quick loader. Bots never carry the launcher or the RPG, and neither is part of the gun game. The **burst rifle** fires three rounds with each pull, and the **LMG** holds 100 rounds but is slow to aim and slow to reload. The **crossbow** fires a real flying bolt (fast, with a little drop) that takes two body hits or one to the head (like the Deagle), so you lead moving targets; it holds one bolt and reloads between shots. The **SMG** fires very fast and kicks little, but its damage fades with distance (full to 12 m, half by 35 m), so it is for sliding into close fights. The **DMR** (marksman rifle) is semi-automatic, accurate, and zooms a little when you aim: two body shots or one head shot kill. The **revolver** holds six rounds and is slow and exact (two body hits or one head hit, and each hit scores in full): a tap is one aimed shot, and holding the trigger fans the hammer, a quick, wide shot every 0.16 s that scores half (FANNED); it loads one round at a time and you can fire to stop loading. The **dual SMGs** fire in turn from both hands, very fast and wide (a hip gun: you cannot aim them), with 40 rounds shared between the two. The **railgun** charges while you hold the trigger (0.6 s, with a rising whine and glowing coils) and then fires by itself: let go early and nothing happens. One bolt goes through up to three targets or players in a line (a wall stops it), and a bolt through two or more scores THREADED on each. It holds three cells. The **minigun** has to spin up before it fires (a quarter of a second of holding the trigger), then shoots about sixteen rounds a second from a 150-round belt; while it spins you move at 60% speed and cannot sprint, and it cannot aim. Bots never carry any of these four, and they are not part of the gun game. **Attachments** (the button under the loadout) add scopes, a red dot, suppressors, brakes, grips, magazines, a choke or a laser to each gun (the SMG, rifle, AK, burst rifle, revolver and Deagle take lasers). Every one is a trade (a suppressor is quiet but kicks a bit more, a high-zoom scope is slower to aim, an extended magazine reloads slower), and each unlocks once you have landed enough hits with that gun (10 to 80; a kill online counts as a hit). They show on your gun and on other players' guns.
-1 is the gun, 2 the knife. The sniper comes with iron sights; fit a low- or high-zoom scope from Attachments. Other attachments include a bipod (steadier when crouched, for the LMG and marksman rifle) and shotgun slugs (all the pellets in one tight, heavy shot). Every gun also has three **skins** (recolours such as Desert camo, Midnight, Gold, Arctic and Crimson) on top of its base look, opened by landing hits with that gun (25, 75 and 150) and picked at the top of the Attachments window; other players see them on your gun. Its no-scope (a hit from the hip) and quickscope (a hit just after aiming in) bonuses are its own, and the other guns
-score less per hit so trickshots stay king. Shots that land on a wall, platform or the floor leave bullet holes (switch them off in Settings > View).
+**Loadout:** pick one gun in the menu (three favourites sit in the row, and **More guns** opens the rest); you always carry the knife too. 1 is the gun, 2 the knife.
+
+- **Sniper:** iron sights out of the box; fit a low- or high-zoom scope from Attachments. Its no-scope (a hit from the hip) and quickscope (a hit just after aiming in) bonuses are its own, and the other guns score less per hit so trickshots stay king.
+- **Rifle, AK, burst rifle:** the all-rounders. The burst rifle fires three rounds with each pull.
+- **SMG:** very fast with little kick, but its damage fades with distance (full to 12 m, half by 35 m), so it is for sliding into close fights.
+- **LMG:** 100 rounds, slow to aim and slow to reload.
+- **DMR** (marksman rifle): semi-automatic, accurate, and zooms a little when you aim. Two body shots or one head shot kill.
+- **Crossbow:** a real flying bolt (fast, with a little drop) that takes two body hits or one to the head, so you lead moving targets. One bolt, reloaded between shots.
+- **Shotgun, sawed-off, auto shotgun:** the pump is the standard; the sawed-off holds two shells of ten pellets (a kill from the hip up close, nothing at range); the auto shotgun fires one shot per pull, weaker than the pump but quicker.
+- **Deagle and revolver:** slow and exact (two body hits or one head hit). The revolver holds six: a tap is one aimed shot, holding the trigger fans the hammer (a quick, wide shot every 0.16 s that scores half, FANNED); it loads one round at a time and you can fire to stop loading.
+- **Machine pistol:** a fast automatic with a 20-round magazine.
+- **Dual SMGs:** fire in turn from both hands, very fast and wide, with 40 rounds shared. A hip gun: you cannot aim them.
+- **Railgun:** charges while you hold the trigger (0.6 s, with a rising whine and glowing coils), then fires by itself; let go early and nothing happens. One bolt goes through up to three targets or players in a line (a wall stops it), and a bolt through two or more scores THREADED on each. Three cells.
+- **Minigun:** spins up for a quarter of a second, then fires about sixteen rounds a second from a 150-round belt. While it spins you move at 60% speed, cannot sprint and cannot aim.
+- **Bow:** hold the trigger to draw (0.7 s) and let go to loose an arrow (let go early and nothing flies); you walk at half speed while it is drawn or aimed.
+- **Grenade launcher:** lobs a grenade that bounces and goes off after about two seconds or on touching a target or player. The blast scores every target in it, hurts everyone but you (full damage in the middle, a quarter at 4.5 m) and throws you away from it, so you can blast jump. It takes a bigger load or a quick loader.
+- **RPG:** one fast rocket that goes off on the first thing it touches (a wider blast, a long reload), and it kicks you backwards when it fires. It takes a red dot, a 2x scope or a quick loader.
+
+Bots never carry the launcher or the RPG, and neither is in the gun game by default.
+
+**G** throws a grenade from any gun on a 9 second cooldown (off in the gun game): hold it to throw further, and from halfway the fuse starts burning, so you can cook it for a quicker blast; hold it too long and it goes off in your hand, which kills you in a room. **C** throws a blast pack (a Raze-style satchel): it sticks where it lands and goes off when you press C again or after 4 seconds, flinging you away from it and only scratching other players (5 to 15 damage; none to you; 6 second recharge). In a room your own grenade, launcher and RPG blasts hurt you like anyone else.
+
+The bottom left shows a small tile for the grenade, the blast pack and the grapple: lit when ready, dim with a thin grey ring filling round it while it recharges, pulsing while a pack waits for you to set it off. Holding G puts two tiny bars under the crosshair: how far the throw will go, and once the pin is out, how much fuse is left.
+
+**Attachments** (the button under the loadout) add scopes, a red dot, suppressors, brakes, grips, magazines, a choke or a laser to each gun (the SMG, rifle, AK, burst rifle, revolver and Deagle take lasers), plus a bipod (steadier when crouched, for the LMG and marksman rifle) and shotgun slugs (all the pellets in one tight, heavy shot). Every one is a trade (a suppressor is quiet but kicks a bit more, a high-zoom scope is slower to aim, an extended magazine reloads slower), and each unlocks once you have landed enough hits with that gun (10 to 80; a kill online counts as a hit). Every gun also has three **skins** (Desert camo, Midnight, Gold, Arctic and Crimson recolours), opened by landing 25, 75 and 150 hits with it and picked at the top of the Attachments window. Other players see your attachments and skin.
+
+Shots that land on a wall, platform or the floor leave bullet holes (switch them off in Settings > View), and what flies off depends on what you hit: sparks from metal, dust from stone and concrete, chips from wood.
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (press jump just as you land) and
 wall bounces, up to 22 u/s (25 on Ice Lake). Tap **E** to fire the grappling hook at a wall, the floor or a target and
@@ -63,8 +87,8 @@ targets and streaks all stack. Two things scale a shot down: firing from close i
 The newer ones: PORTAL SHOT and STRIP SHOT (a hit soon after a portal or a launch strip), PLATFORM SHOT (riding a lift), ZERO-G (long hang time on a low-gravity map), ROCKET, LAUNCHER, GRENADE and PACK JUMP (a hit while still in the air from the shove of your own blast), THREADED (one railgun bolt through two or more targets), CHAIN (different movement tricks within 5 seconds: slide, wall bounce, grapple, pad or ramp launch, portal, strip, lift, blast jump), and NEW (the first time in a run you land each trick, so variety pays). A **live trick feed** down the left shows the tricks and your chain as you pull them off (Settings > View turns it off).
 The full list with every value is under **Trickshot list** in the menu.
 
-Targets come in four kinds: red (standard, still), orange (always moving), blue (small, still) and
-purple (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
+Targets come in four kinds, each with its own colour and mark: red with a ring (standard, still), orange with side chevrons (always moving), blue with a diamond (small, still) and
+purple with a star (tiny and fast, and it runs from you if you get close). How many of each are up at once is set in Settings > Targets.
 
 Settings (sensitivity, crosshair, sound levels, target counts, unlimited ammo and so on) are saved in your
 browser. **Settings > Crosshair** has ready-made presets you can fine-tune, and a hit-marker style (a crosshair flash, an X, a ring or none). **Settings > Mouse** can import your sensitivity from CS2 / CS:GO / Apex / TF2, Valorant, Overwatch 2 or
@@ -101,13 +125,14 @@ To switch multiplayer off completely, set `MULTIPLAYER_ENABLED` to `false` in `g
 
 **Files** (they must stay together):
 
-- `index.html` — page + menus
-- `style.css` — styles
-- `game.js` — everything else (movement, scoring, weapons, audio). Tuning knobs live in the `CFG`
+- `index.html`: the page and the menus
+- `style.css`: the styles (every colour is a named token at the top)
+- `game.js`: everything else (movement, scoring, weapons, audio). Tuning knobs live in the `CFG`
   object at the top.
-- `sounds.js` — recorded sounds, embedded so the game also works when opened from disk
-- `lib/three.min.js` — [three.js](https://threejs.org) r128 (MIT license), the 3D engine, unchanged
-- `tools/sound-lab.html` — test bench for every sound in the game, played the way the game plays it,
+- `sounds.js`: recorded sounds, embedded so the game also works when opened from disk
+- `lib/three.min.js`: [three.js](https://threejs.org) r128 (MIT license), the 3D engine, unchanged
+- `lib/fonts/ChakraPetch-Bold.ttf`: the display font for the title and big numbers, [Chakra Petch](https://github.com/m4rc1e/Chakra-Petch) (SIL Open Font License, in `lib/fonts/OFL.txt`)
+- `tools/sound-lab.html`: test bench for every sound in the game, played the way the game plays it,
   with sliders to try changes, plus the synthesized sniper shots kept for reference
   ([open it](https://cubicobelus.github.io/trickshot_sandbox/tools/sound-lab.html))
 
