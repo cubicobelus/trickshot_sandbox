@@ -472,24 +472,52 @@
   skyDome.renderOrder = -1;
   scene.add(skyDome);
 
+  // clouds are a map's choice (`theme.clouds`: how many, their colour and the shade under them, or false for none);
+  // each is a few soft flattened puffs on a ring well outside the map
   const clouds = new THREE.Group();
+  const cloudGeo = new THREE.IcosahedronGeometry(1, 2);
   const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x9aa6b4, fog: false });
-  for (let i = 0; i < 9; i++) {
-    const c = new THREE.Group();
-    const puffs = 3 + Math.floor(Math.random() * 3);
-    for (let j = 0; j < puffs; j++) {
-      const r = 9 + Math.random() * 9;
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), cloudMat);
-      m.position.set((j - puffs / 2) * r * 1.1, Math.random() * 4, Math.random() * 8);
-      m.scale.y = 0.45;
-      c.add(m);
+  const CLOUD_DEFAULT = { n: 9, color: 0xffffff, shade: 0x9aa6b4 };
+  function buildClouds(opt) {
+    while (clouds.children.length) clouds.remove(clouds.children[0]);
+    if (opt === false) return;
+    const o = Object.assign({}, CLOUD_DEFAULT, opt || {});
+    cloudMat.color.setHex(o.color); cloudMat.emissive.setHex(o.shade);
+    for (let i = 0; i < o.n; i++) {
+      const c = new THREE.Group();
+      const puffs = 4 + Math.floor(Math.random() * 3);
+      for (let j = 0; j < puffs; j++) {
+        const r = (j === 0 || j === puffs - 1 ? 6 : 9) + Math.random() * 6;   // smaller at the ends, so a cloud tapers
+        const m = new THREE.Mesh(cloudGeo, cloudMat);
+        m.scale.set(r * 1.3, r * 0.5, r);
+        m.position.set((j - (puffs - 1) / 2) * 13 + Math.random() * 4, Math.random() * 3 + (j % 2) * 2, Math.random() * 7);
+        c.add(m);
+      }
+      const ang = (i / o.n) * Math.PI * 2 + Math.random() * 0.5, dist = 220 + Math.random() * 90;
+      c.position.set(Math.cos(ang) * dist, 70 + Math.random() * 40, Math.sin(ang) * dist);
+      c.lookAt(0, c.position.y, 0);
+      clouds.add(c);
     }
-    const ang = (i / 9) * Math.PI * 2 + Math.random() * 0.5, dist = 220 + Math.random() * 90;
-    c.position.set(Math.cos(ang) * dist, 70 + Math.random() * 40, Math.sin(ang) * dist);
-    c.lookAt(0, c.position.y, 0);
-    clouds.add(c);
   }
+  buildClouds();
   scene.add(clouds);
+  // stars, for a map with no air (`theme.stars`): fixed dots on the sky, brighter and bigger at random
+  const stars = (function () {
+    const n = 900, pos = new Float32Array(n * 3), col = new Float32Array(n * 3), c = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      const y = 0.05 + Math.random() * 0.95, a = Math.random() * Math.PI * 2, h = Math.sqrt(1 - y * y);
+      pos.set([Math.cos(a) * h * 400, y * 400, Math.sin(a) * h * 400], i * 3);
+      c.setHex(Math.random() < 0.15 ? 0xcfe0ff : 0xfff6e8).multiplyScalar(0.35 + Math.random() * 0.65);
+      col.set([c.r, c.g, c.b], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const p = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.7, sizeAttenuation: false, vertexColors: true, fog: false, toneMapped: false, depthWrite: false }));
+    p.renderOrder = -1; p.visible = false;
+    return p;
+  })();
+  scene.add(stars);
 
   // Environment map: six small canvases painted with the same sky (and the ground below), so
   // shiny surfaces have something to reflect; without one, metal renders nearly black.
@@ -1299,7 +1327,7 @@
     flags: [[-20, 0, 0.25], [20, 0, 0.25]],
     id: "courtyard", name: "Courtyard", blurb: "Close quarters at dusk: a ring of walls with four gates, a lane round the outside. Great with shotguns and Deagles.",
     half: 25, floor: "grass", wallH: 8, targetMaxY: 6.5,
-    theme: { skyTop: 0x3c4a8c, skyHorizon: 0xf0b58a, fog: [26, 90], sunDir: [-40, 16, 30], sunColor: 0xffc99a, sunIntensity: 1.0, hemi: [0xffd9b8, 0x6a5a44, 0.55],
+    theme: { clouds: { n: 7, color: 0xffd6c2, shade: 0x6a4a66 }, skyTop: 0x3c4a8c, skyHorizon: 0xf0b58a, fog: [26, 90], sunDir: [-40, 16, 30], sunColor: 0xffc99a, sunIntensity: 1.0, hemi: [0xffd9b8, 0x6a5a44, 0.55],
       surfaces: { grass: "#c9b48a", concrete: "#b7a89a", brick: "#a35c48", deck: "#7d8591" } },
     walls: [
       // the ring (4.5 m: nobody sees over it), with a 5 m gate in the middle of each side
@@ -1327,7 +1355,7 @@
     flags: [[0, -28, 2.65], [0, 28, 2.65]],
     id: "foundry", name: "Foundry", blurb: "A steel works, symmetric for team play: a long hall of crates with sliding gates, side lanes, and a raised gallery at each end.",
     half: 35, floor: "slab", wallH: 9, targetMaxY: 7,
-    theme: { skyTop: 0x5f6d7d, skyHorizon: 0xb9c3cc, fog: [30, 105], sunDir: [-25, 45, -30], sunColor: 0xe8eef5, sunIntensity: 0.85, hemi: [0xcfd8e2, 0x4a4f55, 0.7],
+    theme: { clouds: { n: 14, color: 0xd9dee4, shade: 0x7d8792 }, skyTop: 0x5f6d7d, skyHorizon: 0xb9c3cc, fog: [30, 105], sunDir: [-25, 45, -30], sunColor: 0xe8eef5, sunIntensity: 0.85, hemi: [0xcfd8e2, 0x4a4f55, 0.7],
       surfaces: { slab: "#4f565e", concrete: "#8b949d", brick: "#9b5a3d", deck: "#6b747d" } },
     walls: [
       // the hall: two long walls with a pair of gaps each (4 m) to cross through
@@ -1357,7 +1385,7 @@
     maxBots: 11,   // (a big map holds more bots in practice)
     id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals.",
     half: 45, floor: "moon", wallH: 18, targetMaxY: 18, physics: { gravity: 8.5 },
-    theme: { skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x5b6c92, 0x2a2d3a, 0.62],
+    theme: { clouds: false, stars: true, skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x93a6d2, 0x585d6e, 1.0], exposure: 1.15,
       surfaces: { moon: "#8c8f96", concrete: "#767a82", brick: "#5b6470", deck: "#a0a6af", facade: "#8f969f", facadeb: "#6e7885", roof: "#6c7078" } },
     buildings: [[-22, -20, 12, 8, 4.5, "facade"], [22, 20, 12, 8, 4.5, "facade"], [22, -22, 8, 12, 6.5, "facadeb"], [-22, 22, 8, 12, 6.5, "facadeb"], [0, 0, 7, 7, 9.5, "facade"]],
     walls: [
@@ -1548,7 +1576,7 @@
     flags: [[0, -35, 0.25], [0, 35, 0.25]],
     id: "harbour", name: "Harbour", blurb: "A container terminal at sunset: rows of containers make lanes and cover, some stacked two high (ladders) and some with a ramp up the side. A flag yard at each end.",
     half: 40, floor: "slab", wallH: 12, targetMaxY: 8,
-    theme: { skyTop: 0x4a7fc0, skyHorizon: 0xf7d9b4, fog: [45, 140], sunDir: [-40, 28, 30], sunColor: 0xffd9a8, sunIntensity: 1.0, hemi: [0xfbe3c8, 0x5e6368, 0.62],
+    theme: { clouds: { n: 8, color: 0xffe0c4, shade: 0x8a6a6a }, skyTop: 0x4a7fc0, skyHorizon: 0xf7d9b4, fog: [45, 140], sunDir: [-40, 28, 30], sunColor: 0xffd9a8, sunIntensity: 1.0, hemi: [0xfbe3c8, 0x5e6368, 0.62],
       surfaces: { slab: "#6d7378", concrete: "#a39d94", deck: "#7d848b", cred: "#b3392f", cblue: "#2f5f9e", cgreen: "#3a7d4f", corange: "#d9822b", cyellow: "#d6b13a" } },
     walls: HARBOUR.walls,
     decks: HARBOUR.decks,
@@ -1619,6 +1647,9 @@
     sun.color.setHex(t.sunColor); sun.intensity = t.sunIntensity;
     hemi.color.setHex(t.hemi[0]); hemi.groundColor.setHex(t.hemi[1]); hemi.intensity = t.hemi[2];
     buildEnvironment();
+    buildClouds(t.clouds);
+    stars.visible = !!t.stars;
+    renderer.toneMappingExposure = t.exposure || TONE_EXPOSURE;
   }
   // empty the level and build a map. opts.keepPlayer: leave the player where they are (replays do)
   function loadMap(id, opts) {
