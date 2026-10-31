@@ -300,9 +300,16 @@
       rgba(255,255,255,0) 42%, rgba(255,255,255,0.09) 70%, rgba(160,200,255,0.20) 100%);
   }
 
+  /* The HUD sits on the scene without boxes: shadowed text, thin rules, and a soft darkening in the corners it uses
+     (the high-contrast setting puts solid boxes back) */
+  #hud::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 360px 220px at 0% 100%, rgba(0,0,0,0.5), rgba(0,0,0,0) 72%),
+      radial-gradient(ellipse 380px 320px at 100% 100%, rgba(0,0,0,0.5), rgba(0,0,0,0) 72%),
+      radial-gradient(ellipse 300px 220px at 100% 0%, rgba(0,0,0,0.45), rgba(0,0,0,0) 72%); }
+  #speed, #score, #streak, #best, #ammo, #hotbar .slot, #mp-timer, #bonus-tags, #range-info { text-shadow: 0 1px 2px rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.45); }
   #speed {
     position: absolute; bottom: 18px; left: 18px; color: var(--white); width: 150px;
-    font-size: 14px; background: rgba(8,8,12,0.66); padding: 6px 10px 7px; border-radius: 6px;
+    font-size: 14px; padding: 2px 0 0 10px; border-left: 2px solid var(--gold);
   }
   #speed span { color: var(--gold); font-weight: bold; }
   .sp-row { display: flex; align-items: baseline; gap: 5px; }
@@ -366,14 +373,14 @@
     align-items: flex-end; gap: 8px;
   }
   #score {
-    color: var(--white); text-align: right;
-    font-size: 14px; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 6px;
+    color: var(--text-1); text-align: right; font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; line-height: 1.1;
+    padding: 0 10px 0 0; border-right: 2px solid var(--gold);
   }
-  #score span { color: var(--gold); font-weight: bold; font-size: 20px; }
+  #score span { color: var(--gold); font-weight: bold; font-size: 30px; letter-spacing: 0; line-height: 1; }
 
   #best {
-    color: var(--white); text-align: right; font-size: 12px; background: rgba(0,0,0,0.4);
-    padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(var(--gold-rgb),0.35); max-width: 220px;
+    color: var(--white); text-align: right; font-size: 12px; background: linear-gradient(to left, rgba(0,0,0,0.45), rgba(0,0,0,0));
+    padding: 4px 10px 5px 24px; border-right: 2px solid rgba(var(--gold-rgb),0.6); max-width: 220px;
   }
   #best[hidden] { display: none; }
   #best span { color: var(--gold); font-weight: bold; font-size: 17px; }
@@ -382,17 +389,17 @@
   #best.new { animation: best-new 1.2s ease-out; }
   @keyframes best-new {
     0% { box-shadow: 0 0 0 0 rgba(var(--gold-rgb),0.9); background: rgba(var(--gold-rgb),0.35); }
-    100% { box-shadow: 0 0 0 10px rgba(var(--gold-rgb),0); background: rgba(0,0,0,0.4); }
+    100% { box-shadow: 0 0 0 10px rgba(var(--gold-rgb),0); background: rgba(0,0,0,0); }
   }
 
   #streak {
-    color: var(--white); text-align: right;
-    font-size: 14px; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 6px;
+    color: var(--text-1); text-align: right; font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; line-height: 1.1;
+    padding: 0 10px 0 0; border-right: 2px solid var(--green);
   }
-  #streak span { color: var(--green); font-weight: bold; font-size: 18px; }
+  #streak span { color: var(--green); font-weight: bold; font-size: 22px; letter-spacing: 0; line-height: 1; }
 
   /* the live trick feed: what you are pulling off right now, down the left */
-  #range-info { position: absolute; top: 150px; left: 18px; font-size: 13px; color: var(--white); background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 6px; line-height: 1.5; text-align: left; pointer-events: none; }
+  #range-info { position: absolute; top: 150px; left: 18px; font-size: 13px; color: var(--white); background: linear-gradient(to right, rgba(0,0,0,0.5), rgba(0,0,0,0)); padding: 5px 28px 6px 10px; border-left: 2px solid var(--gold); line-height: 1.5; text-align: left; pointer-events: none; }
   #range-info[hidden] { display: none; }
   #range-info b { color: var(--gold); }
   #trick-feed { position: absolute; left: 18px; top: 36%; pointer-events: none; display: flex; flex-direction: column; gap: 3px; z-index: 12; }
@@ -401,8 +408,8 @@
   @keyframes tf-fade { 0% { opacity: 0; transform: translateX(-8px); } 8% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
   #bonus-tags {
     color: var(--orange); text-align: right;
-    font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.35); padding: 5px 10px;
-    border-radius: 6px; opacity: 0; transition: opacity 0.6s; max-width: 320px; line-height: 1.55;
+    font-size: 13px; font-weight: bold; background: linear-gradient(to left, rgba(0,0,0,0.4), rgba(0,0,0,0)); padding: 4px 10px 5px 26px;
+    opacity: 0; transition: opacity 0.6s; max-width: 320px; line-height: 1.55;
   }
   #bonus-tags .mult { color: var(--gold); font-size: 15px; }
   /* penalties, and a multiplier dragged under 1 */
@@ -418,10 +425,9 @@
   #feed.show { opacity: 1; transform: translate(-50%, -62%); transition: opacity 0.12s, transform 0.15s; }
 
   #ammo {
-    position: absolute; bottom: 178px; right: 18px; text-align: right;
-    background: rgba(0,0,0,0.42); padding: 6px 12px; border-radius: 6px;
+    position: absolute; bottom: 178px; right: 18px; text-align: right; padding: 0 10px 0 0; border-right: 2px solid var(--line-2);
   }
-  #ammo .count { font-size: 26px; font-weight: bold; color: var(--white); line-height: 1; font-variant-numeric: tabular-nums; }
+  #ammo .count { font-size: 32px; font-weight: bold; color: var(--white); line-height: 1; font-variant-numeric: tabular-nums; }
   #ammo .count .max { font-size: 15px; color: var(--text-3); }
   #ammo .count.low { color: var(--red); }
   #ammo .label { font-size: 10px; color: var(--text-3); letter-spacing: 1.5px; margin-top: 2px; }
@@ -430,16 +436,17 @@
   /* loadout stack, bottom right: gun on top, knife below, each in its own box */
   #hotbar { position: absolute; bottom: 16px; right: 18px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
   .slot {
-    width: 170px; padding: 5px 10px 6px; border-radius: 8px; box-sizing: border-box;
-    background: rgba(0,0,0,0.45); border: 2px solid rgba(255,255,255,0.15);
-    color: var(--text-3); transition: all 0.12s;
+    width: 170px; padding: 4px 10px 5px; box-sizing: border-box;
+    border-right: 2px solid rgba(255,255,255,0.3); opacity: 0.85;
+    color: var(--text-1); transition: all 0.12s;
   }
+  .slot .icon svg { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.8)); }
   .slot .head { display: flex; justify-content: space-between; align-items: baseline; }
   .slot .num { font-size: 11px; opacity: 0.65; }
   .slot .name { font-size: 12px; font-weight: bold; letter-spacing: 0.8px; }
   .slot .icon { height: 34px; margin-top: 2px; }
   .slot .icon svg { height: 100%; width: auto; display: block; margin: 0 auto; }
-  .slot.active { background: rgba(var(--gold-rgb),0.16); border-color: var(--gold); color: var(--white); }
+  .slot.active { background: linear-gradient(to left, rgba(0,0,0,0.5), rgba(0,0,0,0)); border-right-color: var(--gold); color: var(--white); opacity: 1; }
   .slot.active .name { color: var(--gold); }
 
   /* loadout picker in the menu */
@@ -623,8 +630,8 @@
 
   #mp-timer {
     position: absolute; top: 18px; left: 50%; transform: translateX(-50%); text-align: center;
-    color: var(--white); background: rgba(0,0,0,0.4); padding: 5px 16px; border-radius: 6px;
-  }
+    color: var(--white); padding: 2px 16px 3px; border-bottom: 2px solid var(--gold);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.42), rgba(0,0,0,0)); }
   /* King of the Hill: the progress bar across the top */
   #koth-bar { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); width: min(520px, 70vw); pointer-events: none; }
   #koth-bar[hidden] { display: none; }
@@ -739,11 +746,9 @@
   #kill-banner.pop { animation: kill-pop 1.9s ease-out forwards; }
   @keyframes kill-pop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -62%) scale(1); } }
 
-  /* HUD readability on bright maps (ice, sand, sky): darker panels, brighter secondary text */
-  #speed, #score, #streak, #best, #ammo, #mp-timer, #killfeed div { background: rgba(8,8,12,0.68); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
-  .slot { background: rgba(8,8,12,0.72); color: var(--text-2); border-color: rgba(255,255,255,0.3); }
-  .slot.active { background: rgba(58,46,10,0.86); color: var(--white); }
-  #ammo .count .max, #ammo .label { color: var(--text-2); }
+  /* HUD readability on bright maps (ice, sand, sky): the corner shade under the HUD, text shadows, brighter secondary text */
+  #killfeed div { background: rgba(8,8,12,0.68); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+  #ammo .count .max, #ammo .label { color: var(--text-1); }
   #ammo .label.reloading { color: var(--gold); }
 
   /* gun skins in the attachments window */
