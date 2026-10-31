@@ -662,6 +662,42 @@
       g.fillStyle = "rgba(0,0,0,0.38)"; g.fillRect(0, 0, n, 9); g.fillRect(0, n - 9, n, 9);
       speckle(g, 500, n, 0.1, true);
     },
+    // glasshouse floor: pale tiles a metre across, with grout
+    tiles(g, n, base) {
+      g.fillStyle = base || "#cdbb9c"; g.fillRect(0, 0, n, n);
+      for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) { g.fillStyle = (i + j) % 2 ? "rgba(120,80,50,0.10)" : "rgba(255,255,255,0.08)"; g.fillRect(i * n / 4, j * n / 4, n / 4, n / 4); }
+      speckle(g, 1400, n, 0.08, true);
+      g.strokeStyle = "rgba(60,45,30,0.45)"; g.lineWidth = 3;
+      for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(k * n / 4, 0); g.lineTo(k * n / 4, n); g.moveTo(0, k * n / 4); g.lineTo(n, k * n / 4); g.stroke(); }
+    },
+    // a clipped hedge: dense dark leaves
+    hedge(g, n, base) {
+      g.fillStyle = base || "#2f6b36"; g.fillRect(0, 0, n, n);
+      speckle(g, 2400, n, 0.3, true);
+      for (let i = 0; i < 160; i++) { g.fillStyle = i % 3 ? "rgba(20,60,25,0.35)" : "rgba(150,210,110,0.22)"; g.beginPath(); g.ellipse(Math.random() * n, Math.random() * n, 3 + Math.random() * 5, 2 + Math.random() * 3, Math.random() * 3, 0, 7); g.fill(); }
+    },
+    // a wooden walkway: planks across, with a darker gap between them
+    boards(g, n, base) {
+      g.fillStyle = base || "#8b6a45"; g.fillRect(0, 0, n, n);
+      for (let y = 0; y < n; y += n / 8) { g.fillStyle = "rgba(0,0,0,0.4)"; g.fillRect(0, y, n, 3); g.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)"; g.fillRect(0, y + 3, n, n / 8 - 3); }
+      speckle(g, 900, n, 0.12, true);
+    },
+    // a planting bed: wooden boards
+    bed(g, n, base) {
+      g.fillStyle = base || "#7a5638"; g.fillRect(0, 0, n, n);
+      for (let y = 0; y < n; y += n / 4) { g.fillStyle = "rgba(0,0,0,0.28)"; g.fillRect(0, y, n, 4); g.fillStyle = "rgba(255,255,255,0.06)"; g.fillRect(0, y + 6, n, 5); }
+      speckle(g, 1200, n, 0.14, true);
+    },
+    // the glass of the house: white frames round pale green-blue panes
+    glass(g, n, base) {
+      const grad = g.createLinearGradient(0, 0, n, n); grad.addColorStop(0, "#d4ece6"); grad.addColorStop(0.5, base || "#b7dcd6"); grad.addColorStop(1, "#9fcbc6");
+      g.fillStyle = grad; g.fillRect(0, 0, n, n);
+      g.fillStyle = "rgba(255,255,255,0.22)";
+      for (const [x, y] of [[0.05, 0.1], [0.55, 0.1], [0.05, 0.58], [0.55, 0.58]]) { g.beginPath(); g.moveTo(x * n, (y + 0.3) * n); g.lineTo((x + 0.15) * n, y * n); g.lineTo((x + 0.25) * n, y * n); g.lineTo((x + 0.1) * n, (y + 0.3) * n); g.fill(); }
+      g.strokeStyle = "#f1f4ee"; g.lineWidth = 8;
+      g.strokeRect(0, 0, n, n);
+      g.lineWidth = 5; g.beginPath(); g.moveTo(n / 2, 0); g.lineTo(n / 2, n); g.moveTo(0, n / 2); g.lineTo(n, n / 2); g.stroke();
+    },
     deck(g, n, base) {
       g.fillStyle = base || "#8d949c"; g.fillRect(0, 0, n, n);
       g.strokeStyle = "rgba(255,255,255,0.12)"; g.lineWidth = 2;
@@ -771,7 +807,7 @@
 
   // surfaces: "grass" for the floor, "deck" for platforms, "concrete" and "brick" for walls
   function addGround(x, y, z, w, d, surface, solid) {
-    const tile = surface === "moon" ? 12 : ["grass", "slab", "ice", "roof", "meadow", "dirt"].includes(surface) ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
+    const tile = surface === "moon" ? 12 : ["grass", "slab", "ice", "roof", "meadow", "dirt", "tiles", "boards"].includes(surface) ? 4 : Math.max(w, d);   // floors tile every 4 m; decks show one border
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), surfaceMaterial(surface, w / tile, d / tile, levelPalette[surface]));
     mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
@@ -1118,6 +1154,22 @@
         levelGroup.add(cone);
       }
       const box = new THREE.Box3(new THREE.Vector3(d[1] - 0.35 * sc, gy, d[2] - 0.35 * sc), new THREE.Vector3(d[1] + 0.35 * sc, gy + 5 * sc, d[2] + 0.35 * sc));
+      wallBoxes.push(box); bounceBoxes.push(box);
+    } else if (kind === "palm") {   // ["palm", x, z, scale]: a potted palm, a slim trunk you can take cover behind
+      const sc = d[3] || 1;
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * sc, 0.4 * sc, 0.7 * sc, 10), sharedMat("palmpot", () => new THREE.MeshStandardMaterial({ color: 0xb4623a, roughness: 0.9 })));
+      pot.position.set(d[1], FLOOR_Y + 0.35 * sc, d[2]);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * sc, 0.24 * sc, 3.6 * sc, 8), sharedMat("palmtrunk", () => new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 1 })));
+      trunk.position.set(d[1], FLOOR_Y + 2.1 * sc, d[2]); trunk.castShadow = true;
+      levelGroup.add(pot, trunk);
+      const frondMat = sharedMat("palmfrond", () => new THREE.MeshStandardMaterial({ color: 0x3f8a3c, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }));
+      for (let k = 0; k < 7; k++) {
+        const arm = new THREE.Group(); arm.position.set(d[1], FLOOR_Y + 3.9 * sc, d[2]); arm.rotation.y = k * (Math.PI * 2 / 7) + d[1];
+        const frond = new THREE.Mesh(new THREE.BoxGeometry(0.55 * sc, 0.04, 2.5 * sc), frondMat);
+        frond.position.set(0, -0.35 * sc, 1.15 * sc); frond.rotation.x = 0.45;
+        arm.add(frond); levelGroup.add(arm);
+      }
+      const box = new THREE.Box3(new THREE.Vector3(d[1] - 0.5 * sc, FLOOR_Y, d[2] - 0.5 * sc), new THREE.Vector3(d[1] + 0.5 * sc, FLOOR_Y + 4 * sc, d[2] + 0.5 * sc));
       wallBoxes.push(box); bounceBoxes.push(box);
     } else if (kind === "boulder") {   // ["boulder", x, z, size, height of the ground]: something to take cover behind or jump onto
       const sz = d[3] || 2, gy = d[4] === undefined ? FLOOR_Y : d[4];
@@ -1480,6 +1532,45 @@
     ladders: HARBOUR.ladders,
     spawns: HARBOUR.spawns,
     playerSpawn: [0, 24],
+  });
+
+  // Greenhouse: a glass conservatory. Clipped hedges and planting beds make lanes and cover round a central pond, with a walkway up
+  // each long side (ramps up from the flag yards) joined by a bridge over the pond. Mirrored four ways; a flag yard at each end (z).
+  const GREEN = { walls: [], decor: [], spawns: [], decks: [], ramps: [] };
+  {
+    const hedge = (x, z, w, d) => wallAt(x, z, w, d, 2.0, "hedge"), bed = (x, z, w, d) => wallAt(x, z, w, d, 1.1, "bed");
+    const quarter = {
+      walls: [hedge(12, 21, 1.4, 12), hedge(6, 12, 10, 1.4), hedge(30, 14, 1.4, 10), hedge(15, 33, 8, 1.4), bed(18, 18, 6, 2.2), bed(6, 27, 2.2, 7), bed(32, 24.5, 2.2, 5), bed(16, 5, 2.2, 6)],
+      palms: [[29, 19], [9, 19], [5, 33], [19, 8], [3, 10]],
+      spawns: [[8, 24], [18, 30], [32, 32], [32, 18]],
+    };
+    for (const sx of [1, -1]) for (const sz of [1, -1]) {
+      for (const w of quarter.walls) GREEN.walls.push([w[0] * sx, w[1], w[2] * sz, w[3], w[4], w[5], w[6]]);
+      for (const q of quarter.palms) GREEN.decor.push(["palm", q[0] * sx, q[1] * sz, 1]);
+      for (const q of quarter.spawns) GREEN.spawns.push([q[0] * sx, q[1] * sz]);
+    }
+    GREEN.spawns.push([0, 22], [0, -22]);
+    for (const sx of [1, -1]) {
+      GREEN.decks.push([sx * 24, 3.35, 0, 4, 44, "boards", true]);   // the walkways
+      for (const sz of [1, -1]) GREEN.ramps.push([sx * 24, sz * 26.5, "z", 4, 9, 3.35, -sz]);   // up from the yards at each end
+    }
+    GREEN.decks.push([0, 3.35, 0, 46, 3, "boards", true]);   // the bridge over the pond
+    GREEN.decor.push(["pond", 0, 0, 7]);
+  }
+  defineMap({
+    flags: [[0, -31, 0.25], [0, 31, 0.25]],
+    maxBots: 10,
+    id: "greenhouse", name: "Greenhouse", blurb: "A glass conservatory: hedges and planting beds make lanes round a central pond, with a walkway up each side (ramps at the ends) and a bridge over the water. A flag yard at each end.",
+    half: 36, floor: "tiles", wallH: 9, targetMaxY: 7, boundary: "glass", rampSurface: "boards",
+    theme: { skyTop: 0x7fb6e8, skyHorizon: 0xeaf3e0, fog: [50, 160], sunDir: [20, 55, 15], sunColor: 0xfff4d8, sunIntensity: 0.9, hemi: [0xeaf8e6, 0x6b7a5a, 0.6],
+      surfaces: { tiles: "#a8957a", hedge: "#2f6b36", bed: "#7a5638", glass: "#a9cfc9", boards: "#8b6a45" } },
+    walls: GREEN.walls,
+    decks: GREEN.decks,
+    ramps: GREEN.ramps,
+    pads: [],
+    decor: GREEN.decor,
+    spawns: GREEN.spawns,
+    playerSpawn: [0, 26],
   });
 
   const BASE_PHYS = { gravity: CFG.gravity, friction: CFG.friction, momentumFriction: CFG.momentumFriction, groundAccel: CFG.groundAccel, slideFriction: CFG.slideFriction, maxSpeed: CFG.maxSpeed, speedMultMax: CFG.speedMultMax };
@@ -12324,6 +12415,7 @@
     summit: "Summit: trails and ramps climb the hill and ladders finish the last cliff. The top is the hill.",
     canyon: "Canyon: you can wade the river. Ramps and the mega pads reach the ledges, bridges cross the middle.",
     rooftops: "Rooftops: hold forward at a ladder to climb it. Run off a roof pad to reach the tall roofs.",
+    greenhouse: "Greenhouse: ramps at both ends climb to the walkways, which meet in a bridge over the pond.",
     harbour: "Harbour: ladders climb the double-stacked containers and ramps climb the single ones.",
   };
   function showMapTip() {

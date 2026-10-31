@@ -2054,7 +2054,7 @@ def test_spawns(browser, base):
           D.net.pendingCtf = false; D.net.pendingTeams = false;
           return out;
         }""")
-        check("capture the flag is on Courtyard, Foundry, Harbour, Moonbase, Rooftops and Canyon only", sorted(r["id"] for r in ctf) == ["canyon", "courtyard", "foundry", "harbour", "moonbase", "rooftops"], ", ".join(r["id"] for r in ctf))
+        check("capture the flag is on Courtyard, Foundry, Greenhouse, Harbour, Moonbase, Rooftops and Canyon only", sorted(r["id"] for r in ctf) == ["canyon", "courtyard", "foundry", "greenhouse", "harbour", "moonbase", "rooftops"], ", ".join(r["id"] for r in ctf))
         for r in ctf:
             check(f"{r['id']}: both teams open nearer their own flag, with no enemy within 10 m", r["wrong"] == 0 and r["nearEnemy"] >= 10, str(r))
             check(f"{r['id']}: a flag dropped in mid-air lands on the floor ({r['y']})", r["dropped"] and r["y"] == r["below"] and r["y"] < 11, str(r))
