@@ -3253,7 +3253,7 @@
   addPart(combatGroup, bevelBox(0.02, 0.008, 0.075), metalMid, 0, -0.044, 0.05);                              // trigger guard
   addPart(combatGroup, bevelBox(0.006, 0.026, 0.006), metalDark, 0, -0.056, 0.055, 0.25, 0, 0);               // trigger
 
-  // ---- Sawed-off: two short barrels side by side on a breech block, a wooden fore-end and a short raked grip ----
+  // ---- Double barrel shotgun: two short barrels side by side on a breech block, a wooden fore-end and a short raked grip ----
   const sawedGroup = new THREE.Group();
   for (const sx of [-1, 1]) addPart(sawedGroup, new THREE.CylinderGeometry(0.0165, 0.0165, 0.32, 12), metalDark, sx * 0.0175, 0.02, -0.19, HALF_PI, 0, 0);   // the two barrels
   addPart(sawedGroup, bevelBox(0.012, 0.008, 0.3), metalMid, 0, 0.0395, -0.19);                               // the rib between them
@@ -3914,7 +3914,7 @@
   // (a gun travels over the network as its place in this list, so new guns go at the end, after the knife, never in the middle)
   Object.assign(WEAPONS, {
     sawed: {
-      name: "SAWED-OFF", group: sawedGroup,
+      name: "DOUBLE BARREL SHOTGUN", group: sawedGroup,
       restPos: new THREE.Vector3(0.2, -0.22, -0.42), restRot: new THREE.Euler(0.03, -0.07, 0.01),
       adsPos: new THREE.Vector3(0.0, -0.05, -0.3), adsRot: new THREE.Euler(0, 0, 0),   // the bead over the rib
       canADS: true, scope: false, adsZoom: 0.88, fireRate: 0.22, auto: false, isMelee: false, usesAmmo: true,   // both barrels can go one after the other
@@ -3928,7 +3928,7 @@
       inspectDuration: 1.7, inspects: GUN_INSPECTS, inspectReach: 0.55,
     },
     combat: {
-      name: "AUTO SHOTGUN", group: combatGroup,
+      name: "COMBAT SHOTGUN", group: combatGroup,
       restPos: new THREE.Vector3(0.26, -0.27, -0.55), restRot: new THREE.Euler(0.03, -0.07, 0.01),
       adsPos: new THREE.Vector3(0.0, -0.057, -0.34), adsRot: new THREE.Euler(0, 0, 0),
       canADS: true, scope: false, adsZoom: 0.85, fireRate: 0.32, auto: false, isMelee: false, usesAmmo: true,
@@ -8889,10 +8889,10 @@
     } else if (id === "railgun") {   // railgun: two rails with a glowing channel, a block body and a stock
       for (const sx of [-1, 1]) P(B(0.015, 0.02, 0.7), steel, sx * 0.025, 0.02, -0.5);
       P(B(0.01, 0.01, 0.65), railGlowMat, 0, 0.02, -0.5); P(B(0.07, 0.09, 0.4), dark, 0, 0, -0.05); P(B(0.05, 0.1, 0.25), dark, 0, -0.01, 0.3);
-    } else if (id === "sawed") {     // sawed-off: two short barrels and a wooden grip
+    } else if (id === "sawed") {     // double barrel shotgun: two short barrels and a wooden grip
       for (const sx of [-1, 1]) P(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 10), steel, sx * 0.022, 0.02, -0.25, HP);
       P(B(0.06, 0.07, 0.14), dark, 0, 0, 0.0); P(B(0.045, 0.12, 0.06), wood, 0, -0.08, 0.08, 0.4);
-    } else if (id === "combat") {    // auto shotgun: a boxy receiver, a barrel with a tube under it and a stock
+    } else if (id === "combat") {    // combat shotgun: a boxy receiver, a barrel with a tube under it and a stock
       P(B(0.065, 0.085, 0.4), dark, 0, 0, -0.05); P(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 10), steel, 0, 0.02, -0.5, HP);
       P(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 10), dark, 0, -0.03, -0.45, HP); P(B(0.06, 0.1, 0.3), dark, 0, -0.02, 0.25);
     } else if (id === "mpistol") {   // machine pistol: a boxy slide and a long magazine

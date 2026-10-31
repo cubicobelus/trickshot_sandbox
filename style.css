@@ -436,14 +436,14 @@
   /* loadout stack, bottom right: gun on top, knife below, each in its own box */
   #hotbar { position: absolute; bottom: 16px; right: 18px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
   .slot {
-    width: 170px; padding: 4px 10px 5px; box-sizing: border-box;
+    width: 212px; padding: 4px 10px 5px; box-sizing: border-box;
     border-right: 2px solid rgba(255,255,255,0.3); opacity: 0.85;
     color: var(--text-1); transition: all 0.12s;
   }
   .slot .icon svg { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.8)); }
-  .slot .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .slot .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .slot .num { font-size: 11px; opacity: 0.65; }
-  .slot .name { font-size: 12px; font-weight: bold; letter-spacing: 0.8px; }
+  .slot .name { font-size: 12px; font-weight: bold; letter-spacing: 0.8px; white-space: nowrap; }
   .slot .icon { height: 34px; margin-top: 2px; }
   .slot .icon svg { height: 100%; width: auto; display: block; margin: 0 auto; }
   .slot.active { background: linear-gradient(to left, rgba(0,0,0,0.5), rgba(0,0,0,0)); border-right-color: var(--gold); color: var(--white); opacity: 1; }

@@ -1847,28 +1847,28 @@ def test_gungame_ladder(browser, base):
 
 
 def test_more_guns(browser, base):
-    """The sawed-off (two shells, ten pellets), the auto shotgun (one pull, one shot), the machine pistol (automatic), the bow (draw, loose, half speed), and bots that use the newer guns."""
+    """The double barrel (two shells, ten pellets), the combat shotgun (one pull, one shot), the machine pistol (automatic), the bow (draw, loose, half speed), and bots that use the newer guns."""
     server, dbase, tmp = debug_site()
     try:
         page, errors = open_page(browser, dbase + "/index.html", 800, 450)
         AMMO = "(g) => window.__dbg.WEAPONS[g].ammo"
         dm = lambda g, d, n=1: page.evaluate("([g, d, n]) => window.__dbg.hostDamage({ x: 0, z: 0 }, { x: d, z: 0 }, { head: false, n, h: 0 }, g)", [g, d, n])
         w = page.evaluate("""() => { const W = window.__dbg.WEAPONS; return ['sawed', 'combat', 'mpistol', 'bow'].map((g) => [W[g].magSize, W[g].pellets, !!W[g].auto]); }""")
-        check("the sawed-off holds two shells and ten pellets, the auto shotgun eight and eight, the machine pistol twenty rounds and is automatic, the bow five arrows",
+        check("the double barrel holds two shells and ten pellets, the combat shotgun eight and eight, the machine pistol twenty rounds and is automatic, the bow five arrows",
               w == [[2, 10, False], [8, 8, False], [20, 1, True], [5, 1, False]], str(w))
-        check("a sawed-off kills from the hip up close and does little at range", dm("sawed", 3, 10) >= 100 and dm("sawed", 30, 10) < 40, f"{dm('sawed', 3, 10)} / {dm('sawed', 30, 10)}")
-        check("the auto shotgun is weaker per pull than the pump but kills in two", dm("combat", 3, 8) < dm("shotgun", 3, 9) and dm("combat", 3, 8) * 2 >= 100, f"{dm('combat', 3, 8)} vs {dm('shotgun', 3, 9)}")
-        # the sawed-off: two pulls empty it
+        check("a double barrel kills from the hip up close and does little at range", dm("sawed", 3, 10) >= 100 and dm("sawed", 30, 10) < 40, f"{dm('sawed', 3, 10)} / {dm('sawed', 30, 10)}")
+        check("the combat shotgun is weaker per pull than the pump but kills in two", dm("combat", 3, 8) < dm("shotgun", 3, 9) and dm("combat", 3, 8) * 2 >= 100, f"{dm('combat', 3, 8)} vs {dm('shotgun', 3, 9)}")
+        # the double barrel: two pulls empty it
         pick_gun(page, "sawed"); page.click("#start-btn"); step(page, 45)
         for _ in range(2):
             page.dispatch_event("body > canvas", "mousedown", {"button": 0}); step(page, 1)
             page.dispatch_event("body > canvas", "mouseup", {"button": 0}); step(page, 20)
-        check("two pulls empty the sawed-off", page.evaluate(AMMO, "sawed") == 0, str(page.evaluate(AMMO, "sawed")))
+        check("two pulls empty the double barrel", page.evaluate(AMMO, "sawed") == 0, str(page.evaluate(AMMO, "sawed")))
         page.evaluate("__unlock()"); step(page, 3)
-        # the auto shotgun: holding the trigger is still one shot
+        # the combat shotgun: holding the trigger is still one shot
         pick_gun(page, "combat"); page.click("#start-btn"); step(page, 45)
         page.mouse.down(); step(page, 12); page.mouse.up(); step(page, 2)
-        check("the auto shotgun fires once per pull, not while held", page.evaluate(AMMO, "combat") == 7, str(page.evaluate(AMMO, "combat")))
+        check("the combat shotgun fires once per pull, not while held", page.evaluate(AMMO, "combat") == 7, str(page.evaluate(AMMO, "combat")))
         page.evaluate("__unlock()"); step(page, 3)
         # the machine pistol: held, it sprays
         pick_gun(page, "mpistol"); page.click("#start-btn"); step(page, 45)

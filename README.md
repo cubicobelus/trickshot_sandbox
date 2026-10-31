@@ -55,7 +55,7 @@ saves it as a video you can post anywhere (.webm, or .mp4 in Safari), and **Save
 - **LMG:** 100 rounds, slow to aim and slow to reload.
 - **DMR** (marksman rifle): semi-automatic, accurate, and zooms a little when you aim. Two body shots or one head shot kill.
 - **Crossbow:** a real flying bolt (fast, with a little drop) that takes two body hits or one to the head, so you lead moving targets. One bolt, reloaded between shots.
-- **Shotgun, sawed-off, auto shotgun:** the pump is the standard; the sawed-off holds two shells of ten pellets (a kill from the hip up close, nothing at range); the auto shotgun fires one shot per pull, weaker than the pump but quicker.
+- **Shotgun, double barrel shotgun, combat shotgun:** the pump is the standard; the double barrel holds two shells of ten pellets (a kill from the hip up close, nothing at range); the combat shotgun fires one shot per pull, weaker than the pump but quicker.
 - **Deagle and revolver:** slow and exact (two body hits or one head hit). The revolver holds six: a tap is one aimed shot, holding the trigger fans the hammer (a quick, wide shot every 0.16 s that scores half, FANNED); it loads one round at a time and you can fire to stop loading.
 - **Machine pistol:** a fast automatic with a 20-round magazine.
 - **Dual SMGs:** fire in turn from both hands, very fast and wide, with 40 rounds shared. A hip gun: you cannot aim them.
