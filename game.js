@@ -896,7 +896,7 @@
     levelGroup.add(mesh);
     mesh.userData = { topY: y + 0.25, halfW: w / 2, halfD: d / 2, cx: x, cz: z };
     groundMeshes.push(mesh);
-    if (solid) wallBoxes.push(new THREE.Box3().setFromObject(mesh));
+    if (solid) { const box = new THREE.Box3().setFromObject(mesh); box.surf = surface; wallBoxes.push(box); }
     return mesh;
   }
   function addWall(x, y, z, w, h, d, surface, stand) {   // stand: its top is a floor you can land on
@@ -906,6 +906,7 @@
     mesh.castShadow = true; mesh.receiveShadow = true;
     levelGroup.add(mesh);
     const box = new THREE.Box3().setFromObject(mesh);
+    box.surf = surface;   // (what a bullet hitting it throws out)
     wallBoxes.push(box);
     bounceBoxes.push(box);
     if (stand) { mesh.userData = { topY: y + h / 2, halfW: w / 2, halfD: d / 2, cx: x, cz: z, wall: true }; groundMeshes.push(mesh); }
@@ -1004,13 +1005,13 @@
       const Q = P.pair;
       const phi = Math.atan2(Q.nx, Q.nz) - (Math.atan2(P.nx, P.nz) + Math.PI);   // turn so that "into this one" becomes "out of that one"
       const c = Math.cos(phi), sn = Math.sin(phi), vx = player.velocity.x, vz = player.velocity.z;
-      burst(_gStart.set(P.x, FLOOR_Y + 1.5, P.z), 0x7fc4ff, 10);
+      sparkBurst(_gStart.set(P.x, FLOOR_Y + 1.5, P.z), 0x7fc4ff, 14, 6);
       yawObject.position.x = Q.x + Q.nx * 1.05; yawObject.position.z = Q.z + Q.nz * 1.05;
       yawObject.rotation.y += phi; player.lastYaw = yawObject.rotation.y;
       player.velocity.x = vx * c + vz * sn; player.velocity.z = vz * c - vx * sn;
       player.portalCool = 0.6; player.lastPortalAt = elapsedTime; stat("portals"); noteTrick("portal", "PORTAL");
       releaseHook(0);
-      burst(_gStart.set(Q.x, FLOOR_Y + 1.5, Q.z), 0xffb070, 10);
+      sparkBurst(_gStart.set(Q.x, FLOOR_Y + 1.5, Q.z), 0xffb070, 14, 6);
       playSfx("jumpPad", 0.5, 1.5, 0.2, "volMove");
       return;
     }
@@ -2116,15 +2117,15 @@
   }
 
   // ======================================================================
-  // PARTICLES (pooled)
+  // PARTICLES (pooled): lit chips that tumble as they fall, sparks that streak, and what a hit or a blast throws out
   // ======================================================================
   const particlePool = [];
   const particleGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-  for (let i = 0; i < 140; i++) {
-    const mesh = new THREE.Mesh(particleGeo, new THREE.MeshBasicMaterial({ transparent: true }));
+  for (let i = 0; i < 160; i++) {
+    const mesh = new THREE.Mesh(particleGeo, new THREE.MeshLambertMaterial({ transparent: true }));
     mesh.visible = false; mesh.frustumCulled = false;
     scene.add(mesh);
-    particlePool.push({ mesh, vel: new THREE.Vector3(), life: 0, age: 0, active: false, grav: 1 });
+    particlePool.push({ mesh, vel: new THREE.Vector3(), spin: new THREE.Vector3(), life: 0, age: 0, active: false, grav: 1 });
   }
   function spawnParticle(pos, color, vx, vy, vz, life, scale, grav) {
     for (const p of particlePool) {
@@ -2134,7 +2135,10 @@
       p.mesh.visible = true;
       p.mesh.material.color.setHex(color);
       p.mesh.material.opacity = 1;
-      p.mesh.scale.setScalar(scale || 1);
+      const s = scale || 1;   // a flat, uneven chip rather than a cube
+      p.mesh.scale.set(s * (0.5 + Math.random() * 0.7), s * (0.25 + Math.random() * 0.3), s * (0.5 + Math.random() * 0.7));
+      p.mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+      p.spin.set((Math.random() - 0.5) * 24, (Math.random() - 0.5) * 24, (Math.random() - 0.5) * 24);
       p.mesh.position.copy(pos);
       p.vel.set(vx, vy, vz);
       return p;
@@ -2155,9 +2159,81 @@
       if (p.age >= p.life) { p.active = false; p.mesh.visible = false; continue; }
       p.vel.y -= CFG.gravity * 0.6 * p.grav * dt;
       p.mesh.position.addScaledVector(p.vel, dt);
+      p.mesh.rotation.x += p.spin.x * dt; p.mesh.rotation.y += p.spin.y * dt; p.mesh.rotation.z += p.spin.z * dt;
+      p.mesh.material.opacity = Math.min(1, (1 - p.age / p.life) * 3);   // solid, then a quick fade at the end
+    }
+    updateSparks(dt);
+    updateBlastExtras(dt);
+  }
+
+  // sparks: thin bright streaks, stretched along the way they fly, that drop and die quickly
+  const sparkPool = [];
+  const sparkGeo = new THREE.BoxGeometry(0.014, 0.014, 1);
+  sparkGeo.translate(0, 0, -0.5);   // the head at the origin, the tail behind
+  for (let i = 0; i < 90; i++) {
+    const mesh = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    mesh.visible = false; mesh.frustumCulled = false;
+    scene.add(mesh);
+    sparkPool.push({ mesh, vel: new THREE.Vector3(), life: 0, age: 0, active: false });
+  }
+  const _sparkAim = new THREE.Vector3();
+  function spawnSpark(pos, vx, vy, vz, life, color) {
+    for (const p of sparkPool) {
+      if (p.active) continue;
+      p.active = true; p.age = 0; p.life = life;
+      p.mesh.material.color.setHex(color);
+      p.mesh.position.copy(pos);
+      p.vel.set(vx, vy, vz);
+      p.mesh.visible = true;
+      return p;
+    }
+    return null;
+  }
+  function sparkBurst(pos, color, count, speed) {
+    for (let i = 0; i < count; i++) {
+      _sparkAim.set(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize().multiplyScalar((speed || 7) * (0.5 + Math.random() * 0.7));
+      spawnSpark(pos, _sparkAim.x, _sparkAim.y, _sparkAim.z, 0.15 + Math.random() * 0.2, color);
+    }
+  }
+  function updateSparks(dt) {
+    for (const p of sparkPool) {
+      if (!p.active) continue;
+      p.age += dt;
+      if (p.age >= p.life) { p.active = false; p.mesh.visible = false; continue; }
+      p.vel.y -= CFG.gravity * 0.5 * dt;
+      p.mesh.position.addScaledVector(p.vel, dt);
+      p.mesh.lookAt(_sparkAim.copy(p.mesh.position).add(p.vel));
+      p.mesh.scale.z = Math.min(0.5, p.vel.length() * 0.022);
       p.mesh.material.opacity = 1 - p.age / p.life;
     }
   }
+
+  // what a hit throws out, by what was hit: "metal" sparks, "stone" dust and grit, "wood" chips, "player" a red mist,
+  // "target" chips of its colour (pass the colour)
+  const _ifxN = new THREE.Vector3(), _ifxV = new THREE.Vector3(), _ifxP = new THREE.Vector3(), _UP = new THREE.Vector3(0, 1, 0);
+  function impactFx(pos, normal, kind, color) {
+    const n = _ifxN.copy(normal || _UP);
+    const out = (spread, speed) => _ifxV.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(spread * 2).add(n).normalize()
+      .multiplyScalar(speed * (0.5 + Math.random() * 0.7));
+    _ifxP.copy(pos).addScaledVector(n, 0.04);
+    if (kind === "metal") {
+      for (let i = 0; i < 7; i++) { out(0.9, 9); spawnSpark(_ifxP, _ifxV.x, _ifxV.y, _ifxV.z, 0.1 + Math.random() * 0.2, 0xffc46a); }
+      out(0.2, 0.7); spawnSmoke(_ifxP, _ifxV.x, _ifxV.y, _ifxV.z, 0.45, 0.05, 0.3, 0.3, 0x9c9a96);
+    } else if (kind === "wood") {
+      for (let i = 0; i < 5; i++) { out(0.8, 4); spawnParticle(_ifxP, Math.random() < 0.5 ? 0xb88a5a : 0x8f6740, _ifxV.x, _ifxV.y + 1, _ifxV.z, 0.6 + Math.random() * 0.3, 0.5, 1); }
+      out(0.3, 0.8); spawnSmoke(_ifxP, _ifxV.x, _ifxV.y, _ifxV.z, 0.55, 0.06, 0.4, 0.35, 0xcdb89c);
+    } else if (kind === "player") {
+      for (let i = 0; i < 3; i++) { out(0.7, 1.4); spawnSmoke(_ifxP, _ifxV.x, _ifxV.y, _ifxV.z, 0.3 + Math.random() * 0.15, 0.12, 0.55, 0.6, 0x9e1b1b); }
+      for (let i = 0; i < 4; i++) { out(0.8, 3); spawnParticle(_ifxP, 0x7a1212, _ifxV.x, _ifxV.y, _ifxV.z, 0.45, 0.32, 1); }
+    } else if (kind === "target") {
+      for (let i = 0; i < 7; i++) { out(1, 5); spawnParticle(_ifxP, i % 3 ? color : 0xf2f2ee, _ifxV.x, _ifxV.y + 1.5, _ifxV.z, 0.6 + Math.random() * 0.3, 0.8, 1); }
+      for (let i = 0; i < 4; i++) { out(1, 7); spawnSpark(_ifxP, _ifxV.x, _ifxV.y, _ifxV.z, 0.15 + Math.random() * 0.1, 0xfff0c8); }
+    } else {   // stone, concrete, earth: a puff of dust and a little grit
+      for (let i = 0; i < 2; i++) { out(0.35, 1.2); spawnSmoke(_ifxP, _ifxV.x, _ifxV.y, _ifxV.z, 0.6 + Math.random() * 0.3, 0.08, 0.5, 0.45, 0xb8b2a6); }
+      for (let i = 0; i < 4; i++) { out(0.7, 4); spawnParticle(_ifxP, 0x86888c, _ifxV.x, _ifxV.y, _ifxV.z, 0.45 + Math.random() * 0.2, 0.35, 1); }
+    }
+  }
+
 
   // ======================================================================
   // TRACERS (pooled, travel from muzzle to impact)
@@ -2226,7 +2302,7 @@
     return new THREE.CanvasTexture(c);
   })();
   const smokePool = [];
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < 72; i++) {   // (muzzle smoke, dust, blood mist and blasts all draw from these)
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: smokeTex, color: 0xa9a9a4, transparent: true, opacity: 0, depthWrite: false,
     }));
@@ -2235,10 +2311,13 @@
     smokePool.push({ sprite, vel: new THREE.Vector3(), age: 0, life: 0, size0: 0, size1: 0, alpha: 0, active: false });
   }
 
-  function spawnSmoke(pos, vx, vy, vz, life, size0, size1, alpha) {
+  // colour: the puff's colour (grey smoke when left out); glow: it adds light, like fire
+  function spawnSmoke(pos, vx, vy, vz, life, size0, size1, alpha, color, glow) {
     for (const s of smokePool) {
       if (s.active) continue;
       s.active = true; s.age = 0; s.life = life;
+      s.sprite.material.color.setHex(color === undefined ? 0xa9a9a4 : color);
+      s.sprite.material.blending = glow ? THREE.AdditiveBlending : THREE.NormalBlending;
       s.size0 = size0; s.size1 = size1; s.alpha = alpha;
       s.sprite.position.copy(pos);
       s.sprite.scale.setScalar(size0);
@@ -6060,7 +6139,7 @@
         hk.pos.copy(hk.anchor); hk.flying = false;
         hk.len = yawObject.position.distanceTo(hk.anchor);
         stat("grapples"); achProgress();
-        playKnifeStick(hk.len); burst(hk.anchor, 0xffd24a, 4);
+        playKnifeStick(hk.len); impactFx(hk.anchor, null, "metal");
       }
       return;
     }
@@ -6275,7 +6354,7 @@
 
     playWallBounce(perfect);
     stat("wallBounces"); if (perfect) { stat("perfectBounces"); achProgress(); }
-    if (perfect) burst(yawObject.position, 0x7CFC00, 5);
+    if (perfect) sparkBurst(yawObject.position, 0xffd24a, 10, 5);
     return true;
   }
 
@@ -6709,6 +6788,9 @@
   const _occPoint = new THREE.Vector3();
   // (it also leaves the facing of the surface it found in _occNormal, for the bullet holes)
   const _occNormal = new THREE.Vector3(0, 1, 0), _occBest = new THREE.Vector3();
+  // (and what it is made of, as an impact kind: "metal", "wood" or "stone")
+  let occKind = "stone";
+  const METAL_SURFS = new Set(["slab", "deck", "container", "cred", "cblue", "cgreen", "corange", "cyellow"]), WOOD_SURFS = new Set(["boards", "bed"]);
   function occluderDistance(maxDist) {
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
     let best = maxDist, bestBox = null, floor = false;
@@ -6720,6 +6802,8 @@
     if (floor) _occNormal.set(0, 1, 0);
     else if (bestBox && bestBox.round && _occBest.y < bestBox.max.y - 0.02) _occNormal.set(_occBest.x - bestBox.round.x, 0, _occBest.z - bestBox.round.z).normalize();
     else if (bestBox) boxFaceNormal(bestBox, _occBest, _occNormal);
+    const surf = !floor && bestBox && bestBox.surf;
+    occKind = METAL_SURFS.has(surf) ? "metal" : WOOD_SURFS.has(surf) ? "wood" : "stone";
     return best;
   }
 
@@ -7206,7 +7290,7 @@
     const res = computeMultipliers(target, dist, isKnife, ammoBefore, snap, thrown, weapon);
     target.userData.alive = false;
     knockOutTarget(target);
-    burst(target.position, new THREE.Color(TARGET_TYPES[target.userData.type].color).getHex(), target.userData.small ? 8 : 6);
+    impactFx(target.position, null, "target", new THREE.Color(TARGET_TYPES[target.userData.type].color).getHex());
     const pointsGained = awardPoints(res);
     stats.kinds[target.userData.type] = (stats.kinds[target.userData.type] || 0) + 1;
     if (isKnife && !thrown) stat("knifeSwingHits");
@@ -7243,7 +7327,7 @@
         prop.velocity.y += 3.5;
       }
       playKnifeHit();
-      burst(propHits[0].point, 0xd2a679, 5);
+      impactFx(propHits[0].point, null, "wood");
       flashCrosshair();
     } else {
       hit = false;
@@ -7427,7 +7511,7 @@
     lastShotOrigin.copy(_muzzleWorld);
     if (net.active) mpSendShot(_muzzleWorld, _railDir, beamLen);
     if (!hits.length && occ < maxD) {   // it ended on a wall or the floor: leave a mark
-      spawnDecal(_railEnd, _occNormal, 0.09); burst(_railEnd, 0x9fe8ff, 6);
+      spawnDecal(_railEnd, _occNormal, 0.09); impactFx(_railEnd, _occNormal, occKind); sparkBurst(_railEnd, 0x9fe8ff, 10, 8);
     }
     const sn = trickState();
     if (hits.length >= 2) sn.threaded = hits.length;
@@ -7558,11 +7642,11 @@
           prop.velocity.addScaledVector(_pelletDir, CFG.shotForce * (w.pellets > 1 ? 0.35 : 1));
           prop.velocity.y += w.pellets > 1 ? 0.6 : 2;
         }
-        if (puffs++ < 4) burst(propHits[0].point, 0xd2a679, w.pellets > 1 ? 2 : 5);
+        if (puffs++ < 4) impactFx(propHits[0].point, null, "wood");
       } else if (impactDist < maxD) {
         _impactPt.copy(raycaster.ray.origin).addScaledVector(_pelletDir, impactDist);
         spawnDecal(_impactPt, _occNormal, w.pellets > 1 ? 0.045 : w.sniper ? 0.085 : 0.06);
-        if (puffs++ < 4) burst(_impactPt, 0xb8c0c8, w.pellets > 1 ? 2 : 4);
+        if (puffs++ < 4) impactFx(_impactPt, _occNormal, occKind);
       }
     }
 
@@ -7744,9 +7828,48 @@
     tone("sine", 120, 28, 0.85 * SETTINGS.volGuns * lvl, 0.5, 0, 0.3);
     noiseHit(2400, 1.0, 0.25 * SETTINGS.volGuns * lvl, 0.12, "highpass", 0, 0.2);
   }
+  // a blast: a flash of light, a fireball of glowing puffs, sparks and debris, a ring along the ground, then smoke that rises and hangs
+  const blastLight = new THREE.PointLight(0xffa050, 0, 22, 2);
+  scene.add(blastLight);
+  let blastLightAge = 99;
+  const blastRings = [];
+  for (let i = 0; i < 3; i++) {
+    const mesh = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48), new THREE.MeshBasicMaterial({ color: 0xfff0d0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
+    mesh.rotation.x = -Math.PI / 2; mesh.visible = false; mesh.frustumCulled = false;
+    scene.add(mesh);
+    blastRings.push({ mesh, age: 99, r: 4.5 });
+  }
+  function updateBlastExtras(dt) {
+    blastLightAge += dt;
+    blastLight.intensity = blastLightAge < 0.22 ? 9 * (1 - blastLightAge / 0.22) : 0;
+    for (const b of blastRings) {
+      if (!b.mesh.visible) continue;
+      b.age += dt;
+      const t = b.age / 0.3;
+      if (t >= 1) { b.mesh.visible = false; continue; }
+      b.mesh.scale.setScalar(b.r * (0.15 + 1.0 * easeOut(t)));
+      b.mesh.material.opacity = 0.4 * (1 - t) * (1 - t);
+    }
+  }
+  const _blastV = new THREE.Vector3(), _blastP = new THREE.Vector3();
   function showBlast(pos, r) {
     r = r || 4.5;
-    burst(pos, 0xffa020, 26); burst(pos, 0xffe08a, 10); burst(pos, 0x555555, 12);
+    blastLight.position.copy(pos); blastLight.position.y += 0.6; blastLightAge = 0;
+    const ring = blastRings.reduce((a, b) => (a.age > b.age ? a : b));
+    ring.age = 0; ring.r = r; ring.mesh.visible = true;
+    ring.mesh.position.set(pos.x, Math.max(surfaceBelow(pos.x, pos.y + 0.2, pos.z), pos.y - r * 0.5) + 0.06, pos.z);
+    for (let i = 0; i < 14; i++) {   // the fireball
+      _blastV.set(Math.random() - 0.5, Math.random() * 0.8 - 0.2, Math.random() - 0.5).normalize();
+      _blastP.copy(pos).addScaledVector(_blastV, r * 0.12 * Math.random());
+      _blastV.multiplyScalar(r * (0.8 + Math.random() * 0.8));
+      spawnSmoke(_blastP, _blastV.x, _blastV.y, _blastV.z, 0.35 + Math.random() * 0.25, r * 0.22, r * (0.55 + Math.random() * 0.25), 0.9, i % 3 ? 0xff8a2a : 0xffd27a, true);
+    }
+    for (let i = 0; i < 10; i++) {   // the smoke left behind
+      _blastV.set(Math.random() - 0.5, 0, Math.random() - 0.5).multiplyScalar(r * 0.7);
+      spawnSmoke(pos, _blastV.x, 1.2 + Math.random() * 1.2, _blastV.z, 1.6 + Math.random() * 1.0, r * 0.2, r * (0.55 + Math.random() * 0.25), 0.55, i % 2 ? 0x3d3a37 : 0x56524c);
+    }
+    sparkBurst(pos, 0xffb24a, 22, 15);
+    for (let i = 0; i < 8; i++) spawnParticle(pos, 0x3e3a36, (Math.random() - 0.5) * 12, 3 + Math.random() * 6, (Math.random() - 0.5) * 12, 0.9 + Math.random() * 0.4, 0.7, 1);
     const fx = blastFx.reduce((a, b) => (a.age > b.age ? a : b));
     fx.age = 0; fx.r = r; fx.mesh.position.copy(pos); fx.mesh.visible = true;
     playBlastSound(pos, r);
@@ -7755,10 +7878,10 @@
     for (const fx of blastFx) {
       if (!fx.mesh.visible) continue;
       fx.age += dt;
-      const t = fx.age / 0.35;
+      const t = fx.age / 0.2;
       if (t >= 1) { fx.mesh.visible = false; continue; }
       fx.mesh.scale.setScalar(fx.r * (0.25 + 0.75 * Math.sqrt(t)));
-      fx.mesh.material.opacity = 0.55 * (1 - t) * (1 - t);
+      fx.mesh.material.opacity = 0.2 * (1 - t) * (1 - t);
     }
   }
   const blastDamage = (d, kind) => { const b = DAMAGE[kind] || DAMAGE.launcher; return b.max - (b.max - b.min) * Math.min(Math.max(d / b.radius, 0), 1); };
@@ -7938,7 +8061,7 @@
           if (d > R || !botLineClear(pos.x, pos.y, pos.z, q.x, q.y + 0.9, q.z)) continue;
           const res = computeMultipliers(_pseudoTarget, g.from.distanceTo(_blastC.set(q.x, q.y + 0.9, q.z)), false, 0, g.snap, false, w);
           pendingRes.set(q.id, res);
-          burst(_blastC, 0xff5555, 8);
+          impactFx(_blastC, null, "player");
           hits.push({ v: q.id, pts: Math.round(CFG.basePoints * res.mult * (res.scale || 1)), tags: res.tags });
           hitCount++;
         }
@@ -8215,9 +8338,9 @@
             prop.velocity.addScaledVector(d, CFG.shotForce * 0.8);
             prop.mesh.attach(k.root);   // ride along with the crate
           }
-          burst(_kHit, 0xd2a679, 4);
+          impactFx(_kHit, null, "wood");
         } else {
-          burst(_kHit, 0xb8c0c8, 3);
+          impactFx(_kHit, null, "stone");
         }
         continue;
       }
@@ -9203,7 +9326,7 @@
         const wasAlive = t.userData.alive;
         t.userData.alive = false; t.visible = false; t.userData.respawnTimer = 1.1;
         if (wasAlive && m.by !== net.id) {
-          burst(t.position, t.userData.small ? 0x22d3ee : 0xffd24a, 10);
+          impactFx(t.position, null, "target", t.userData.small ? 0x22d3ee : 0xffd24a);
           playHitSound(0.8);
         }
         break;
@@ -9243,7 +9366,7 @@
         if (m.self || m.k === m.v) {   // caught in their own blast
           feedLine("<b>" + esc(v ? v.name : "?") + "</b> blew themselves up");
           if (m.v === net.id) { setLocalDead("your own blast", null, ["You were caught in your own blast"]); lifeLogReset(); }
-          else if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8);
+          else if (v && v.mesh) impactFx(v.mesh.position, null, "player");
           break;
         }
         if (m.k === net.id) { const res = pendingRes.get(m.v); if (res) awardPoints(res, true); playPlayerHit(!!m.head); spawnDamageNumber(v, Math.max(0, Math.min(Number(m.dmg) || 0, 999)), !!m.head, true); }   // the kill pays out
@@ -9259,7 +9382,7 @@
         }
         if (m.v === net.id && net.gungame && m.w === "knife") showKillBanner("KNIFED", "back a level", true);
         if (m.v === net.id) { setLocalDead(k ? k.name : "", m.k, deathRecap(k, m)); lifeLogReset(); }
-        else if (m.k !== net.id) { playPlayerHit(!!m.head, 0.5); if (v && v.mesh) burst(v.mesh.position, 0xff5555, 8); }
+        else if (m.k !== net.id) { playPlayerHit(!!m.head, 0.5); if (v && v.mesh) impactFx(v.mesh.position, null, "player"); }
         break;
       }
 
@@ -9337,7 +9460,7 @@
     const res = computeMultipliers(_pseudoTarget, pres.dist, isKnife, ammoBefore, snap, !!thrown, weapon);
     if (pres.head && !isKnife) { res.mult *= 1.5; res.tags.push("HEADSHOT x1.50"); }
     pendingRes.set(pres.p.id, res);
-    burst(pres.point, 0xff5555, 8);
+    impactFx(pres.point, null, "player");
     sendToHost({ t: "hurt", v: pres.p.id, pts: Math.round(CFG.basePoints * res.mult * (res.scale || 1)), tags: res.tags, head: !!pres.head,
       knife: !!isKnife, thr: !!thrown, n: pellets || 1, h: heads || 0 });
   }
@@ -12405,7 +12528,7 @@
         ud.coreVel = ud.coreVel || new THREE.Vector3();
         ud.coreVel.fromArray(e.cv);
         ud.coreSpin = e.sp;
-        burst(t.position, new THREE.Color(TARGET_TYPES[e.ty] ? TARGET_TYPES[e.ty].color : "#ffffff").getHex(), 6);
+        impactFx(t.position, null, "target", new THREE.Color(TARGET_TYPES[e.ty] ? TARGET_TYPES[e.ty].color : "#ffffff").getHex());
       } else if (e.type === "spawn" && t && TARGET_TYPES[e.ty]) {
         resetTargetParts(t);
         t.children[0].material = TARGET_LOOKS[e.ty];
