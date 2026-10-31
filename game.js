@@ -254,7 +254,7 @@
     // crosshair
     xhStyle: "cross", xhColor: "#eeeeee", xhSize: 9, xhThick: 2, xhGap: 0, xhAlpha: 1, xhOutline: false, hitStyle: "flash",
     // view
-    hand: "right", fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
+    hand: "right", arms: false, fov: 78, bob: 1, shake: 1, scopeSway: true, speedLines: true,
     quality: "auto", showFps: false, trickFeed: true, attach: {}, skin: {}, padOn: true, padLook: 1, reduceMotion: false, highContrast: false, soundCues: false, hudScale: 1, colorblindTargets: false, bulletHoles: true, damageNumbers: true, fullscreen: true, map: "arena",   // graphics: auto / high / medium / low, and the frame counter
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
@@ -2792,9 +2792,17 @@
   // ---- first-person hands: a gloved fist round the grip, a support hand under the fore-end, and a sleeve running back toward the camera ----
   const gloveMat = new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.9, metalness: 0.05 });
   const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x3d4636, roughness: 0.95, metalness: 0.0 });
+  const HANDS = new Map();   // gun group -> its hands
+  function stripHands(root) {
+    const hands = [];
+    root.traverse((o) => { if (o.userData.isHand) hands.push(o); });
+    for (const h of hands) h.parent.remove(h);
+  }
   function addHand(parent, x, y, z, side) {
     const hand = new THREE.Group(); hand.position.set(x, y, z); parent.add(hand);
-    (parent.userData.hands || (parent.userData.hands = [])).push(hand);
+    hand.userData.isHand = true;   // (the attachment picker and the thrown knife leave hands out)
+    if (!HANDS.has(parent)) HANDS.set(parent, []);
+    HANDS.get(parent).push(hand);
     addPart(hand, new THREE.BoxGeometry(0.056, 0.062, 0.078), gloveMat, 0, 0, 0);                                         // fist
     addPart(hand, new THREE.BoxGeometry(0.016, 0.03, 0.05), gloveMat, -0.03 * side, 0.012, -0.012);                       // thumb, on the side nearest the middle
     for (let i = 0; i < 3; i++) addPart(hand, new THREE.BoxGeometry(0.012, 0.012, 0.074), gloveMat, 0.03 * side, -0.02 + i * 0.02, 0);   // knuckles
@@ -2821,7 +2829,7 @@
   addHands(rpgGroup, [0, -0.105, 0.1], [0, -0.08, -0.2]);
   addHands(revolverGroup, [0, -0.07, 0.1]);
   for (const gun of dualGuns) addHands(gun, [0, -0.075, 0.065]);
-  dualGroup.userData.hands = dualGuns.flatMap((g) => g.userData.hands);
+  HANDS.set(dualGroup, dualGuns.flatMap((g) => HANDS.get(g)));
   addHands(railgunGroup, [0, -0.085, 0.12], [0, -0.05, -0.28]);
   addHands(minigunGroup, [0, -0.08, 0.065], [0, -0.075, -0.1]);
 
@@ -2916,7 +2924,6 @@
     p.set(-0.06 * l, 0.04 * l, 0.13 * l);
     r.set(-Math.PI * 2 * easeInOut(t), 0.2 * l, 0.15 * l);
   }
-  RIFLE_INSPECTS[2].letGo = inspectToss.letGo = inspectTwirl.letGo = true;
   const GUN_INSPECTS = [RIFLE_INSPECTS[0], RIFLE_INSPECTS[2], inspectChamber, inspectMuzzleUp, inspectSide, inspectHeft];
   const LIGHT_INSPECTS = GUN_INSPECTS.concat([inspectToss, inspectTwirl]);
   RIFLE_INSPECTS.push(inspectChamber, inspectMuzzleUp, inspectSide);
@@ -2942,7 +2949,6 @@
     },
   ];
 
-  KNIFE_INSPECTS[0].letGo = KNIFE_INSPECTS[1].letGo = KNIFE_INSPECTS[2].letGo = true;
   KNIFE_INSPECTS.push(
     // a quick jab, a twist of the wrist and back
     function (t, p, r) {
@@ -3734,20 +3740,19 @@
       if (vm.slashTimer <= 0) { vm.slashTimer = 0; _swing.fill(0); }
     }
 
-    let ipx = 0, ipy = 0, ipz = 0, irx = 0, iry = 0, irz = 0, handsOn = true;
+    let ipx = 0, ipy = 0, ipz = 0, irx = 0, iry = 0, irz = 0;
     if (vm.inspectTimer > 0) {
       vm.inspectTimer -= dt;
       const t = 1 - Math.max(vm.inspectTimer, 0) / w.inspectDuration;
-      const insp = w.inspects[vm.inspectIndex];
-      insp(Math.min(t, 1), _tmpPos, _tmpRot);
-      handsOn = !(insp.letGo && t > 0.08 && t < 0.92);   // a gun that is tossed or spun leaves the hand
+      w.inspects[vm.inspectIndex](Math.min(t, 1), _tmpPos, _tmpRot);
       const reach = w.inspectReach || 1;
       ipx = _tmpPos.x * reach; ipy = _tmpPos.y * reach; ipz = _tmpPos.z * reach;
       irx = _tmpRot.x; iry = _tmpRot.y; irz = _tmpRot.z;
       if (vm.inspectTimer <= 0) { vm.inspectTimer = 0; boltMesh.position.z = 0.20; }
     }
 
-    if (w.group.userData.hands) for (const h of w.group.userData.hands) h.visible = handsOn;
+    const hh = HANDS.get(w.group);
+    if (hh) for (const h of hh) h.visible = SETTINGS.arms;
 
     const rl = reload.active ? (reload.shells ? shellReloadPose(reload.elapsed) : reloadPose(w, reload.elapsed)) : RELOAD_REST;
 
@@ -7210,6 +7215,7 @@
   const thrownPool = [];
   for (let i = 0; i < 14; i++) {
     const model = knifeGroup.clone();
+    stripHands(model);
     model.visible = true;
     model.position.set(0, 0, 0.06);   // spin about the knife's balance point
     const spin = new THREE.Group();
@@ -11307,6 +11313,7 @@
     const w = WEAPONS[attachGun], flashWas = muzzleFlash.visible;
     muzzleFlash.visible = false;
     const copy = w.group.clone(true);
+    stripHands(copy);
     muzzleFlash.visible = flashWas;
     copy.visible = true; copy.position.set(0, 0, 0); copy.rotation.set(0, 0, 0); copy.scale.set(1, 1, 1);
     copy.updateMatrixWorld(true);
