@@ -1417,7 +1417,7 @@
     maxBots: 11,   // (a big map holds more bots in practice)
     id: "moonbase", name: "Moonbase", blurb: "Low gravity on the moon: huge jumps and long hang time, rocks and base modules, two pairs of portals.",
     half: 45, floor: "moon", wallH: 18, targetMaxY: 18, physics: { gravity: 8.5 },
-    theme: { clouds: false, stars: true, skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0x93a6d2, 0x585d6e, 1.0], exposure: 1.15,
+    theme: { clouds: false, stars: true, skyTop: 0x04050c, skyHorizon: 0x1a1d2c, fog: [80, 260], sunDir: [-30, 28, 40], sunColor: 0xffffff, sunIntensity: 1.35, hemi: [0xb4b9c6, 0x5c5e66, 0.95], exposure: 1.15,
       surfaces: { moon: "#8c8f96", concrete: "#767a82", brick: "#5b6470", deck: "#a0a6af", facade: "#8f969f", facadeb: "#6e7885", roof: "#6c7078" } },
     buildings: [[-22, -20, 12, 8, 4.5, "facade"], [22, 20, 12, 8, 4.5, "facade"], [22, -22, 8, 12, 6.5, "facadeb"], [-22, 22, 8, 12, 6.5, "facadeb"], [0, 0, 7, 7, 9.5, "facade"]],
     walls: [
@@ -7940,7 +7940,7 @@
       const t = fx.age / 0.2;
       if (t >= 1) { fx.mesh.visible = false; continue; }
       fx.mesh.scale.setScalar(fx.r * (0.25 + 0.75 * Math.sqrt(t)));
-      fx.mesh.material.opacity = 0.2 * (1 - t) * (1 - t);
+      fx.mesh.material.opacity = 0.08 * (1 - t) * (1 - t);   // (only a faint flash: the fireball, light and ring carry the blast)
     }
   }
   const blastDamage = (d, kind) => { const b = DAMAGE[kind] || DAMAGE.launcher; return b.max - (b.max - b.min) * Math.min(Math.max(d / b.radius, 0), 1); };

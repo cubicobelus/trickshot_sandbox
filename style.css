@@ -349,7 +349,7 @@
   #hpbar-text { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 12px; font-weight: bold; color: var(--white) !important; text-shadow: 0 0 3px var(--black); }
   /* damage you deal: numbers floating up from the player you hit */
   #dmg-numbers { position: fixed; inset: 0; pointer-events: none; z-index: 5; overflow: hidden; }
-  #dmg-numbers span { position: fixed; transform: translate(-50%, -50%); font: bold 20px var(--font-ui); color: var(--white);
+  #dmg-numbers span { position: fixed; transform: translate(-50%, -50%); font: 700 20px var(--font-display); color: var(--white);
     text-shadow: 0 0 4px var(--black), 0 1px 3px var(--black); white-space: nowrap; }
   #dmg-numbers span.head { color: var(--gold); font-size: 27px; }
   #dmg-numbers span.kill { color: var(--red); font-size: 30px; }
