@@ -1,6 +1,22 @@
 (function () {
   "use strict";
 
+  // ---- colour: every hex and CSS colour in this file is an sRGB colour (what a colour picker shows). The renderer lights in
+  // linear values and converts back on output (sRGB, filmic tone mapping), so colours are turned linear on the way in and back
+  // on the way out. (setColorName goes through setHex, hence the guard.) ----
+  (function () {
+    const C = THREE.Color.prototype, setHex = C.setHex, setStyle = C.setStyle, getHex = C.getHex, getStyle = C.getStyle;
+    let inStyle = false;
+    C.setHex = function (h) { setHex.call(this, h); return inStyle ? this : this.convertSRGBToLinear(); };
+    C.setStyle = function (s) {
+      inStyle = true;
+      try { setStyle.call(this, s); } finally { inStyle = false; }
+      return this.convertSRGBToLinear();
+    };
+    C.getHex = function () { return getHex.call(this.clone().convertLinearToSRGB()); };
+    C.getStyle = function () { return getStyle.call(this.clone().convertLinearToSRGB()); };
+  })();
+
   // "Erase all data" sets this flag and reloads; the wipe happens here, before anything reads storage, so nothing
   // that saves as the page unloads can bring the old data back.
   try {
@@ -336,6 +352,7 @@
   scene.background = new THREE.Color(SKY_HORIZON);
   scene.fog = new THREE.Fog(SKY_HORIZON, 45, 140);
   const SUN_DIR = new THREE.Vector3(30, 50, 20).normalize();
+  const TONE_EXPOSURE = 1.0;   // (a map's theme can set its own: `exposure`)
 
   const camera = new THREE.PerspectiveCamera(CFG.baseFov, window.innerWidth / window.innerHeight, 0.02, 500);
   const pitchObject = new THREE.Object3D();
@@ -351,6 +368,9 @@
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = TONE_EXPOSURE;
   document.body.appendChild(renderer.domElement);
 
   window.addEventListener("resize", () => {
@@ -442,6 +462,8 @@
         "  float s = max(dot(normalize(vDir), sunDir), 0.0);",
         "  c += vec3(1.0, 0.92, 0.75) * (pow(s, 400.0) * 1.2 + pow(s, 12.0) * 0.18);",  // sun disc and halo
         "  gl_FragColor = vec4(c, 1.0);",
+        "  #include <tonemapping_fragment>",   // the same output as everything else, so fog meets the sky without a seam
+        "  #include <encodings_fragment>",
         "}",
       ].join("\n"),
     }));
@@ -501,11 +523,13 @@
   buildEnvironment();
 
   // ---- surface textures, drawn in code: small canvases tiled across each surface ----
+  const srgbTex = (t) => { t.encoding = THREE.sRGBEncoding; return t; };   // a canvas painted in picker colours
   function canvasTexture(size, draw, repeatX, repeatY) {
     const c = document.createElement("canvas");
     c.width = c.height = size;
     draw(c.getContext("2d"), size);
     const t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;   // a colour picture (a mask sets it back to linear)
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.anisotropy = renderer.capabilities.getMaxAnisotropy();
     t.repeat.set(repeatX || 1, repeatY || 1);
@@ -1101,6 +1125,7 @@
     }
     g.putImageData(img, 0, 0);
     waterTexBase = new THREE.CanvasTexture(c);
+    waterTexBase.encoding = THREE.sRGBEncoding;
     waterTexBase.wrapS = waterTexBase.wrapT = THREE.RepeatWrapping;
     return waterTexBase;
   }
@@ -1206,7 +1231,7 @@
       g.fillStyle = "#22262b"; g.fillRect(0, 0, 256, 128);
       g.strokeStyle = "#ffd24a"; g.lineWidth = 6; g.strokeRect(4, 4, 248, 120);
       g.fillStyle = "#fff"; g.font = "bold 64px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(String(d[3]), 128, 68);
-      const board = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshBasicMaterial({ map: srgbTex(new THREE.CanvasTexture(c)) }));
       board.position.set(d[1], FLOOR_Y + 2.4, d[2]); board.rotation.y = (d[4] || 1) > 0 ? Math.PI / 2 : -Math.PI / 2;
       levelGroup.add(board);
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.4, 0.15), new THREE.MeshStandardMaterial({ color: 0x555d66 }));
@@ -4603,7 +4628,7 @@
       g.beginPath(); g.moveTo(61, 64 + s * k); g.lineTo(67, 64 + s * k); g.stroke();
     }
     g.fillStyle = "#ff3b30"; g.beginPath(); g.arc(64, 64, 1.8, 0, 7); g.fill();
-    reticleTexBase = new THREE.CanvasTexture(c);
+    reticleTexBase = srgbTex(new THREE.CanvasTexture(c));
     AT_RETICLE.map = reticleTexBase;
     return reticleTexBase;
   }
@@ -4807,7 +4832,7 @@
       g.fillStyle = colors[1 + Math.floor(rnd() * (colors.length - 1))];
       g.beginPath(); g.ellipse(rnd() * 64, rnd() * 64, 4 + rnd() * 9, 3 + rnd() * 6, rnd() * 3, 0, 7); g.fill();
     }
-    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    const t = srgbTex(new THREE.CanvasTexture(c)); t.wrapS = t.wrapT = THREE.RepeatWrapping;
     return t;
   };
   const SKIN_THEMES = {
@@ -8429,7 +8454,7 @@
     g.strokeText(text, 128, 30);
     g.fillStyle = "#" + color.toString(16).padStart(6, "0");
     g.fillText(text, 128, 30);
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: srgbTex(new THREE.CanvasTexture(c)), transparent: true, toneMapped: false }));
     spr.scale.set(1.7, 0.37, 1);
     spr.position.y = 2.35;
     return spr;
@@ -11651,6 +11676,7 @@
     const canvas = document.getElementById("attach-canvas");
     AP.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     AP.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    AP.renderer.outputEncoding = THREE.sRGBEncoding; AP.renderer.toneMapping = THREE.ACESFilmicToneMapping;   // (as the game's view)
     AP.scene = new THREE.Scene();
     AP.scene.add(new THREE.HemisphereLight(0xffffff, 0x4a4a55, 1.2));
     const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(2, 3, 4); AP.scene.add(key);
