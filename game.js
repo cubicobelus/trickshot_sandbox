@@ -981,18 +981,41 @@
   }
 
   // ---- portals: walk into one end and come out of the other, still going the way you were (keeps your speed) ----
+  // the inside of a portal: a slow spiral, dark in the middle and bright toward the rim, so it looks deep rather than a flat glowing sheet
+  const portalSwirl = canvasTexture(256, (g, n) => {
+    const c = n / 2, grad = g.createRadialGradient(c, c, 0, c, c, c);
+    grad.addColorStop(0, "#1a1a1a"); grad.addColorStop(0.55, "#6a6a6a"); grad.addColorStop(0.92, "#e8e8e8"); grad.addColorStop(1, "#ffffff");
+    g.fillStyle = grad; g.fillRect(0, 0, n, n);
+    g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineCap = "round";
+    for (let arm = 0; arm < 5; arm++) {
+      g.lineWidth = 5 - arm * 0.5; g.beginPath();
+      for (let k = 0; k <= 40; k++) { const t = k / 40, a = arm * (Math.PI * 2 / 5) + t * 4.2, r = c * (0.08 + 0.9 * t); k ? g.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r) : g.moveTo(c + Math.cos(a) * r, c + Math.sin(a) * r); }
+      g.stroke();
+    }
+  });
+  // the frame: a steel oval with a bevelled edge (shared by every portal), and a thin coloured lip inside it
+  let portalFrameGeo = null;
+  const portalFrameMat = new THREE.MeshStandardMaterial({ color: 0x5c636c, roughness: 0.4, metalness: 0.75 });
   function addPortalPair(a) {   // [x, z, facing x, facing z, x2, z2, facing x2, facing z2]
+    if (!portalFrameGeo) {
+      const sh = new THREE.Shape(); sh.absellipse(0, 0, 1.28, 1.86, 0, Math.PI * 2, false, 0);
+      const hole = new THREE.Path(); hole.absellipse(0, 0, 1.04, 1.58, 0, Math.PI * 2, true, 0); sh.holes.push(hole);
+      portalFrameGeo = new THREE.ExtrudeGeometry(sh, { depth: 0.22, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 2, curveSegments: 40 });
+      portalFrameGeo.translate(0, 0, -0.11);
+    }
     const make = (x, z, nx, nz, color) => {
       const g = new THREE.Group();
       g.position.set(x, FLOOR_Y + 1.5, z);
       g.rotation.y = Math.atan2(nx, nz);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.09, 8, 40), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.1, roughness: 0.4 }));
-      ring.scale.y = 1.5;
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.97, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-      disc.scale.y = 1.5;
-      g.add(ring, disc);
+      const frame = new THREE.Mesh(portalFrameGeo, portalFrameMat); frame.castShadow = true;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.035, 6, 48), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9, roughness: 0.4 }));
+      ring.scale.y = 1.52;
+      const tex = portalSwirl.clone(); tex.needsUpdate = true; tex.center.set(0.5, 0.5);
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(1.0, 40), new THREE.MeshBasicMaterial({ color, map: tex, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+      disc.scale.y = 1.52;
+      g.add(frame, ring, disc);
       levelGroup.add(g);
-      return { x, z, nx, nz, disc, pair: null };
+      return { x, z, nx, nz, disc, tex, pair: null };
     };
     const p = make(a[0], a[1], a[2], a[3], 0x2f9bff), q = make(a[4], a[5], a[6], a[7], 0xff8a2a);
     p.pair = q; q.pair = p;
@@ -1058,7 +1081,7 @@
   function updateLevelFx(dt) {
     for (const b of boosts) b.tex.offset.y -= dt * 1.2;
     const t = elapsedTime;
-    for (const p of portals) p.disc.material.opacity = 0.34 + 0.12 * Math.sin(t * 3 + p.x + p.z);
+    for (const p of portals) { p.tex.rotation = -t * 0.9; p.disc.material.opacity = 0.8 + 0.08 * Math.sin(t * 3 + p.x + p.z); }
   }
 
   // ---- kicker ramps: a sloped floor rising along x or z. Running off the high end turns
@@ -1132,15 +1155,27 @@
     mega: { power: () => CFG.megaPadPower, boost: () => CFG.megaPadBoost, color: 0xd23cff, beamColor: 0xe58bff, radius: 1.6, beam: 5.2 },
   };
   const padBaseMat = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
-  // the light column fades out toward the top: an alpha map running from opaque at the base to clear
-  const beamFade = canvasTexture(64, (g, n) => {
-    const grad = g.createLinearGradient(0, n, 0, 0);   // canvas bottom is the cylinder's base (v = 0)
-    grad.addColorStop(0, "#fff");
-    grad.addColorStop(0.35, "#888");
-    grad.addColorStop(1, "#000");
-    g.fillStyle = grad; g.fillRect(0, 0, n, n);
+  // the plate: a dark steel grille with vent slots in two rings and four arrows; only the slots and arrows light up
+  // (the same drawing is the colour and the glow), so a pad reads as a machine, not as a glowing disc
+  const padPlateTex = canvasTexture(256, (g, n) => {
+    const c = n / 2;
+    g.fillStyle = "#2a2e34"; g.fillRect(0, 0, n, n);
+    g.strokeStyle = "#454b53"; g.lineWidth = 2;
+    for (let r = 20; r < c; r += 14) { g.beginPath(); g.arc(c, c, r, 0, 7); g.stroke(); }
+    g.fillStyle = "#fff";
+    for (const [r0, r1, k] of [[c * 0.58, c * 0.78, 20], [c * 0.84, c * 0.95, 28]]) {
+      for (let i = 0; i < k; i++) {
+        const a0 = (i / k) * Math.PI * 2 + 0.05, a1 = a0 + (Math.PI * 2 / k) * 0.55;
+        g.beginPath(); g.arc(c, c, r1, a0, a1); g.arc(c, c, r0, a1, a0, true); g.closePath(); g.fill();
+      }
+    }
+    for (let i = 0; i < 4; i++) {   // arrows pointing out from the middle
+      g.save(); g.translate(c, c); g.rotate(i * Math.PI / 2);
+      g.beginPath(); g.moveTo(0, -c * 0.46); g.lineTo(c * 0.13, -c * 0.3); g.lineTo(c * 0.05, -c * 0.3); g.lineTo(c * 0.05, -c * 0.16);
+      g.lineTo(-c * 0.05, -c * 0.16); g.lineTo(-c * 0.05, -c * 0.3); g.lineTo(-c * 0.13, -c * 0.3); g.closePath(); g.fill(); g.restore();
+    }
+    g.fillStyle = "#3a3f46"; g.beginPath(); g.arc(c, c, c * 0.12, 0, 7); g.fill();
   });
-  beamFade.wrapS = beamFade.wrapT = THREE.ClampToEdgeWrapping;
   const jumpPads = [];
   function addJumpPad(x, y, z, tier) {
     const T = PAD_TIERS[tier];
@@ -1149,26 +1184,34 @@
     const base = new THREE.Mesh(new THREE.CylinderGeometry(T.radius + 0.15, T.radius + 0.3, 0.14, 32), padBaseMat);
     base.position.y = 0.07;
     base.receiveShadow = true;
-    const glowMat = new THREE.MeshStandardMaterial({ color: T.color, emissive: T.color, emissiveIntensity: 0.8, roughness: 0.4 });
-    const glow = new THREE.Mesh(new THREE.CylinderGeometry(T.radius - 0.15, T.radius - 0.15, 0.16, 32), glowMat);
+    const glowMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(T.color).multiplyScalar(0.35), map: padPlateTex, emissive: T.color, emissiveMap: padPlateTex, emissiveIntensity: 0.8, roughness: 0.45, metalness: 0.5 });
+    const glow = new THREE.Mesh(new THREE.CylinderGeometry(T.radius - 0.05, T.radius - 0.05, 0.16, 40), [padBaseMat, glowMat, padBaseMat]);
     glow.position.y = 0.08;
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(T.radius, 0.05, 6, 40), glowMat);
+    const rimMat = new THREE.MeshStandardMaterial({ color: tier === "mega" ? 0xd8a23a : 0x9aa3ad, roughness: 0.35, metalness: 0.8 });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(T.radius, 0.07, 8, 48), rimMat);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.16;
-    // a column of light so pads read from across the map; taller for the mega pads
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(T.radius - 0.4, T.radius - 0.15, T.beam, 24, 1, true), new THREE.MeshBasicMaterial({
-      color: T.beamColor, alphaMap: beamFade, transparent: true, opacity: 0.3,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-    beam.position.y = 0.16 + T.beam / 2;
-    g.add(base, glow, ring, beam);
+    g.add(base, glow, ring);
+    // rings of light that rise off the pad and fade, so it reads from across the map as "this throws you up"; more and higher on a mega pad
+    const rings = [];
+    for (let i = 0; i < (tier === "mega" ? 4 : 3); i++) {
+      const rm = new THREE.Mesh(new THREE.TorusGeometry(T.radius - 0.2, 0.045, 6, 48), new THREE.MeshBasicMaterial({ color: T.beamColor, transparent: true, opacity: 0, depthWrite: false }));
+      rm.rotation.x = Math.PI / 2; g.add(rm); rings.push(rm);
+    }
     levelGroup.add(g);
-    jumpPads.push({ x, y: y + 0.16, z, r: T.radius, power: T.power(), boost: T.boost(), glowMat, beam, flash: 0 });
+    jumpPads.push({ x, y: y + 0.16, z, r: T.radius, power: T.power(), boost: T.boost(), glowMat, rings, rise: T.beam, flash: 0 });
   }
   function updateJumpPads(dt) {
     for (const p of jumpPads) {
       p.flash = Math.max(0, p.flash - dt * 3);
-      p.glowMat.emissiveIntensity = 0.7 + 0.25 * Math.sin(elapsedTime * 4 + p.x) + p.flash * 1.5;
-      p.beam.material.opacity = 0.26 + 0.08 * Math.sin(elapsedTime * 4 + p.x) + p.flash * 0.5;
+      p.glowMat.emissiveIntensity = 0.75 + 0.2 * Math.sin(elapsedTime * 4 + p.x) + p.flash * 1.5;
+      const n = p.rings.length;
+      p.rings.forEach((rm, i) => {
+        const f = (((elapsedTime * 0.7 + i / n + p.x * 0.13) % 1) + 1) % 1;
+        rm.position.y = 0.2 + f * f * p.rise * (1 + p.flash * 0.6);
+        rm.scale.setScalar(1 - 0.35 * f);
+        rm.material.opacity = Math.min(f * 8, 1) * (1 - f) * (0.8 + p.flash * 0.2);
+      });
     }
   }
 
