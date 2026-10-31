@@ -2444,6 +2444,32 @@
   // ======================================================================
   // VIEWMODELS
   // ======================================================================
+  // A box with its edges chamfered, so a part catches a line of light along each edge instead of meeting its neighbour
+  // in a hard seam: the gun and player models are built from these. The bevel is a fifth of the thinnest side, at most
+  // rMax (6 mm by default); thin parts stay plain boxes. UVs are laid out like a plain box's, so skin patterns keep their scale.
+  function bevelBox(w, h, d, rMax) {
+    const r = Math.min(rMax || 0.006, Math.min(w, h, d) * 0.2);
+    if (r < 0.0015) return new THREE.BoxGeometry(w, h, d);
+    const iw = w / 2 - r, ih = h / 2 - r, c = Math.min(r * 0.8, iw, ih), sh = new THREE.Shape();
+    sh.moveTo(-iw + c, -ih); sh.lineTo(iw - c, -ih); sh.lineTo(iw, -ih + c); sh.lineTo(iw, ih - c);
+    sh.lineTo(iw - c, ih); sh.lineTo(-iw + c, ih); sh.lineTo(-iw, ih - c); sh.lineTo(-iw, -ih + c); sh.closePath();
+    const e = new THREE.ExtrudeGeometry(sh, { depth: d - 2 * r, bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: 1, curveSegments: 1 });
+    e.translate(0, 0, -(d - 2 * r) / 2);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", e.attributes.position);
+    g.setAttribute("normal", e.attributes.normal);
+    const pos = e.attributes.position, nor = e.attributes.normal, uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i) / w + 0.5, y = pos.getY(i) / h + 0.5, z = pos.getZ(i) / d + 0.5;
+      const ax = Math.abs(nor.getX(i)), ay = Math.abs(nor.getY(i)), az = Math.abs(nor.getZ(i));
+      if (az >= ax && az >= ay) uv.set([x, y], i * 2); else if (ax >= ay) uv.set([z, y], i * 2); else uv.set([x, z], i * 2);
+    }
+    g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    g.computeBoundingSphere();
+    g.parameters = { width: w, height: h, depth: d };
+    e.dispose();
+    return g;
+  }
   const metalDark = new THREE.MeshStandardMaterial({ color: 0x232427, roughness: 0.45, metalness: 0.6, envMapIntensity: 0.55 });
   const metalMid = new THREE.MeshStandardMaterial({ color: 0x3c3f45, roughness: 0.5, metalness: 0.5, envMapIntensity: 0.55 });
   const woodStock = new THREE.MeshStandardMaterial({ color: 0x4b3a2a, roughness: 0.8, metalness: 0.05 });
@@ -2466,32 +2492,32 @@
   const rifleGroup = new THREE.Group();
   const HALF_PI = Math.PI / 2;
   // receiver, top rail and bolt shroud
-  addPart(rifleGroup, new THREE.BoxGeometry(0.10, 0.115, 0.46), metalMid, 0, 0, 0);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.045, 0.014, 0.44), metalDark, 0, 0.064, -0.02);
-  for (let i = 0; i < 9; i++) addPart(rifleGroup, new THREE.BoxGeometry(0.05, 0.006, 0.012), metalDark, 0, 0.073, -0.21 + i * 0.045);
+  addPart(rifleGroup, bevelBox(0.10, 0.115, 0.46), metalMid, 0, 0, 0);
+  addPart(rifleGroup, bevelBox(0.045, 0.014, 0.44), metalDark, 0, 0.064, -0.02);
+  for (let i = 0; i < 9; i++) addPart(rifleGroup, bevelBox(0.05, 0.006, 0.012), metalDark, 0, 0.073, -0.21 + i * 0.045);
   addPart(rifleGroup, new THREE.CylinderGeometry(0.026, 0.028, 0.05, 12), metalMid, 0, 0.02, 0.255, HALF_PI, 0, 0);
   // stock: wood with a raised cheek rest and a rubber butt pad
   const rifleStock = new THREE.Group();   // the light stock attachment swaps it for a skeleton frame
   rifleGroup.add(rifleStock);
-  addPart(rifleStock, new THREE.BoxGeometry(0.08, 0.10, 0.34), woodStock, 0, -0.01, 0.36);
-  addPart(rifleStock, new THREE.BoxGeometry(0.07, 0.06, 0.20), woodStock, 0, -0.07, 0.42, -0.12, 0, 0);
-  addPart(rifleStock, new THREE.BoxGeometry(0.055, 0.04, 0.18), woodStock, 0, 0.07, 0.30);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.085, 0.15, 0.03), gripMat, 0, -0.03, 0.54);
+  addPart(rifleStock, bevelBox(0.08, 0.10, 0.34), woodStock, 0, -0.01, 0.36);
+  addPart(rifleStock, bevelBox(0.07, 0.06, 0.20), woodStock, 0, -0.07, 0.42, -0.12, 0, 0);
+  addPart(rifleStock, bevelBox(0.055, 0.04, 0.18), woodStock, 0, 0.07, 0.30);
+  addPart(rifleGroup, bevelBox(0.085, 0.15, 0.03), gripMat, 0, -0.03, 0.54);
   // pistol grip, trigger guard and trigger
-  addPart(rifleGroup, new THREE.BoxGeometry(0.05, 0.13, 0.055), gripMat, 0, -0.11, 0.19, 0.32, 0, 0);
+  addPart(rifleGroup, bevelBox(0.05, 0.13, 0.055), gripMat, 0, -0.11, 0.19, 0.32, 0, 0);
   addPart(rifleGroup, new THREE.TorusGeometry(0.032, 0.006, 6, 14, Math.PI), metalDark, 0, -0.058, 0.10, 0, HALF_PI, Math.PI);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.008, 0.035, 0.008), metalDark, 0, -0.075, 0.10, 0.25, 0, 0);
+  addPart(rifleGroup, bevelBox(0.008, 0.035, 0.008), metalDark, 0, -0.075, 0.10, 0.25, 0, 0);
   // wooden forend under the barrel
-  addPart(rifleGroup, new THREE.BoxGeometry(0.075, 0.07, 0.36), woodStock, 0, -0.025, -0.40);
+  addPart(rifleGroup, bevelBox(0.075, 0.07, 0.36), woodStock, 0, -0.025, -0.40);
   // tapered barrel
   addPart(rifleGroup, new THREE.CylinderGeometry(0.023, 0.033, 0.88, 16), metalDark, 0, 0.005, -0.64, HALF_PI, 0, 0);
   // muzzle brake: a block with three gas ports cut into each side (a fitted muzzle attachment replaces it)
   const rifleBrake = new THREE.Group();
   rifleGroup.add(rifleBrake);
-  addPart(rifleBrake, new THREE.BoxGeometry(0.068, 0.058, 0.15), metalDark, 0, 0.005, -1.11);
+  addPart(rifleBrake, bevelBox(0.068, 0.058, 0.15), metalDark, 0, 0.005, -1.11);
   for (let i = 0; i < 3; i++) {
     for (const side of [-1, 1]) {
-      addPart(rifleBrake, new THREE.BoxGeometry(0.004, 0.036, 0.022), portMat, side * 0.0335, 0.005, -1.065 - i * 0.04);
+      addPart(rifleBrake, bevelBox(0.004, 0.036, 0.022), portMat, side * 0.0335, 0.005, -1.065 - i * 0.04);
     }
   }
   // folded bipod, legs tucked along the barrel
@@ -2512,7 +2538,7 @@
   addPart(scopeLow, new THREE.CylinderGeometry(0.016, 0.016, 0.028, 12), metalMid, 0, 0.038, 0.01);                      // elevation turret
   for (const z of [-0.05, 0.1]) {
     addPart(scopeLow, new THREE.TorusGeometry(0.033, 0.009, 8, 16), metalDark, 0, 0, z);
-    addPart(scopeLow, new THREE.BoxGeometry(0.028, 0.06, 0.028), metalDark, 0, -0.04, z);
+    addPart(scopeLow, bevelBox(0.028, 0.06, 0.028), metalDark, 0, -0.04, z);
   }
   addPart(scopeLow, new THREE.CircleGeometry(0.036, 20), scopeGlass, 0, 0, -0.1715);
   addPart(scopeLow, new THREE.CircleGeometry(0.026, 20), scopeGlass, 0, 0, 0.2465, 0, Math.PI, 0);
@@ -2531,7 +2557,7 @@
   addPart(scopeHigh, new THREE.CylinderGeometry(0.026, 0.026, 0.014, 12), metalMid, -0.05, 0, -0.17, 0, 0, HALF_PI);     // parallax wheel
   for (const z of [-0.1, 0.14]) {
     addPart(scopeHigh, new THREE.TorusGeometry(0.040, 0.010, 8, 16), metalDark, 0, 0, z);
-    addPart(scopeHigh, new THREE.BoxGeometry(0.03, 0.05, 0.03), metalDark, 0, -0.035, z);
+    addPart(scopeHigh, bevelBox(0.03, 0.05, 0.03), metalDark, 0, -0.035, z);
   }
   addPart(scopeHigh, new THREE.CircleGeometry(0.052, 20), scopeGlass, 0, 0, -0.3615);
   addPart(scopeHigh, new THREE.CircleGeometry(0.012, 10), glintMat, -0.016, 0.017, -0.3625);
@@ -2540,14 +2566,14 @@
   // puts the post's tip level with the top of the notch
   const rifleIrons = new THREE.Group();
   rifleGroup.add(rifleIrons);
-  addPart(rifleIrons, new THREE.BoxGeometry(0.024, 0.032, 0.03), metalDark, 0, 0.052, -0.99);      // front sight block
-  addPart(rifleIrons, new THREE.BoxGeometry(0.004, 0.04, 0.004), metalMid, 0, 0.088, -0.99);        // front post
-  addPart(rifleIrons, new THREE.BoxGeometry(0.004, 0.044, 0.022), metalDark, -0.013, 0.09, -0.99);  // hood ears
-  addPart(rifleIrons, new THREE.BoxGeometry(0.004, 0.044, 0.022), metalDark, 0.013, 0.09, -0.99);
-  addPart(rifleIrons, new THREE.BoxGeometry(0.034, 0.016, 0.03), metalDark, 0, 0.084, 0.06);        // rear sight base
-  addPart(rifleIrons, new THREE.BoxGeometry(0.011, 0.016, 0.006), metalDark, -0.0105, 0.1, 0.06);   // rear ears, the notch between
-  addPart(rifleIrons, new THREE.BoxGeometry(0.011, 0.016, 0.006), metalDark, 0.0105, 0.1, 0.06);
-  const magMesh = addPart(rifleGroup, new THREE.BoxGeometry(0.055, 0.19, 0.07), metalDark, 0, -0.15, 0.02, -0.15, 0, 0);
+  addPart(rifleIrons, bevelBox(0.024, 0.032, 0.03), metalDark, 0, 0.052, -0.99);      // front sight block
+  addPart(rifleIrons, bevelBox(0.004, 0.04, 0.004), metalMid, 0, 0.088, -0.99);        // front post
+  addPart(rifleIrons, bevelBox(0.004, 0.044, 0.022), metalDark, -0.013, 0.09, -0.99);  // hood ears
+  addPart(rifleIrons, bevelBox(0.004, 0.044, 0.022), metalDark, 0.013, 0.09, -0.99);
+  addPart(rifleIrons, bevelBox(0.034, 0.016, 0.03), metalDark, 0, 0.084, 0.06);        // rear sight base
+  addPart(rifleIrons, bevelBox(0.011, 0.016, 0.006), metalDark, -0.0105, 0.1, 0.06);   // rear ears, the notch between
+  addPart(rifleIrons, bevelBox(0.011, 0.016, 0.006), metalDark, 0.0105, 0.1, 0.06);
+  const magMesh = addPart(rifleGroup, bevelBox(0.055, 0.19, 0.07), metalDark, 0, -0.15, 0.02, -0.15, 0, 0);
 
   // ---- dropped magazines: the empty mag falls out during a reload and lies on the floor ----
   const magDropPool = [];
@@ -2619,10 +2645,10 @@
   rifleGroup.add(boltMesh);
   addPart(boltMesh, new THREE.CylinderGeometry(0.008, 0.008, 0.055, 8), metalMid, 0.027, 0, 0, 0, 0, Math.PI / 2);
   addPart(boltMesh, new THREE.SphereGeometry(0.018, 10, 10), metalMid, 0.058, -0.004, 0);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.012, 0.012, 0.24), metalDark, 0.022, -0.035, -0.75);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.012, 0.012, 0.24), metalDark, -0.022, -0.035, -0.75);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.018, 0.016, 0.02), gripMat, 0.022, -0.035, -0.88);
-  addPart(rifleGroup, new THREE.BoxGeometry(0.018, 0.016, 0.02), gripMat, -0.022, -0.035, -0.88);
+  addPart(rifleGroup, bevelBox(0.012, 0.012, 0.24), metalDark, 0.022, -0.035, -0.75);
+  addPart(rifleGroup, bevelBox(0.012, 0.012, 0.24), metalDark, -0.022, -0.035, -0.75);
+  addPart(rifleGroup, bevelBox(0.018, 0.016, 0.02), gripMat, 0.022, -0.035, -0.88);
+  addPart(rifleGroup, bevelBox(0.018, 0.016, 0.02), gripMat, -0.022, -0.035, -0.88);
 
   const flashMat = new THREE.MeshBasicMaterial({
     color: 0xffc66a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
@@ -2633,8 +2659,8 @@
   rifleGroup.add(muzzleFlash);
   // forward plume, plus the sideways jets the muzzle brake throws out
   addPart(muzzleFlash, new THREE.ConeGeometry(0.06, 0.38, 8), flashMat, 0, 0, -0.17, -Math.PI / 2, 0, 0);
-  addPart(muzzleFlash, new THREE.BoxGeometry(0.34, 0.03, 0.03), flashMat, 0, 0, 0.13);
-  addPart(muzzleFlash, new THREE.BoxGeometry(0.26, 0.022, 0.022), flashMat, 0, 0, 0.06);
+  addPart(muzzleFlash, bevelBox(0.34, 0.03, 0.03), flashMat, 0, 0, 0.13);
+  addPart(muzzleFlash, bevelBox(0.26, 0.022, 0.022), flashMat, 0, 0, 0.06);
   const flashJets = [muzzleFlash.children[1], muzzleFlash.children[2]];
 
   // lights up the surroundings for a frame; lives on the camera so it never drops out
@@ -2659,9 +2685,9 @@
     geo.translate(0, 0, -0.0065);
     geo.rotateY(Math.PI / 2);
     knifeGroup.add(new THREE.Mesh(geo, bladeMat));
-    addPart(knifeGroup, new THREE.BoxGeometry(0.016, 0.010, 0.30), bladeEdgeMat, 0, -0.026, -0.16);
-    addPart(knifeGroup, new THREE.BoxGeometry(0.016, 0.011, 0.20), metalMid, 0, 0.012, -0.16);
-    addPart(knifeGroup, new THREE.BoxGeometry(0.085, 0.030, 0.030), metalDark, 0, 0.004, 0.018);
+    addPart(knifeGroup, bevelBox(0.016, 0.010, 0.30), bladeEdgeMat, 0, -0.026, -0.16);
+    addPart(knifeGroup, bevelBox(0.016, 0.011, 0.20), metalMid, 0, 0.012, -0.16);
+    addPart(knifeGroup, bevelBox(0.085, 0.030, 0.030), metalDark, 0, 0.004, 0.018);
     addPart(knifeGroup, new THREE.CylinderGeometry(0.023, 0.026, 0.055, 10), gripMat, 0, -0.002, 0.062, Math.PI / 2, 0, 0);
     addPart(knifeGroup, new THREE.CylinderGeometry(0.026, 0.026, 0.055, 10), gripMat, 0, -0.004, 0.118, Math.PI / 2, 0, 0);
     addPart(knifeGroup, new THREE.CylinderGeometry(0.026, 0.022, 0.055, 10), gripMat, 0, -0.006, 0.174, Math.PI / 2, 0, 0);
@@ -2673,46 +2699,46 @@
   const polymerMat = new THREE.MeshStandardMaterial({ color: 0x2b2c2f, roughness: 0.75, metalness: 0.15, envMapIntensity: 0.6 });
   // ---- assault rifle: flat-top carbine with a quad-rail handguard ----
   const arGroup = new THREE.Group();
-  addPart(arGroup, new THREE.BoxGeometry(0.05, 0.06, 0.26), metalDark, 0, 0.02, 0);              // upper receiver
-  addPart(arGroup, new THREE.BoxGeometry(0.046, 0.05, 0.19), metalMid, 0, -0.03, 0.02);         // lower receiver
-  addPart(arGroup, new THREE.BoxGeometry(0.03, 0.012, 0.25), metalDark, 0, 0.056, -0.01);       // top rail
-  addPart(arGroup, new THREE.BoxGeometry(0.062, 0.062, 0.25), polymerMat, 0, 0.015, -0.26);     // handguard
-  for (let i = 0; i < 6; i++) addPart(arGroup, new THREE.BoxGeometry(0.066, 0.008, 0.012), metalDark, 0, 0.015, -0.16 - i * 0.04);
+  addPart(arGroup, bevelBox(0.05, 0.06, 0.26), metalDark, 0, 0.02, 0);              // upper receiver
+  addPart(arGroup, bevelBox(0.046, 0.05, 0.19), metalMid, 0, -0.03, 0.02);         // lower receiver
+  addPart(arGroup, bevelBox(0.03, 0.012, 0.25), metalDark, 0, 0.056, -0.01);       // top rail
+  addPart(arGroup, bevelBox(0.062, 0.062, 0.25), polymerMat, 0, 0.015, -0.26);     // handguard
+  for (let i = 0; i < 6; i++) addPart(arGroup, bevelBox(0.066, 0.008, 0.012), metalDark, 0, 0.015, -0.16 - i * 0.04);
   addPart(arGroup, new THREE.CylinderGeometry(0.011, 0.011, 0.24, 10), metalDark, 0, 0.015, -0.50, HALF_PI, 0, 0);   // barrel
   addPart(arGroup, new THREE.CylinderGeometry(0.015, 0.015, 0.055, 10), metalDark, 0, 0.015, -0.64, HALF_PI, 0, 0);  // flash hider
   // iron sights: aiming looks through the rear ring with the front post's tip at its centre
-  addPart(arGroup, new THREE.BoxGeometry(0.008, 0.036, 0.012), metalDark, 0, 0.059, -0.37);     // front sight post
+  addPart(arGroup, bevelBox(0.008, 0.036, 0.012), metalDark, 0, 0.059, -0.37);     // front sight post
   const arRear = new THREE.Group();   // folds away under a red dot
   arGroup.add(arRear);
-  addPart(arRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.064, 0.08);        // rear sight base
+  addPart(arRear, bevelBox(0.03, 0.016, 0.03), metalDark, 0, 0.064, 0.08);        // rear sight base
   addPart(arRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.077, 0.08);  // rear sight ring
-  addPart(arGroup, new THREE.BoxGeometry(0.035, 0.1, 0.04), gripMat, 0, -0.085, 0.10, 0.35, 0, 0);   // pistol grip
+  addPart(arGroup, bevelBox(0.035, 0.1, 0.04), gripMat, 0, -0.085, 0.10, 0.35, 0, 0);   // pistol grip
   addPart(arGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.058, 0.04, 0, HALF_PI, Math.PI);
   addPart(arGroup, new THREE.CylinderGeometry(0.016, 0.016, 0.17, 10), metalDark, 0, 0.008, 0.21, HALF_PI, 0, 0);    // buffer tube
-  addPart(arGroup, new THREE.BoxGeometry(0.045, 0.075, 0.14), polymerMat, 0, -0.015, 0.31);     // stock
-  addPart(arGroup, new THREE.BoxGeometry(0.02, 0.012, 0.03), metalMid, 0, 0.055, 0.12);         // charging handle
-  const arMag = addPart(arGroup, new THREE.BoxGeometry(0.03, 0.15, 0.065), metalDark, 0, -0.12, -0.035, 0.2, 0, 0);
+  addPart(arGroup, bevelBox(0.045, 0.075, 0.14), polymerMat, 0, -0.015, 0.31);     // stock
+  addPart(arGroup, bevelBox(0.02, 0.012, 0.03), metalMid, 0, 0.055, 0.12);         // charging handle
+  const arMag = addPart(arGroup, bevelBox(0.03, 0.15, 0.065), metalDark, 0, -0.12, -0.035, 0.2, 0, 0);
 
   // ---- AK: wooden furniture, gas tube over the barrel, slant brake, curved mag ----
   const akGroup = new THREE.Group();
-  addPart(akGroup, new THREE.BoxGeometry(0.048, 0.06, 0.27), metalDark, 0, 0, 0);                // receiver
-  addPart(akGroup, new THREE.BoxGeometry(0.044, 0.018, 0.25), metalMid, 0, 0.038, 0.005);       // dust cover
-  addPart(akGroup, new THREE.BoxGeometry(0.004, 0.012, 0.09), metalMid, 0.026, 0.008, 0.02);     // bolt carrier slot
-  addPart(akGroup, new THREE.BoxGeometry(0.02, 0.01, 0.012), metalMid, 0.036, 0.008, -0.04);     // charging handle, right side
+  addPart(akGroup, bevelBox(0.048, 0.06, 0.27), metalDark, 0, 0, 0);                // receiver
+  addPart(akGroup, bevelBox(0.044, 0.018, 0.25), metalMid, 0, 0.038, 0.005);       // dust cover
+  addPart(akGroup, bevelBox(0.004, 0.012, 0.09), metalMid, 0.026, 0.008, 0.02);     // bolt carrier slot
+  addPart(akGroup, bevelBox(0.02, 0.01, 0.012), metalMid, 0.036, 0.008, -0.04);     // charging handle, right side
   addPart(akGroup, new THREE.CylinderGeometry(0.011, 0.011, 0.42, 10), metalDark, 0, 0.0, -0.33, HALF_PI, 0, 0);    // barrel
   addPart(akGroup, new THREE.CylinderGeometry(0.009, 0.009, 0.22, 8), metalDark, 0, 0.03, -0.22, HALF_PI, 0, 0);    // gas tube
-  addPart(akGroup, new THREE.BoxGeometry(0.05, 0.04, 0.17), woodStock, 0, -0.012, -0.22);        // lower handguard
-  addPart(akGroup, new THREE.BoxGeometry(0.036, 0.02, 0.15), woodStock, 0, 0.035, -0.22);        // upper handguard
-  addPart(akGroup, new THREE.BoxGeometry(0.028, 0.045, 0.03), metalDark, 0, 0.012, -0.36);       // gas block
-  addPart(akGroup, new THREE.BoxGeometry(0.022, 0.04, 0.03), metalDark, 0, 0.02, -0.5);          // front sight block
-  addPart(akGroup, new THREE.BoxGeometry(0.004, 0.022, 0.004), metalMid, 0, 0.049, -0.5);        // front sight post
+  addPart(akGroup, bevelBox(0.05, 0.04, 0.17), woodStock, 0, -0.012, -0.22);        // lower handguard
+  addPart(akGroup, bevelBox(0.036, 0.02, 0.15), woodStock, 0, 0.035, -0.22);        // upper handguard
+  addPart(akGroup, bevelBox(0.028, 0.045, 0.03), metalDark, 0, 0.012, -0.36);       // gas block
+  addPart(akGroup, bevelBox(0.022, 0.04, 0.03), metalDark, 0, 0.02, -0.5);          // front sight block
+  addPart(akGroup, bevelBox(0.004, 0.022, 0.004), metalMid, 0, 0.049, -0.5);        // front sight post
   addPart(akGroup, new THREE.CylinderGeometry(0.014, 0.014, 0.05, 10), metalDark, 0, 0.0, -0.565, HALF_PI, 0, 0);   // slant brake
   // rear sight: a leaf with a notch the front post lines up in
-  addPart(akGroup, new THREE.BoxGeometry(0.032, 0.012, 0.04), metalDark, 0, 0.034, -0.105);
-  addPart(akGroup, new THREE.BoxGeometry(0.011, 0.012, 0.006), metalDark, -0.0105, 0.054, -0.105);
-  addPart(akGroup, new THREE.BoxGeometry(0.011, 0.012, 0.006), metalDark, 0.0105, 0.054, -0.105);
-  addPart(akGroup, new THREE.BoxGeometry(0.032, 0.006, 0.006), metalDark, 0, 0.045, -0.105);
-  addPart(akGroup, new THREE.BoxGeometry(0.034, 0.1, 0.042), woodStock, 0, -0.07, 0.08, 0.3, 0, 0);    // pistol grip
+  addPart(akGroup, bevelBox(0.032, 0.012, 0.04), metalDark, 0, 0.034, -0.105);
+  addPart(akGroup, bevelBox(0.011, 0.012, 0.006), metalDark, -0.0105, 0.054, -0.105);
+  addPart(akGroup, bevelBox(0.011, 0.012, 0.006), metalDark, 0.0105, 0.054, -0.105);
+  addPart(akGroup, bevelBox(0.032, 0.006, 0.006), metalDark, 0, 0.045, -0.105);
+  addPart(akGroup, bevelBox(0.034, 0.1, 0.042), woodStock, 0, -0.07, 0.08, 0.3, 0, 0);    // pistol grip
   addPart(akGroup, new THREE.TorusGeometry(0.024, 0.0045, 6, 12, Math.PI), metalDark, 0, -0.032, 0.025, 0, HALF_PI, Math.PI);
   (function buildAkStock() {
     const p = new THREE.Shape();
@@ -2734,29 +2760,29 @@
   const akMag = new THREE.Group();
   akMag.position.set(0, -0.05, -0.045);
   akGroup.add(akMag);
-  addPart(akMag, new THREE.BoxGeometry(0.028, 0.06, 0.06), metalDark, 0, -0.03, 0, 0.12, 0, 0);
-  addPart(akMag, new THREE.BoxGeometry(0.028, 0.06, 0.058), metalDark, 0, -0.085, -0.016, 0.32, 0, 0);
-  addPart(akMag, new THREE.BoxGeometry(0.028, 0.055, 0.055), metalDark, 0, -0.135, -0.044, 0.55, 0, 0);
+  addPart(akMag, bevelBox(0.028, 0.06, 0.06), metalDark, 0, -0.03, 0, 0.12, 0, 0);
+  addPart(akMag, bevelBox(0.028, 0.06, 0.058), metalDark, 0, -0.085, -0.016, 0.32, 0, 0);
+  addPart(akMag, bevelBox(0.028, 0.055, 0.055), metalDark, 0, -0.135, -0.044, 0.55, 0, 0);
 
   // ---- pump shotgun: a classic 870-style gun ----
   const shotgunGroup = new THREE.Group();
   // receiver, with the ejection port on the right and the loading port underneath
-  addPart(shotgunGroup, new THREE.BoxGeometry(0.062, 0.08, 0.25), metalDark, 0, 0, 0);
-  addPart(shotgunGroup, new THREE.BoxGeometry(0.004, 0.032, 0.085), portMat, 0.0312, 0.012, -0.03);
-  addPart(shotgunGroup, new THREE.BoxGeometry(0.036, 0.004, 0.09), portMat, 0, -0.0402, -0.03);
+  addPart(shotgunGroup, bevelBox(0.062, 0.08, 0.25), metalDark, 0, 0, 0);
+  addPart(shotgunGroup, bevelBox(0.004, 0.032, 0.085), portMat, 0.0312, 0.012, -0.03);
+  addPart(shotgunGroup, bevelBox(0.036, 0.004, 0.09), portMat, 0, -0.0402, -0.03);
   // barrel with a vent rib on top; the bead sits on the rib's front end
   addPart(shotgunGroup, new THREE.CylinderGeometry(0.016, 0.016, 0.62, 14), metalDark, 0, 0.022, -0.44, HALF_PI, 0, 0);
-  addPart(shotgunGroup, new THREE.BoxGeometry(0.012, 0.004, 0.6), metalMid, 0, 0.042, -0.44);
-  for (let i = 0; i < 12; i++) addPart(shotgunGroup, new THREE.BoxGeometry(0.008, 0.004, 0.006), metalMid, 0, 0.0385, -0.17 - i * 0.05);
+  addPart(shotgunGroup, bevelBox(0.012, 0.004, 0.6), metalMid, 0, 0.042, -0.44);
+  for (let i = 0; i < 12; i++) addPart(shotgunGroup, bevelBox(0.008, 0.004, 0.006), metalMid, 0, 0.0385, -0.17 - i * 0.05);
   addPart(shotgunGroup, new THREE.SphereGeometry(0.005, 8, 8), metalMid, 0, 0.049, -0.735);
   // magazine tube, end cap, and the barrel band that clamps the two together
   addPart(shotgunGroup, new THREE.CylinderGeometry(0.0145, 0.0145, 0.5, 12), metalMid, 0, -0.018, -0.4, HALF_PI, 0, 0);
   addPart(shotgunGroup, new THREE.CylinderGeometry(0.016, 0.016, 0.022, 12), metalDark, 0, -0.018, -0.66, HALF_PI, 0, 0);
-  addPart(shotgunGroup, new THREE.BoxGeometry(0.036, 0.06, 0.018), metalDark, 0, 0.002, -0.62);
+  addPart(shotgunGroup, bevelBox(0.036, 0.06, 0.018), metalDark, 0, 0.002, -0.62);
   // trigger guard, trigger, safety and sling stud
-  addPart(shotgunGroup, new THREE.BoxGeometry(0.02, 0.008, 0.075), metalMid, 0, -0.044, 0.05);
+  addPart(shotgunGroup, bevelBox(0.02, 0.008, 0.075), metalMid, 0, -0.044, 0.05);
   addPart(shotgunGroup, new THREE.TorusGeometry(0.024, 0.005, 6, 12, Math.PI), metalMid, 0, -0.046, 0.05, 0, HALF_PI, Math.PI);
-  addPart(shotgunGroup, new THREE.BoxGeometry(0.006, 0.028, 0.006), metalDark, 0, -0.058, 0.055, 0.25, 0, 0);
+  addPart(shotgunGroup, bevelBox(0.006, 0.028, 0.006), metalDark, 0, -0.058, 0.055, 0.25, 0, 0);
   addPart(shotgunGroup, new THREE.CylinderGeometry(0.004, 0.004, 0.024, 8), metalDark, 0, -0.04, 0.09, 0, 0, HALF_PI);
   addPart(shotgunGroup, new THREE.CylinderGeometry(0.004, 0.004, 0.012, 8), metalMid, 0, -0.038, -0.6);
   // stock: a side profile (comb, heel, toe, wrist) extruded to the stock's thickness
@@ -2779,7 +2805,7 @@
     const stock = new THREE.Mesh(geo, woodStock);
     stock.position.set(0, 0, 0.125);
     shotgunGroup.add(stock);
-    addPart(shotgunGroup, new THREE.BoxGeometry(0.058, 0.12, 0.014), gripMat, 0, -0.093, 0.125 + 0.362, -0.19, 0, 0);   // butt pad
+    addPart(shotgunGroup, bevelBox(0.058, 0.12, 0.014), gripMat, 0, -0.093, 0.125 + 0.362, -0.19, 0, 0);   // butt pad
   })();
   // pump: rounded and ribbed, riding on the magazine tube
   const shotgunPump = new THREE.Group();
@@ -2793,116 +2819,116 @@
   const stainlessMat = new THREE.MeshStandardMaterial({ color: 0xd4d8de, roughness: 0.22, metalness: 0.9 });
   const stainlessDark = new THREE.MeshStandardMaterial({ color: 0xa7acb3, roughness: 0.3, metalness: 0.85 });
   const pistolGroup = new THREE.Group();
-  addPart(pistolGroup, new THREE.BoxGeometry(0.038, 0.03, 0.27), stainlessDark, 0, -0.012, -0.03);    // the frame, under the whole slide
-  for (let i = 0; i < 3; i++) addPart(pistolGroup, new THREE.BoxGeometry(0.034, 0.004, 0.008), metalDark, 0, -0.0275, -0.08 - i * 0.022);   // rail slots under the muzzle
+  addPart(pistolGroup, bevelBox(0.038, 0.03, 0.27), stainlessDark, 0, -0.012, -0.03);    // the frame, under the whole slide
+  for (let i = 0; i < 3; i++) addPart(pistolGroup, bevelBox(0.034, 0.004, 0.008), metalDark, 0, -0.0275, -0.08 - i * 0.022);   // rail slots under the muzzle
   addPart(pistolGroup, new THREE.CylinderGeometry(0.0125, 0.0125, 0.04, 12), stainlessMat, 0, 0.034, -0.19, HALF_PI, 0, 0);   // the barrel nose
   addPart(pistolGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.004, 10), portMat, 0, 0.034, -0.2105, HALF_PI, 0, 0);   // bore
   // slide: the whole top half, which kicks back on every shot
   const pistolSlide = new THREE.Group();
   pistolGroup.add(pistolSlide);
-  addPart(pistolSlide, new THREE.BoxGeometry(0.04, 0.0455, 0.285), stainlessMat, 0, 0.0258, -0.0475);
-  addPart(pistolSlide, new THREE.BoxGeometry(0.012, 0.004, 0.2), stainlessDark, 0, 0.0505, -0.06);        // the ribbed top
-  for (let i = 0; i < 6; i++) addPart(pistolSlide, new THREE.BoxGeometry(0.042, 0.034, 0.0035), stainlessDark, 0, 0.026, 0.05 + i * 0.008);   // serrations at the back
-  addPart(pistolSlide, new THREE.BoxGeometry(0.004, 0.012, 0.045), portMat, 0.0205, 0.036, 0.0);          // the ejection port, on the right
-  addPart(pistolSlide, new THREE.BoxGeometry(0.005, 0.015, 0.012), stainlessDark, 0, 0.056, -0.175);      // front sight
-  addPart(pistolSlide, new THREE.BoxGeometry(0.008, 0.009, 0.008), stainlessDark, -0.009, 0.053, 0.083);   // rear sight, two ears
-  addPart(pistolSlide, new THREE.BoxGeometry(0.008, 0.009, 0.008), stainlessDark, 0.009, 0.053, 0.083);
+  addPart(pistolSlide, bevelBox(0.04, 0.0455, 0.285), stainlessMat, 0, 0.0258, -0.0475);
+  addPart(pistolSlide, bevelBox(0.012, 0.004, 0.2), stainlessDark, 0, 0.0505, -0.06);        // the ribbed top
+  for (let i = 0; i < 6; i++) addPart(pistolSlide, bevelBox(0.042, 0.034, 0.0035), stainlessDark, 0, 0.026, 0.05 + i * 0.008);   // serrations at the back
+  addPart(pistolSlide, bevelBox(0.004, 0.012, 0.045), portMat, 0.0205, 0.036, 0.0);          // the ejection port, on the right
+  addPart(pistolSlide, bevelBox(0.005, 0.015, 0.012), stainlessDark, 0, 0.056, -0.175);      // front sight
+  addPart(pistolSlide, bevelBox(0.008, 0.009, 0.008), stainlessDark, -0.009, 0.053, 0.083);   // rear sight, two ears
+  addPart(pistolSlide, bevelBox(0.008, 0.009, 0.008), stainlessDark, 0.009, 0.053, 0.083);
   // squared trigger guard, trigger, slide stop
-  addPart(pistolGroup, new THREE.BoxGeometry(0.008, 0.032, 0.008), stainlessDark, 0, -0.036, -0.06);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.008, 0.008, 0.06), stainlessDark, 0, -0.05, -0.034);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.006, 0.024, 0.006), metalDark, 0, -0.032, -0.03, 0.25, 0, 0);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.004, 0.008, 0.03), stainlessDark, 0.02, -0.004, 0.0);
-  addPart(pistolGroup, new THREE.BoxGeometry(0.04, 0.135, 0.058), gripMat, 0, -0.08, 0.06, 0.24, 0, 0);    // rubber grip
-  for (const side of [-1, 1]) addPart(pistolGroup, new THREE.BoxGeometry(0.002, 0.1, 0.042), metalDark, side * 0.0205, -0.082, 0.06, 0.24, 0, 0);   // inset panels on its sides
-  const pistolMag = addPart(pistolGroup, new THREE.BoxGeometry(0.03, 0.12, 0.045), metalDark, 0, -0.09, 0.062, 0.24, 0, 0);
+  addPart(pistolGroup, bevelBox(0.008, 0.032, 0.008), stainlessDark, 0, -0.036, -0.06);
+  addPart(pistolGroup, bevelBox(0.008, 0.008, 0.06), stainlessDark, 0, -0.05, -0.034);
+  addPart(pistolGroup, bevelBox(0.006, 0.024, 0.006), metalDark, 0, -0.032, -0.03, 0.25, 0, 0);
+  addPart(pistolGroup, bevelBox(0.004, 0.008, 0.03), stainlessDark, 0.02, -0.004, 0.0);
+  addPart(pistolGroup, bevelBox(0.04, 0.135, 0.058), gripMat, 0, -0.08, 0.06, 0.24, 0, 0);    // rubber grip
+  for (const side of [-1, 1]) addPart(pistolGroup, bevelBox(0.002, 0.1, 0.042), metalDark, side * 0.0205, -0.082, 0.06, 0.24, 0, 0);   // inset panels on its sides
+  const pistolMag = addPart(pistolGroup, bevelBox(0.03, 0.12, 0.045), metalDark, 0, -0.09, 0.062, 0.24, 0, 0);
 
   // ---- SMG: a short boxy receiver with a vented shroud, a straight 32-round magazine and a folding wire stock ----
   // sights: the rear ring and the front post both sit 0.074 above the bore, which is what aiming lines up (see adsPos)
   const smgGroup = new THREE.Group();
-  addPart(smgGroup, new THREE.BoxGeometry(0.05, 0.068, 0.30), metalDark, 0, 0.012, -0.02);               // receiver
-  addPart(smgGroup, new THREE.BoxGeometry(0.036, 0.01, 0.28), metalMid, 0, 0.051, -0.02);                // top cover
-  addPart(smgGroup, new THREE.BoxGeometry(0.056, 0.056, 0.12), polymerMat, 0, 0.008, -0.23);             // shroud
-  for (let i = 0; i < 4; i++) addPart(smgGroup, new THREE.BoxGeometry(0.058, 0.008, 0.012), metalDark, 0, 0.008, -0.19 - i * 0.025);   // vent slots
+  addPart(smgGroup, bevelBox(0.05, 0.068, 0.30), metalDark, 0, 0.012, -0.02);               // receiver
+  addPart(smgGroup, bevelBox(0.036, 0.01, 0.28), metalMid, 0, 0.051, -0.02);                // top cover
+  addPart(smgGroup, bevelBox(0.056, 0.056, 0.12), polymerMat, 0, 0.008, -0.23);             // shroud
+  for (let i = 0; i < 4; i++) addPart(smgGroup, bevelBox(0.058, 0.008, 0.012), metalDark, 0, 0.008, -0.19 - i * 0.025);   // vent slots
   addPart(smgGroup, new THREE.CylinderGeometry(0.0095, 0.0095, 0.1, 10), metalDark, 0, 0.012, -0.34, HALF_PI, 0, 0);   // barrel
   addPart(smgGroup, new THREE.CylinderGeometry(0.014, 0.014, 0.045, 10), metalDark, 0, 0.012, -0.395, HALF_PI, 0, 0);  // flash hider
-  addPart(smgGroup, new THREE.BoxGeometry(0.005, 0.04, 0.006), metalDark, 0, 0.054, -0.27);             // front sight post
+  addPart(smgGroup, bevelBox(0.005, 0.04, 0.006), metalDark, 0, 0.054, -0.27);             // front sight post
   const smgRear = new THREE.Group();   // folds away under a red dot
   smgGroup.add(smgRear);
-  addPart(smgRear, new THREE.BoxGeometry(0.03, 0.012, 0.03), metalDark, 0, 0.062, 0.04);                 // rear sight base
+  addPart(smgRear, bevelBox(0.03, 0.012, 0.03), metalDark, 0, 0.062, 0.04);                 // rear sight base
   addPart(smgRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.074, 0.04);           // rear sight ring
-  addPart(smgGroup, new THREE.BoxGeometry(0.016, 0.012, 0.03), metalMid, 0.03, 0.035, 0.0);              // charging handle
-  addPart(smgGroup, new THREE.BoxGeometry(0.035, 0.1, 0.04), gripMat, 0, -0.075, 0.11, 0.3, 0, 0);       // pistol grip
+  addPart(smgGroup, bevelBox(0.016, 0.012, 0.03), metalMid, 0.03, 0.035, 0.0);              // charging handle
+  addPart(smgGroup, bevelBox(0.035, 0.1, 0.04), gripMat, 0, -0.075, 0.11, 0.3, 0, 0);       // pistol grip
   addPart(smgGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
-  for (const sx of [-0.02, 0.02]) addPart(smgGroup, new THREE.BoxGeometry(0.01, 0.01, 0.24), metalMid, sx, 0.0, 0.24);   // wire stock
-  addPart(smgGroup, new THREE.BoxGeometry(0.05, 0.07, 0.012), metalDark, 0, 0.0, 0.355);                 // butt plate
-  const smgMag = addPart(smgGroup, new THREE.BoxGeometry(0.03, 0.17, 0.056), metalDark, 0, -0.115, -0.02);
+  for (const sx of [-0.02, 0.02]) addPart(smgGroup, bevelBox(0.01, 0.01, 0.24), metalMid, sx, 0.0, 0.24);   // wire stock
+  addPart(smgGroup, bevelBox(0.05, 0.07, 0.012), metalDark, 0, 0.0, 0.355);                 // butt plate
+  const smgMag = addPart(smgGroup, bevelBox(0.03, 0.17, 0.056), metalDark, 0, -0.115, -0.02);
 
   // ---- DMR (marksman rifle): a long slim rifle with a full-length handguard, a 10-round box magazine and iron sights ----
   const dmrGroup = new THREE.Group();
-  addPart(dmrGroup, new THREE.BoxGeometry(0.048, 0.07, 0.34), metalDark, 0, 0.01, 0);                    // receiver
-  addPart(dmrGroup, new THREE.BoxGeometry(0.03, 0.012, 0.46), metalMid, 0, 0.056, -0.05);                // top rail
-  addPart(dmrGroup, new THREE.BoxGeometry(0.056, 0.06, 0.36), polymerMat, 0, 0.012, -0.36);              // handguard
-  for (let i = 0; i < 6; i++) addPart(dmrGroup, new THREE.BoxGeometry(0.058, 0.008, 0.012), metalDark, 0, 0.012, -0.22 - i * 0.05);   // vent slots
+  addPart(dmrGroup, bevelBox(0.048, 0.07, 0.34), metalDark, 0, 0.01, 0);                    // receiver
+  addPart(dmrGroup, bevelBox(0.03, 0.012, 0.46), metalMid, 0, 0.056, -0.05);                // top rail
+  addPart(dmrGroup, bevelBox(0.056, 0.06, 0.36), polymerMat, 0, 0.012, -0.36);              // handguard
+  for (let i = 0; i < 6; i++) addPart(dmrGroup, bevelBox(0.058, 0.008, 0.012), metalDark, 0, 0.012, -0.22 - i * 0.05);   // vent slots
   addPart(dmrGroup, new THREE.CylinderGeometry(0.0105, 0.0105, 0.2, 10), metalDark, 0, 0.012, -0.64, HALF_PI, 0, 0);   // barrel
   addPart(dmrGroup, new THREE.CylinderGeometry(0.0145, 0.0145, 0.06, 10), metalDark, 0, 0.012, -0.76, HALF_PI, 0, 0);  // flash hider
-  addPart(dmrGroup, new THREE.BoxGeometry(0.005, 0.04, 0.006), metalDark, 0, 0.057, -0.5);              // front sight post
+  addPart(dmrGroup, bevelBox(0.005, 0.04, 0.006), metalDark, 0, 0.057, -0.5);              // front sight post
   const dmrRear = new THREE.Group();   // folds away under a red dot
   dmrGroup.add(dmrRear);
-  addPart(dmrRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.064, 0.10);                 // rear sight base
+  addPart(dmrRear, bevelBox(0.03, 0.016, 0.03), metalDark, 0, 0.064, 0.10);                 // rear sight base
   addPart(dmrRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.077, 0.10);           // rear sight ring
-  addPart(dmrGroup, new THREE.BoxGeometry(0.036, 0.1, 0.042), gripMat, 0, -0.075, 0.12, 0.3, 0, 0);      // pistol grip
+  addPart(dmrGroup, bevelBox(0.036, 0.1, 0.042), gripMat, 0, -0.075, 0.12, 0.3, 0, 0);      // pistol grip
   addPart(dmrGroup, new THREE.TorusGeometry(0.028, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
-  addPart(dmrGroup, new THREE.BoxGeometry(0.02, 0.012, 0.03), metalMid, 0.028, 0.035, 0.05);             // charging handle
+  addPart(dmrGroup, bevelBox(0.02, 0.012, 0.03), metalMid, 0.028, 0.035, 0.05);             // charging handle
   addPart(dmrGroup, new THREE.CylinderGeometry(0.02, 0.026, 0.31, 10), polymerMat, 0, -0.01, 0.305, HALF_PI, 0, 0);   // stock tube
-  addPart(dmrGroup, new THREE.BoxGeometry(0.05, 0.085, 0.03), gripMat, 0, -0.01, 0.47);                  // butt pad
-  const dmrMag = addPart(dmrGroup, new THREE.BoxGeometry(0.034, 0.12, 0.075), metalDark, 0, -0.09, -0.02, 0.1, 0, 0);
+  addPart(dmrGroup, bevelBox(0.05, 0.085, 0.03), gripMat, 0, -0.01, 0.47);                  // butt pad
+  const dmrMag = addPart(dmrGroup, bevelBox(0.034, 0.12, 0.075), metalDark, 0, -0.09, -0.02, 0.1, 0, 0);
 
   // ---- burst rifle: a slim carbine with a short vented handguard and a big flash hider; one pull fires three rounds ----
   // sights: the rear ring and the front post both sit 0.078 above the bore (see adsPos)
   const burstGroup = new THREE.Group();
-  addPart(burstGroup, new THREE.BoxGeometry(0.052, 0.066, 0.34), metalDark, 0, 0.018, 0);                // receiver
-  addPart(burstGroup, new THREE.BoxGeometry(0.034, 0.012, 0.36), metalMid, 0, 0.057, -0.01);             // top rail
-  addPart(burstGroup, new THREE.BoxGeometry(0.056, 0.056, 0.22), polymerMat, 0, 0.014, -0.28);           // handguard
-  for (let i = 0; i < 4; i++) addPart(burstGroup, new THREE.BoxGeometry(0.06, 0.008, 0.012), metalDark, 0, 0.014, -0.22 - i * 0.04);   // vent slots
+  addPart(burstGroup, bevelBox(0.052, 0.066, 0.34), metalDark, 0, 0.018, 0);                // receiver
+  addPart(burstGroup, bevelBox(0.034, 0.012, 0.36), metalMid, 0, 0.057, -0.01);             // top rail
+  addPart(burstGroup, bevelBox(0.056, 0.056, 0.22), polymerMat, 0, 0.014, -0.28);           // handguard
+  for (let i = 0; i < 4; i++) addPart(burstGroup, bevelBox(0.06, 0.008, 0.012), metalDark, 0, 0.014, -0.22 - i * 0.04);   // vent slots
   addPart(burstGroup, new THREE.CylinderGeometry(0.0105, 0.0105, 0.2, 10), metalDark, 0, 0.014, -0.49, HALF_PI, 0, 0);   // barrel
   addPart(burstGroup, new THREE.CylinderGeometry(0.0155, 0.0155, 0.07, 10), metalDark, 0, 0.014, -0.625, HALF_PI, 0, 0);  // flash hider
   addPart(burstGroup, new THREE.CylinderGeometry(0.018, 0.018, 0.012, 10), metalMid, 0, 0.014, -0.6, HALF_PI, 0, 0);      // its ring
-  addPart(burstGroup, new THREE.BoxGeometry(0.022, 0.026, 0.04), metalDark, 0, 0.0275, -0.46);           // gas block
-  addPart(burstGroup, new THREE.BoxGeometry(0.006, 0.04, 0.008), metalDark, 0, 0.058, -0.46);            // front sight post
+  addPart(burstGroup, bevelBox(0.022, 0.026, 0.04), metalDark, 0, 0.0275, -0.46);           // gas block
+  addPart(burstGroup, bevelBox(0.006, 0.04, 0.008), metalDark, 0, 0.058, -0.46);            // front sight post
   const burstRear = new THREE.Group();   // folds away under a red dot
   burstGroup.add(burstRear);
-  addPart(burstRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.0645, 0.10);               // rear sight base
+  addPart(burstRear, bevelBox(0.03, 0.016, 0.03), metalDark, 0, 0.0645, 0.10);               // rear sight base
   addPart(burstRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.078, 0.10);         // rear sight ring
-  addPart(burstGroup, new THREE.BoxGeometry(0.004, 0.012, 0.03), accentMat, 0.027, 0.03, 0.0);           // the burst selector
-  addPart(burstGroup, new THREE.BoxGeometry(0.036, 0.1, 0.042), gripMat, 0, -0.075, 0.12, 0.3, 0, 0);    // pistol grip
+  addPart(burstGroup, bevelBox(0.004, 0.012, 0.03), accentMat, 0.027, 0.03, 0.0);           // the burst selector
+  addPart(burstGroup, bevelBox(0.036, 0.1, 0.042), gripMat, 0, -0.075, 0.12, 0.3, 0, 0);    // pistol grip
   addPart(burstGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
-  addPart(burstGroup, new THREE.BoxGeometry(0.02, 0.012, 0.03), metalMid, 0.03, 0.04, 0.12);             // charging handle
+  addPart(burstGroup, bevelBox(0.02, 0.012, 0.03), metalMid, 0.03, 0.04, 0.12);             // charging handle
   addPart(burstGroup, new THREE.CylinderGeometry(0.016, 0.016, 0.2, 10), metalDark, 0, 0.012, 0.27, HALF_PI, 0, 0);   // buffer tube
-  addPart(burstGroup, new THREE.BoxGeometry(0.045, 0.08, 0.14), polymerMat, 0, -0.012, 0.37);            // stock
-  const burstMag = addPart(burstGroup, new THREE.BoxGeometry(0.03, 0.15, 0.066), metalDark, 0, -0.085, -0.02, 0.15, 0, 0);
+  addPart(burstGroup, bevelBox(0.045, 0.08, 0.14), polymerMat, 0, -0.012, 0.37);            // stock
+  const burstMag = addPart(burstGroup, bevelBox(0.03, 0.15, 0.066), metalDark, 0, -0.085, -0.02, 0.15, 0, 0);
 
   // ---- LMG: a heavy receiver, a long shrouded barrel, a folded bipod and a big box magazine for 100 rounds ----
   // sights: the rear ring and the front post both sit 0.088 above the bore
   const lmgGroup = new THREE.Group();   // (the drum is the magazine mesh: the attachments' magazine parts are not built for it, so it has its own option)
-  addPart(lmgGroup, new THREE.BoxGeometry(0.062, 0.082, 0.46), metalDark, 0, 0.014, 0);                  // receiver
-  addPart(lmgGroup, new THREE.BoxGeometry(0.05, 0.012, 0.4), metalMid, 0, 0.061, -0.02);                 // top cover
-  addPart(lmgGroup, new THREE.BoxGeometry(0.066, 0.066, 0.34), polymerMat, 0, 0.012, -0.40);             // heat shroud
-  for (let i = 0; i < 6; i++) addPart(lmgGroup, new THREE.BoxGeometry(0.07, 0.008, 0.012), metalDark, 0, 0.012, -0.28 - i * 0.045);   // vent slots
+  addPart(lmgGroup, bevelBox(0.062, 0.082, 0.46), metalDark, 0, 0.014, 0);                  // receiver
+  addPart(lmgGroup, bevelBox(0.05, 0.012, 0.4), metalMid, 0, 0.061, -0.02);                 // top cover
+  addPart(lmgGroup, bevelBox(0.066, 0.066, 0.34), polymerMat, 0, 0.012, -0.40);             // heat shroud
+  for (let i = 0; i < 6; i++) addPart(lmgGroup, bevelBox(0.07, 0.008, 0.012), metalDark, 0, 0.012, -0.28 - i * 0.045);   // vent slots
   addPart(lmgGroup, new THREE.CylinderGeometry(0.0125, 0.0125, 0.22, 10), metalDark, 0, 0.012, -0.68, HALF_PI, 0, 0);   // barrel
   addPart(lmgGroup, new THREE.CylinderGeometry(0.0185, 0.0185, 0.07, 10), metalDark, 0, 0.012, -0.825, HALF_PI, 0, 0);  // muzzle device
-  for (const sx of [-0.02, 0.02]) addPart(lmgGroup, new THREE.BoxGeometry(0.008, 0.012, 0.18), metalMid, sx, -0.0265, -0.45);   // folded bipod legs
-  addPart(lmgGroup, new THREE.BoxGeometry(0.03, 0.02, 0.04), metalDark, 0, 0.055, -0.5);                 // front sight base
-  addPart(lmgGroup, new THREE.BoxGeometry(0.006, 0.03, 0.008), metalDark, 0, 0.073, -0.5);               // front sight post
+  for (const sx of [-0.02, 0.02]) addPart(lmgGroup, bevelBox(0.008, 0.012, 0.18), metalMid, sx, -0.0265, -0.45);   // folded bipod legs
+  addPart(lmgGroup, bevelBox(0.03, 0.02, 0.04), metalDark, 0, 0.055, -0.5);                 // front sight base
+  addPart(lmgGroup, bevelBox(0.006, 0.03, 0.008), metalDark, 0, 0.073, -0.5);               // front sight post
   const lmgRear = new THREE.Group();   // folds away under a red dot
   lmgGroup.add(lmgRear);
-  addPart(lmgRear, new THREE.BoxGeometry(0.03, 0.02, 0.03), metalDark, 0, 0.0735, 0.12);                // rear sight base
+  addPart(lmgRear, bevelBox(0.03, 0.02, 0.03), metalDark, 0, 0.0735, 0.12);                // rear sight base
   addPart(lmgRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.088, 0.12);           // rear sight ring
-  addPart(lmgGroup, new THREE.BoxGeometry(0.022, 0.014, 0.04), metalMid, 0.04, 0.03, 0.02);              // charging handle
-  addPart(lmgGroup, new THREE.BoxGeometry(0.04, 0.11, 0.046), gripMat, 0, -0.08, 0.15, 0.3, 0, 0);       // pistol grip
+  addPart(lmgGroup, bevelBox(0.022, 0.014, 0.04), metalMid, 0.04, 0.03, 0.02);              // charging handle
+  addPart(lmgGroup, bevelBox(0.04, 0.11, 0.046), gripMat, 0, -0.08, 0.15, 0.3, 0, 0);       // pistol grip
   addPart(lmgGroup, new THREE.TorusGeometry(0.028, 0.005, 6, 12, Math.PI), metalDark, 0, -0.055, 0.075, 0, HALF_PI, Math.PI);   // trigger guard
-  addPart(lmgGroup, new THREE.BoxGeometry(0.05, 0.1, 0.22), polymerMat, 0, -0.005, 0.34);                // stock
-  addPart(lmgGroup, new THREE.BoxGeometry(0.052, 0.11, 0.02), gripMat, 0, -0.005, 0.46);                 // butt pad
-  addPart(lmgGroup, new THREE.BoxGeometry(0.06, 0.04, 0.07), metalDark, 0, -0.04, 0);                     // feed neck
+  addPart(lmgGroup, bevelBox(0.05, 0.1, 0.22), polymerMat, 0, -0.005, 0.34);                // stock
+  addPart(lmgGroup, bevelBox(0.052, 0.11, 0.02), gripMat, 0, -0.005, 0.46);                 // butt pad
+  addPart(lmgGroup, bevelBox(0.06, 0.04, 0.07), metalDark, 0, -0.04, 0);                     // feed neck
   const lmgMag = addPart(lmgGroup, new THREE.CylinderGeometry(0.1, 0.1, 0.1, 24), metalDark, 0, -0.115, 0, 0, 0, HALF_PI);   // the drum (its axis runs across the gun)
   addPart(lmgMag, new THREE.CylinderGeometry(0.045, 0.045, 0.108, 16), metalMid, 0, 0, 0);                // hub
   for (const sy of [-1, 1]) addPart(lmgMag, new THREE.TorusGeometry(0.093, 0.006, 6, 24), metalMid, 0, sy * 0.052, 0, HALF_PI, 0, 0);   // rims
@@ -2910,31 +2936,31 @@
   // ---- crossbow: a dark stock with a rail, a prod with two flexing limbs and a moving string, and a bolt lying in the groove ----
   // sights: the rear ring and the front post both sit 0.07 above the rail's centre line (see adsPos)
   const crossbowGroup = new THREE.Group();
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.05, 0.07, 0.6), metalDark, 0, 0, 0.05);                  // stock body
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.026, 0.012, 0.5), metalMid, 0, 0.041, 0.0);              // rail on top
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.075, 0.056, 0.08), metalDark, 0, 0.0, -0.3);             // prod block
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.03, 0.03, 0.05), metalMid, 0, 0.02, -0.12);              // latch
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.008, 0.03, 0.008), metalDark, 0, 0.055, -0.2);           // front sight post
+  addPart(crossbowGroup, bevelBox(0.05, 0.07, 0.6), metalDark, 0, 0, 0.05);                  // stock body
+  addPart(crossbowGroup, bevelBox(0.026, 0.012, 0.5), metalMid, 0, 0.041, 0.0);              // rail on top
+  addPart(crossbowGroup, bevelBox(0.075, 0.056, 0.08), metalDark, 0, 0.0, -0.3);             // prod block
+  addPart(crossbowGroup, bevelBox(0.03, 0.03, 0.05), metalMid, 0, 0.02, -0.12);              // latch
+  addPart(crossbowGroup, bevelBox(0.008, 0.03, 0.008), metalDark, 0, 0.055, -0.2);           // front sight post
   const crossbowRear = new THREE.Group();   // folds away under an optic
   crossbowGroup.add(crossbowRear);
-  addPart(crossbowRear, new THREE.BoxGeometry(0.03, 0.016, 0.03), metalDark, 0, 0.052, 0.0);             // rear sight base
+  addPart(crossbowRear, bevelBox(0.03, 0.016, 0.03), metalDark, 0, 0.052, 0.0);             // rear sight base
   addPart(crossbowRear, new THREE.TorusGeometry(0.0075, 0.0025, 6, 14), metalDark, 0, 0.07, 0.0);        // rear sight ring
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.04, 0.1, 0.045), gripMat, 0, -0.075, 0.14, 0.3, 0, 0);  // grip
+  addPart(crossbowGroup, bevelBox(0.04, 0.1, 0.045), gripMat, 0, -0.075, 0.14, 0.3, 0, 0);  // grip
   addPart(crossbowGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.08, 0, HALF_PI, Math.PI);   // trigger guard
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.045, 0.08, 0.2), polymerMat, 0, -0.01, 0.43);            // butt
-  addPart(crossbowGroup, new THREE.BoxGeometry(0.05, 0.09, 0.02), gripMat, 0, -0.01, 0.54);               // butt pad
+  addPart(crossbowGroup, bevelBox(0.045, 0.08, 0.2), polymerMat, 0, -0.01, 0.43);            // butt
+  addPart(crossbowGroup, bevelBox(0.05, 0.09, 0.02), gripMat, 0, -0.01, 0.54);               // butt pad
   // each limb is two segments, the outer one bending a little more as the string comes back
   const XB = { px: 0.035, pz: -0.33, y: 0.015, inner: 0.17, outer: 0.15, latchZ: -0.12 };
   const xbLimbs = [];
   for (const sx of [-1, 1]) {
     const inner = new THREE.Group(); inner.position.set(sx * XB.px, XB.y, XB.pz); crossbowGroup.add(inner);
-    addPart(inner, new THREE.BoxGeometry(XB.inner, 0.022, 0.032), polymerMat, sx * XB.inner / 2, 0, 0);
+    addPart(inner, bevelBox(XB.inner, 0.022, 0.032), polymerMat, sx * XB.inner / 2, 0, 0);
     const outer = new THREE.Group(); outer.position.set(sx * XB.inner, 0, 0); inner.add(outer);
-    addPart(outer, new THREE.BoxGeometry(XB.outer, 0.018, 0.026), polymerMat, sx * XB.outer / 2, 0, 0);
-    addPart(outer, new THREE.BoxGeometry(0.014, 0.024, 0.036), metalMid, sx * XB.outer, 0, 0);            // the string's nock at the tip
+    addPart(outer, bevelBox(XB.outer, 0.018, 0.026), polymerMat, sx * XB.outer / 2, 0, 0);
+    addPart(outer, bevelBox(0.014, 0.024, 0.036), metalMid, sx * XB.outer, 0, 0);            // the string's nock at the tip
     xbLimbs.push({ sx, inner, outer });
   }
-  const xbString = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.004, 1), metalMid); crossbowGroup.add(m); return m; });
+  const xbString = [-1, 1].map(() => { const m = new THREE.Mesh(bevelBox(0.004, 0.004, 1), metalMid); crossbowGroup.add(m); return m; });
   // d: 1 = drawn back and latched, 0 = relaxed (just fired); a little below 0 is the limbs springing past
   function setCrossbowDraw(d) {
     const a1 = 0.42 - 0.42 * d, a2 = 0.55 - 0.85 * d;   // how far each segment sweeps forward
@@ -2951,24 +2977,24 @@
   }
   setCrossbowDraw(1);
   // the bolt is the "magazine": it slides out of the groove and a fresh one rises into it on a reload
-  const crossbowMag = addPart(crossbowGroup, new THREE.BoxGeometry(0.008, 0.008, 0.26), metalMid, 0, 0.0525, -0.25);
+  const crossbowMag = addPart(crossbowGroup, bevelBox(0.008, 0.008, 0.26), metalMid, 0, 0.0525, -0.25);
   addPart(crossbowMag, new THREE.ConeGeometry(0.008, 0.035, 8), metalMid, 0, 0, -0.1475, -HALF_PI, 0, 0);   // head
-  addPart(crossbowMag, new THREE.BoxGeometry(0.04, 0.002, 0.04), accentMat, 0, 0, 0.11);                   // fletching
-  addPart(crossbowMag, new THREE.BoxGeometry(0.002, 0.04, 0.04), accentMat, 0, 0, 0.11);
+  addPart(crossbowMag, bevelBox(0.04, 0.002, 0.04), accentMat, 0, 0, 0.11);                   // fletching
+  addPart(crossbowMag, bevelBox(0.002, 0.04, 0.04), accentMat, 0, 0, 0.11);
 
   // ---- grenade launcher: a stubby body, a fat barrel with a muzzle ring, a pump under it and a grenade lying in the open breech ----
   const launcherGroup = new THREE.Group();
-  addPart(launcherGroup, new THREE.BoxGeometry(0.06, 0.085, 0.5), metalDark, 0, 0, 0.02);                           // receiver
+  addPart(launcherGroup, bevelBox(0.06, 0.085, 0.5), metalDark, 0, 0, 0.02);                           // receiver
   addPart(launcherGroup, new THREE.CylinderGeometry(0.036, 0.036, 0.36, 14), metalMid, 0, 0.012, -0.4, HALF_PI, 0, 0);   // the fat barrel
   addPart(launcherGroup, new THREE.CylinderGeometry(0.043, 0.043, 0.03, 14), metalDark, 0, 0.012, -0.59, HALF_PI, 0, 0); // muzzle ring
-  addPart(launcherGroup, new THREE.BoxGeometry(0.07, 0.05, 0.15), polymerMat, 0, -0.058, -0.26);                      // pump
-  addPart(launcherGroup, new THREE.BoxGeometry(0.04, 0.1, 0.045), gripMat, 0, -0.08, 0.13, 0.3, 0, 0);                // grip
+  addPart(launcherGroup, bevelBox(0.07, 0.05, 0.15), polymerMat, 0, -0.058, -0.26);                      // pump
+  addPart(launcherGroup, bevelBox(0.04, 0.1, 0.045), gripMat, 0, -0.08, 0.13, 0.3, 0, 0);                // grip
   addPart(launcherGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.05, 0.08, 0, HALF_PI, Math.PI);   // trigger guard
-  addPart(launcherGroup, new THREE.BoxGeometry(0.045, 0.085, 0.2), polymerMat, 0, -0.005, 0.37);                       // stock
-  addPart(launcherGroup, new THREE.BoxGeometry(0.05, 0.09, 0.02), gripMat, 0, -0.005, 0.48);                           // butt pad
-  addPart(launcherGroup, new THREE.BoxGeometry(0.008, 0.035, 0.008), metalDark, 0, 0.065, -0.5);                       // front post
-  addPart(launcherGroup, new THREE.BoxGeometry(0.034, 0.008, 0.016), metalDark, 0, 0.047, 0.1);                         // rear sight base
-  for (const sx of [-1, 1]) addPart(launcherGroup, new THREE.BoxGeometry(0.008, 0.03, 0.016), metalDark, sx * 0.013, 0.06, 0.1);   // and its two posts (an open notch to aim through)
+  addPart(launcherGroup, bevelBox(0.045, 0.085, 0.2), polymerMat, 0, -0.005, 0.37);                       // stock
+  addPart(launcherGroup, bevelBox(0.05, 0.09, 0.02), gripMat, 0, -0.005, 0.48);                           // butt pad
+  addPart(launcherGroup, bevelBox(0.008, 0.035, 0.008), metalDark, 0, 0.065, -0.5);                       // front post
+  addPart(launcherGroup, bevelBox(0.034, 0.008, 0.016), metalDark, 0, 0.047, 0.1);                         // rear sight base
+  for (const sx of [-1, 1]) addPart(launcherGroup, bevelBox(0.008, 0.03, 0.016), metalDark, sx * 0.013, 0.06, 0.1);   // and its two posts (an open notch to aim through)
   const launcherMag = addPart(launcherGroup, new THREE.CylinderGeometry(0.02, 0.02, 0.1, 10), accentMat, 0, 0.046, -0.06, HALF_PI, 0, 0);   // the grenade in the breech (the "magazine")
   addPart(launcherMag, new THREE.SphereGeometry(0.02, 10, 6), accentMat, 0, 0.05, 0);
 
@@ -2977,14 +3003,14 @@
   addPart(rpgGroup, new THREE.CylinderGeometry(0.05, 0.05, 0.85, 14), metalDark, 0, 0, -0.05, HALF_PI, 0, 0);          // the tube
   addPart(rpgGroup, new THREE.CylinderGeometry(0.075, 0.05, 0.14, 14), metalMid, 0, 0, 0.42, HALF_PI, 0, 0);           // flared rear
   addPart(rpgGroup, new THREE.CylinderGeometry(0.058, 0.058, 0.05, 14), metalMid, 0, 0, -0.45, HALF_PI, 0, 0);         // front collar
-  addPart(rpgGroup, new THREE.BoxGeometry(0.04, 0.1, 0.045), gripMat, 0, -0.1, 0.1, 0.3, 0, 0);                        // grip
-  addPart(rpgGroup, new THREE.BoxGeometry(0.035, 0.07, 0.04), gripMat, 0, -0.08, -0.2, -0.1, 0, 0);                    // front hand grip
+  addPart(rpgGroup, bevelBox(0.04, 0.1, 0.045), gripMat, 0, -0.1, 0.1, 0.3, 0, 0);                        // grip
+  addPart(rpgGroup, bevelBox(0.035, 0.07, 0.04), gripMat, 0, -0.08, -0.2, -0.1, 0, 0);                    // front hand grip
   addPart(rpgGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), metalDark, 0, -0.062, 0.05, 0, HALF_PI, Math.PI);   // trigger guard
-  addPart(rpgGroup, new THREE.BoxGeometry(0.008, 0.04, 0.008), metalDark, 0, 0.075, -0.4);                             // front post
+  addPart(rpgGroup, bevelBox(0.008, 0.04, 0.008), metalDark, 0, 0.075, -0.4);                             // front post
   const rpgRear = new THREE.Group();   // folds away under an optic
   rpgGroup.add(rpgRear);
-  addPart(rpgRear, new THREE.BoxGeometry(0.034, 0.008, 0.016), metalDark, 0, 0.058, 0.15);                              // rear sight base
-  for (const sx of [-1, 1]) addPart(rpgRear, new THREE.BoxGeometry(0.008, 0.03, 0.016), metalDark, sx * 0.013, 0.071, 0.15);   // and its two posts (an open notch to aim through)
+  addPart(rpgRear, bevelBox(0.034, 0.008, 0.016), metalDark, 0, 0.058, 0.15);                              // rear sight base
+  for (const sx of [-1, 1]) addPart(rpgRear, bevelBox(0.008, 0.03, 0.016), metalDark, sx * 0.013, 0.071, 0.15);   // and its two posts (an open notch to aim through)
   const rpgMag = new THREE.Group(); rpgMag.position.set(0, 0, -0.5); rpgGroup.add(rpgMag);
   addPart(rpgMag, new THREE.CylinderGeometry(0.04, 0.04, 0.12, 12), accentMat, 0, 0, 0, HALF_PI, 0, 0);                 // the warhead's body
   addPart(rpgMag, new THREE.ConeGeometry(0.04, 0.12, 12), accentMat, 0, 0, -0.12, -HALF_PI, 0, 0);                      // and its nose
@@ -2992,27 +3018,27 @@
   // ---- Revolver: a long barrel with a rib and an ejector rod under it, a six-chamber cylinder that turns a notch with every shot, a hammer and a wooden grip ----
   const revolverGroup = new THREE.Group();
   addPart(revolverGroup, new THREE.CylinderGeometry(0.0125, 0.0125, 0.24, 14), stainlessMat, 0, 0.034, -0.19, HALF_PI, 0, 0);   // barrel
-  addPart(revolverGroup, new THREE.BoxGeometry(0.008, 0.004, 0.24), stainlessDark, 0, 0.0505, -0.19);                             // the rib on top
-  addPart(revolverGroup, new THREE.BoxGeometry(0.022, 0.016, 0.16), stainlessDark, 0, 0.018, -0.2);                               // the lug under the barrel
+  addPart(revolverGroup, bevelBox(0.008, 0.004, 0.24), stainlessDark, 0, 0.0505, -0.19);                             // the rib on top
+  addPart(revolverGroup, bevelBox(0.022, 0.016, 0.16), stainlessDark, 0, 0.018, -0.2);                               // the lug under the barrel
   addPart(revolverGroup, new THREE.CylinderGeometry(0.0045, 0.0045, 0.13, 8), stainlessMat, 0, 0.007, -0.215, HALF_PI, 0, 0);     // ejector rod
   addPart(revolverGroup, new THREE.CylinderGeometry(0.0145, 0.0145, 0.008, 14), stainlessDark, 0, 0.034, -0.31, HALF_PI, 0, 0);   // muzzle crown
   addPart(revolverGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.002, 10), portMat, 0, 0.034, -0.3145, HALF_PI, 0, 0);       // bore
-  addPart(revolverGroup, new THREE.BoxGeometry(0.034, 0.052, 0.165), stainlessDark, 0, 0.01, 0.0125);                              // frame
-  addPart(revolverGroup, new THREE.BoxGeometry(0.026, 0.01, 0.21), stainlessDark, 0, 0.0465, 0.0);                                 // top strap
+  addPart(revolverGroup, bevelBox(0.034, 0.052, 0.165), stainlessDark, 0, 0.01, 0.0125);                              // frame
+  addPart(revolverGroup, bevelBox(0.026, 0.01, 0.21), stainlessDark, 0, 0.0465, 0.0);                                 // top strap
   const revCyl = new THREE.Group(); revCyl.position.set(0, 0.02, -0.045); revolverGroup.add(revCyl);
   addPart(revCyl, new THREE.CylinderGeometry(0.022, 0.022, 0.068, 18), stainlessMat, 0, 0, 0, HALF_PI, 0, 0);
   for (let i = 0; i < 6; i++) {
     const a = i / 6 * Math.PI * 2;
     addPart(revCyl, new THREE.CylinderGeometry(0.0085, 0.0085, 0.002, 10), portMat, Math.cos(a) * 0.0135, Math.sin(a) * 0.0135, -0.035, HALF_PI, 0, 0);   // the chambers, on the front face
-    addPart(revCyl, new THREE.BoxGeometry(0.006, 0.006, 0.05), stainlessDark, Math.cos(a + 0.52) * 0.0225, Math.sin(a + 0.52) * 0.0225, 0);                // and the flutes between them
+    addPart(revCyl, bevelBox(0.006, 0.006, 0.05), stainlessDark, Math.cos(a + 0.52) * 0.0225, Math.sin(a + 0.52) * 0.0225, 0);                // and the flutes between them
   }
   const revHammer = new THREE.Group(); revHammer.position.set(0, 0.04, 0.09); revolverGroup.add(revHammer);
-  addPart(revHammer, new THREE.BoxGeometry(0.008, 0.022, 0.012), stainlessDark, 0, 0.011, 0.004);
-  addPart(revolverGroup, new THREE.BoxGeometry(0.036, 0.115, 0.05), woodStock, 0, -0.06, 0.1, -0.3, 0, 0);                         // grip
+  addPart(revHammer, bevelBox(0.008, 0.022, 0.012), stainlessDark, 0, 0.011, 0.004);
+  addPart(revolverGroup, bevelBox(0.036, 0.115, 0.05), woodStock, 0, -0.06, 0.1, -0.3, 0, 0);                         // grip
   addPart(revolverGroup, new THREE.TorusGeometry(0.026, 0.005, 6, 12, Math.PI), stainlessDark, 0, -0.016, 0.045, 0, HALF_PI, Math.PI);   // trigger guard
-  addPart(revolverGroup, new THREE.BoxGeometry(0.005, 0.02, 0.006), metalDark, 0, -0.012, 0.03, 0.25, 0, 0);                       // trigger
-  addPart(revolverGroup, new THREE.BoxGeometry(0.005, 0.012, 0.012), stainlessDark, 0, 0.0575, -0.29);                             // front blade
-  for (const sx of [-1, 1]) addPart(revolverGroup, new THREE.BoxGeometry(0.007, 0.009, 0.008), stainlessDark, sx * 0.009, 0.056, 0.1);   // rear sight: two posts on the strap
+  addPart(revolverGroup, bevelBox(0.005, 0.02, 0.006), metalDark, 0, -0.012, 0.03, 0.25, 0, 0);                       // trigger
+  addPart(revolverGroup, bevelBox(0.005, 0.012, 0.012), stainlessDark, 0, 0.0575, -0.29);                             // front blade
+  for (const sx of [-1, 1]) addPart(revolverGroup, bevelBox(0.007, 0.009, 0.008), stainlessDark, sx * 0.009, 0.056, 0.1);   // rear sight: two posts on the strap
 
   // ---- Dual SMGs: two small boxy machine pistols, one in each hand, firing in turn; both magazines ride on one group so a reload drops them together ----
   const dualGroup = new THREE.Group();
@@ -3020,33 +3046,34 @@
   const dualMags = new THREE.Group(); dualGroup.add(dualMags);
   for (const sx of [-1, 1]) {
     const gun = new THREE.Group(); gun.position.set(sx * 0.15, 0, 0); dualGroup.add(gun); dualGuns.push(gun);
-    addPart(gun, new THREE.BoxGeometry(0.042, 0.052, 0.2), metalDark, 0, 0, 0);                                      // receiver
-    addPart(gun, new THREE.BoxGeometry(0.03, 0.008, 0.17), metalMid, 0, 0.03, 0);                                    // top cover
-    addPart(gun, new THREE.BoxGeometry(0.036, 0.04, 0.085), polymerMat, 0, 0, -0.14);                                // shroud
-    for (let i = 0; i < 3; i++) addPart(gun, new THREE.BoxGeometry(0.038, 0.006, 0.01), metalDark, 0, 0, -0.115 - i * 0.025);   // vents
+    addPart(gun, bevelBox(0.042, 0.052, 0.2), metalDark, 0, 0, 0);                                      // receiver
+    addPart(gun, bevelBox(0.03, 0.008, 0.17), metalMid, 0, 0.03, 0);                                    // top cover
+    addPart(gun, bevelBox(0.036, 0.04, 0.085), polymerMat, 0, 0, -0.14);                                // shroud
+    for (let i = 0; i < 3; i++) addPart(gun, bevelBox(0.038, 0.006, 0.01), metalDark, 0, 0, -0.115 - i * 0.025);   // vents
     addPart(gun, new THREE.CylinderGeometry(0.008, 0.008, 0.075, 8), metalDark, 0, 0, -0.22, HALF_PI, 0, 0);          // barrel
     addPart(gun, new THREE.CylinderGeometry(0.0115, 0.0115, 0.03, 8), metalDark, 0, 0, -0.275, HALF_PI, 0, 0);       // flash hider
-    addPart(gun, new THREE.BoxGeometry(0.03, 0.09, 0.04), gripMat, 0, -0.065, 0.065, -0.25, 0, 0);                  // grip
-    addPart(gun, new THREE.BoxGeometry(0.005, 0.014, 0.005), metalDark, 0, 0.0385, -0.17);                           // front post
-    addPart(gun, new THREE.BoxGeometry(0.022, 0.008, 0.012), metalDark, 0, 0.0365, 0.075);                           // rear sight
-    addPart(dualMags, new THREE.BoxGeometry(0.028, 0.11, 0.042), metalDark, sx * 0.15, -0.075, -0.02);               // the magazine
+    addPart(gun, bevelBox(0.03, 0.09, 0.04), gripMat, 0, -0.065, 0.065, -0.25, 0, 0);                  // grip
+    addPart(gun, bevelBox(0.005, 0.014, 0.005), metalDark, 0, 0.0385, -0.17);                           // front post
+    addPart(gun, bevelBox(0.022, 0.008, 0.012), metalDark, 0, 0.0365, 0.075);                           // rear sight
+    addPart(dualMags, bevelBox(0.028, 0.11, 0.042), metalDark, sx * 0.15, -0.075, -0.02);               // the magazine
   }
 
   // ---- Railgun: two rails with glowing coils round them, a capacitor on the side and an energy cell under the receiver; the glow rises as it charges ----
   const railGlowMat = new THREE.MeshStandardMaterial({ color: 0x1a3a44, emissive: 0x22d3ee, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.2 });
   const railgunGroup = new THREE.Group();
-  addPart(railgunGroup, new THREE.BoxGeometry(0.052, 0.07, 0.28), metalDark, 0, 0, 0.05);                              // receiver
-  for (const sx of [-1, 1]) addPart(railgunGroup, new THREE.BoxGeometry(0.011, 0.014, 0.52), metalMid, sx * 0.019, 0.016, -0.39);   // the two rails
-  addPart(railgunGroup, new THREE.BoxGeometry(0.008, 0.008, 0.5), railGlowMat, 0, 0.016, -0.39);                       // the glowing channel between them
+  addPart(railgunGroup, bevelBox(0.052, 0.07, 0.28), metalDark, 0, 0, 0.05);                              // receiver
+  addPart(railgunGroup, bevelBox(0.046, 0.052, 0.07), metalMid, 0, 0.008, -0.115);                       // the breech the rails run out of
+  for (const sx of [-1, 1]) addPart(railgunGroup, bevelBox(0.011, 0.014, 0.52), metalMid, sx * 0.019, 0.016, -0.39);   // the two rails
+  addPart(railgunGroup, bevelBox(0.008, 0.008, 0.5), railGlowMat, 0, 0.016, -0.39);                       // the glowing channel between them
   for (let i = 0; i < 6; i++) addPart(railgunGroup, new THREE.TorusGeometry(0.032, 0.006, 6, 16), railGlowMat, 0, 0.016, -0.2 - i * 0.075);   // coils round the rails
-  addPart(railgunGroup, new THREE.BoxGeometry(0.046, 0.05, 0.03), metalMid, 0, 0.016, -0.66);                          // muzzle block
-  addPart(railgunGroup, new THREE.BoxGeometry(0.04, 0.085, 0.22), polymerMat, 0, -0.012, 0.3);                         // stock
-  addPart(railgunGroup, new THREE.BoxGeometry(0.036, 0.1, 0.045), gripMat, 0, -0.08, 0.12, 0.3, 0, 0);                 // grip
+  addPart(railgunGroup, bevelBox(0.046, 0.05, 0.03), metalMid, 0, 0.016, -0.66);                          // muzzle block
+  addPart(railgunGroup, bevelBox(0.04, 0.085, 0.22), polymerMat, 0, -0.012, 0.3);                         // stock
+  addPart(railgunGroup, bevelBox(0.036, 0.1, 0.045), gripMat, 0, -0.08, 0.12, 0.3, 0, 0);                 // grip
   addPart(railgunGroup, new THREE.CylinderGeometry(0.02, 0.02, 0.12, 12), metalMid, -0.04, 0.05, 0.04, HALF_PI, 0, 0);   // capacitor
   addPart(railgunGroup, new THREE.CylinderGeometry(0.0215, 0.0215, 0.016, 12), railGlowMat, -0.04, 0.05, 0.04, HALF_PI, 0, 0);   // its glowing band
-  const railCell = addPart(railgunGroup, new THREE.BoxGeometry(0.032, 0.07, 0.065), railGlowMat, 0, -0.075, -0.02);     // the energy cell (its "magazine")
-  addPart(railgunGroup, new THREE.BoxGeometry(0.005, 0.014, 0.006), metalDark, 0, 0.048, -0.665);                      // front post
-  for (const sx of [-1, 1]) addPart(railgunGroup, new THREE.BoxGeometry(0.007, 0.012, 0.008), metalDark, sx * 0.011, 0.041, 0.13);   // rear sight: two posts
+  const railCell = addPart(railgunGroup, bevelBox(0.032, 0.07, 0.065), railGlowMat, 0, -0.066, -0.02);     // the energy cell (its "magazine")
+  addPart(railgunGroup, bevelBox(0.005, 0.014, 0.006), metalDark, 0, 0.048, -0.665);                      // front post
+  for (const sx of [-1, 1]) addPart(railgunGroup, bevelBox(0.007, 0.012, 0.008), metalDark, sx * 0.011, 0.041, 0.13);   // rear sight: two posts
 
   // ---- Minigun: six steel barrels on a spindle that turns as it spins up, a lighter motor housing with a red band, an arched carry handle, two handles, and an ammunition box on the left feeding a brass belt through a short chute ----
   const minigunBrass = new THREE.MeshStandardMaterial({ color: 0xc9a14a, metalness: 0.8, roughness: 0.35 });
@@ -3062,13 +3089,13 @@
   for (const z of [-0.15, 0, 0.15]) addPart(minigunBarrels, new THREE.TorusGeometry(0.037, 0.005, 6, 18), metalDark, 0, 0, z);   // clamp rings
   addPart(minigunGroup, new THREE.TorusGeometry(0.043, 0.008, 6, 18), stainlessDark, 0, 0, -0.55);                         // the fixed muzzle ring
   const carry = addPart(minigunGroup, new THREE.TorusGeometry(0.07, 0.007, 6, 14, Math.PI), metalMid, 0, 0.034, 0, 0, HALF_PI, 0); carry.scale.y = 0.45;   // an arched carry handle
-  addPart(minigunGroup, new THREE.BoxGeometry(0.034, 0.1, 0.045), gripMat, 0, -0.075, 0.065, 0.25, 0, 0);                  // rear handle
-  addPart(minigunGroup, new THREE.BoxGeometry(0.028, 0.08, 0.036), gripMat, 0, -0.07, -0.1, -0.1, 0, 0);                   // front handle
-  addPart(minigunGroup, new THREE.BoxGeometry(0.05, 0.03, 0.045), metalMid, -0.05, 0.005, 0.045, 0, 0, 0.3);               // the feed chute, from the box up to the housing
+  addPart(minigunGroup, bevelBox(0.034, 0.1, 0.045), gripMat, 0, -0.075, 0.065, 0.25, 0, 0);                  // rear handle
+  addPart(minigunGroup, bevelBox(0.028, 0.08, 0.036), gripMat, 0, -0.07, -0.1, -0.1, 0, 0);                   // front handle
+  addPart(minigunGroup, bevelBox(0.05, 0.03, 0.045), metalMid, -0.05, 0.005, 0.045, 0, 0, 0.3);               // the feed chute, from the box up to the housing
   const minigunBox = new THREE.Group(); minigunBox.position.set(-0.092, -0.055, 0.045); minigunBox.rotation.z = 0.25; minigunGroup.add(minigunBox);
-  addPart(minigunBox, new THREE.BoxGeometry(0.075, 0.085, 0.12), metalMid, 0, 0, 0);                                      // ammunition box (its "magazine")
-  addPart(minigunBox, new THREE.BoxGeometry(0.06, 0.008, 0.1), accentMat, 0, 0.0465, 0);                                    // a stripe on its lid
-  addPart(minigunBox, new THREE.BoxGeometry(0.003, 0.045, 0.07), accentMat, -0.0385, 0, 0);                                // and a plate on its side
+  addPart(minigunBox, bevelBox(0.075, 0.085, 0.12), metalMid, 0, 0, 0);                                      // ammunition box (its "magazine")
+  addPart(minigunBox, bevelBox(0.06, 0.008, 0.1), accentMat, 0, 0.0465, 0);                                    // a stripe on its lid
+  addPart(minigunBox, bevelBox(0.003, 0.045, 0.07), accentMat, -0.0385, 0, 0);                                // and a plate on its side
   for (let i = 0; i < 6; i++) {   // the belt: brass rounds lying across the gun, climbing from the box to the chute
     const k = i / 5;
     addPart(minigunGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.034, 8), minigunBrass, -0.095 + k * 0.045, -0.01 + k * 0.025, 0.045, HALF_PI, 0, 0);
@@ -3076,65 +3103,65 @@
 
   // ---- Combat shotgun: a semi-automatic with a polymer stock, a pistol grip, a tube under the barrel and a rail on top ----
   const combatGroup = new THREE.Group();
-  addPart(combatGroup, new THREE.BoxGeometry(0.058, 0.078, 0.27), metalDark, 0, 0, 0.02);                                  // receiver
-  addPart(combatGroup, new THREE.BoxGeometry(0.02, 0.008, 0.22), metalMid, 0, 0.043, 0.02);                                // top rail
+  addPart(combatGroup, bevelBox(0.058, 0.078, 0.27), metalDark, 0, 0, 0.02);                                  // receiver
+  addPart(combatGroup, bevelBox(0.02, 0.008, 0.22), metalMid, 0, 0.043, 0.02);                                // top rail
   addPart(combatGroup, new THREE.CylinderGeometry(0.0165, 0.0165, 0.5, 12), metalDark, 0, 0.022, -0.39, HALF_PI, 0, 0);    // barrel
   addPart(combatGroup, new THREE.CylinderGeometry(0.0145, 0.0145, 0.42, 12), metalMid, 0, -0.022, -0.35, HALF_PI, 0, 0);   // magazine tube
-  addPart(combatGroup, new THREE.BoxGeometry(0.052, 0.046, 0.2), polymerMat, 0, -0.012, -0.36);                            // fore-end
-  addPart(combatGroup, new THREE.BoxGeometry(0.04, 0.09, 0.26), polymerMat, 0, -0.01, 0.3);                                // stock
-  addPart(combatGroup, new THREE.BoxGeometry(0.036, 0.1, 0.045), gripMat, 0, -0.085, 0.13, 0.3, 0, 0);                    // pistol grip
-  addPart(combatGroup, new THREE.BoxGeometry(0.004, 0.03, 0.08), portMat, 0.0302, 0.012, -0.03);                           // ejection port
-  addPart(combatGroup, new THREE.BoxGeometry(0.005, 0.014, 0.006), metalDark, 0, 0.0535, -0.62);                           // front post
-  for (const sx of [-1, 1]) addPart(combatGroup, new THREE.BoxGeometry(0.007, 0.014, 0.008), metalDark, sx * 0.012, 0.0535, 0.12);   // rear sight: two posts
-  addPart(combatGroup, new THREE.BoxGeometry(0.02, 0.008, 0.075), metalMid, 0, -0.044, 0.05);                              // trigger guard
-  addPart(combatGroup, new THREE.BoxGeometry(0.006, 0.026, 0.006), metalDark, 0, -0.056, 0.055, 0.25, 0, 0);               // trigger
+  addPart(combatGroup, bevelBox(0.052, 0.046, 0.2), polymerMat, 0, -0.012, -0.36);                            // fore-end
+  addPart(combatGroup, bevelBox(0.04, 0.09, 0.26), polymerMat, 0, -0.01, 0.3);                                // stock
+  addPart(combatGroup, bevelBox(0.036, 0.1, 0.045), gripMat, 0, -0.085, 0.13, 0.3, 0, 0);                    // pistol grip
+  addPart(combatGroup, bevelBox(0.004, 0.03, 0.08), portMat, 0.0302, 0.012, -0.03);                           // ejection port
+  addPart(combatGroup, bevelBox(0.005, 0.014, 0.006), metalDark, 0, 0.0535, -0.62);                           // front post
+  for (const sx of [-1, 1]) addPart(combatGroup, bevelBox(0.007, 0.014, 0.008), metalDark, sx * 0.012, 0.0535, 0.12);   // rear sight: two posts
+  addPart(combatGroup, bevelBox(0.02, 0.008, 0.075), metalMid, 0, -0.044, 0.05);                              // trigger guard
+  addPart(combatGroup, bevelBox(0.006, 0.026, 0.006), metalDark, 0, -0.056, 0.055, 0.25, 0, 0);               // trigger
 
   // ---- Sawed-off: two short barrels side by side on a breech block, a wooden fore-end and a short raked grip ----
   const sawedGroup = new THREE.Group();
   for (const sx of [-1, 1]) addPart(sawedGroup, new THREE.CylinderGeometry(0.0165, 0.0165, 0.32, 12), metalDark, sx * 0.0175, 0.02, -0.19, HALF_PI, 0, 0);   // the two barrels
-  addPart(sawedGroup, new THREE.BoxGeometry(0.012, 0.008, 0.3), metalMid, 0, 0.0395, -0.19);                               // the rib between them
-  addPart(sawedGroup, new THREE.BoxGeometry(0.066, 0.058, 0.1), metalDark, 0, 0.012, 0.01);                                // breech block
+  addPart(sawedGroup, bevelBox(0.012, 0.008, 0.3), metalMid, 0, 0.0395, -0.19);                               // the rib between them
+  addPart(sawedGroup, bevelBox(0.066, 0.058, 0.1), metalDark, 0, 0.012, 0.01);                                // breech block
   addPart(sawedGroup, new THREE.CylinderGeometry(0.008, 0.008, 0.07, 8), metalMid, 0, 0.012, -0.035, 0, 0, HALF_PI);       // hinge pin
-  addPart(sawedGroup, new THREE.BoxGeometry(0.05, 0.036, 0.13), woodStock, 0, -0.016, -0.12);                              // fore-end
-  addPart(sawedGroup, new THREE.BoxGeometry(0.04, 0.12, 0.05), woodStock, 0, -0.07, 0.09, 0.45, 0, 0);                     // grip
-  for (const sx of [-1, 1]) addPart(sawedGroup, new THREE.BoxGeometry(0.012, 0.022, 0.012), metalDark, sx * 0.016, 0.046, 0.06, -0.5, 0, 0);   // the two hammers
-  addPart(sawedGroup, new THREE.BoxGeometry(0.02, 0.008, 0.06), metalMid, 0, -0.044, 0.035);                               // trigger guard
-  addPart(sawedGroup, new THREE.BoxGeometry(0.006, 0.026, 0.006), metalDark, 0, -0.054, 0.04, 0.25, 0, 0);                 // trigger
+  addPart(sawedGroup, bevelBox(0.05, 0.036, 0.13), woodStock, 0, -0.016, -0.12);                              // fore-end
+  addPart(sawedGroup, bevelBox(0.04, 0.12, 0.05), woodStock, 0, -0.065, 0.075, 0.45, 0, 0);                     // grip
+  for (const sx of [-1, 1]) addPart(sawedGroup, bevelBox(0.012, 0.022, 0.012), metalDark, sx * 0.016, 0.046, 0.06, -0.5, 0, 0);   // the two hammers
+  addPart(sawedGroup, bevelBox(0.02, 0.008, 0.06), metalMid, 0, -0.044, 0.035);                               // trigger guard
+  addPart(sawedGroup, bevelBox(0.006, 0.026, 0.006), metalDark, 0, -0.054, 0.04, 0.25, 0, 0);                 // trigger
   addPart(sawedGroup, new THREE.SphereGeometry(0.005, 8, 8), metalMid, 0, 0.047, -0.345);                                  // front bead
 
   // ---- Machine pistol: a boxy slide over a polymer frame, vented at the front, with a long straight magazine ----
   const mpistolGroup = new THREE.Group();
-  addPart(mpistolGroup, new THREE.BoxGeometry(0.032, 0.04, 0.2), metalDark, 0, 0.02, -0.04);                               // slide
-  addPart(mpistolGroup, new THREE.BoxGeometry(0.02, 0.006, 0.1), metalMid, 0, 0.043, -0.06);                               // its top
-  for (let i = 0; i < 3; i++) addPart(mpistolGroup, new THREE.BoxGeometry(0.034, 0.004, 0.008), portMat, 0, 0.0262, -0.1 - i * 0.016);   // vents at the front
+  addPart(mpistolGroup, bevelBox(0.032, 0.04, 0.2), metalDark, 0, 0.02, -0.04);                               // slide
+  addPart(mpistolGroup, bevelBox(0.02, 0.006, 0.1), metalMid, 0, 0.043, -0.06);                               // its top
+  for (let i = 0; i < 3; i++) addPart(mpistolGroup, bevelBox(0.034, 0.004, 0.008), portMat, 0, 0.0262, -0.1 - i * 0.016);   // vents at the front
   addPart(mpistolGroup, new THREE.CylinderGeometry(0.0095, 0.0095, 0.03, 8), metalMid, 0, 0.02, -0.155, HALF_PI, 0, 0);    // barrel nose
-  addPart(mpistolGroup, new THREE.BoxGeometry(0.034, 0.03, 0.17), polymerMat, 0, -0.005, -0.03);                           // frame
-  addPart(mpistolGroup, new THREE.BoxGeometry(0.034, 0.11, 0.045), gripMat, 0, -0.08, 0.04, 0.2, 0, 0);                    // grip
-  const mpMag = addPart(mpistolGroup, new THREE.BoxGeometry(0.028, 0.15, 0.04), metalDark, 0, -0.11, 0.046, 0.2, 0, 0);    // the long magazine
-  addPart(mpistolGroup, new THREE.BoxGeometry(0.018, 0.006, 0.05), metalMid, 0, -0.03, -0.04);                             // trigger guard
-  addPart(mpistolGroup, new THREE.BoxGeometry(0.005, 0.02, 0.005), metalDark, 0, -0.026, -0.015, 0.25, 0, 0);              // trigger
-  addPart(mpistolGroup, new THREE.BoxGeometry(0.005, 0.01, 0.01), metalDark, 0, 0.047, -0.125);                            // front post
-  addPart(mpistolGroup, new THREE.BoxGeometry(0.018, 0.01, 0.01), metalDark, 0, 0.046, 0.05);                              // rear sight
+  addPart(mpistolGroup, bevelBox(0.034, 0.03, 0.17), polymerMat, 0, -0.005, -0.03);                           // frame
+  addPart(mpistolGroup, bevelBox(0.034, 0.11, 0.045), gripMat, 0, -0.08, 0.04, 0.2, 0, 0);                    // grip
+  const mpMag = addPart(mpistolGroup, bevelBox(0.028, 0.15, 0.04), metalDark, 0, -0.11, 0.046, 0.2, 0, 0);    // the long magazine
+  addPart(mpistolGroup, bevelBox(0.018, 0.006, 0.05), metalMid, 0, -0.03, -0.04);                             // trigger guard
+  addPart(mpistolGroup, bevelBox(0.005, 0.02, 0.005), metalDark, 0, -0.026, -0.015, 0.25, 0, 0);              // trigger
+  addPart(mpistolGroup, bevelBox(0.005, 0.01, 0.01), metalDark, 0, 0.047, -0.125);                            // front post
+  addPart(mpistolGroup, bevelBox(0.018, 0.01, 0.01), metalDark, 0, 0.046, 0.05);                              // rear sight
 
   // ---- Compound bow: a riser with a stabiliser, two limbs with a cam at each tip, a string that draws back and an arrow on the rest ----
   const bowGroup = new THREE.Group();
   const BOW_LIMB = 0.26, BOW_ANG = 0.45, BOW_PIV = 0.09;
-  addPart(bowGroup, new THREE.BoxGeometry(0.036, 0.2, 0.05), metalDark, 0, 0, 0);                                          // the riser
-  addPart(bowGroup, new THREE.BoxGeometry(0.034, 0.09, 0.044), gripMat, 0, -0.02, 0.012);                                  // the grip
+  addPart(bowGroup, bevelBox(0.036, 0.2, 0.05), metalDark, 0, 0, 0);                                          // the riser
+  addPart(bowGroup, bevelBox(0.034, 0.09, 0.044), gripMat, 0, -0.02, 0.012);                                  // the grip
   addPart(bowGroup, new THREE.CylinderGeometry(0.008, 0.008, 0.24, 8), metalMid, 0, -0.05, -0.15, HALF_PI, 0, 0);          // the stabiliser rod
   addPart(bowGroup, new THREE.SphereGeometry(0.014, 8, 8), accentMat, 0, -0.05, -0.27);                                    // its weight
-  addPart(bowGroup, new THREE.BoxGeometry(0.03, 0.008, 0.07), metalMid, -0.012, 0.012, -0.03);                              // the arrow rest
-  addPart(bowGroup, new THREE.BoxGeometry(0.006, 0.03, 0.006), accentMat, -0.025, 0.06, -0.025);                           // a pin sight
+  addPart(bowGroup, bevelBox(0.03, 0.008, 0.07), metalMid, -0.012, 0.012, -0.03);                              // the arrow rest
+  addPart(bowGroup, bevelBox(0.006, 0.03, 0.006), accentMat, -0.025, 0.06, -0.025);                           // a pin sight
   const bowTop = new THREE.Group(), bowBot = new THREE.Group();
   bowTop.position.set(0, BOW_PIV, 0); bowBot.position.set(0, -BOW_PIV, 0); bowGroup.add(bowTop, bowBot);
-  addPart(bowTop, new THREE.BoxGeometry(0.02, BOW_LIMB, 0.014), polymerMat, 0, BOW_LIMB / 2, 0);                           // the limbs
-  addPart(bowBot, new THREE.BoxGeometry(0.02, BOW_LIMB, 0.014), polymerMat, 0, -BOW_LIMB / 2, 0);
+  addPart(bowTop, bevelBox(0.02, BOW_LIMB, 0.014), polymerMat, 0, BOW_LIMB / 2, 0);                           // the limbs
+  addPart(bowBot, bevelBox(0.02, BOW_LIMB, 0.014), polymerMat, 0, -BOW_LIMB / 2, 0);
   addPart(bowTop, new THREE.CylinderGeometry(0.022, 0.022, 0.012, 10), metalMid, 0, BOW_LIMB, 0, 0, 0, HALF_PI);           // a cam at each tip
   addPart(bowBot, new THREE.CylinderGeometry(0.022, 0.022, 0.012, 10), metalMid, 0, -BOW_LIMB, 0, 0, 0, HALF_PI);
   const bowStringMat = new THREE.MeshBasicMaterial({ color: 0xe8e4d8 });
-  const bowStrTop = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.003, 1), bowStringMat), bowStrBot = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.003, 1), bowStringMat);
+  const bowStrTop = new THREE.Mesh(bevelBox(0.003, 0.003, 1), bowStringMat), bowStrBot = new THREE.Mesh(bevelBox(0.003, 0.003, 1), bowStringMat);
   bowGroup.add(bowStrTop, bowStrBot);
-  const bowArrow = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.006, 1), woodStock); bowGroup.add(bowArrow);              // the shaft, stretched to fit the draw
+  const bowArrow = new THREE.Mesh(bevelBox(0.006, 0.006, 1), woodStock); bowGroup.add(bowArrow);              // the shaft, stretched to fit the draw
   const bowHead = addPart(bowGroup, new THREE.ConeGeometry(0.01, 0.045, 8), metalMid, -0.025, 0.015, -0.14, -HALF_PI, 0, 0);    // the arrowhead
   const _bowA = new THREE.Vector3(), _bowB = new THREE.Vector3(), _bowN = new THREE.Vector3(), _bowZ = new THREE.Vector3(0, 0, 1);
   function bowSegment(mesh, a, b) {   // a thin box from a to b
@@ -3170,10 +3197,10 @@
     hand.userData.isHand = true;   // (the attachment picker and the thrown knife leave hands out)
     if (!HANDS.has(parent)) HANDS.set(parent, []);
     HANDS.get(parent).push(hand);
-    addPart(hand, new THREE.BoxGeometry(0.056, 0.062, 0.078), gloveMat, 0, 0, 0);                                         // fist
-    addPart(hand, new THREE.BoxGeometry(0.016, 0.03, 0.05), gloveMat, -0.03 * side, 0.012, -0.012);                       // thumb, on the side nearest the middle
-    for (let i = 0; i < 3; i++) addPart(hand, new THREE.BoxGeometry(0.012, 0.012, 0.074), gloveMat, 0.03 * side, -0.02 + i * 0.02, 0);   // knuckles
-    const sleeve = addPart(hand, new THREE.BoxGeometry(0.07, 0.065, 0.34), sleeveMat, 0.03 * side, -0.1, 0.2, 0.6, -0.1 * side, 0);   // forearm and sleeve
+    addPart(hand, bevelBox(0.056, 0.062, 0.078), gloveMat, 0, 0, 0);                                         // fist
+    addPart(hand, bevelBox(0.016, 0.03, 0.05), gloveMat, -0.03 * side, 0.012, -0.012);                       // thumb, on the side nearest the middle
+    for (let i = 0; i < 3; i++) addPart(hand, bevelBox(0.012, 0.012, 0.074), gloveMat, 0.03 * side, -0.02 + i * 0.02, 0);   // knuckles
+    const sleeve = addPart(hand, bevelBox(0.07, 0.065, 0.34), sleeveMat, 0.03 * side, -0.1, 0.2, 0.6, -0.1 * side, 0);   // forearm and sleeve
     sleeve.frustumCulled = false;
     return hand;
   }
@@ -3219,8 +3246,8 @@
   addPart(grappleGroup, new THREE.CylinderGeometry(0.024, 0.024, 0.3, 12), metalDark, 0, 0.01, -0.1, HALF_PI, 0, 0);   // tube
   for (const z of [0.02, -0.1, -0.22]) addPart(grappleGroup, new THREE.CylinderGeometry(0.028, 0.028, 0.012, 12), spearSteelHeld, 0, 0.01, z, HALF_PI, 0, 0);   // bands
   addPart(grappleGroup, new THREE.CylinderGeometry(0.014, 0.018, 0.1, 8), metalMid, 0, 0.01, -0.3, HALF_PI, 0, 0);       // muzzle
-  addPart(grappleGroup, new THREE.BoxGeometry(0.03, 0.085, 0.04), gripMat, 0, -0.05, 0.03, 0.15, 0, 0);
-  addPart(grappleGroup, new THREE.BoxGeometry(0.012, 0.012, 0.03), accentMat, 0, -0.012, -0.02);   // trigger
+  addPart(grappleGroup, bevelBox(0.03, 0.085, 0.04), gripMat, 0, -0.05, 0.03, 0.15, 0, 0);
+  addPart(grappleGroup, bevelBox(0.012, 0.012, 0.03), accentMat, 0, -0.012, -0.02);   // trigger
   addPart(grappleGroup, new THREE.ConeGeometry(0.014, 0.1, 8), spearSteelHeld, 0, 0.01, -0.38, -HALF_PI, 0, 0);   // the spear tip, peeking out
   addHands(grappleGroup, [0, -0.05, 0.03]);
   grappleGroup.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
@@ -4884,8 +4911,8 @@
         add(new THREE.CylinderGeometry(r * 0.45, r * 0.45, 0.004, 10), AT_RUBBER, 0, mz[1], mz[0] - len - 0.002, HP);
       } else if ((id === "brake" || id === "comp") && mz) {   // a ported block a little wider than the barrel
         const w = mz[2] * 2.5, len = Math.max(mz[2] * 4, 0.06);
-        add(new THREE.BoxGeometry(w, w, len), AT_STEEL, 0, mz[1], mz[0] - len / 2);
-        for (const side of [-1, 1]) for (let i = 0; i < 2; i++) add(new THREE.BoxGeometry(0.003, w * 0.6, len * 0.16), AT_RUBBER, side * (w / 2 + 0.0005), mz[1], mz[0] - len * (0.3 + i * 0.36));
+        add(bevelBox(w, w, len), AT_STEEL, 0, mz[1], mz[0] - len / 2);
+        for (const side of [-1, 1]) for (let i = 0; i < 2; i++) add(bevelBox(0.003, w * 0.6, len * 0.16), AT_RUBBER, side * (w / 2 + 0.0005), mz[1], mz[0] - len * (0.3 + i * 0.36));
       } else if (id === "choke" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.15, mz[2] * 1.3, 0.05, 14), AT_STEEL, 0, mz[1], mz[0] - 0.025, HP);
       else if (id === "wide" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.7, mz[2] * 1.2, 0.045, 14), AT_STEEL, 0, mz[1], mz[0] - 0.022, HP);
       else if (id === "slug" && mz) add(new THREE.CylinderGeometry(mz[2] * 1.2, mz[2] * 1.2, 0.035, 14), AT_BRASS, 0, mz[1], mz[0] - 0.0175, HP);   // a brass collar at the muzzle: slugs are loaded
@@ -4895,14 +4922,14 @@
           add(new THREE.CylinderGeometry(0.017, 0.017, 0.085, 10), AT_GRENADE, x - 0.017, y, z + dz, HP);
           add(new THREE.CylinderGeometry(0.0125, 0.0125, 0.02, 10), AT_BRASS, x - 0.017, y, z + dz - 0.0525, HP);
         }
-        add(new THREE.BoxGeometry(0.008, 0.045, 0.16), AT_RUBBER, x - 0.003, y, z);
+        add(bevelBox(0.008, 0.045, 0.16), AT_RUBBER, x - 0.003, y, z);
       } else if (id === "capacitor" && M.left) {   // a second capacitor on the left of the receiver, with a glowing band
         const [x, y, z] = M.left;
         add(new THREE.CylinderGeometry(0.018, 0.018, 0.11, 12), AT_STEEL, x - 0.018, y + 0.01, z, HP);
         add(new THREE.CylinderGeometry(0.0195, 0.0195, 0.014, 12), railGlowMat, x - 0.018, y + 0.01, z - 0.02, HP);
       } else if (id === "lquick" && M.left) {   // a speed loader: a pouch on the left with two rounds standing in it
         const [x, y, z] = M.left;
-        add(new THREE.BoxGeometry(0.018, 0.07, 0.09), AT_STEEL, x - 0.009, y, z);
+        add(bevelBox(0.018, 0.07, 0.09), AT_STEEL, x - 0.009, y, z);
         for (const dz of [-0.025, 0.025]) add(new THREE.CylinderGeometry(0.011, 0.011, 0.03, 8), AT_BRASS, x - 0.009, y + 0.05, z + dz);
       } else if (id === "rquick" && M.under) {   // a spare warhead clipped under the tube
         const [z, y] = M.under;
@@ -4911,7 +4938,7 @@
       }
       else if ((id === "optic-2x" || id === "optic-4x") && M.optic) {   // a scope on a clamp: an open tube, a flared front with glass, an eyepiece ring (the frame you aim through) and a turret
         const [z, t] = M.optic, big = id === "optic-4x", len = big ? 0.17 : 0.11, r = big ? 0.0225 : 0.019, c = t + AT_DOT_RISE;
-        add(new THREE.BoxGeometry(0.024, 0.015, 0.05), AT_STEEL, 0, t + 0.0075, z);
+        add(bevelBox(0.024, 0.015, 0.05), AT_STEEL, 0, t + 0.0075, z);
         add(new THREE.CylinderGeometry(r, r, len, 14, 1, true), AT_STEEL, 0, c, z, HP);
         add(new THREE.CylinderGeometry(r, r * 1.35, 0.03, 14, 1, true), AT_STEEL, 0, c, z - len / 2 - 0.015, HP);
         add(new THREE.TorusGeometry(r * 1.02, 0.0045, 6, 16), AT_STEEL, 0, c, z + len / 2);
@@ -4921,23 +4948,23 @@
         add(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 8), AT_STEEL, 0, c + r + 0.004, z);
       } else if (id === "reddot" && M.optic) {   // a reflex sight: a clamp and base, a slim frame round the window, a hood with a lip, a glass, a small emitter pod, two knobs, and a pin-prick dot
         const [z, t] = M.optic, c = t + AT_DOT_RISE;
-        add(new THREE.BoxGeometry(0.03, 0.008, 0.05), AT_STEEL, 0, t + 0.004, z);                       // rail clamp
+        add(bevelBox(0.03, 0.008, 0.05), AT_STEEL, 0, t + 0.004, z);                       // rail clamp
         for (const side of [-1, 1]) { const bolt = add(new THREE.CylinderGeometry(0.0035, 0.0035, 0.006, 8), AT_RUBBER, side * 0.0165, t + 0.004, z + 0.012); bolt.rotation.z = HP; }
-        add(new THREE.BoxGeometry(0.036, 0.012, 0.052), AT_STEEL, 0, t + 0.014, z);                     // the base the window sits on
-        add(new THREE.BoxGeometry(0.03, 0.008, 0.012), AT_STEEL, 0, t + 0.0145, z - 0.03, 0.5);        // its sloped nose
-        for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.0045, 0.037, 0.05), AT_STEEL, side * 0.0175, c, z);   // the two sides of the window
-        add(new THREE.BoxGeometry(0.039, 0.005, 0.054), AT_RUBBER, 0, c + 0.021, z);                    // the hood over the top
-        add(new THREE.BoxGeometry(0.037, 0.003, 0.012), AT_RUBBER, 0, c + 0.021, z - 0.032);            // and its lip out front
+        add(bevelBox(0.036, 0.012, 0.052), AT_STEEL, 0, t + 0.014, z);                     // the base the window sits on
+        add(bevelBox(0.03, 0.008, 0.012), AT_STEEL, 0, t + 0.0145, z - 0.03, 0.5);        // its sloped nose
+        for (const side of [-1, 1]) add(bevelBox(0.0045, 0.037, 0.05), AT_STEEL, side * 0.0175, c, z);   // the two sides of the window
+        add(bevelBox(0.039, 0.005, 0.054), AT_RUBBER, 0, c + 0.021, z);                    // the hood over the top
+        add(bevelBox(0.037, 0.003, 0.012), AT_RUBBER, 0, c + 0.021, z - 0.032);            // and its lip out front
         add(new THREE.PlaneGeometry(0.03, 0.034), AT_LENS, 0, c, z - 0.021);                            // the glass
-        add(new THREE.BoxGeometry(0.014, 0.008, 0.012), AT_STEEL, 0, c - 0.0125, z - 0.016);            // the emitter pod at the foot of the window
+        add(bevelBox(0.014, 0.008, 0.012), AT_STEEL, 0, c - 0.0125, z - 0.016);            // the emitter pod at the foot of the window
         const knobW = add(new THREE.CylinderGeometry(0.0045, 0.0045, 0.008, 10), AT_RUBBER, 0.0225, c + 0.005, z - 0.004); knobW.rotation.z = HP;   // windage knob
         add(new THREE.CylinderGeometry(0.0045, 0.0045, 0.005, 10), AT_RUBBER, 0, c + 0.0255, z - 0.004);  // elevation knob
-        add(new THREE.BoxGeometry(0.0016, 0.0016, 0.001), AT_DOT, 0, c, z - 0.0215);                   // the dot (small: it is a point of light)
+        add(bevelBox(0.0016, 0.0016, 0.001), AT_DOT, 0, c, z - 0.0215);                   // the dot (small: it is a point of light)
         add(new THREE.CircleGeometry(0.0038, 12), AT_DOT_HALO, 0, c, z - 0.0218);                      // and its faint glow
       } else if (id === "vgrip" && M.under) add(new THREE.CylinderGeometry(0.015, 0.017, 0.1, 10), AT_STEEL, 0, M.under[1] - 0.048, M.under[0]);
-      else if (id === "agrip" && M.under) add(new THREE.BoxGeometry(0.028, 0.03, 0.085), AT_STEEL, 0, M.under[1] - 0.012, M.under[0] + 0.01, 0.35);
+      else if (id === "agrip" && M.under) add(bevelBox(0.028, 0.03, 0.085), AT_STEEL, 0, M.under[1] - 0.012, M.under[0] + 0.01, 0.35);
       else if (id === "laser" && M.under) {   // a box under the frame, the red lens facing forward
-        add(new THREE.BoxGeometry(0.026, 0.022, 0.06), AT_STEEL, 0, M.under[1] - 0.011, M.under[0]);
+        add(bevelBox(0.026, 0.022, 0.06), AT_STEEL, 0, M.under[1] - 0.011, M.under[0]);
         add(new THREE.CylinderGeometry(0.004, 0.004, 0.002, 8), AT_DOT, 0, M.under[1] - 0.011, M.under[0] - 0.031, HP);
         const by = M.under[1] - 0.011, bz = M.under[0] - 0.032, sl = AT_BEAM_LEN / AT_BEAM_SEGS;
         for (let k = 0; k < AT_BEAM_SEGS; k++) {   // the beam, a run of short cones that thin out
@@ -4947,16 +4974,16 @@
             if (k >= 3) seg.userData.noFit = true;   // the preview frames the gun and the start of the beam, not all of it
           }
         }
-      } else if (id === "stock-heavy" && M.butt) add(new THREE.BoxGeometry(0.09, M.butt[2] * 1.05, 0.05), AT_RUBBER, 0, M.butt[1], M.butt[0] + 0.02);
+      } else if (id === "stock-heavy" && M.butt) add(bevelBox(0.09, M.butt[2] * 1.05, 0.05), AT_RUBBER, 0, M.butt[1], M.butt[0] + 0.02);
       else if (id === "stock-light" && M.butt) {   // a skeleton frame in place of the wooden stock: top bar, lower strut, upright
         const [zBack, yc, h, len] = M.butt, zb = zBack - 0.03;
-        add(new THREE.BoxGeometry(0.035, 0.025, len), AT_STEEL, 0, yc + h / 2 - 0.0125, zb - len / 2);
-        add(new THREE.BoxGeometry(0.03, 0.022, len * 0.8), AT_STEEL, 0, yc - h / 2 + 0.011, zb - len * 0.4);
-        add(new THREE.BoxGeometry(0.05, h * 0.95, 0.03), AT_STEEL, 0, yc, zb - 0.015);
+        add(bevelBox(0.035, 0.025, len), AT_STEEL, 0, yc + h / 2 - 0.0125, zb - len / 2);
+        add(bevelBox(0.03, 0.022, len * 0.8), AT_STEEL, 0, yc - h / 2 + 0.011, zb - len * 0.4);
+        add(bevelBox(0.05, h * 0.95, 0.03), AT_STEEL, 0, yc, zb - 0.015);
       }
       else if (id === "bipod" && M.under) {   // a mount block under the fore-end and two legs swung forward and down
         const [z, y] = M.under;
-        add(new THREE.BoxGeometry(0.04, 0.02, 0.045), AT_STEEL, 0, y - 0.008, z + 0.03);
+        add(bevelBox(0.04, 0.02, 0.045), AT_STEEL, 0, y - 0.008, z + 0.03);
         for (const side of [-1, 1]) {
           const leg = add(new THREE.CylinderGeometry(0.0055, 0.004, 0.11, 8), AT_STEEL, side * 0.02, y - 0.05, z - 0.01, 0.9);
           leg.rotation.z = side * -0.12;
@@ -4983,8 +5010,8 @@
     const [y, z, tilt, w, d] = M.mag, g = new THREE.Group();
     g.position.set(0, y, z); g.rotation.x = tilt;
     const add = (geo, mat, py) => { const m = new THREE.Mesh(geo, mat); m.position.y = py; g.add(m); };
-    if (ids.includes("extmag")) { add(new THREE.BoxGeometry(w, 0.06, d), AT_STEEL, -0.03); add(new THREE.BoxGeometry(w + 0.006, 0.012, d + 0.008), AT_STEEL, -0.064); }   // the extra length and a base plate
-    else if (ids.includes("fastmag")) add(new THREE.BoxGeometry(0.012, 0.026, 0.004), AT_RUBBER, -0.013);   // a pull tab
+    if (ids.includes("extmag")) { add(bevelBox(w, 0.06, d), AT_STEEL, -0.03); add(bevelBox(w + 0.006, 0.012, d + 0.008), AT_STEEL, -0.064); }   // the extra length and a base plate
+    else if (ids.includes("fastmag")) add(bevelBox(0.012, 0.026, 0.004), AT_RUBBER, -0.013);   // a pull tab
     else return null;
     return g;
   }
@@ -8777,35 +8804,35 @@
     const legs = [];
     for (const sx of [-1, 1]) {   // each leg hangs from the hip so it can swing
       const hip = new THREE.Group(); hip.position.set(sx * 0.12, 0.74, 0); g.add(hip);
-      addPart(hip, new THREE.BoxGeometry(0.2, 0.52, 0.22), dark, 0, -0.26, 0);
-      addPart(hip, new THREE.BoxGeometry(0.22, 0.2, 0.3), boot, 0, -0.64, -0.03);
+      addPart(hip, bevelBox(0.2, 0.52, 0.22), dark, 0, -0.26, 0);
+      addPart(hip, bevelBox(0.22, 0.2, 0.3), boot, 0, -0.64, -0.03);
       legs.push(hip);
     }
     const torso = new THREE.Group(); torso.position.set(0, 0.74, 0); g.add(torso);
-    addPart(torso, new THREE.BoxGeometry(0.5, 0.18, 0.3), dark, 0, 0.08, 0);                 // hips and belt line
-    addPart(torso, new THREE.BoxGeometry(0.52, 0.04, 0.32), boot, 0, 0.19, 0);               // the belt
-    addPart(torso, new THREE.BoxGeometry(0.56, 0.5, 0.32), suit, 0, 0.47, 0);                // chest, in their colour
-    addPart(torso, new THREE.BoxGeometry(0.4, 0.36, 0.07), vest, 0, 0.47, -0.17);            // a vest plate on the front
-    addPart(torso, new THREE.BoxGeometry(0.34, 0.4, 0.12), vest, 0, 0.45, 0.2);              // and a pack on the back
-    for (const sx of [-1, 1]) addPart(torso, new THREE.BoxGeometry(0.16, 0.1, 0.26), suit, sx * 0.33, 0.68, 0);   // shoulders
+    addPart(torso, bevelBox(0.5, 0.18, 0.3), dark, 0, 0.08, 0);                 // hips and belt line
+    addPart(torso, bevelBox(0.52, 0.04, 0.32), boot, 0, 0.19, 0);               // the belt
+    addPart(torso, bevelBox(0.56, 0.5, 0.32), suit, 0, 0.47, 0);                // chest, in their colour
+    addPart(torso, bevelBox(0.4, 0.36, 0.07), vest, 0, 0.47, -0.17);            // a vest plate on the front
+    addPart(torso, bevelBox(0.34, 0.4, 0.12), vest, 0, 0.45, 0.2);              // and a pack on the back
+    for (const sx of [-1, 1]) addPart(torso, bevelBox(0.16, 0.1, 0.26), suit, sx * 0.33, 0.68, 0);   // shoulders
     const headPivot = new THREE.Group();
     headPivot.position.set(0, 1.5, 0);
     addPart(headPivot, new THREE.CylinderGeometry(0.075, 0.085, 0.1, 8), skin, 0, 0.0, 0);   // neck
     addPart(headPivot, new THREE.SphereGeometry(0.2, 12, 10), skin, 0, 0.14, 0);
     addPart(headPivot, new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), suit, 0, 0.15, 0);   // a cap in their colour
-    addPart(headPivot, new THREE.BoxGeometry(0.3, 0.075, 0.07), dark, 0, 0.17, -0.175);       // a visor across the eyes: it shows which way they face
+    addPart(headPivot, bevelBox(0.3, 0.075, 0.07), dark, 0, 0.17, -0.175);       // a visor across the eyes: it shows which way they face
     const steel = new THREE.MeshStandardMaterial({ color: 0x4a4e57, roughness: 0.5, metalness: 0.5 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.8 });
     const guns = {};
     for (const id of GUNS) { guns[id] = makeAvatarGun(id, dark, steel, wood); headPivot.add(guns[id]); }
     const launcher = new THREE.Group();   // the grapple, while they have it out
     addPart(launcher, new THREE.CylinderGeometry(0.03, 0.03, 0.5, 10), dark, 0, 0, -0.2, Math.PI / 2, 0, 0);
-    addPart(launcher, new THREE.BoxGeometry(0.04, 0.1, 0.05), steel, 0, -0.07, 0.02);
+    addPart(launcher, bevelBox(0.04, 0.1, 0.05), steel, 0, -0.07, 0.02);
     launcher.position.set(AV_GUN_X, -0.25, -0.1);
     launcher.visible = false;
     headPivot.add(launcher);
     const knife = new THREE.Group();
-    addPart(knife, new THREE.BoxGeometry(0.035, 0.07, 0.3), metalMid, 0, 0, -0.2);
+    addPart(knife, bevelBox(0.035, 0.07, 0.3), metalMid, 0, 0, -0.2);
     knife.position.set(AV_GUN_X, -0.25, -0.1);
     knife.visible = false;
     headPivot.add(knife);
@@ -8814,8 +8841,8 @@
     // two arms: an upper arm in their colour, a forearm and a glove
     const arms = [];
     for (const sx of [-1, 1]) {
-      const upper = addPart(g, new THREE.BoxGeometry(0.11, 1, 0.11), suit, 0, 0, 0);
-      const fore = addPart(g, new THREE.BoxGeometry(0.09, 1, 0.09), dark, 0, 0, 0);
+      const upper = addPart(g, bevelBox(0.11, 1, 0.11), suit, 0, 0, 0);
+      const fore = addPart(g, bevelBox(0.09, 1, 0.09), dark, 0, 0, 0);
       const hand = addPart(g, new THREE.SphereGeometry(0.055, 8, 6), skin, 0, 0, 0);
       arms.push({ sx, upper, fore, hand, shoulder: new THREE.Vector3(sx * 0.34, 1.38, 0) });
     }
@@ -11891,9 +11918,11 @@
     AP.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     AP.renderer.outputEncoding = THREE.sRGBEncoding; AP.renderer.toneMapping = THREE.ACESFilmicToneMapping;   // (as the game's view)
     AP.scene = new THREE.Scene();
-    AP.scene.add(new THREE.HemisphereLight(0xffffff, 0x4a4a55, 1.2));
-    const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(2, 3, 4); AP.scene.add(key);
-    const rim = new THREE.DirectionalLight(0x9fb4ff, 0.9); rim.position.set(-3, 1, -2); AP.scene.add(rim);
+    // a studio set: a soft fill, a warm key from the front, a cool rim from behind that outlines dark parts against the backdrop
+    AP.scene.add(new THREE.HemisphereLight(0xffffff, 0x5a5a66, 1.5));
+    const key = new THREE.DirectionalLight(0xfff4e6, 2.2); key.position.set(2, 3, 4); AP.scene.add(key);
+    const fill = new THREE.DirectionalLight(0xdfe6ff, 0.8); fill.position.set(-3, 0.5, 3); AP.scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xbfd2ff, 2.0); rim.position.set(-2, 2.5, -4); AP.scene.add(rim);
     AP.camera = new THREE.PerspectiveCamera(28, 1, 0.02, 20);
     AP.pivot = new THREE.Group(); AP.scene.add(AP.pivot);
     let lx = 0, ly = 0;
