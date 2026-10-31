@@ -261,7 +261,7 @@
   };
 
   // team colours (the red team turns orange with the colourblind setting) and the hill ring when two sides are on it
-  const TEAM_COLORS = [0x3e8ef7, 0xe5484d], TEAM_NAMES = ["Blue", "Red"], HILL_CONTESTED = { c: 0xff4a3d, css: "#ff6a5e" };
+  const TEAM_COLORS = [0x3e8ef7, 0xe24b4b], TEAM_NAMES = ["Blue", "Red"], HILL_CONTESTED = { c: 0xff4a3d, css: "#ff6a5e" };
   const SETTINGS = {
     sensX: 1.0, sensY: 1.0, scopedSensMult: 0.35, volume: 0.55,
     unlimitedAmmo: false, mouseAccel: false, accelStrength: 0.7,
@@ -3059,7 +3059,7 @@
   }
 
   // ---- Railgun: two rails with glowing coils round them, a capacitor on the side and an energy cell under the receiver; the glow rises as it charges ----
-  const railGlowMat = new THREE.MeshStandardMaterial({ color: 0x1a3a44, emissive: 0x22d3ee, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.2 });
+  const railGlowMat = new THREE.MeshStandardMaterial({ color: 0x1a3a44, emissive: 0x5cc8f2, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.2 });
   const railgunGroup = new THREE.Group();
   addPart(railgunGroup, bevelBox(0.052, 0.07, 0.28), metalDark, 0, 0, 0.05);                              // receiver
   addPart(railgunGroup, bevelBox(0.046, 0.052, 0.07), metalMid, 0, 0.008, -0.115);                       // the breech the rails run out of
@@ -5036,10 +5036,10 @@
       dark: { camo: ["#a8895a", "#7a6340", "#5a4a30", "#c4ab7c"], metalness: 0.15, roughness: 0.8 }, mid: { color: 0x6f5f3d, metalness: 0.3, roughness: 0.6 },
       grip: { color: 0x4a3f2a, metalness: 0.05, roughness: 0.9 }, wood: { color: 0x9a7a45, metalness: 0.05, roughness: 0.8 },
       accent: { color: 0xd0a24a, metalness: 0.5, roughness: 0.5 }, steel: { color: 0x8a7a55, metalness: 0.6, roughness: 0.45 } } },
-    midnight: { name: "Midnight", sw: ["#1d2b57", "#22d3ee"], roles: {
+    midnight: { name: "Midnight", sw: ["#1d2b57", "#5cc8f2"], roles: {
       dark: { color: 0x1c2a5c, metalness: 0.6, roughness: 0.35 }, mid: { color: 0x2f4a94, metalness: 0.6, roughness: 0.35 },
       grip: { color: 0x0b1020, metalness: 0.1, roughness: 0.8 }, wood: { color: 0x25357a, metalness: 0.1, roughness: 0.6 },
-      accent: { color: 0x22d3ee, metalness: 0.4, roughness: 0.4, emissive: 0x0a6f85, emissiveIntensity: 0.8 }, steel: { color: 0x4560b0, metalness: 0.6, roughness: 0.3 } } },
+      accent: { color: 0x5cc8f2, metalness: 0.4, roughness: 0.4, emissive: 0x1a6a8a, emissiveIntensity: 0.8 }, steel: { color: 0x4560b0, metalness: 0.6, roughness: 0.3 } } },
     gold: { name: "Gold", sw: ["#d9b04a", "#7a5a10"], roles: {
       dark: { color: 0xb8892a, metalness: 0.95, roughness: 0.3 }, mid: { color: 0xd9b04a, metalness: 0.95, roughness: 0.25 },
       grip: { color: 0x3b2a14, metalness: 0.1, roughness: 0.8 }, wood: { color: 0x5a3b18, metalness: 0.1, roughness: 0.6 },
@@ -5364,7 +5364,7 @@
   let decalMesh = null;   // the bullet holes (built further down)
   function applySettings() {
     applyTargetPalette();
-    TEAM_COLORS[1] = SETTINGS.colorblindTargets ? 0xf5a623 : 0xe5484d;
+    TEAM_COLORS[1] = SETTINGS.colorblindTargets ? 0xf5a623 : 0xe24b4b;
     TEAM_NAMES[1] = SETTINGS.colorblindTargets ? "Orange" : "Red";
     HILL_CONTESTED.c = SETTINGS.colorblindTargets ? 0xff4fd8 : 0xff4a3d; HILL_CONTESTED.css = SETTINGS.colorblindTargets ? "#ff7be3" : "#ff6a5e";
     document.body.classList.toggle("hc", !!SETTINGS.highContrast);
@@ -7498,7 +7498,7 @@
   const RAIL_BEAMS = [];
   for (let i = 0; i < 6; i++) {
     const mk = (color) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const core = new THREE.Mesh(railBeamGeo, mk(0xcff8ff)), glow = new THREE.Mesh(railBeamGeo, mk(0x22d3ee));
+    const core = new THREE.Mesh(railBeamGeo, mk(0xcff8ff)), glow = new THREE.Mesh(railBeamGeo, mk(0x5cc8f2));
     core.visible = glow.visible = false; core.frustumCulled = glow.frustumCulled = false;
     scene.add(core, glow);
     RAIL_BEAMS.push({ core, glow, age: 9 });
@@ -8478,7 +8478,7 @@
     }
     return ggLadderVal;
   }
-  const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
+  const PLAYER_COLORS = [0xe24b4b, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
   // (the deathmatch spawn points, SPAWNS, come from the map)
   const SUB_NAMES = { race: "Score Race", dm: "Deathmatch" };
@@ -9382,7 +9382,7 @@
         const wasAlive = t.userData.alive;
         t.userData.alive = false; t.visible = false; t.userData.respawnTimer = 1.1;
         if (wasAlive && m.by !== net.id) {
-          impactFx(t.position, null, "target", t.userData.small ? 0x22d3ee : 0xffd24a);
+          impactFx(t.position, null, "target", new THREE.Color(TARGET_TYPES[t.userData.type] ? TARGET_TYPES[t.userData.type].color : "#ffd24a").getHex());
           playHitSound(0.8);
         }
         break;
@@ -11288,7 +11288,7 @@
       else msg = "Take their flag";
       document.getElementById("kb-left").textContent = TEAM_NAMES[0] + " " + net.caps[0];
       document.getElementById("kb-right").textContent = net.caps[1] + " " + TEAM_NAMES[1];
-      const mid = document.getElementById("kb-mid"); mid.textContent = msg; mid.style.color = f1.s === 1 ? "#ff6a5e" : f2.s === 1 ? "#7cfc00" : "#e6e6e6";
+      const mid = document.getElementById("kb-mid"); mid.textContent = msg; mid.style.color = f1.s === 1 ? "#ff6a5e" : f2.s === 1 ? "#5fd38a" : "#e6e6e6";
       return;
     }
     if (!net.koth) {   // team deathmatch: each team's kills fill in from its own side towards the middle (the first to the limit wins)
@@ -12143,7 +12143,7 @@
     mapBigCtx.save();
     mapBigCtx.translate(px(yawObject.position.x), px(yawObject.position.z));
     mapBigCtx.rotate(Math.atan2(-Math.cos(yawObject.rotation.y), -Math.sin(yawObject.rotation.y)));   // the way you face
-    mapBigCtx.fillStyle = "#22d3ee"; mapBigCtx.strokeStyle = "#fff"; mapBigCtx.lineWidth = 1.5;
+    mapBigCtx.fillStyle = "#5cc8f2"; mapBigCtx.strokeStyle = "#fff"; mapBigCtx.lineWidth = 1.5;
     mapBigCtx.beginPath(); mapBigCtx.moveTo(10, 0); mapBigCtx.lineTo(-7, 6); mapBigCtx.lineTo(-4, 0); mapBigCtx.lineTo(-7, -6); mapBigCtx.closePath();
     mapBigCtx.fill(); mapBigCtx.stroke();
     mapBigCtx.restore();
@@ -12784,7 +12784,7 @@
     if (hit && hit.o && hit.p) {   // where you were, where it landed
       g.setLineDash([6, 5]); g.strokeStyle = "#ffd24a"; g.lineWidth = 2;
       g.beginPath(); g.moveTo(px(hit.o[0]), pz(hit.o[2])); g.lineTo(px(hit.p[0]), pz(hit.p[2])); g.stroke(); g.setLineDash([]);
-      g.fillStyle = "#22d3ee"; g.beginPath(); g.arc(px(hit.o[0]), pz(hit.o[2]), 6, 0, 7); g.fill();
+      g.fillStyle = "#5cc8f2"; g.beginPath(); g.arc(px(hit.o[0]), pz(hit.o[2]), 6, 0, 7); g.fill();
       g.strokeStyle = "#ff3b3b"; g.lineWidth = 3; g.beginPath(); g.arc(px(hit.p[0]), pz(hit.p[2]), 8, 0, 7); g.stroke();
     }
     const font = (px2, bold) => (bold ? "bold " : "") + px2 + "px Segoe UI, Arial, sans-serif";
@@ -13069,7 +13069,7 @@
           hpFillEl.style.background = me.hp > 60 ? "#3ddc84" : me.hp > 30 ? "#ffd24a" : "#ff4d4d";
           hpTextEl.textContent = Math.ceil(me.hp);
         }
-        speedbarEl.style.background = speed > 18 ? "#22d3ee" : (speed > 12 ? "#7CFC00" : "#ffd24a");
+        speedbarEl.style.background = speed > 18 ? "#5cc8f2" : (speed > 12 ? "#5fd38a" : "#ffd24a");
         const st = player.sliding ? "SLIDING"
           : (!player.onGround ? (player.wallContactTime >= 0 ? "WALL" : "AIR") : "");
         if (st !== lastStateText) { stateEl.textContent = st; lastStateText = st; }
