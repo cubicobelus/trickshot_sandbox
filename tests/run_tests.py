@@ -987,7 +987,7 @@ GUNS_JS = """() => {
     if (!w.sound || !(w.sound.rate > 0) || !(w.sound.length > 0)) bad(id + " has no usable sound profile");
     if (!(w.fireRate > 0) || !(w.magSize > 0) || !w.group || !w.muzzle) bad(id + " is missing fire rate, magazine, model or muzzle");
     if (w.action !== "pump" && !(w.reload && w.reload.style === "shells") && (w.mag === undefined || w.magRestY === undefined)) bad(id + " has no magazine part for the reload");   // (the pump shotgun and the revolver load rounds instead)
-    if (!D.GG_ORDER.includes(id) && !["launcher", "rpg", "revolver", "dual", "railgun", "minigun"].includes(id)) bad(id + " is not on the gun game ladder");   // (the launcher, the RPG and the four newest guns are kept out of the gun game, and bots never pick them)
+    if (!D.ggDefaultPool().includes(id) && !["launcher", "rpg"].includes(id)) bad(id + " is not in the gun game pool");   // (the launcher, the RPG and the four newest guns are kept out of the gun game, and bots never pick them)
   }
   const dm = (g, d, head) => D.hostDamage({ x: 0, z: 0 }, { x: d, z: 0 }, { head: !!head, n: 1, h: head ? 1 : 0 }, g);
   out.facts.smg = [dm("smg", 5), dm("smg", 12), dm("smg", 23.5), dm("smg", 35), dm("smg", 80), dm("smg", 5, true), dm("smg", 80, true)];
@@ -995,7 +995,7 @@ GUNS_JS = """() => {
   out.facts.lmg = [D.WEAPONS.lmg.magSize, dm("lmg", 5), dm("lmg", 5, true)];
   out.facts.burst = [D.WEAPONS.burst.burst, dm("burst", 5), dm("burst", 5, true)];
   out.facts.knife = dm("knife", 1);
-  out.facts.ggLen = D.GG_ORDER.length;
+  out.facts.ggLen = D.ggOrder().length;
   return out;
 }"""
 
@@ -1582,7 +1582,7 @@ def debug_site():
     with open(path, encoding="utf-8", newline="") as fh:
         src = fh.read().replace("\r\n", "\n")
     hook = ("  window.__dbg = { wallBoxes, ramps, ladders, jumpPads, portals, boosts, movers, MAPS, MAP_ORDER, loadMap, navBuild, navPath, navLevelFor, "
-            "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, GG_ORDER, ATTACHMENTS, WEAPON_ICONS, hostDamage, SETTINGS, applyAttachments, setLoadout, "
+            "WEAPONS, WEAPON_ORDER, GUNS, DAMAGE, ggOrder, ggDefaultPool, makeGgLadder, makeGgPreset, ATTACHMENTS, WEAPON_ICONS, hostDamage, SETTINGS, applyAttachments, setLoadout, "
             "targets, camera, yawObject, pitchObject, thrownPool, stats, vm, run, player, net, "
             "hostStartRound, hostDealDamage, grenades, throwFrag, explodeGrenade, trickState, computeMultipliers, attachCode, pickSpawn, hostRespawn, resolveWalls, rayHitBox, wallBoxes, hostCtfTick, ctfBase, surfaceBelow, showKillBanner, ggLevelHtml, ggBotGun, botFire, hostHandle, makeGgPreset, ggParsePreset, "
             "FLOOR_Y, CFG, get currentMap() { return currentMap; }, get navLv() { return navLv; }, get navLinks() { return navLinks; }, "
@@ -1773,7 +1773,7 @@ def test_gungame_bot_knife(browser, base):
         held = page.evaluate("""() => {
           const D = window.__dbg, bot = [...D.net.players.values()].find((p) => p.bot), me = D.net.players.get('you');
           D.net.cd = 0; me.protectUntil = 0; bot.protectUntil = 0;
-          bot.gg = D.GG_ORDER.length; D.ggBotGun(bot);
+          bot.gg = D.ggOrder().length; D.ggBotGun(bot);
           bot.x = me.x; bot.z = me.z - 12; bot.y = me.y;
           return D.WEAPON_ORDER[bot.g];
         }""")
@@ -1785,6 +1785,61 @@ def test_gungame_bot_knife(browser, base):
         check("and it runs up and stabs to win the round", res[0] == "results" and res[1] is False, str(res))
         check("the winning knife kill counts as the 11th gun (11 / 11)", page.evaluate("[...window.__dbg.net.players.values()].find((p) => p.bot).gg") == 11)
         check("the bot knife runs without errors", not errors, "; ".join(errors[:2]))
+        page.close()
+    finally:
+        server.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_gungame_ladder(browser, base):
+    """The gun game's ladder is random each game, comes from the guns the host switched on (the launcher and RPG off by default), and reaches every player."""
+    server, dbase, tmp = debug_site()
+    try:
+        page, errors = open_page(browser, dbase + "/index.html", 1000, 800)
+        f = page.evaluate("""() => {
+          const D = window.__dbg, ladders = [];
+          for (let i = 0; i < 40; i++) ladders.push(D.makeGgLadder());
+          const all = [].concat(...ladders);
+          return { lens: [...new Set(ladders.map((l) => l.length))], blast: all.filter((g) => g === "launcher" || g === "rpg").length, dup: ladders.some((l) => new Set(l).size !== l.length),
+                   distinct: new Set(ladders.map((l) => l.join(","))).size, bad: all.filter((g) => !D.GUNS.includes(g)).length, pool: D.ggDefaultPool().length, gunsAll: D.GUNS.length };
+        }""")
+        check("a ladder has ten different guns, none of them the launcher or RPG by default", f["lens"] == [10] and f["blast"] == 0 and not f["dup"] and f["bad"] == 0, str(f))
+        check("every game rolls a different ladder", f["distinct"] >= 30, str(f["distinct"]))
+        check("the default pool is every gun but the launcher and RPG", f["pool"] == f["gunsAll"] - 2, str(f["pool"]))
+        # the setup window: icons to switch guns on and off
+        page.click('#mode-tabs .tab[data-mode="mp"]')
+        page.click("#mp-card-practice")
+        check("the gun game guns are hidden for the other modes", page.is_hidden("#ps-gg"))
+        page.click('#ps-modes .ps-card[data-mode="gungame"]')
+        n = page.locator("#ps-gg-guns button").count()
+        check("the gun game window shows an icon button for every gun", page.is_visible("#ps-gg") and n == f["gunsAll"], str(n))
+        on0 = page.locator("#ps-gg-guns button.lo-gun.active").count()
+        check("the launcher and RPG start switched off", on0 == f["gunsAll"] - 2 and "active" not in (page.get_attribute('#ps-gg-guns button[data-gun="rpg"]', "class") or ""), str(on0))
+        page.click('#ps-gg-guns button[data-gun="rpg"]')
+        check("clicking a gun's icon switches it on", "active" in (page.get_attribute('#ps-gg-guns button[data-gun="rpg"]', "class") or ""))
+        # keep only three on: the last three cannot be switched off
+        guns = page.evaluate("window.__dbg.GUNS")
+        for g in guns[3:]:
+            if "active" in (page.get_attribute(f'#ps-gg-guns button[data-gun="{g}"]', "class") or ""):
+                page.click(f'#ps-gg-guns button[data-gun="{g}"]')
+        left = page.locator("#ps-gg-guns button.lo-gun.active").count()
+        page.click(f'#ps-gg-guns button[data-gun="{guns[0]}"]')
+        check("at least three guns stay on", left == 3 and page.locator("#ps-gg-guns button.lo-gun.active").count() == 3, str(left))
+        page.click("#ps-gg-all")
+        check("All guns switches every gun on", page.locator("#ps-gg-guns button.lo-gun.active").count() == f["gunsAll"])
+        page.click("#ps-gg-default")
+        check("Default puts the launcher and RPG back off", page.locator("#ps-gg-guns button.lo-gun.active").count() == f["gunsAll"] - 2)
+        # a game: the host rolls a ladder and sends it
+        page.click("#ps-go")
+        page.click("#mp-play-btn")
+        step(page, 40)
+        g = page.evaluate("""() => {
+          const D = window.__dbg, me = D.net.players.get('you');
+          return { ggp: D.net.ggp.split(';')[0], ladder: D.ggOrder(), len: D.ggOrder().length, held: D.WEAPON_ORDER[me.g] };
+        }""")
+        check("the round's setup string starts with the ladder, and the game uses it", g["ggp"] == "L:" + ",".join(g["ladder"]) and g["len"] == 10, str(g))
+        check("you start on the first gun of the ladder", g["held"] == g["ladder"][0], g["held"])
+        check("the ladder runs without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:
         server.shutdown()
@@ -2120,10 +2175,10 @@ def test_map_sanity(browser, base):
 
 # the tests, in the order they run; a name is the function name without "test_"
 TESTS = [test_game, test_score_attack, test_controls, test_grapple, test_first_visit, test_erase, test_bots, test_crosshair, test_scoring_extras,
-         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_avatar_reactions, test_new_guns, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
+         test_access_and_backup, test_map_records, test_play_setup, test_attachments, test_gamepad, test_maps, test_map_sanity, test_map_speed, test_spawns, test_shots_after_death, test_bot_aim, test_bot_extras, test_attach_extras, test_map_tips, test_gungame_bot_knife, test_gungame_ladder, test_round_rocks, test_countdown, test_guns, test_launcher, test_blasts, test_satchel, test_avatar_reactions, test_new_guns, test_skins, test_crossbow, test_problem_report, test_tutorial, test_sound_lab]
 NAMES = {t.__name__[len("test_"):]: t for t in TESTS}
 QUICK = ["grapple", "first_visit", "erase", "scoring_extras", "access_and_backup", "map_records", "play_setup", "attachments", "gamepad",
-         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "avatar_reactions", "new_guns", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
+         "map_sanity", "map_speed", "spawns", "shots_after_death", "bot_aim", "bot_extras", "attach_extras", "map_tips", "gungame_bot_knife", "gungame_ladder", "round_rocks", "countdown", "guns", "launcher", "blasts", "satchel", "avatar_reactions", "new_guns", "skins", "crossbow", "problem_report", "tutorial", "sound_lab"]   # --quick (about 5 minutes): leaves out the long ones (game, bots, Score Attack, controls, crosshair, every map played), which --only can still run
 FLAKY = {"bots"}   # a test that sometimes fails once because a hard bot kills the player at the wrong moment: it gets one retry
 
 

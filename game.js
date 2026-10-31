@@ -4734,7 +4734,7 @@
   const GG_SLOT_CHANCE = { bipod: 0.3, optic: 0.7, muzzle: 0.45, barrel: 0.3, grip: 0.5, mag: 0.4, stock: 0.4, sights: 0.5 };
   const GG_MUST_OPTIC = ["rifle", "dmr", "crossbow"];
   function makeGgPreset() {
-    const parts = [];
+    const parts = ["L:" + makeGgLadder().join(",")];   // (the ladder goes first; the guns after it)
     for (const gun of GUNS) {
       const ids = [];
       for (const [slot, opts] of Object.entries(ATTACHMENTS[gun] || {})) {
@@ -7979,7 +7979,36 @@
     minigun: { body: 11, head: 16, near: 15, far: 45, farMult: 0.6 },
   };
   const KNIFE_SWING_DMG = 100, KNIFE_THROW_DMG = 55, KNIFE_THROW_HEAD_DMG = 100;   // a thrown knife is like the Deagle: two body hits, or one to the head
-  const GG_ORDER = ["smg", "ar", "ak", "burst", "lmg", "shotgun", "dmr", "crossbow", "pistol", "rifle"];   // gun game: ten guns, then the knife (level 11)
+  // Gun game: a ladder of guns (up to GG_RUNGS), then the knife as the last level. The host rolls a new ladder every game from the guns
+  // switched on in the setup window (all but the launcher and RPG by default), the easiest tiers first, and sends it with the attachment setup.
+  const GG_DEFAULT = ["smg", "ar", "ak", "burst", "lmg", "shotgun", "dmr", "crossbow", "pistol", "rifle"];   // (the ladder before the first one is rolled)
+  const GG_RUNGS = 10;
+  const GG_TIER = { smg: 1, mpistol: 1, dual: 1, ar: 2, ak: 2, burst: 2, lmg: 3, minigun: 3, combat: 3, shotgun: 3, sawed: 3, revolver: 4, pistol: 4, bow: 5, crossbow: 5, dmr: 5, launcher: 5, rpg: 5, railgun: 6, rifle: 6 };
+  const GG_POOL_KEY = "tsb-ggpool";
+  const ggDefaultPool = () => GUNS.filter((id) => id !== "launcher" && id !== "rpg");
+  let ggPool = ggDefaultPool();   // the guns a game may pick from (the host's choice, remembered)
+  (function loadGgPool() {
+    try {
+      const a = JSON.parse(localStorage.getItem(GG_POOL_KEY));
+      if (Array.isArray(a)) { const ok = GUNS.filter((id) => a.includes(id)); if (ok.length >= 3) ggPool = ok; }
+    } catch (e) { /* none saved */ }
+  })();
+  function saveGgPool() { try { localStorage.setItem(GG_POOL_KEY, JSON.stringify(ggPool)); } catch (e) { /* ignore */ } }
+  function makeGgLadder() {
+    const bag = ggPool.filter((id) => GUNS.includes(id));
+    for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+    return bag.slice(0, GG_RUNGS).map((id) => ({ id, k: (GG_TIER[id] || 3) + Math.random() * 0.9 })).sort((a, b) => a.k - b.k).map((x) => x.id);
+  }
+  let ggLadderKey = "", ggLadderVal = GG_DEFAULT;
+  function ggOrder() {   // this game's ladder, from the host's string
+    const gp = net.ggp || "";
+    if (gp !== ggLadderKey) {
+      ggLadderKey = gp;
+      const m = /(?:^|;)L:([a-z,]*)/.exec(gp), ids = m ? m[1].split(",").filter((id) => GUNS.includes(id)) : [];
+      ggLadderVal = ids.length ? ids.slice(0, 12) : GG_DEFAULT;
+    }
+    return ggLadderVal;
+  }
   const PLAYER_COLORS = [0xe5484d, 0x3e8ef7, 0x30a46c, 0xf5a524, 0x9d5bd2, 0x13b9b9, 0xe5589b, 0xa0a0a8];
   // spawn points on the open floor, clear of the walls, pillars and platforms
   // (the deathmatch spawn points, SPAWNS, come from the map)
@@ -8086,7 +8115,7 @@
     range: "Stationary dummies stand at set distances and never shoot back. Every hit shows its damage, they heal fast and come back after a kill, and the corner shows what your gun does. Practice only.",
     br: "One life each. A safe circle closes in over the round and anyone outside it takes damage that gets worse; the last player standing wins. Kills still count, and there are no respawns.",
     ctf: "Two teams, a flag each. Touch their flag to pick it up and bring it back to your own flag while yours is home to score. Kill the carrier and it drops; touch your own dropped flag to send it home. First to the captures wins (the first-to number divided by 5).",
-    gungame: "Everyone starts with the same gun and every kill gives you the next one: assault rifle, AK, shotgun, Deagle, sniper, then the knife. A kill with the knife wins. Get knifed and you drop a level.",
+    gungame: "Everyone starts with the same gun and every kill gives you the next one, from a ladder of random guns picked each game (you choose which guns below), then the knife. A kill with the knife wins. Get knifed and you drop a level.",
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
@@ -8564,7 +8593,7 @@
       const e = {
         id: String(raw.id).slice(0, 64), name: String(raw.name).replace(/[^\w \-]/g, "").slice(0, 14) || "Player",
         color: Number.isInteger(raw.color) && raw.color >= 0 && raw.color <= 0xffffff ? raw.color : 0xa0a0a8,
-        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), gg: Math.max(0, Math.min(num(raw.gg), 9)), caps: Math.max(0, Math.min(num(raw.caps), 99)), at: typeof raw.at === "string" && AT_CODE_OK.test(raw.at) ? raw.at : "", heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
+        score: num(raw.score), kills: num(raw.kills), deaths: num(raw.deaths), hill: Math.max(0, num(raw.hill)), gg: Math.max(0, Math.min(num(raw.gg), 12)), caps: Math.max(0, Math.min(num(raw.caps), 99)), at: typeof raw.at === "string" && AT_CODE_OK.test(raw.at) ? raw.at : "", heads: Math.max(0, num(raw.heads)), dmg: Math.max(0, num(raw.dmg)), best: Math.max(0, num(raw.best)), bstreak: Math.max(0, num(raw.bstreak)), alive: raw.alive === true,
         hp: Math.max(0, Math.min(Number.isFinite(raw.hp) ? raw.hp : 100, 100)),
         team: raw.team === 0 || raw.team === 1 ? raw.team : -1,
       };
@@ -8769,7 +8798,7 @@
     net.phase = m.phase;
     net.left = m.left; net.leftRecv = nowMs();
     net.cd = Math.max(0, Math.min(Number(m.cd) || 0, 10)); net.cdRecv = nowMs();
-    net.ggp = typeof m.gp === "string" ? m.gp.slice(0, 800) : "";
+    net.ggp = typeof m.gp === "string" ? m.gp.slice(0, 2000) : "";
     net.resultsLeft = m.rl || 0;
     if (m.targets) {
       m.targets.forEach((d, i) => { if (targets[i]) { applyTargetData(targets[i], d); targets[i].userData.respawnTimer = 1.1; } });
@@ -9202,7 +9231,7 @@
     if (g === "knifeThrow") return m.head ? KNIFE_THROW_HEAD_DMG : KNIFE_THROW_DMG;
     const d = DAMAGE[g];
     if (!d) return 0;
-    if (g === "shotgun") {
+    if (d.pellets) {
       const n = Math.max(1, Math.min(Math.floor(Number(m.n)) || 1, d.pellets)), h = Math.max(0, Math.min(Math.floor(Number(m.h)) || 0, n));
       const dist = Math.hypot(p.x - v.x, p.z - v.z);
       const f = dist <= d.near ? 1 : Math.max(d.farMult, 1 - (1 - d.farMult) * (dist - d.near) / (d.far - d.near));
@@ -9250,7 +9279,7 @@
     let ggWin = false;
     if (net.gungame) {
       if (info.knife && v.gg > 0) v.gg--;   // knifed: back a level
-      if (p.gg >= GG_ORDER.length) { ggWin = !!info.knife; if (ggWin) p.gg = GG_ORDER.length + 1; }   // on the knife: a knife kill wins (bots too: they run up and stab), and that kill is the last of the 11
+      if (p.gg >= ggOrder().length) { ggWin = !!info.knife; if (ggWin) p.gg = ggOrder().length + 1; }   // on the knife: a knife kill wins (bots too: they run up and stab), and that kill is the last of the 11
       else { p.gg++; ggBotGun(p); }
     }
     hostBroadcast({ t: "kill", k: p.id, v: v.id, w: typeof info.g === "string" ? info.g : "", dmg: Math.round(dmg), pts, tags: Array.isArray(info.tags) ? info.tags.slice(0, 6).map((t) => String(t).slice(0, 40)) : [], head: !!info.head, knife: !!info.knife });
@@ -9539,7 +9568,7 @@
   // bots go through the same health, damage, regeneration, kill feed and scoreboard as real players do.
   // Their positions are moved here; a shot is resolved by working out where its aim lands on the target.
   // ======================================================================
-  const BOT_GUNS = GUNS.filter((id) => !["launcher", "rpg", "revolver", "dual", "railgun", "minigun"].includes(id));   // (bots do not fire blast weapons, and the newer guns are for players)
+  const BOT_GUNS = GUNS.filter((id) => !["launcher", "rpg"].includes(id));   // (bots do not fire blast weapons)
   const BOT_NAMES = ["Rex", "Nova", "Blitz", "Echo", "Vega"];
   // react: seconds before a bot starts shooting at something it sees; err: aim error in degrees; turn: rad/s;
   // head: how often it goes for the head; speed: u/s; burst: shots per burst for automatics; pause: seconds between bursts
@@ -9556,7 +9585,7 @@
   // standing still or running straight at a bot is easy to hit, strafing is hard, and flat-out strafing and jumping is only rarely hit
   BOT_LEVELS.easy.lag = 0.30; BOT_LEVELS.medium.lag = 0.20; BOT_LEVELS.hard.lag = 0.13;
   BOT_LEVELS.dummy = { react: 9999, err: 90, turn: 0, head: 0, speed: 0, burst: [1, 1], pause: [99, 99], hop: 0 };   // the range: stands still, never fires
-  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32, knife: 1.6 };   // the distance each gun likes to fight at (the knife: right up close)
+  const BOT_PREFER = { rifle: 34, ar: 18, ak: 18, shotgun: 7, pistol: 14, smg: 11, dmr: 28, burst: 24, lmg: 20, crossbow: 32, revolver: 16, dual: 9, railgun: 40, minigun: 18, knife: 1.6 };   // the distance each gun likes to fight at (the knife: right up close)
   // What a mode asks of its bots, on top of their level (L3). Hill bots defend the hill harder: on it they react and aim a fifth better.
   // Battle royale bots are more cautious: they get well inside the circle early, hang back from fights, and fall back when hurt.
   const BOT_MODE = { koth: { holdReact: 0.8, holdErr: 0.8 }, br: { margin: 12, prefer: 1.3, retreatHp: 45 } };
@@ -9591,12 +9620,12 @@
   // gun game: a bot uses the gun of its level (it has no knife, so it stays on the last gun)
   function ggBotGun(p) {
     if (!p.bot) return;
-    const g = p.gg >= GG_ORDER.length ? "knife" : GG_ORDER[p.gg];   // (past the last gun a bot takes the knife and goes for the win)
+    const g = p.gg >= ggOrder().length ? "knife" : ggOrder()[p.gg];   // (past the last gun a bot takes the knife and goes for the win)
     p.ai.gun = g; p.g = WEAPON_ORDER.indexOf(g); p.rl = 0; p.ai.ammo = g === "knife" ? 999 : baseMag(g); p.ai.reloadT = 0; p.at = randomAttachCode(g);
   }
   function botReset(p, spawn) {
     const ai = p.ai;
-    ai.gun = net.gungame ? (p.gg >= GG_ORDER.length ? "knife" : GG_ORDER[p.gg]) : BOT_GUNS[Math.floor(Math.random() * BOT_GUNS.length)];
+    ai.gun = net.gungame ? (p.gg >= ggOrder().length ? "knife" : ggOrder()[p.gg]) : BOT_GUNS[Math.floor(Math.random() * BOT_GUNS.length)];
     p.g = WEAPON_ORDER.indexOf(ai.gun); p.rl = 0;
     ai.ammo = baseMag(ai.gun); ai.reloadT = 0; ai.fireT = 1 + Math.random(); ai.burstLeft = 0; ai.seeT = 0;
     p.at = randomAttachCode(ai.gun);
@@ -10135,6 +10164,9 @@
       if (Math.random() < 0.85) hostDealDamage(p, tgt, KNIFE_SWING_DMG, { pts: 100, tags: [], head: false, knife: true, g: "knife" });
       return;
     }
+    const warm = w.spinUp || w.charge;   // the minigun spins up and the railgun charges before the first shot of a burst
+    if (warm && now - (ai.lastShotAt || -1e9) > 1500 && !ai.warming) { ai.warming = true; ai.fireT = warm; return; }
+    ai.warming = false; ai.lastShotAt = now;
     ai.ammo--; p.lastFireAt = now; p.protectUntil = 0;
     let gap = w.fireRate * 1.08;
     if (w.burst) {   // three quick rounds, then the gun's own pause
@@ -10161,9 +10193,9 @@
     const lag = [ai.tlat * (L.lag || 0.2), Math.abs(ai.tvy) * (L.lag || 0.2) * 1.3];
     if (w.projectile) { botLaunchBolt(p, tgt, dist, errRad, aimHeight, ox, oy, oz, tx, ty, tz, now, lag); return; }
     let n = 0, h = 0;
-    if (g === "shotgun") {
-      for (let i = 0; i < DAMAGE.shotgun.pellets; i++) {
-        const spread = 0.065 * Math.sqrt(Math.random());
+    if (DAMAGE[g].pellets) {
+      for (let i = 0; i < DAMAGE[g].pellets; i++) {
+        const spread = w.spread * Math.sqrt(Math.random());
         const land = botShotLands(dist, Math.hypot(errRad, spread * 0.55), aimHeight, lag);
         if (land) { n++; if (land === "head") h++; }
       }
@@ -10173,7 +10205,7 @@
       if (!land) return;
       n = 1; h = land === "head" ? 1 : 0;
     }
-    const m = { head: h > 0 && g !== "shotgun", n, h };
+    const m = { head: h > 0 && !DAMAGE[g].pellets, n, h };
     const dmg = hostDamage(p, tgt, m, g);
     if (dmg <= 0) return;
     const pts = Math.round(CFG.basePoints * (1 + Math.max(0, dist - CFG.distanceFrom) * CFG.distanceMultPerM) * (h > 0 ? 1.5 : 1));
@@ -10343,8 +10375,31 @@
     const sum = [limitText(mode, d.limit)];
     if (ps.kind === "practice") sum.push(mode.id === "range" ? d.bots + " dummies" : d.bots + " bot" + (d.bots === 1 ? "" : "s"), mode.id === "range" ? "" : d.level);
     if (ruleText(d.rules)) sum.push(ruleText(d.rules));
+    renderGgPanel();
     document.getElementById("ps-go").textContent = ps.kind === "practice" ? "Start practice" : ps.kind === "host" ? "Create room" : "Use for the next round";
   }
+  // the gun game's guns: a button with the icon of each gun, switched on or off (at least three stay on)
+  function renderGgPanel() {
+    const box = document.getElementById("ps-gg"), show = !!ps && ps.draft.mode === "gungame";
+    box.hidden = !show;
+    if (!show) return;
+    const grid = document.getElementById("ps-gg-guns");
+    grid.textContent = "";
+    for (const id of GUNS) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "lo-gun" + (ggPool.includes(id) ? " active" : ""); b.dataset.gun = id; b.title = WEAPONS[id].name;
+      b.innerHTML = iconSVG(id) + WEAPONS[id].name;
+      b.addEventListener("click", () => {
+        if (ggPool.includes(id)) { if (ggPool.length <= 3) return; ggPool = ggPool.filter((x) => x !== id); }
+        else ggPool = GUNS.filter((x) => x === id || ggPool.includes(x));
+        saveGgPool(); renderGgPanel();
+      });
+      grid.appendChild(b);
+    }
+    document.getElementById("ps-gg-note").textContent = ggPool.length + " on: each game picks " + Math.min(GG_RUNGS, ggPool.length) + " of them at random, the easiest first, then the knife.";
+  }
+  document.getElementById("ps-gg-all").addEventListener("click", () => { ggPool = GUNS.slice(); saveGgPool(); renderGgPanel(); });
+  document.getElementById("ps-gg-default").addEventListener("click", () => { ggPool = ggDefaultPool(); saveGgPool(); renderGgPanel(); });
   for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"], ["ps-r-siphon", "siphon"]]) {
     document.getElementById(id).addEventListener("change", (e) => { if (ps) { ps.draft.rules[key] = e.target.checked; renderSetup(); } });
   }
@@ -10598,7 +10653,7 @@
     }
     if (net.sub === "dm" && net.br) label = "Battle royale" + (ruleText(net.rules) ? " \u00b7 " + ruleText(net.rules) : "");
     if (net.sub === "dm" && net.ctf) label = "Capture the flag \u00b7 " + (net.limit ? "first to " + ctfNeed() : "no limit") + (ruleText(net.rules) ? " \u00b7 " + ruleText(net.rules) : "");
-    if (net.sub === "dm" && net.gungame) { const me = localPlayer(); label = "Gun game · " + (me ? Math.min(me.gg, GG_ORDER.length + 1) : 0) + " / " + (GG_ORDER.length + 1) + " guns" + (ruleText(net.rules) ? " · " + ruleText(net.rules) : ""); }
+    if (net.sub === "dm" && net.gungame) { const me = localPlayer(); label = "Gun game · " + (me ? Math.min(me.gg, ggOrder().length + 1) : 0) + " / " + (ggOrder().length + 1) + " guns" + (ruleText(net.rules) ? " · " + ruleText(net.rules) : ""); }
     mpEls.timerMode.textContent = net.phase === "results" ? "Round over" : label;
     mpEls.roomMode.textContent = modeName();
     updateKothBar();
@@ -10630,7 +10685,7 @@
     if (gp !== ggPresetKey) { ggPresetKey = gp; ggPresetMap = ggParsePreset(gp); if (ggOn) applyAttachments(); }   // a new game, a new setup
     const me = localPlayer();
     if (!me) return;
-    const t = me.gg >= GG_ORDER.length ? "knife" : GG_ORDER[me.gg];
+    const t = me.gg >= ggOrder().length ? "knife" : ggOrder()[me.gg];
     if (ggApplied === t) return;
     ggApplied = t;
     const first = ggSaved === null;
@@ -10830,7 +10885,7 @@
     const kd = (p) => (p.kills / Math.max(1, p.deaths)).toFixed(2), n = (v) => Math.round(v).toLocaleString();
     const cols = dm && net.br ? [["Status", (p) => (p.alive ? "alive" : "out")], ["Kills", (p) => p.kills], ["Dmg", (p) => n(p.dmg)]]
       : dm && net.ctf ? [["Caps", (p) => p.caps], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
-      : ggm ? [["Guns", (p) => Math.min(p.gg, GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
+      : ggm ? [["Guns", (p) => Math.min(p.gg, ggOrder().length + 1) + " / " + (ggOrder().length + 1)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["Dmg", (p) => n(p.dmg)]]
       : koth ? [["Hill", (p) => Math.floor(p.hill)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")]]
       : dm ? [["Score", (p) => n(p.score)], ["Kills", (p) => p.kills], ["Deaths", (p) => p.deaths], ["K/D", kd], ["HS", (p) => p.heads], ["Dmg", (p) => n(p.dmg)], ["Best", (p) => (p.best ? n(p.best) : "-")], ["Streak", (p) => p.bstreak]]
       : [["Score", (p) => n(p.score)], ["Hits", (p) => p.kills]];
@@ -10873,9 +10928,9 @@
   function ggLevelHtml() {
     const me = localPlayer();
     if (!me) return "";
-    const t = me.gg >= GG_ORDER.length ? "knife" : GG_ORDER[me.gg];
-    if (me.gg > GG_ORDER.length) return (GG_ORDER.length + 1) + " / " + (GG_ORDER.length + 1) + " GUNS: YOU WIN";
-    return me.gg + " / " + (GG_ORDER.length + 1) + " GUNS " + ' <span class="kb-gun">' + iconSVG(t) + "</span> " + (t === "knife" ? "KNIFE: one more kill wins" : WEAPONS[t].name);
+    const t = me.gg >= ggOrder().length ? "knife" : ggOrder()[me.gg];
+    if (me.gg > ggOrder().length) return (ggOrder().length + 1) + " / " + (ggOrder().length + 1) + " GUNS: YOU WIN";
+    return me.gg + " / " + (ggOrder().length + 1) + " GUNS " + ' <span class="kb-gun">' + iconSVG(t) + "</span> " + (t === "knife" ? "KNIFE: one more kill wins" : WEAPONS[t].name);
   }
   function mpFrame(dt) {
     updateMpCountdown();

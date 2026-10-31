@@ -692,6 +692,11 @@
   .ps-preview b { color: #ffd24a; font-size: 13px; }
   .ps-preview span { font-size: 11.5px; color: #9a9aa3; line-height: 1.35; }
   #ps-rules { margin: 12px 0 0; }
+  #ps-gg { margin: 12px 0 0; }
+  #ps-gg .ps-h { margin: 0 0 2px; }
+  #ps-gg-guns { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  #ps-gg-guns .lo-gun { width: 78px; }
+  .ps-gg-row { display: flex; gap: 8px; }
   #ps-rules .ps-h { margin: 0 0 2px; }
   .ps-rules-body { display: flex; gap: 18px; flex-wrap: wrap; padding: 8px 0 0; font-size: 13px; color: #ccc; }
   .ps-go { margin: 16px auto 0; }
