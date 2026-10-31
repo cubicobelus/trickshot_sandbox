@@ -10985,14 +10985,14 @@
       const off = (isKothMode(d.mode) && !(MAPS[id] && MAPS[id].hill)) || (mode.id === "range" && id !== "range") || (mode.id === "ctf" && !(MAPS[id] && MAPS[id].flags));
       b.type = "button"; b.dataset.map = id; b.className = (id === d.map ? "active" : "") + (off ? " off" : "");
       const c = document.createElement("canvas"); c.width = c.height = 64;
-      if (id === "random") { const g = c.getContext("2d"); g.fillStyle = "#1c1d22"; g.fillRect(0, 0, 64, 64); g.fillStyle = "#ffd24a"; g.font = "bold 36px sans-serif"; g.textAlign = "center"; g.fillText("?", 32, 46); }
+      if (id === "random") drawRandomThumb(c);
       else drawMapThumb(c, MAPS[id]);
       b.appendChild(c); b.appendChild(document.createTextNode(id === "random" ? "Random" : MAPS[id].name));
       b.addEventListener("click", () => { if (off) return; d.map = id; renderSetup(); });
       mapsEl.appendChild(b);
     }
     const pv = document.getElementById("ps-preview"), pg = pv.getContext("2d");
-    if (d.map === "random") { pg.fillStyle = "#1c1d22"; pg.fillRect(0, 0, 200, 200); pg.fillStyle = "#ffd24a"; pg.font = "bold 90px sans-serif"; pg.textAlign = "center"; pg.fillText("?", 100, 130); }
+    if (d.map === "random") drawRandomThumb(pv);
     else drawMapThumb(pv, MAPS[d.map]);
     document.getElementById("ps-map-name").textContent = mapNameOf(d.map);
     document.getElementById("ps-map-note").textContent = d.map === "random" ? "A different map each round." : MAPS[d.map].blurb;
@@ -12027,29 +12027,90 @@
   });
 
   // ---- the map picker in the menu: a thumbnail drawn from each map's own walls ----
+  // a plan of the map like a site drawing: the floor in its own colour with a 10 m grid, every wall and deck in its surface
+  // colour with a lit top and a shadow cast away from that map's sun (longer for taller walls), trees and rocks shaded
+  const THUMB_SURF = { concrete: "#9aa0a8", brick: "#a0614a", rock: "#8b857a", deck: "#7d858f", glass: "#a9cbd8", facade: "#b9b2a6", facadeb: "#b66d4f", roof: "#6e7279", slab: "#7d838b" };
+  const thumbShade = (hex, f) => {   // "#rrggbb" lighter (f > 0) or darker (f < 0)
+    const v = parseInt(String(hex).slice(1, 7), 16) || 0, ch = (c) => Math.round(f > 0 ? c + (255 - c) * f : c * (1 + f));
+    return "rgb(" + ch(v >> 16) + "," + ch((v >> 8) & 255) + "," + ch(v & 255) + ")";
+  };
   function drawMapThumb(canvas, m) {
     const n = canvas.width, g = canvas.getContext("2d"), k = n / (m.half * 2), px = (v) => (v + m.half) * k;
     const css = (hex) => "#" + new THREE.Color(hex).getHexString();
-    g.fillStyle = (m.theme.surfaces && m.theme.surfaces[m.floor]) || (m.floor === "slab" ? "#4f565e" : "#6f9a52");
-    g.fillRect(0, 0, n, n);
-    const box = (x, z, w, d, fill) => { g.fillStyle = fill; g.fillRect(px(x - w / 2), px(z - d / 2), Math.max(1.5, w * k), Math.max(1.5, d * k)); };
-    for (const b of m.buildings || []) box(b[0], b[1], b[2], b[3], b[4] > 8 ? "#d8dbe0" : "#aab0b8");
-    for (const d of m.decks) box(d[0], d[2], d[3], d[4], "rgba(190,200,215,0.55)");
-    for (const r of m.ramps) box(r[0], r[1], r[2] === "x" ? r[4] : r[3], r[2] === "x" ? r[3] : r[4], "#e3b53a");
-    for (const w of m.walls.slice().sort((p, q) => p[4] - q[4])) { const l = 150 + Math.min(w[4], 12) * 8; box(w[0], w[2], w[3], w[5], w[4] < 2 ? "rgba(235,235,240,0.5)" : "rgb(" + l + "," + l + "," + l + ")"); }   // taller walls are lighter, so tiers read
-    for (const b of m.boosts || []) { g.save(); g.translate(px(b[0]), px(b[1])); g.rotate(Math.atan2(b[3], b[2])); g.fillStyle = "#ffb42a"; g.fillRect(-b[5] * k / 2, -Math.max(1, b[4] * k / 2), b[5] * k, Math.max(2, b[4] * k)); g.restore(); }
-    for (const a of m.movers || []) box(a[0], a[2], a[3], a[4], "rgba(255,255,255,0.7)");
-    for (const a of m.gates || []) box(a[0], a[1], a[2], a[3], "#ffb42a");
-    for (const p of m.pads) { g.fillStyle = p[2] === "mega" ? "#d23cff" : "#1bd6c8"; g.beginPath(); g.arc(px(p[0]), px(p[1]), Math.max(2, 1.4 * k), 0, 7); g.fill(); }
-    for (const a of m.portals || []) { g.fillStyle = "#2f9bff"; g.beginPath(); g.arc(px(a[0]), px(a[1]), Math.max(2, 1.6 * k), 0, 7); g.fill(); g.fillStyle = "#ff8a2a"; g.beginPath(); g.arc(px(a[4]), px(a[5]), Math.max(2, 1.6 * k), 0, 7); g.fill(); }
-    for (const l of m.ladders || []) { g.fillStyle = "#c7a548"; g.fillRect(px(l[0]) - Math.max(1, k * 0.5), px(l[1]) - Math.max(1, k * 0.5), Math.max(2, k), Math.max(2, k)); }
-    for (const d of m.decor || []) {   // trees, boulders and ponds on the nature map
-      if (d[0] === "tree") { g.fillStyle = "rgba(40,110,50,0.9)"; g.beginPath(); g.arc(px(d[1]), px(d[2]), Math.max(1.2, k * 1.1 * (d[3] || 1)), 0, 7); g.fill(); }
-      else if (d[0] === "boulder") { g.fillStyle = "#b9b4a8"; g.beginPath(); g.arc(px(d[1]), px(d[2]), Math.max(1.2, k * (d[3] || 2) * 0.5), 0, 7); g.fill(); }
-      else if (d[0] === "pond") { g.fillStyle = "#3d7fa6"; g.beginPath(); g.ellipse(px(d[1]), px(d[2]), d[3] * k, d[3] * 0.7 * k, 0, 0, 7); g.fill(); }
+    const pal = m.theme.surfaces || {}, surf = (kind) => pal[kind] || THUMB_SURF[kind] || "#9aa0a8";
+    g.fillStyle = pal[m.floor] || (m.floor === "slab" ? "#4f565e" : "#6f9a52"); g.fillRect(0, 0, n, n);
+    g.strokeStyle = "rgba(0,0,0,0.08)"; g.lineWidth = 1;   // a 10 m grid
+    for (let v = -m.half + 10; v < m.half; v += 10) { g.beginPath(); g.moveTo(px(v), 0); g.lineTo(px(v), n); g.moveTo(0, px(v)); g.lineTo(n, px(v)); g.stroke(); }
+    const sd = m.theme.sunDir || [20, 50, 10], sl = Math.hypot(sd[0], sd[2]) || 1, sx = -sd[0] / sl, sz = -sd[2] / sl, slope = Math.min(sl / Math.max(sd[1], 1), 1.2) * 0.55;
+    const solid = (x, z, w, d, h, top) => {   // a block seen from above: its shadow, then its top
+      const ox = sx * h * slope * k, oz = sz * h * slope * k, X = px(x - w / 2), Z = px(z - d / 2), W = Math.max(1.5, w * k), D = Math.max(1.5, d * k);
+      g.fillStyle = "rgba(0,0,0,0.28)";
+      g.beginPath(); g.moveTo(X, Z); g.lineTo(X + W, Z); g.lineTo(X + W + ox, Z + oz); g.lineTo(X + W + ox, Z + D + oz); g.lineTo(X + ox, Z + D + oz); g.lineTo(X, Z + D); g.closePath(); g.fill();
+      g.fillRect(X + ox, Z + oz, W, D);
+      g.fillStyle = top; g.fillRect(X, Z, W, D);
+      if (W > 3 && D > 3) { g.strokeStyle = "rgba(0,0,0,0.3)"; g.lineWidth = 1; g.strokeRect(X + 0.5, Z + 0.5, W - 1, D - 1); }
+    };
+    const blob = (x, z, r, col, h) => {   // a tree or a rock: a shadow, then a ball lit from the top left
+      g.fillStyle = "rgba(0,0,0,0.26)"; g.beginPath(); g.arc(px(x) + sx * h * slope * k, px(z) + sz * h * slope * k, r, 0, 7); g.fill();
+      const gr = g.createRadialGradient(px(x) - r * 0.35, px(z) - r * 0.35, r * 0.1, px(x), px(z), r);
+      gr.addColorStop(0, thumbShade(col, 0.25)); gr.addColorStop(1, thumbShade(col, -0.25));
+      g.fillStyle = gr; g.beginPath(); g.arc(px(x), px(z), r, 0, 7); g.fill();
+    };
+    for (const d of m.decor || []) if (d[0] === "pond" || d[0] === "river") {
+      g.fillStyle = "#3d7fa6"; g.beginPath();
+      if (d[0] === "pond") g.ellipse(px(d[1]), px(d[2]), d[3] * k, d[3] * 0.7 * k, 0, 0, 7); else g.rect(px(d[1] - d[3] / 2), px(d[2] - d[4] / 2), d[3] * k, d[4] * k);
+      g.fill();
     }
+    for (const b of m.buildings || []) solid(b[0], b[1], b[2], b[3], b[4], thumbShade(surf("roof"), b[4] > 8 ? 0.2 : 0));
+    const blocks = m.walls.map((w) => ({ x: w[0], z: w[2], w: w[3], d: w[5], top: w[1] + w[4] / 2, kind: w[6] }))
+      .concat(m.decks.map((d) => ({ x: d[0], z: d[2], w: d[3], d: d[4], top: d[1] + 0.25, kind: d[5] || "deck" })))
+      .sort((p, q) => p.top - q.top);   // lowest first, so a tier sits on what is under it
+    for (const o of blocks) solid(o.x, o.z, o.w, o.d, Math.min(o.top, 12), thumbShade(surf(o.kind), Math.min(o.top, 12) * 0.022));
+    for (const r of m.ramps) {
+      const w = r[2] === "x" ? r[4] : r[3], d = r[2] === "x" ? r[3] : r[4], X = px(r[0] - w / 2), Z = px(r[1] - d / 2), W = Math.max(1.5, w * k), D = Math.max(1.5, d * k);
+      g.fillStyle = thumbShade(surf(m.rampSurface || "deck"), 0.1); g.fillRect(X, Z, W, D);
+      g.strokeStyle = "#e3b53a"; g.lineWidth = Math.max(1, k * 0.4); g.strokeRect(X, Z, W, D);
+    }
+    for (const b of m.boosts || []) { g.save(); g.translate(px(b[0]), px(b[1])); g.rotate(Math.atan2(b[3], b[2])); g.fillStyle = "#ffb42a"; g.fillRect(-b[5] * k / 2, -Math.max(1, b[4] * k / 2), b[5] * k, Math.max(2, b[4] * k)); g.restore(); }
+    for (const a of m.movers || []) solid(a[0], a[2], a[3], a[4], 2, "rgba(235,238,242,0.85)");
+    for (const a of m.gates || []) solid(a[0], a[1], a[2], a[3], 1, "#ffb42a");
+    for (const d of m.decor || []) {   // trees and rocks, lit by the same sun
+      if (d[0] === "tree") blob(d[1], d[2], Math.max(1.4, k * 1.6 * (d[3] || 1)), "#2f6234", 5 * (d[3] || 1));
+      else if (d[0] === "palm") blob(d[1], d[2], Math.max(1.4, k * 1.4 * (d[3] || 1)), "#3f8a3c", 4);
+      else if (d[0] === "boulder") blob(d[1], d[2], Math.max(1.2, k * (d[3] || 2) * 0.55), pal.boulder || "#9a958b", (d[3] || 2) * 0.7);
+      else if (d[0] === "tank") blob(d[1], d[3], Math.max(1.4, k * 1.25), "#7b8794", 3);
+    }
+    for (const p of m.pads) {
+      g.fillStyle = "#2a2e34"; g.beginPath(); g.arc(px(p[0]), px(p[1]), Math.max(2.2, 1.6 * k), 0, 7); g.fill();
+      g.strokeStyle = p[2] === "mega" ? "#d23cff" : "#1bd6c8"; g.lineWidth = Math.max(1, k * 0.5); g.beginPath(); g.arc(px(p[0]), px(p[1]), Math.max(1.4, 1.1 * k), 0, 7); g.stroke();
+    }
+    for (const a of m.portals || []) for (const [x, z, c] of [[a[0], a[1], "#2f9bff"], [a[4], a[5], "#ff8a2a"]]) {
+      g.fillStyle = "#5c636c"; g.beginPath(); g.arc(px(x), px(z), Math.max(2.4, 1.8 * k), 0, 7); g.fill();
+      g.fillStyle = c; g.beginPath(); g.arc(px(x), px(z), Math.max(1.4, 1.2 * k), 0, 7); g.fill();
+    }
+    for (const l of m.ladders || []) { g.fillStyle = "#c7a548"; g.fillRect(px(l[0]) - Math.max(1, k * 0.5), px(l[1]) - Math.max(1, k * 0.5), Math.max(2, k), Math.max(2, k)); }
     if (m.hill) { g.strokeStyle = "#ffd24a"; g.lineWidth = Math.max(1.5, k * 0.5); g.beginPath(); g.arc(px(m.hill.x), px(m.hill.z), Math.max(3, m.hill.r * k), 0, 7); g.stroke(); }
+    const vg = g.createRadialGradient(n / 2, n / 2, n * 0.35, n / 2, n / 2, n * 0.75);   // a soft edge, like a printed plan
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,0.28)");
+    g.fillStyle = vg; g.fillRect(0, 0, n, n);
     g.strokeStyle = css(m.theme.skyHorizon); g.lineWidth = 2; g.strokeRect(1, 1, n - 2, n - 2);
+  }
+  // "random": a quarter each of four real maps, dimmed, under two crossing arrows (shuffle)
+  function drawRandomThumb(canvas) {
+    const n = canvas.width, g = canvas.getContext("2d"), h = n / 2, tmp = document.createElement("canvas");
+    tmp.width = tmp.height = n;
+    MAP_ORDER.filter((id) => id !== "random" && MAPS[id] && !MAPS[id].noRandom).slice(0, 4).forEach((id, i) => {
+      drawMapThumb(tmp, MAPS[id]);
+      g.drawImage(tmp, (i % 2) * h, Math.floor(i / 2) * h, h, h, (i % 2) * h, Math.floor(i / 2) * h, h, h);
+    });
+    g.fillStyle = "rgba(12,13,16,0.62)"; g.fillRect(0, 0, n, n);
+    const u = n / 64;
+    g.strokeStyle = "#f4f5f7"; g.fillStyle = "#f4f5f7"; g.lineWidth = 4 * u; g.lineCap = "round"; g.lineJoin = "round";
+    const arrow = (y0, y1) => {
+      g.beginPath(); g.moveTo(14 * u, y0); g.bezierCurveTo(30 * u, y0, 34 * u, y1, 46 * u, y1); g.stroke();
+      g.beginPath(); g.moveTo(53 * u, y1); g.lineTo(44 * u, y1 - 6 * u); g.lineTo(44 * u, y1 + 6 * u); g.closePath(); g.fill();
+    };
+    arrow(22 * u, 42 * u); arrow(42 * u, 22 * u);
   }
   // ---- the attachments window: a turnable 3D copy of the gun, and a card for every option ----
   const attachPopupEl = document.getElementById("attach-popup");
@@ -12346,10 +12407,7 @@
     const b = document.createElement("button");
     b.type = "button"; b.dataset.map = "random"; b.title = "A different random map each Score Attack run and each online round.";
     const c = document.createElement("canvas"); c.width = c.height = 64;
-    const g = c.getContext("2d");
-    g.fillStyle = "#1c1d22"; g.fillRect(0, 0, 64, 64);
-    g.strokeStyle = "#ffd24a"; g.lineWidth = 2; g.strokeRect(1, 1, 62, 62);
-    g.fillStyle = "#ffd24a"; g.font = "bold 44px Segoe UI, Arial, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("?", 32, 35);
+    drawRandomThumb(c);
     b.appendChild(c); b.appendChild(document.createTextNode("Random"));
     b.addEventListener("click", (e) => { e.stopPropagation(); setMap("random"); });
     mapPickerEl.appendChild(b);
