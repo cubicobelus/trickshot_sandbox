@@ -2789,6 +2789,42 @@
     addPart(minigunGroup, new THREE.CylinderGeometry(0.0065, 0.0065, 0.034, 8), minigunBrass, -0.095 + k * 0.045, -0.01 + k * 0.025, 0.045, HALF_PI, 0, 0);
   }
 
+  // ---- first-person hands: a gloved fist round the grip, a support hand under the fore-end, and a sleeve running back toward the camera ----
+  const gloveMat = new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.9, metalness: 0.05 });
+  const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x3d4636, roughness: 0.95, metalness: 0.0 });
+  function addHand(parent, x, y, z, side) {
+    const hand = new THREE.Group(); hand.position.set(x, y, z); parent.add(hand);
+    (parent.userData.hands || (parent.userData.hands = [])).push(hand);
+    addPart(hand, new THREE.BoxGeometry(0.056, 0.062, 0.078), gloveMat, 0, 0, 0);                                         // fist
+    addPart(hand, new THREE.BoxGeometry(0.016, 0.03, 0.05), gloveMat, -0.03 * side, 0.012, -0.012);                       // thumb, on the side nearest the middle
+    for (let i = 0; i < 3; i++) addPart(hand, new THREE.BoxGeometry(0.012, 0.012, 0.074), gloveMat, 0.03 * side, -0.02 + i * 0.02, 0);   // knuckles
+    const sleeve = addPart(hand, new THREE.BoxGeometry(0.07, 0.065, 0.34), sleeveMat, 0.03 * side, -0.1, 0.2, 0.6, -0.1 * side, 0);   // forearm and sleeve
+    sleeve.frustumCulled = false;
+    return hand;
+  }
+  function addHands(g, rear, front) {
+    if (rear) addHand(g, rear[0], rear[1], rear[2], 1);
+    if (front) addHand(g, front[0], front[1], front[2], -1);
+  }
+  addHands(rifleGroup, [0, -0.115, 0.19], [0, -0.055, -0.3]);
+  addHands(arGroup, [0, -0.09, 0.10], [0, -0.05, -0.3]);
+  addHands(akGroup, [0, -0.075, 0.08], [0, -0.067, -0.23]);
+  addHands(shotgunGroup, [0, -0.075, 0.2], [0, -0.05, -0.38]);
+  addHands(pistolGroup, [0, -0.085, 0.06]);
+  addHands(knifeGroup, [0, -0.003, 0.12]);
+  addHands(smgGroup, [0, -0.08, 0.11], [0, -0.055, -0.23]);
+  addHands(dmrGroup, [0, -0.08, 0.12], [0, -0.053, -0.36]);
+  addHands(burstGroup, [0, -0.08, 0.12], [0, -0.05, -0.3]);
+  addHands(lmgGroup, [0, -0.085, 0.15], [0, -0.056, -0.4]);
+  addHands(crossbowGroup, [0, -0.08, 0.14], [0, -0.05, -0.25]);
+  addHands(launcherGroup, [0, -0.085, 0.13], [0, -0.078, -0.12]);
+  addHands(rpgGroup, [0, -0.105, 0.1], [0, -0.08, -0.2]);
+  addHands(revolverGroup, [0, -0.07, 0.1]);
+  for (const gun of dualGuns) addHands(gun, [0, -0.075, 0.065]);
+  dualGroup.userData.hands = dualGuns.flatMap((g) => g.userData.hands);
+  addHands(railgunGroup, [0, -0.085, 0.12], [0, -0.05, -0.28]);
+  addHands(minigunGroup, [0, -0.08, 0.065], [0, -0.075, -0.1]);
+
   const HELD = [rifleGroup, arGroup, akGroup, shotgunGroup, pistolGroup, knifeGroup, smgGroup, dmrGroup, burstGroup, lmgGroup, crossbowGroup, launcherGroup, rpgGroup, revolverGroup, dualGroup, railgunGroup, minigunGroup];
   for (const g of HELD) g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   // everything held sits under one root, so left-handed is a single mirror (three.js
@@ -2807,6 +2843,7 @@
   addPart(grappleGroup, new THREE.BoxGeometry(0.03, 0.085, 0.04), gripMat, 0, -0.05, 0.03, 0.15, 0, 0);
   addPart(grappleGroup, new THREE.BoxGeometry(0.012, 0.012, 0.03), accentMat, 0, -0.012, -0.02);   // trigger
   addPart(grappleGroup, new THREE.ConeGeometry(0.014, 0.1, 8), spearSteelHeld, 0, 0.01, -0.38, -HALF_PI, 0, 0);   // the spear tip, peeking out
+  addHands(grappleGroup, [0, -0.05, 0.03]);
   grappleGroup.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   grappleGroup.visible = false;
   viewmodelRoot.add(grappleGroup);
@@ -2840,7 +2877,49 @@
     },
   ];
 
-  const GUN_INSPECTS = [RIFLE_INSPECTS[0], RIFLE_INSPECTS[2]];
+  // rise, hold, settle: 0 at both ends, 1 between a and b
+  function hold(t, a, b) { return t < a ? easeInOut(t / a) : t < b ? 1 : 1 - easeInOut((t - b) / (1 - b)); }
+  const pulse = (t, a, b) => Math.sin(Math.PI * Math.min(Math.max((t - a) / (b - a), 0), 1));
+  // every gun: bring it up, look along the slide, tug it back and let it go
+  function inspectChamber(t, p, r) {
+    const l = hold(t, 0.28, 0.75), tug = pulse(t, 0.42, 0.58);
+    p.set(-0.12 * l, 0.08 * l, 0.14 * l + 0.035 * tug);
+    r.set(0.3 * l, 0.85 * l, -0.55 * l);
+  }
+  // muzzle up, as if to sight along it
+  function inspectMuzzleUp(t, p, r) {
+    const l = hold(t, 0.3, 0.72);
+    p.set(-0.08 * l, 0.12 * l, 0.12 * l);
+    r.set(0.8 * l, 0.25 * l + 0.05 * Math.sin(t * 12) * l, -0.25 * l);
+  }
+  // turn the gun to show its right side and rock it slowly
+  function inspectSide(t, p, r) {
+    const l = hold(t, 0.3, 0.72);
+    p.set(-0.16 * l, 0.05 * l, 0.2 * l);
+    r.set(0.1 * l, 1.2 * l, 0.35 * l + 0.12 * l * Math.sin(t * 14));
+  }
+  // weigh it: lift and drop it twice, as if to judge its weight
+  function inspectHeft(t, p, r) {
+    const l = Math.sin(Math.PI * t), w = Math.sin(4 * Math.PI * t);
+    p.set(-0.04 * l, 0.07 * w * l, 0.06 * l);
+    r.set(0.12 * w * l, -0.15 * l, 0.1 * l);
+  }
+  // the light guns only: toss it up, flip it end over end, catch it
+  function inspectToss(t, p, r) {
+    const toss = Math.sin(Math.PI * t);
+    p.set(-0.05 * toss, 0.26 * toss, 0.06 * toss);
+    r.set(Math.PI * 2 * easeInOut(t), 0.15 * toss, 0.1 * toss);
+  }
+  // the light guns only: spin it round the trigger finger, backwards
+  function inspectTwirl(t, p, r) {
+    const l = Math.sin(Math.PI * t);
+    p.set(-0.06 * l, 0.04 * l, 0.13 * l);
+    r.set(-Math.PI * 2 * easeInOut(t), 0.2 * l, 0.15 * l);
+  }
+  RIFLE_INSPECTS[2].letGo = inspectToss.letGo = inspectTwirl.letGo = true;
+  const GUN_INSPECTS = [RIFLE_INSPECTS[0], RIFLE_INSPECTS[2], inspectChamber, inspectMuzzleUp, inspectSide, inspectHeft];
+  const LIGHT_INSPECTS = GUN_INSPECTS.concat([inspectToss, inspectTwirl]);
+  RIFLE_INSPECTS.push(inspectChamber, inspectMuzzleUp, inspectSide);
 
   const KNIFE_INSPECTS = [
     // classic spin in the hand
@@ -2862,6 +2941,22 @@
       r.set(0.25 * l, -0.8 * l, Math.PI * 2 * easeInOut(t));
     },
   ];
+
+  KNIFE_INSPECTS[0].letGo = KNIFE_INSPECTS[1].letGo = KNIFE_INSPECTS[2].letGo = true;
+  KNIFE_INSPECTS.push(
+    // a quick jab, a twist of the wrist and back
+    function (t, p, r) {
+      const j = pulse(t, 0.15, 0.4), w = pulse(t, 0.4, 0.85);
+      p.set(-0.08 * w, 0.02 * w, -0.2 * j + 0.1 * w);
+      r.set(0.2 * j - 0.3 * w, -0.4 * j, Math.PI * easeInOut(Math.min(Math.max((t - 0.4) / 0.45, 0), 1)) * Math.sin(Math.PI * Math.min(Math.max((t - 0.4) / 0.45, 0), 1)));
+    },
+    // turn it over to a reverse grip, show the edge and turn it back
+    function (t, p, r) {
+      const l = hold(t, 0.3, 0.7);
+      p.set(-0.15 * l, 0.08 * l, 0.18 * l);
+      r.set(0.4 * l, 0.5 * l, Math.PI * l);
+    }
+  );
 
   // Every weapon is data; all the guns share one firing path.
   //   scope: the sniper overlay, only with a scope fitted; otherwise every gun aims down sights, zooming to adsZoom x FOV
@@ -3276,6 +3371,8 @@
     },
   };
   // (a gun travels over the network as its place in this list, so new guns go at the end, after the knife, never in the middle)
+  for (const k of ["pistol", "smg", "revolver", "dual"]) WEAPONS[k].inspects = LIGHT_INSPECTS;   // the light guns get the tosses and twirls too
+
   const WEAPON_ORDER = ["rifle", "ar", "ak", "shotgun", "pistol", "knife", "smg", "dmr", "burst", "lmg", "crossbow", "launcher", "rpg", "revolver", "dual", "railgun", "minigun"];
   for (const id of WEAPON_ORDER) {
     const w = WEAPONS[id];
@@ -3331,7 +3428,9 @@
   function startInspect() {
     if (vm.switchTimer > 0 || vm.inspectTimer > 0 || reload.active || vm.boltTime >= 0 || vm.pumpTime >= 0 || vm.throwTimer > 0 || vm.grappleOut > 0) return;
     const w = currentWeapon();
-    vm.inspectIndex = Math.floor(Math.random() * w.inspects.length);
+    const n = w.inspects.length;
+    vm.inspectIndex = n > 1 && vm.inspectGun === vm.current ? (vm.inspectIndex + 1 + Math.floor(Math.random() * (n - 1))) % n : Math.floor(Math.random() * n);   // never the same one twice running
+    vm.inspectGun = vm.current;
     vm.inspectTimer = w.inspectDuration;
     playInspectSound();
   }
@@ -3635,16 +3734,20 @@
       if (vm.slashTimer <= 0) { vm.slashTimer = 0; _swing.fill(0); }
     }
 
-    let ipx = 0, ipy = 0, ipz = 0, irx = 0, iry = 0, irz = 0;
+    let ipx = 0, ipy = 0, ipz = 0, irx = 0, iry = 0, irz = 0, handsOn = true;
     if (vm.inspectTimer > 0) {
       vm.inspectTimer -= dt;
       const t = 1 - Math.max(vm.inspectTimer, 0) / w.inspectDuration;
-      w.inspects[vm.inspectIndex](Math.min(t, 1), _tmpPos, _tmpRot);
+      const insp = w.inspects[vm.inspectIndex];
+      insp(Math.min(t, 1), _tmpPos, _tmpRot);
+      handsOn = !(insp.letGo && t > 0.08 && t < 0.92);   // a gun that is tossed or spun leaves the hand
       const reach = w.inspectReach || 1;
       ipx = _tmpPos.x * reach; ipy = _tmpPos.y * reach; ipz = _tmpPos.z * reach;
       irx = _tmpRot.x; iry = _tmpRot.y; irz = _tmpRot.z;
       if (vm.inspectTimer <= 0) { vm.inspectTimer = 0; boltMesh.position.z = 0.20; }
     }
+
+    if (w.group.userData.hands) for (const h of w.group.userData.hands) h.visible = handsOn;
 
     const rl = reload.active ? (reload.shells ? shellReloadPose(reload.elapsed) : reloadPose(w, reload.elapsed)) : RELOAD_REST;
 
