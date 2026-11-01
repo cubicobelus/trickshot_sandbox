@@ -8452,7 +8452,7 @@
   }
   // SMOKE AND FLASH. A smoke cloud is a ring of big soft puffs that swell, hang for a while and thin out; a bot cannot see through
   // one (smokeBlocks). A flash blinds whoever is near and looking at it (white, fading over a few seconds) and stops bots seeing for as long
-  const SMOKE_R = 5, SMOKE_LIFE = 13, SMOKE_PUFFS = 34, FLASH_R = 22;
+  const SMOKE_R = 5, SMOKE_LIFE = 13, SMOKE_PUFFS = 34, FLASH_R = 44;
   const smokeClouds = [], cloudPuffs = [];
   for (let i = 0; i < SMOKE_PUFFS * 3; i++) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0xb9bdc0, transparent: true, opacity: 0, depthWrite: false }));
