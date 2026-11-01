@@ -364,7 +364,7 @@ def test_grapple(browser, base):
 
 
 def test_first_visit(browser, base):
-    """A brand-new visitor is walked through the tutorial on the first click to play; a returning one isn't."""
+    """A brand-new visitor sees a welcome with one Play button, which starts the basics; skipping works; the whole menu is there after; a returning one sees the menu."""
     page = browser.new_page(viewport={"width": 1280, "height": 720})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -372,18 +372,31 @@ def test_first_visit(browser, base):
     page.add_init_script("window.__noForceTutorial = false;")
     page.goto(base + "/index.html")
     page.wait_for_timeout(1000)
-    check("a first-time visitor's play button says the tutorial comes first", "tutorial" in page.inner_text("#start-btn").lower(), page.inner_text("#start-btn"))
-    page.click("#start-btn")
+    check("a first-time visitor sees the welcome (one line, a Play button) and not the full menu",
+          page.is_visible("#welcome-play") and "trick" in page.inner_text(".welcome-pitch").lower() and not page.is_visible("#map-picker") and not page.is_visible("#loadout"))
+    page.click("#welcome-play")
     step(page, 30)
-    check("their first click to play starts the tutorial", page.is_visible("#tutorial") and "1/" in page.inner_text("#tut-count"), page.inner_text("#tut-count"))
+    check("Play starts the basics", page.is_visible("#tutorial") and "1/6" in page.inner_text("#tut-count"), page.inner_text("#tut-count"))
     page.evaluate("__unlock()")
     step(page, 5)
+    check("back in the menu, everything is there, with a line saying so", page.is_visible("#map-picker") and page.is_visible("#loadout") and page.is_visible("#menu-opened"))
     page.reload()
     page.wait_for_timeout(1000)
-    check("on the next visit the play button is plain again", "tutorial" not in page.inner_text("#start-btn").lower(), page.inner_text("#start-btn"))
+    check("on the next visit the menu shows straight away and the play button is plain",
+          not page.is_visible("#welcome") and page.is_visible("#map-picker") and "tutorial" not in page.inner_text("#start-btn").lower(), page.inner_text("#start-btn"))
     page.click("#start-btn")
     step(page, 20)
     check("and clicking it plays without the tutorial", not page.is_visible("#tutorial"))
+    page.close()
+    page = browser.new_page(viewport={"width": 1280, "height": 720})   # a second new player, who skips the intro
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script(INIT)
+    page.add_init_script("window.__noForceTutorial = false;")
+    page.goto(base + "/index.html")
+    page.wait_for_timeout(1000)
+    page.click("#welcome-skip")
+    step(page, 20)
+    check("Skip the intro goes straight into play", not page.is_visible("#tutorial") and page.evaluate("!!document.pointerLockElement"))
     check("no errors on a first visit", not errors, "; ".join(errors[:3]))
     page.close()
 
@@ -882,43 +895,51 @@ def test_maps(browser, base):
 
 
 def test_tutorial(browser, base):
-    """The tutorial starts, ticks steps off, can be skipped with Enter, and is remembered when finished."""
+    """The basics start, tick steps off, can be skipped with Enter and are remembered; then More moves, with the map and records step."""
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
-    check("the tutorial button glows on a first visit and the panel is hidden in the menu",
+    check("the tutorial button glows before you've done it and the panel is hidden in the menu",
           glows and not page.is_visible("#tutorial"))
     page.click("#tutorial-btn")
     step(page, 30)
-    check("starting the tutorial shows step 1 over the game", page.is_visible("#tutorial") and "1/" in page.inner_text("#tut-count"),
+    check("starting the tutorial shows step 1 of the basics over the game", page.is_visible("#tutorial") and "1/6" in page.inner_text("#tut-count"),
           page.inner_text("#tut-count"))
-    for _ in range(40):   # look around: a big sweep with the mouse
+    for _ in range(40):   # look around: a big sweep with the mouse, and a few steps forward
         page.evaluate("document.dispatchEvent(new MouseEvent('mousemove', {movementX: 100, movementY: 0}))")
         step(page, 1)
+    page.keyboard.down("KeyW"); step(page, 90); page.keyboard.up("KeyW")
     step(page, 90)
-    check("turning the view completes the look-around step", page.inner_text("#tut-title") == "Move", page.inner_text("#tut-title"))
-    for _ in range(30):   # skip ahead to the map and records step
-        if page.inner_text("#tut-title") == "Map and records":
-            break
-        page.keyboard.press("Enter")
-        step(page, 12)
-    check("the tutorial has a step for the map and records keys", page.inner_text("#tut-title") == "Map and records", page.inner_text("#tut-title"))
-    page.keyboard.down("m"); step(page, 20)
-    page.keyboard.down("l"); step(page, 20)
-    page.keyboard.up("m"); page.keyboard.up("l")
-    step(page, 120)
-    check("holding the map and records keys ticks that step off", page.inner_text("#tut-title") == "Trickshot", page.inner_text("#tut-title"))
-    for _ in range(40):   # Enter skips whatever is left
+    check("looking and walking complete the first step", page.inner_text("#tut-title") == "Hit a target", page.inner_text("#tut-title"))
+    for _ in range(20):   # Enter skips the rest of the basics
         if "complete" in page.inner_text("#tut-count").lower():
             break
         page.keyboard.press("Enter")
         step(page, 12)
-    check("Enter skips steps through to the end", "complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    check("Enter skips steps through to the end of the basics", "complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
     ends = page.inner_text("#tut-text")
-    check("the last card points at what to try next (Score Attack, attachments, practice, maps)", all(k in ends for k in ("Score Attack", "Attachments", "Practice", "Moonbase")), ends[:120])
+    check("the last card points at what to try next (Score Attack, More moves, Attachments, Practice)", all(k in ends for k in ("Score Attack", "More moves", "Attachments", "Practice")), ends[:120])
     page.evaluate("__unlock()")
     step(page, 5)
-    done = page.evaluate("localStorage.getItem('tsb-tutorial')") == "done" and page.inner_text("#tutorial-btn") == "Tutorial"
-    check("finishing is remembered and the button goes plain", done, page.inner_text("#tutorial-btn"))
+    check("finishing the basics is remembered and the button offers More moves",
+          page.evaluate("localStorage.getItem('tsb-tutorial')") == "done" and page.inner_text("#tutorial-btn") == "More moves", page.inner_text("#tutorial-btn"))
+    page.click("#tutorial-btn")
+    step(page, 30)
+    check("More moves starts at its first step", "more moves 1/" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    for _ in range(20):   # skip ahead to the map and records step
+        if page.inner_text("#tut-title") == "Map and records":
+            break
+        page.keyboard.press("Enter")
+        step(page, 12)
+    check("More moves has a step for the map and records keys", page.inner_text("#tut-title") == "Map and records", page.inner_text("#tut-title"))
+    page.keyboard.down("m"); step(page, 20)
+    page.keyboard.down("l"); step(page, 20)
+    page.keyboard.up("m"); page.keyboard.up("l")
+    step(page, 120)
+    check("holding the map and records keys ticks that step off (and ends More moves)", "complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    page.evaluate("__unlock()")
+    step(page, 5)
+    done = page.evaluate("localStorage.getItem('tsb-tutorial')") == "all" and page.inner_text("#tutorial-btn") == "Tutorial"
+    check("finishing More moves is remembered and the button goes plain", done, page.inner_text("#tutorial-btn"))
     check("no errors in the tutorial", not errors, "; ".join(errors[:3]))
     page.close()
 

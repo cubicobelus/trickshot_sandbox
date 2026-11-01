@@ -5831,7 +5831,8 @@
     if (uiMode === "mp" && !net.active) return;   // nothing to play until you're in a room
     if (!resultsEl.hidden) return;                  // the results screen has its own buttons
     initAudio();
-    if (FIRST_VISIT && !tutOffered && uiMode === "solo" && !tut.active) { tutOffered = true; startTutorial(); return; }   // first time: the tutorial comes first
+    if (FIRST_VISIT && !tutOffered && uiMode === "solo" && !tut.active) { tutOffered = true; endFirstRun(); startTutorial("basics"); return; }   // first time: the basics come first
+    endFirstRun();
     if (uiMode === "solo" && isRunMode() && !runInProgress() && !tut.active) startRun();
     goFullscreen();
     lockPointer();
@@ -7496,7 +7497,7 @@
       if (v === undefined) continue;
       if (typeof v !== "string" || v.length > 4800000) return "The file has a value for " + k + " that doesn't look right.";
       if (DATA_JSON_KEYS.includes(k)) { try { const j = JSON.parse(v); if (!j || typeof j !== "object") throw new Error("x"); } catch (e) { return "The file has a value for " + k + " that doesn't look right."; } }
-      else if (k === "tsb-tutorial" && v !== "started" && v !== "done") return "The file has a value for " + k + " that doesn't look right.";
+      else if (k === "tsb-tutorial" && v !== "started" && v !== "done" && v !== "all") return "The file has a value for " + k + " that doesn't look right.";
       else if (k === "tsb-settings-seen" && v !== "1") return "The file has a value for " + k + " that doesn't look right.";
       else if (k === "tsb-name" && !/^[\w \-]{0,14}$/.test(v)) return "The file has a value for " + k + " that doesn't look right.";
       clean[k] = v;
@@ -12909,34 +12910,35 @@
   // Most are read from the stats counters (so they notice the real thing, however it happened).
   // ======================================================================
   const TUT_KEY = "tsb-tutorial";
-  const tut = { active: false, step: 0, base: null, look: 0, doneTimer: 0, lastHit: null, sawMap: false, sawBoard: false };
+  const tut = { active: false, set: "basics", step: 0, base: null, look: 0, doneTimer: 0, lastHit: null, sawMap: false, sawBoard: false };
   const tutDelta = (k) => stats[k] - tut.base[k];
   const keyOf = (a) => bindLabel(a);
   const either = (a, b) => [a, b].map(keyOf).filter((l) => l !== "unbound").join(" or ") || "unbound";
-  const TUT_STEPS = [
-    { title: "Look around", text: "Move the mouse to look around.", done: () => tut.look > Math.PI * 0.75 },
-    { title: "Move", text: () => "Walk with " + ["forward", "left", "back", "right"].map((a) => inputLabel(BINDS[a][0])).join(" ") + ".", done: () => tutDelta("distance") > 6 },
-    { title: "Sprint", text: () => SETTINGS.autoSprint ? "Auto sprint is on, so just keep moving. " + keyOf("sprint") + " would slow you to a walk." : "Hold " + keyOf("sprint") + " while you move to run faster.", done: () => Math.hypot(player.velocity.x, player.velocity.z) > 8.5 },
-    { title: "Jump", text: () => "Press " + keyOf("jump") + " to jump.", done: () => tutDelta("jumps") >= 1 },
-    { title: "Slide", text: () => "Sprint, then hold " + keyOf("slide") + " to slide: it keeps your speed. Under " + CFG.slideMinSpeed + " on the speed meter, " + keyOf("slide") + " only crouch-walks.", done: () => tutDelta("slides") >= 1 },
-    { title: "Shoot", text: () => "Hit a target with " + keyOf("fire") + ". Smaller and faster targets are worth more.", done: () => tutDelta("hits") >= 1 },
+  // The basics come first and are about the idea of the game (every trick multiplies the shot); More moves is the rest, for later
+  const TUT_BASICS = [
+    { title: "Move and look", text: () => "Walk with " + ["forward", "left", "back", "right"].map((a) => inputLabel(BINDS[a][0])).join(" ") + " and look around with the mouse.", done: () => tut.look > Math.PI * 0.3 && tutDelta("distance") > 3 },
+    { title: "Hit a target", text: () => "Hit a target with " + keyOf("fire") + ". The number that pops up is its score: 100 points times every trick you pulled off.", done: () => tutDelta("hits") >= 1 },
+    { title: "Shoot in the air", text: () => "Jump with " + keyOf("jump") + " and hit a target before you land. Being in the air is a trick: AIR x" + CFG.airMult + ".", done: () => tut.lastHit && tut.lastHit.tags.includes("AIR") },
+    { title: "Slide", text: () => (SETTINGS.autoSprint ? "Run" : "Hold " + keyOf("sprint") + " to run") + ", then hold " + keyOf("slide") + " to slide: it keeps your speed, and a hit while sliding is another trick.", done: () => tutDelta("slides") >= 1 },
+    { title: "Jump pad", text: "Run onto a jump pad, the round plates on the floor. A hit on the way up adds LAUNCHED to AIR.", done: () => tutDelta("padLaunches") >= 1 },
+    { title: "Trickshot", text: "Now stack them for a 3x shot: off a pad, mid-slide, a spin in the air, a far or a small target. Each trick multiplies the others.", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
+  ];
+  const TUT_MORE = [
     { title: "Aim", text: () => "Hold " + keyOf("aim") + " to aim down the sights, then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
-    { title: "Shoot in the air", text: "Hit a target while you're in the air. Every trick multiplies the shot.", done: () => tut.lastHit && tut.lastHit.tags.includes("AIR") },
-    { title: "Jump pad", text: "Run onto a glowing jump pad. The purple ones throw you higher.", done: () => tutDelta("padLaunches") >= 1 },
-    { title: "Bunnyhop", text: "Jump again the moment you land to keep your speed. Do it twice.", done: () => tutDelta("bhops") >= 2 },
+    { title: "Bunnyhop", text: () => "Press " + keyOf("jump") + " again the moment you land to keep your speed. Three in a row is BUNNY HOP.", done: () => tutDelta("bhops") >= 2 },
     { title: "Wall bounce", text: () => "Run at a wall, jump, and press " + keyOf("jump") + " again as you reach it. Right on time is a perfect bounce.", done: () => tutDelta("wallBounces") >= 1 },
     { title: "Grapple", text: () => "Aim at a wall, the floor or a target and tap " + keyOf("grapple") + ". A hook flies out and zips you there. Tap " + keyOf("grapple") + " or " + keyOf("jump") + " to let go and keep your speed.", done: () => tutDelta("grapples") >= 1 },
     { title: "Knife", text: () => "Press " + either("knife", "swap") + " for the knife, then " + keyOf("aim") + " to throw it. " + either("gun", "swap") + " takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
     { title: "Map and records", text: () => "Hold " + keyOf("map") + " to see the map and where you are, and " + keyOf("leaderboard") + " for your records on this map.", done: () => tut.sawMap && tut.sawBoard },
-    { title: "Trickshot", text: "Put it together: land a 2x shot. Jump, spin, hit from far away...", done: () => tut.lastHit && tut.lastHit.mult >= 2 },
   ];
+  const tutSteps = () => (tut.set === "more" ? TUT_MORE : TUT_BASICS);
   const tutEl = document.getElementById("tutorial");
-  function startTutorial() {
+  function startTutorial(set) {
     if (runInProgress() || run.state === "done") quitRun();
     if (currentMap.id !== "arena") loadMap("arena");   // its steps use the arena's pads and walls
-    tut.active = true; tut.step = 0; tut.doneTimer = 0;
+    tut.active = true; tut.set = set === "more" ? "more" : "basics"; tut.step = 0; tut.doneTimer = 0;
     tutBegin();
-    try { localStorage.setItem(TUT_KEY, "started"); } catch (e) { /* ignore */ }
+    try { if (tut.set === "basics" && !localStorage.getItem(TUT_KEY)) localStorage.setItem(TUT_KEY, "started"); } catch (e) { /* ignore */ }
     refreshTutorialUI();
     requestPlay();
   }
@@ -12949,30 +12951,32 @@
     tut.active = false;
     if (SETTINGS.map !== "random" && currentMap.id !== SETTINGS.map) loadMap(SETTINGS.map);
     tutEl.hidden = true;
-    if (finished) try { localStorage.setItem(TUT_KEY, "done"); } catch (e) { /* ignore */ }
     refreshTutorialUI();
   }
   function renderTutorial() {
-    const s = TUT_STEPS[tut.step];
+    const steps = tutSteps(), s = steps[tut.step];
     tutEl.hidden = !tut.active;
     if (!s) return;
-    document.getElementById("tut-count").textContent = "Tutorial " + (tut.step + 1) + "/" + TUT_STEPS.length;
+    document.getElementById("tut-count").textContent = (tut.set === "more" ? "More moves " : "Tutorial ") + (tut.step + 1) + "/" + steps.length;
     document.getElementById("tut-title").textContent = s.title;
     document.getElementById("tut-text").textContent = typeof s.text === "function" ? s.text() : s.text;
-    document.getElementById("tut-fill").style.width = (tut.step / TUT_STEPS.length * 100).toFixed(1) + "%";
+    document.getElementById("tut-fill").style.width = (tut.step / steps.length * 100).toFixed(1) + "%";
     tutEl.classList.remove("done");
   }
   function tutNext() {
     tut.step++;
-    if (tut.step >= TUT_STEPS.length) {
-      document.getElementById("tut-count").textContent = "Tutorial complete";
-      document.getElementById("tut-title").textContent = "You're ready";
-      document.getElementById("tut-text").textContent = "Next: Score Attack is a 1:00 run for a high score. Attachments (in the menu, under More guns) add scopes, barrels and more as you land hits.\nMultiplayer > Practice has bots and modes: hill, flag, gun game, battle royale. Each round opens with a 3-2-1, and in free-for-alls a kill refills your health.\nMoonbase has portals, Foundry launch strips, Rooftops lifts and ladders. The Trickshot list shows every trick.";
+    if (tut.step >= tutSteps().length) {
+      const more = tut.set === "more";
+      document.getElementById("tut-count").textContent = more ? "More moves complete" : "Tutorial complete";
+      document.getElementById("tut-title").textContent = more ? "You know every move" : "That's the basics";
+      document.getElementById("tut-text").textContent = more
+        ? "Moonbase has portals, Foundry launch strips, Rooftops lifts and ladders. Challenges in the menu ask for the hardest combinations, and the Trickshot list shows every trick."
+        : "Next: Score Attack is 1:00 to score as much as you can. More moves (bunnyhop, wall bounce, grapple, knife) wait under More moves in the menu.\nThe menu now has every gun and grenade, the maps, Attachments, and Multiplayer > Practice with bots.";
       document.getElementById("tut-fill").style.width = "100%";
       tutEl.classList.add("done");
       tut.active = false;
-      setTimeout(() => endTutorial(true), 15000);   // (a longer card to read)
-      try { localStorage.setItem(TUT_KEY, "done"); } catch (e) { /* ignore */ }
+      setTimeout(() => endTutorial(true), 12000);   // (a longer card to read)
+      try { localStorage.setItem(TUT_KEY, more ? "all" : localStorage.getItem(TUT_KEY) === "all" ? "all" : "done"); } catch (e) { /* ignore */ }
       refreshTutorialUI();
       return;
     }
@@ -12987,7 +12991,7 @@
       if (tut.doneTimer <= 0) tutNext();
       return;
     }
-    if (TUT_STEPS[tut.step].done()) {
+    if (tutSteps()[tut.step].done()) {
       tut.doneTimer = 1.1;
       tutEl.classList.add("done");
       if (SETTINGS.volHits > 0) tone("triangle", 880, 1320, 0.1 * SETTINGS.volHits, 0.16, 0, 0.15);
@@ -13008,14 +13012,28 @@
   function refreshTutorialUI() {
     let seen = null;
     try { seen = localStorage.getItem(TUT_KEY); } catch (e) { /* ignore */ }
-    tutBtn.textContent = tut.active ? "Quit tutorial" : seen === "done" ? "Tutorial" : seen ? "Restart tutorial" : "New here? Start the tutorial";
-    tutBtn.classList.toggle("glow", !seen && !tut.active);
+    tutBtn.textContent = tut.active ? "Quit tutorial" : seen === "done" ? "More moves" : seen === "all" ? "Tutorial" : seen ? "Restart tutorial" : "Tutorial";
+    tutBtn.classList.toggle("glow", (!seen || seen === "done") && !tut.active);
   }
   tutBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (tut.active) { endTutorial(false); return; }
-    startTutorial();
+    let seen = null;
+    try { seen = localStorage.getItem(TUT_KEY); } catch (er) { /* ignore */ }
+    startTutorial(seen === "done" ? "more" : "basics");
   });
+
+  // ---- the first visit: a welcome with one button (the intro), and the whole menu once you have played ----
+  const welcomeEl = document.getElementById("welcome");
+  function endFirstRun() {
+    if (!document.body.classList.contains("first-run")) return;
+    document.body.classList.remove("first-run");
+    document.getElementById("menu-opened").hidden = false;   // a one-time line: the rest of the menu is here now
+  }
+  if (FIRST_VISIT) { document.body.classList.add("first-run"); welcomeEl.hidden = false; }
+  document.getElementById("welcome-play").addEventListener("click", (e) => { e.stopPropagation(); requestPlay(); });
+  document.getElementById("welcome-skip").addEventListener("click", (e) => { e.stopPropagation(); tutOffered = true; requestPlay(); });
+  document.getElementById("welcome-settings").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("settings-open").click(); });
   controlsListeners.push(() => { if (tut.active && tut.doneTimer <= 0) renderTutorial(); });
   refreshTutorialUI();
 
