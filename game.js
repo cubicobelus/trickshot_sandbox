@@ -1472,6 +1472,32 @@
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.4, 0.15), new THREE.MeshStandardMaterial({ color: 0x555d66 }));
       post.position.set(d[1] - (d[4] || 1) * 0.12, FLOOR_Y + 1.2, d[2]);
       levelGroup.add(post);
+    } else if (kind === "stripe") {   // ["stripe", x, z, width, depth, colour]: paint on the floor
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(d[3], d[4]), sharedMat("stripe" + d[5], () => new THREE.MeshStandardMaterial({ color: d[5], roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })));
+      m.rotation.x = -Math.PI / 2; m.position.set(d[1], FLOOR_Y + 0.012, d[2]); m.receiveShadow = true;
+      levelGroup.add(m);
+    } else if (kind === "berm") {   // ["berm", z, height, depth]: an earth bank right across the map behind the targets (it stops you like a low wall)
+      const h = d[2], dep = d[3], w = currentMap.half * 2, sh = new THREE.Shape();
+      sh.moveTo(dep / 2, 0); sh.bezierCurveTo(dep * 0.2, h * 0.9, -dep * 0.1, h * 1.05, -dep / 2, h); sh.lineTo(-dep / 2, 0); sh.closePath();   // sloping toward the firing line
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false, curveSegments: 10 });
+      geo.rotateY(-Math.PI / 2); geo.translate(w / 2, 0, 0);
+      const uv = geo.attributes.uv, pos = geo.attributes.position;   // the texture by metres, from above
+      for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), pos.getZ(i) + pos.getY(i));
+      const m = new THREE.Mesh(geo, surfaceMaterial("dirt", 0.25, 0.25, levelPalette.dirt));
+      m.position.set(0, FLOOR_Y, d[1]); m.castShadow = true; m.receiveShadow = true;
+      levelGroup.add(m);
+      wallBoxes.push(new THREE.Box3(new THREE.Vector3(-w / 2, FLOOR_Y, d[1] - dep / 2), new THREE.Vector3(w / 2, FLOOR_Y + h * 0.8, d[1] + dep / 2)));
+    } else if (kind === "sandbags") {   // ["sandbags", x, z, along x?]: a low stack of bags
+      const mat = sharedMat("sandbag", () => weather(new THREE.MeshStandardMaterial({ color: 0xa8956d, roughness: 1 })));
+      const geo = sharedMat("sandbaggeo", () => bevelBox(0.62, 0.2, 0.34, 0.08));
+      for (let row = 0; row < 3; row++) for (let k = 0; k < 4 - row; k++) {
+        const b = new THREE.Mesh(geo, mat), off = (k - (3 - row) / 2) * 0.64;
+        b.position.set(d[1] + (d[3] ? off : 0), FLOOR_Y + 0.1 + row * 0.19, d[2] + (d[3] ? 0 : off));
+        b.rotation.y = (d[3] ? 0 : Math.PI / 2) + ((k * 7 + row * 3) % 5 - 2) * 0.04; b.castShadow = true;
+        levelGroup.add(b);
+      }
+      const hx = d[3] ? 1.3 : 0.2, hz = d[3] ? 0.2 : 1.3;
+      wallBoxes.push(new THREE.Box3(new THREE.Vector3(d[1] - hx, FLOOR_Y, d[2] - hz), new THREE.Vector3(d[1] + hx, FLOOR_Y + 0.6, d[2] + hz)));
     } else if (kind === "door") {
       const frame = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.8), new THREE.MeshStandardMaterial({ color: 0x555d66, roughness: 0.8 }));
       const leaf = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.6), new THREE.MeshStandardMaterial({ color: 0x20252b, roughness: 0.7 }));
@@ -1636,11 +1662,16 @@
     id: "range", noRandom: true, name: "Range", blurb: "A long firing lane with distance boards every 10 metres. Used by the shooting range mode.",
     half: 40, floor: "slab", wallH: 8, targetMaxY: 6,
     theme: { skyTop: 0x6fa8e8, skyHorizon: 0xe8eef2, fog: [80, 240], sunDir: [30, 55, 10], sunColor: 0xfff6e8, sunIntensity: 1.0, hemi: [0xe6f0ff, 0x7d8288, 0.65],
-      surfaces: { slab: "#7d838b", concrete: "#9aa0a8", brick: "#8a6f5c", deck: "#838b95" } },
-    walls: [wallAt(-14, 0, 1, 76, 1.2, "concrete"), wallAt(14, 0, 1, 76, 1.2, "concrete"), wallAt(0, 33, 6, 1, 1.1, "concrete")],   // lane edges, and the firing line
+      surfaces: { slab: "#7d838b", concrete: "#9aa0a8", brick: "#8a6f5c", deck: "#838b95", boards: "#7a6044", dirt: "#7c6a52" } },
+    walls: [wallAt(-14, 0, 1, 76, 1.2, "concrete"), wallAt(14, 0, 1, 76, 1.2, "concrete"), wallAt(0, 33, 6, 1, 1.1, "boards")],   // lane edges, and the firing line (a timber bench)
     decks: [], ramps: [], pads: [],
     decor: [["sign", -13, 26, "10 m", 1], ["sign", 13, 26, "10 m", -1], ["sign", -13, 16, "20 m", 1], ["sign", 13, 16, "20 m", -1], ["sign", -13, 1, "35 m", 1], ["sign", 13, 1, "35 m", -1],
-      ["sign", -13, -14, "50 m", 1], ["sign", 13, -14, "50 m", -1], ["sign", -13, -34, "70 m", 1], ["sign", 13, -34, "70 m", -1]],
+      ["sign", -13, -14, "50 m", 1], ["sign", 13, -14, "50 m", -1], ["sign", -13, -34, "70 m", 1], ["sign", 13, -34, "70 m", -1],
+      // painted lines: the lane edges, a yellow firing line, and a mark across the lane at each board
+      ["stripe", -12.8, -2, 0.4, 72, "#e8e4d8"], ["stripe", 12.8, -2, 0.4, 72, "#e8e4d8"], ["stripe", 0, 32.2, 25, 0.35, "#e3b53a"],
+      ["stripe", 0, 26, 25, 0.12, "#e8e4d8"], ["stripe", 0, 16, 25, 0.12, "#e8e4d8"], ["stripe", 0, 1, 25, 0.12, "#e8e4d8"], ["stripe", 0, -14, 25, 0.12, "#e8e4d8"], ["stripe", 0, -34, 25, 0.12, "#e8e4d8"],
+      ["berm", -38.2, 3.2, 3.6],   // an earth backstop behind the last dummy
+      ["sandbags", -11, 22, 0], ["sandbags", 11, 8, 0], ["sandbags", -11, -6, 0], ["sandbags", 11, -24, 0]],
     rangeSpots: [[0, 26], [-5, 16], [5, 1], [-4, -14], [4, -34]],
     spawns: [[-6, 36], [-2, 36], [2, 36], [6, 36]],
     playerSpawn: [0, 36],
