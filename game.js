@@ -12940,6 +12940,7 @@
   function startTutorial(set, noPlay) {
     if (runInProgress() || run.state === "done") quitRun();
     if (currentMap.id !== "arena") loadMap("arena");   // its steps use the arena's pads and walls
+    clearTimeout(tut.endTimer);   // (the last tutorial's closing card must not end this one)
     tut.active = true; tut.set = set === "more" ? "more" : "basics"; tut.step = 0; tut.doneTimer = 0;
     tutBegin();
     try { if (tut.set === "basics" && !localStorage.getItem(TUT_KEY)) localStorage.setItem(TUT_KEY, "started"); } catch (e) { /* ignore */ }
@@ -12979,7 +12980,7 @@
       document.getElementById("tut-fill").style.width = "100%";
       tutEl.classList.add("done");
       tut.active = false;
-      setTimeout(() => endTutorial(true), 12000);   // (a longer card to read)
+      tut.endTimer = setTimeout(() => endTutorial(true), 12000);   // (a longer card to read)
       try { localStorage.setItem(TUT_KEY, more ? "all" : localStorage.getItem(TUT_KEY) === "all" ? "all" : "done"); } catch (e) { /* ignore */ }
       refreshTutorialUI();
       return;
