@@ -8898,18 +8898,29 @@
   }
 
   // ---------------- remote avatars ----------------
+  // a name over a player: white in the display face, with a bar in their colour under it (the colour carries the team,
+  // the white stays readable on any sky). Drawn again once the face has loaded, if it had not yet
+  const TAG_FONT = '700 30px "Chakra Petch", "Segoe UI", Arial, sans-serif';
   function makeNameTag(text, color) {
     const c = document.createElement("canvas");
-    c.width = 256; c.height = 56;
-    const g = c.getContext("2d");
-    g.font = "bold 30px Segoe UI, Arial, sans-serif";
-    g.textAlign = "center"; g.textBaseline = "middle";
-    g.lineWidth = 6; g.strokeStyle = "rgba(0,0,0,0.85)";
-    g.strokeText(text, 128, 30);
-    g.fillStyle = "#" + color.toString(16).padStart(6, "0");
-    g.fillText(text, 128, 30);
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: srgbTex(new THREE.CanvasTexture(c)), transparent: true, toneMapped: false }));
-    spr.scale.set(1.7, 0.37, 1);
+    c.width = 256; c.height = 64;
+    const g = c.getContext("2d"), hex = "#" + color.toString(16).padStart(6, "0");
+    const tex = srgbTex(new THREE.CanvasTexture(c));
+    const draw = () => {
+      g.clearRect(0, 0, 256, 64);
+      g.font = TAG_FONT; g.textAlign = "center"; g.textBaseline = "middle";
+      const w = Math.min(g.measureText(text).width, 240);
+      g.lineJoin = "round"; g.lineWidth = 5; g.strokeStyle = "rgba(0,0,0,0.7)";
+      g.strokeText(text, 128, 26, 240);
+      g.fillStyle = "#f4f5f7"; g.fillText(text, 128, 26, 240);
+      g.fillStyle = "rgba(0,0,0,0.6)"; g.fillRect(128 - w / 2 - 2, 45, w + 4, 8);
+      g.fillStyle = hex; g.fillRect(128 - w / 2, 47, w, 4);
+      tex.needsUpdate = true;
+    };
+    draw();
+    if (document.fonts && !document.fonts.check(TAG_FONT)) document.fonts.load(TAG_FONT).then(draw).catch(() => {});
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, toneMapped: false }));
+    spr.scale.set(1.7, 0.425, 1);
     spr.position.y = 2.35;
     return spr;
   }
