@@ -7408,7 +7408,7 @@
   document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
   // Back up and restore: everything the game keeps in this browser as one file. An imported file is checked key by key and
   // value by value before it replaces anything (and the game's own loaders check again when it starts).
-  const DATA_JSON_KEYS = ["tsb-tips", "tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-score-attack", "tsb-map-records"];
+  const DATA_JSON_KEYS = ["tsb-tips", "tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-challenges", "tsb-score-attack", "tsb-map-records"];
   const DATA_KEYS = DATA_JSON_KEYS.concat(["tsb-tutorial", "tsb-name", "tsb-settings-seen"]);
   const importNoteEl = document.getElementById("data-import-note"), importApplyEl = document.getElementById("data-import-apply");
   let importClean = null;
@@ -7566,6 +7566,7 @@
     if (isKnife && !thrown) stat("knifeSwingHits");
     else { statMax("longestShot", dist); if (thrown) stat("knifeThrowHits"); else gunStat(weapon ? weapon.id : vm.current).points += pointsGained; }
     achHit(res, target.userData.type, isKnife, thrown, dist);
+    chalHit(res, target.userData.type, isKnife, thrown, dist);
     recHit(target, dist, isKnife, thrown, res, pointsGained);
     target.userData.respawnTimer = 1.1;
     if (net.active) mpTargetHit(target, pointsGained);
@@ -7820,6 +7821,7 @@
   // a miss ends the streak (in deathmatch only dying does)
   function breakStreak() {
     if (net.active && net.sub === "dm") return;
+    chalHeat = 0;
     streak = 0; streakEl.textContent = streak;
   }
 
@@ -11904,6 +11906,8 @@
   function nextAchToast() {
     const a = achQueue.shift();
     if (!a) { achToastTimer = 0; achToastEl.classList.remove("show"); return; }
+    achToastEl.querySelector("small").textContent = a.label || "Achievement unlocked";
+    achToastEl.classList.toggle("tier", !!a.tier); achToastEl.dataset.tier = a.tier || "";
     achToastEl.querySelector("b").textContent = a.name;
     achToastEl.querySelector("span").textContent = a.desc;
     achToastEl.classList.remove("show"); void achToastEl.offsetWidth; achToastEl.classList.add("show");
@@ -11974,6 +11978,119 @@
   window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !achEl.hidden) setAchievements(false); });
   achProgress();   // grind goals already met by the saved stats
   updateAchCount();
+
+  // ======================================================================
+  // TRICK CHALLENGES: one shot (or one run) that puts certain tricks together. Four tiers, from Bronze to
+  // Legendary; the Legendary ones are meant to take a long time. Checked on every scoring hit, kept in this browser.
+  // ======================================================================
+  const CHAL_KEY = "tsb-challenges";
+  const CHAL_TIERS = { bronze: "Bronze", silver: "Silver", gold: "Gold", legend: "Legendary" };
+  // c = { has(name), spin (degrees), chain, combo, hang (s), tricks (how many different tricks), dist, mult, kind, isKnife, thrown }
+  const CHALLENGES = [
+    { id: "slidesnipe", tier: "bronze", name: "Slide Snipe", desc: "Hit a target 30 m or more away while sliding.", hit: (c) => c.has("SLIDING") && c.dist >= 30 },
+    { id: "bankshot", tier: "bronze", name: "Bank Shot", desc: "A wall bounce and a 180° turn in the same shot.", hit: (c) => c.has("WALL BOUNCE") && c.spin >= 180 },
+    { id: "padplate", tier: "bronze", name: "Pad to Plate", desc: "Hit a target 40 m or more away while still rising off a pad or ramp.", hit: (c) => (c.has("LAUNCHED") || c.has("MEGA LAUNCH") || c.has("RAMP LAUNCH")) && c.dist >= 40 },
+    { id: "airpin", tier: "bronze", name: "Needle in the Sky", desc: "Hit a small or purple target in the air.", hit: (c) => c.has("AIR") && (c.kind === "small" || c.kind === "tiny") },
+    { id: "five", tier: "bronze", name: "Five Tricks", desc: "Land a shot with five different tricks.", hit: (c) => c.tricks >= 5 },
+    { id: "x25", tier: "bronze", name: "Twenty-Five", desc: "Land a 25x shot.", hit: (c) => c.mult >= 25 },
+    { id: "swingflick", tier: "silver", name: "Swing and Flick", desc: "Let go of the grapple and land a FLICK or SNAP FLICK.", hit: (c) => c.has("GRAPPLE") && (c.has("FLICK") || c.has("SNAP FLICK")) },
+    { id: "portal360", tier: "silver", name: "Through and Around", desc: "Come out of a portal and land a 360° spin shot.", hit: (c) => c.has("PORTAL SHOT") && c.spin >= 360 },
+    { id: "railreverse", tier: "silver", name: "Look Back", desc: "A REVERSE shot while riding a lift or the shuttle.", hit: (c) => c.has("PLATFORM SHOT") && c.has("REVERSE") },
+    { id: "knife360", tier: "silver", name: "Spinning Blade", desc: "Hit with a thrown knife after a 360° spin.", hit: (c) => c.thrown && c.spin >= 360 },
+    { id: "lastword", tier: "silver", name: "Last Word", desc: "A no-scope with the last round in the magazine.", hit: (c) => c.has("NO-SCOPE") && c.has("LAST ROUND") },
+    { id: "chain4", tier: "silver", name: "Chain Reaction", desc: "Land a CHAIN 4 shot (four different movement tricks in a row).", hit: (c) => c.chain >= 4 },
+    { id: "seven", tier: "silver", name: "Seven Tricks", desc: "Land a shot with seven different tricks.", hit: (c) => c.tricks >= 7 },
+    { id: "sweep", tier: "gold", name: "Clean Sweep", desc: "Hit four targets in one jump.", hit: (c) => c.combo >= 4 },
+    { id: "soundbarrier", tier: "gold", name: "Sound Barrier", desc: "A MEGA SNIPE (50 m or more) at SONIC speed.", hit: (c) => c.has("MEGA SNIPE") && c.has("SONIC") },
+    { id: "rocketman", tier: "gold", name: "Rocket Man", desc: "Blast yourself into the air and land a 360° spin shot before you touch down.", hit: (c) => c.blast && c.spin >= 360 },
+    { id: "1080", tier: "gold", name: "Ten-Eighty", desc: "Hit a target with a 1080° spin.", hit: (c) => c.spin >= 1080 },
+    { id: "longhang", tier: "gold", name: "Long Hang", desc: "Land a shot after 5 seconds of HANG TIME.", hit: (c) => c.hang >= 5 },
+    { id: "x250", tier: "gold", name: "Quarter Grand", desc: "Land a 250x shot.", hit: (c) => c.mult >= 250 },
+    { id: "nine", tier: "gold", name: "Nine Tricks", desc: "Land a shot with nine different tricks.", hit: (c) => c.tricks >= 9 },
+    { id: "1440ns", tier: "legend", name: "1440 No-Scope", desc: "Four full turns in the air, then a no-scope.", hit: (c) => c.spin >= 1440 && c.has("NO-SCOPE") },
+    { id: "fivejump", tier: "legend", name: "Five in One Jump", desc: "Hit five targets before you land.", hit: (c) => c.combo >= 5 },
+    { id: "x1000", tier: "legend", name: "Untouchable", desc: "Land a 1000x shot.", hit: (c) => c.mult >= 1000 },
+    { id: "twelve", tier: "legend", name: "The Full Send", desc: "Land a shot with twelve different tricks.", hit: (c) => c.tricks >= 12 },
+    { id: "chain6", tier: "legend", name: "Perpetual Motion", desc: "Land a CHAIN 6 shot.", hit: (c) => c.chain >= 6 },
+    { id: "pinace", tier: "legend", name: "Pinpoint Ace", desc: "A no-scope MEGA SNIPE on a purple target, in the air.", hit: (c) => c.kind === "tiny" && c.has("NO-SCOPE") && c.has("MEGA SNIPE") && c.has("AIR") },
+    { id: "heater", tier: "legend", name: "Heater", desc: "Ten hits in a row, every one 25x or more, without a miss.", goal: 10, progress: () => chalHeatBest },
+    { id: "sa25k", tier: "legend", name: "Twenty-Five Grand", desc: "Score 25,000 or more in a 1:00 Score Attack.", run: (r) => r.mode === "sa60" && r.score >= 25000 },
+  ];
+  let chalDone = {}, chalHeat = 0, chalHeatBest = 0;
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHAL_KEY));
+    if (saved && typeof saved === "object") {
+      for (const a of CHALLENGES) if (typeof saved[a.id] === "string") chalDone[a.id] = saved[a.id].slice(0, 10);
+      if (Number.isFinite(saved._heat)) chalHeatBest = Math.min(Math.max(saved._heat | 0, 0), 10);
+    }
+  } catch (e) { /* storage blocked or empty */ }
+  function chalSave() { try { localStorage.setItem(CHAL_KEY, JSON.stringify(Object.assign({ _heat: chalHeatBest }, chalDone))); } catch (e) { /* ignore */ } }
+  const CHAL_ORDER = Object.keys(CHAL_TIERS);
+  function chalUnlock(list) {   // everything one shot completed makes one toast: the hardest one, and how many more
+    list = list.filter((a) => !chalDone[a.id]);
+    if (!list.length) return;
+    const day = new Date().toISOString().slice(0, 10);
+    for (const a of list) chalDone[a.id] = day;
+    chalSave();
+    const top = list.slice().sort((p, q) => CHAL_ORDER.indexOf(q.tier) - CHAL_ORDER.indexOf(p.tier))[0];
+    achQueue.push({ name: top.name, desc: list.length > 1 ? "and " + (list.length - 1) + " more challenge" + (list.length > 2 ? "s" : "") : top.desc, tier: top.tier, label: CHAL_TIERS[top.tier] + " challenge" });
+    if (!achToastTimer) nextAchToast();
+    updateChalCount();
+  }
+  function chalHit(res, kind, isKnife, thrown, dist) {
+    const raw = res.tags.map((t) => t.replace(/ x[\d.]+$/, "")), keys = new Set(raw.map((t) => trickKey(t) || t));
+    const num = (re) => { for (const t of raw) { const m = t.match(re); if (m) return parseFloat(m[1]); } return 0; };
+    const combo = keys.has("QUAD") ? 4 : keys.has("TRIPLE") ? 3 : keys.has("DOUBLE") ? 2 : num(/^(\d+)-HIT COMBO$/);
+    const c = {
+      has: (n) => keys.has(n), kind, isKnife, thrown, dist, mult: res.mult, combo,
+      spin: num(/^(\d+)° SPIN$/) || (keys.has("180°") ? 180 : 0), chain: num(/^CHAIN (\d+)/), hang: num(/^HANG TIME ([\d.]+)s/),
+      blast: Object.values(BLAST_JUMP).some((b) => keys.has(b[0])),
+      tricks: raw.filter((t) => !/^(STREAK|NEW) /.test(t)).length,   // the bookkeeping tags don't count as tricks
+    };
+    chalHeat = res.mult >= 25 ? chalHeat + 1 : 0;
+    if (chalHeat > chalHeatBest) { chalHeatBest = Math.min(chalHeat, 10); chalSave(); }
+    chalUnlock(CHALLENGES.filter((a) => !chalDone[a.id] && (a.hit ? a.hit(c) : a.goal ? a.progress() >= a.goal : false)));
+  }
+  function chalRun(r) { chalUnlock(CHALLENGES.filter((a) => a.run && !chalDone[a.id] && a.run(r))); }
+  const chalCountEl = document.getElementById("chal-count");
+  function updateChalCount() { chalCountEl.textContent = Object.keys(chalDone).length + "/" + CHALLENGES.length; }
+  const chalEl = document.getElementById("challenges");
+  function buildChallenges() {
+    const list = document.getElementById("chal-list");
+    list.textContent = "";
+    for (const tier of Object.keys(CHAL_TIERS)) {
+      const all = CHALLENGES.filter((a) => a.tier === tier), got = all.filter((a) => chalDone[a.id]).length;
+      const h = document.createElement("h3"); h.className = "chal-tier"; h.dataset.tier = tier;
+      h.textContent = CHAL_TIERS[tier] + " ";
+      const n = document.createElement("small"); n.textContent = got + " / " + all.length; h.appendChild(n);
+      list.appendChild(h);
+      for (const a of all) {
+        const done = chalDone[a.id];
+        const row = document.createElement("div"); row.className = "ach-row chal-row" + (done ? " done" : ""); row.dataset.tier = tier;
+        const mark = document.createElement("div"); mark.className = "ach-mark"; mark.textContent = done ? "✓" : "";
+        const body = document.createElement("div");
+        const name = document.createElement("b"); name.textContent = a.name;
+        const desc = document.createElement("span"); desc.textContent = a.desc;
+        body.append(name, desc);
+        if (a.goal && !done) {
+          const bar = document.createElement("i"); bar.className = "ach-bar";
+          const fill = document.createElement("i"); fill.style.width = (Math.min(a.progress() / a.goal, 1) * 100).toFixed(1) + "%";
+          bar.appendChild(fill);
+          const txt = document.createElement("small"); txt.textContent = "Best so far: " + a.progress() + " / " + a.goal;
+          body.append(bar, txt);
+        }
+        const when = document.createElement("small"); when.className = "ach-when"; when.textContent = done || "";
+        row.append(mark, body, when);
+        list.appendChild(row);
+      }
+    }
+  }
+  function setChallenges(open) { if (open) buildChallenges(); chalEl.hidden = !open; }
+  document.getElementById("chal-open").addEventListener("click", (e) => { e.stopPropagation(); setChallenges(true); });
+  document.getElementById("chal-close").addEventListener("click", () => setChallenges(false));
+  chalEl.addEventListener("click", (e) => { if (e.target === chalEl) setChallenges(false); });   // the backdrop
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !chalEl.hidden) setChallenges(false); });
+  updateChalCount();
 
   // ======================================================================
   // SCORE ATTACK: a timed run. A 3-2-1 countdown (you can look around but not move or shoot), then the
@@ -12064,6 +12181,7 @@
     try { localStorage.setItem(RUN_KEY, JSON.stringify(tops)); } catch (e) { /* storage blocked */ }
     showResults(entry, rank, tops[topsKey(run.mode)]);
     achRun({ mode: run.mode, score: entry.score });
+    chalRun({ mode: run.mode, score: entry.score });
     runTimerEl.hidden = true;
     if (document.pointerLockElement) document.exitPointerLock();
   }

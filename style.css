@@ -10,6 +10,7 @@
     --team-red: #e24b4b;
     --green: #5fd38a; --green-soft: #c9f2d6; --blue-soft: #9fe6ff;
     --pv-sky: #87b7d9; --pv-grass: #b4e77f; --pv-wall: #6e6e78;
+    --tier-bronze: #d08c56; --tier-silver: #c8d0da; --tier-legend: #ff7a5c;
     --black: #0b0c0f; --panel-0: #15161b; --panel-1: #22242b; --line-0: #2c2e36; --line-1: #383b45; --line-2: #4a4d58;
     --text-4: #6b6f7b; --text-3: #9095a1; --text-2: #b8bcc6; --text-1: #e6e8ed; --white: #ffffff;
     --sel-bg: #e9ecf2; --sel-ink: #15171c;
@@ -40,13 +41,13 @@
   #instructions .start:hover { background: rgba(var(--gold-rgb),0.22); }
 
   /* the trickshot list: a popup over everything */
-  #glossary-open, #stats-open, #ach-open { margin-top: 10px; }
-  #ach-count { color: var(--gold); }
-  #glossary, #stats, #achievements, #settings-popup, #map-popup, #attach-popup, #loadout-popup {
+  #glossary-open, #stats-open, #ach-open, #chal-open { margin-top: 10px; }
+  #ach-count, #chal-count { color: var(--gold); }
+  #glossary, #stats, #achievements, #challenges, #settings-popup, #map-popup, #attach-popup, #loadout-popup {
     position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.7);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
-  #glossary[hidden], #stats[hidden], #achievements[hidden], #settings-popup[hidden], #map-popup[hidden], #attach-popup[hidden], #loadout-popup[hidden] { display: none; }
+  #glossary[hidden], #stats[hidden], #achievements[hidden], #challenges[hidden], #settings-popup[hidden], #map-popup[hidden], #attach-popup[hidden], #loadout-popup[hidden] { display: none; }
   #loadout-popup .g-panel { width: min(520px, 100%); max-height: calc(100vh - 72px); overflow-y: auto; }
   .lo-group h3 { margin: 12px 0 6px; font-size: 12px; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
   .lo-row { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -125,6 +126,17 @@
     transition: opacity 0.3s, transform 0.3s; min-width: 240px;
   }
   #ach-toast.show { opacity: 1; transform: translate(-50%, 0); }
+  /* trick challenges: a colour per tier, on the list's headings and ticks and on the toast */
+  #chal-list { columns: 2; column-gap: 28px; }
+  #chal-list h3.chal-tier { column-span: all; margin: 14px 0 4px; font: 700 15px var(--font-display); letter-spacing: 1px; text-transform: uppercase; color: var(--tier); border-bottom: 2px solid var(--tier); padding-bottom: 3px; }
+  #chal-list h3.chal-tier:first-child { margin-top: 2px; }
+  #chal-list h3 small { float: right; font-size: 12px; color: var(--text-2); }
+  [data-tier="bronze"] { --tier: var(--tier-bronze); } [data-tier="silver"] { --tier: var(--tier-silver); }
+  [data-tier="gold"] { --tier: var(--gold); } [data-tier="legend"] { --tier: var(--tier-legend); }
+  .chal-row.done .ach-mark { background: var(--tier); border-color: var(--tier); }
+  .chal-row.done b { color: var(--tier); }
+  #ach-toast.tier { border-color: var(--tier); }
+  #ach-toast.tier small, #ach-toast.tier b { color: var(--tier); }
   #ach-toast small { display: block; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); }
   #ach-toast b { display: block; font-size: 17px; color: var(--gold); }
   #ach-toast span { display: block; font-size: 12px; color: var(--text-2); }

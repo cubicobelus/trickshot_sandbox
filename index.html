@@ -53,6 +53,7 @@
       <button type="button" class="btn" id="glossary-open">Trickshot list</button>
       <button type="button" class="btn" id="stats-open">Stats</button>
       <button type="button" class="btn" id="ach-open">Achievements <span id="ach-count"></span></button>
+      <button type="button" class="btn" id="chal-open">Challenges <span id="chal-count"></span></button>
       <button type="button" class="btn" id="settings-open">Settings</button>
       <button type="button" class="btn" id="run-quit" hidden>Quit run</button>
       <div id="watch-row">
@@ -217,6 +218,15 @@
     <div class="g-head"><h2>Achievements</h2><button type="button" class="g-close" id="ach-close" aria-label="Close">&times;</button></div>
     <p class="g-note">Goals to chase, kept in this browser.</p>
     <div id="ach-list"></div>
+  </div>
+</div>
+
+<!-- trick challenges, a popup over everything; filled in game.js -->
+<div id="challenges" hidden>
+  <div class="g-panel" role="dialog" aria-label="Trick challenges">
+    <div class="g-head"><h2>Trick challenges</h2><button type="button" class="g-close" id="chal-close" aria-label="Close">&times;</button></div>
+    <p class="g-note">One shot that puts certain tricks together. Bronze to Legendary; the Legendary ones are meant to take a long time.</p>
+    <div id="chal-list"></div>
   </div>
 </div>
 
