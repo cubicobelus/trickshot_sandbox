@@ -251,6 +251,19 @@
     blastJumpMinPush: 5,        // the shove has to be at least this many u/s (a blast further off than about 3 to 5 m does not count)
     threadedMult: 1.5,          // THREADED: one railgun bolt through two or more targets or players
     fanMult: 0.5,               // FANNED: a revolver shot from fanning the hammer (wide and quick, so worth half)
+    hipShotMult: 1.3,           // HIP SHOT: any gun that can aim (not the sniper: that is NO-SCOPE), fired from the hip...
+    hipShotMinDist: 30,         // ...at this range or more
+    bhopMultPer: 0.1,           // BUNNY HOP: three or more hops chained (each jump on the landing frame) give x1.2, then +0.1 a hop...
+    bhopMultMax: 1.5,           // ...up to this
+    ladderMult: 1.3,            // LADDER SHOT: a hit while on a ladder
+    dropShotFall: 11,           // DROP SHOT: landing from a fall at least this fast (u/s; about a 3 m drop)...
+    dropShotWindow: 0.4,        // ...and hitting within this long of touching down...
+    dropShotMult: 1.4,          // ...pays this
+    buzzerTime: 3,              // BUZZER BEATER: a hit in the last this-many seconds of a Score Attack
+    buzzerMult: 1.5,
+    quickDoubleWindow: 0.6,     // QUICK DOUBLE: on the ground, another target this soon after the last (the air combo's ground cousin)...
+    quickDoubleMultPer: 0.25,   // ...x1.25, x1.5 for a third...
+    quickDoubleMultMax: 1.75,
     // Realistic shooting (a setting, on by default): extra spread, in radians
     realisticAirSpread: 0.025,  // any gun, while you're in the air (on top of the moving spread)
     realisticMoveSpread: 0.016, // any gun on the ground: none standing still, growing with speed until...
@@ -6295,7 +6308,7 @@
     sliding: false,
     slideTimer: 0, slideCooldown: 0, slideDustTimer: 0,
     wallContactTime: -1, wallBounceCooldown: 0,
-    lastWallBounceAt: -99, lastLandTime: -99,
+    lastWallBounceAt: -99, lastLandTime: -99, bhopChain: 0, dropLandAt: -99,
     lastYaw: 0, airSpinAccum: 0, airSpinNet: 0, feetY: 0.25,
     groundRise: 0,   // how fast the ramp under you is lifting you (m/s); becomes a launch off the top
     stepDist: 0,     // ground covered since the last footstep
@@ -6784,6 +6797,7 @@
       // speed; each hop still bleeds some of what's above a sprint (see CFG.bhopKeep)
       const jumpHeld = held("jump");
       const bhopping = jumpHeld && (elapsedTime - player.lastLandTime) <= CFG.bhopWindow;
+      if (!bhopping && elapsedTime - player.lastLandTime > CFG.bhopWindow) player.bhopChain = 0;   // stood on the ground: the hop chain is over
 
       if (!bhopping && !player.hook) {
         const fric = player.sliding ? CFG.slideFriction : frictionAt(horizSpeed);
@@ -6815,6 +6829,7 @@
         player.velocity.y = CFG.jumpSpeed + player.groundRise;   // jumping off a ramp adds its lift
         stat("jumps");
         if (bhopping) stat("bhops");
+        player.bhopChain = bhopping ? player.bhopChain + 1 : 1;
         if (player.groundRise > 2) { player.launch = "ramp"; player.launchRun = Math.hypot(player.velocity.x, player.velocity.z); }
         player.onGround = false;
         player.sliding = false;
@@ -6926,6 +6941,7 @@
       if (!player.onGround) {
         const fall = -player.velocity.y;
         if (fall > 3.5) playLanding((0.06 + 0.3 * Math.min((fall - 3.5) / 14, 1)) * (held("jump") || player.sliding ? 0.6 : 1));
+        if (fall >= CFG.dropShotFall) player.dropLandAt = elapsedTime;   // a hard landing: DROP SHOT for a moment
         player.stepDist = 0.8;   // the next step comes a little after touching down
       }
       yawObject.position.y = eyeTarget;
@@ -7150,7 +7166,8 @@
   const trickSeen = new Set();   // the tricks landed so far this run (each new one adds to the shot)
   const COLLECTABLE = new Set(["AIR", "180\u00b0", "SPIN", "NO-SCOPE", "QUICKSCOPE", "FLICK", "SNAP FLICK", "SLIDING", "WALL BOUNCE", "GRAPPLE", "LAUNCHED", "RAMP LAUNCH",
     "MEGA LAUNCH", "REVERSE", "QUICK SWITCH", "PORTAL SHOT", "STRIP SHOT", "PLATFORM SHOT", "ZERO-G", "CHAIN", "HANG TIME", "MICRO TARGET", "PINPOINT", "MOVING TARGET",
-    "LAST ROUND", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC", "ROCKET JUMP", "LAUNCHER JUMP", "GRENADE JUMP", "PACK JUMP", "THREADED"]);
+    "LAST ROUND", "DOUBLE", "TRIPLE", "LONG SHOT", "MEGA SNIPE", "BLAZING", "SONIC", "ROCKET JUMP", "LAUNCHER JUMP", "GRENADE JUMP", "PACK JUMP", "THREADED",
+    "HIP SHOT", "BUNNY HOP", "LADDER SHOT", "DROP SHOT", "BUZZER BEATER", "QUICK DOUBLE", "QUICK TRIPLE"]);
   const BLAST_JUMP = { rpg: ["ROCKET JUMP", "rocketJumpMult"], launcher: ["LAUNCHER JUMP", "launcherJumpMult"], frag: ["GRENADE JUMP", "grenadeJumpMult"], satchel: ["PACK JUMP", "packJumpMult"] };   // by blast kind: the tag, and its CFG value
   const collectKey = (tag) => { const k = trickKey(tag); return k && /SPIN$/.test(k) ? "SPIN" : k; };
 
@@ -7179,7 +7196,7 @@
     const name = sp >= 19 ? "SONIC" : sp >= 15 ? "BLAZING" : "FAST";
     return [name + " " + Math.round(sp) + " u/s", Math.min(1 + (sp - CFG.speedFrom) * CFG.speedMultPer, CFG.speedMultMax)];
   }
-  let comboAirId = -1, comboCount = 0;
+  let comboAirId = -1, comboCount = 0, quickCount = 0, quickLastAt = -99;
 
   function trickState() {
     return {
@@ -7205,6 +7222,10 @@
       quickSwitch: elapsedTime - vm.switchDoneAt <= CFG.quickSwitchWindow &&
         elapsedTime - (currentWeapon().lastFiredAt === undefined ? -99 : currentWeapon().lastFiredAt) > CFG.quickSwitchFreshGun,
       reverse: reversing(),
+      bhop: !player.onGround || elapsedTime - player.lastLandTime <= CFG.bhopWindow ? player.bhopChain : 0,
+      ladder: !!player.ladder,
+      drop: player.onGround && elapsedTime - player.dropLandAt <= CFG.dropShotWindow,
+      hip: vm.adsProgress < 0.35,
     };
   }
 
@@ -7239,6 +7260,8 @@
       }
       // the last round of a full magazine, once (a shotgun firing its one reloaded shell doesn't count)
       if (ammoBefore === 1 && weapon && weapon.lastRoundReady && !SETTINGS.unlimitedAmmo) add("LAST ROUND", CFG.lastRoundMult);
+      // any other gun that can aim, from the hip at range (guns that only fire from the hip don't count)
+      if (!thrown && weapon && !weapon.sniper && weapon.canADS && (st.hip === undefined ? vm.adsProgress < 0.35 : st.hip) && dist >= CFG.hipShotMinDist) add("HIP SHOT", CFG.hipShotMult);
     }
 
     const spd = speedFactor(st.speed);
@@ -7254,7 +7277,17 @@
     if (st.reverse) add("REVERSE", CFG.reverseMult);
     if (st.blast && BLAST_JUMP[st.blast]) add(BLAST_JUMP[st.blast][0], CFG[BLAST_JUMP[st.blast][1]]);
     if (st.threaded >= 2) add("THREADED", CFG.threadedMult);
+    if (st.bhop >= 3) add("BUNNY HOP " + st.bhop, Math.min(1 + (st.bhop - 1) * CFG.bhopMultPer, CFG.bhopMultMax));
+    if (st.ladder) add("LADDER SHOT", CFG.ladderMult);
+    if (st.drop) add("DROP SHOT", CFG.dropShotMult);
+    if (run.state === "live" && run.left <= CFG.buzzerTime) add("BUZZER BEATER", CFG.buzzerMult);
 
+    // ground combo: targets in quick succession without leaving the ground
+    if (st.onGround) {
+      quickCount = elapsedTime - quickLastAt <= CFG.quickDoubleWindow ? quickCount + 1 : 1;
+      quickLastAt = elapsedTime;
+      if (quickCount >= 2) add(["QUICK DOUBLE", "QUICK TRIPLE"][quickCount - 2] || "QUICK " + quickCount, Math.min(1 + (quickCount - 1) * CFG.quickDoubleMultPer, CFG.quickDoubleMultMax));
+    } else quickCount = 0;
     // air combo: every hit from the same jump counts up
     if (!st.onGround && st.airId !== undefined) {
       if (st.airId === comboAirId) comboCount++; else { comboAirId = st.airId; comboCount = 1; }
@@ -7324,12 +7357,16 @@
         ["REVERSE", x(C.reverseMult), "In the air, having turned 90°+ since takeoff, flying at " + C.reverseSpeed + "+ u/s away from where you aim. Backpedalling doesn't count."],
         ["ROCKET / LAUNCHER / GRENADE / PACK JUMP", x(C.rocketJumpMult) + " / " + x(C.launcherJumpMult) + " / " + x(C.grenadeJumpMult) + " / " + x(C.packJumpMult),
           "Hit while still in the air from the shove of your own blast (RPG, launcher grenade, thrown grenade, blast pack). It has to throw you at least " + C.blastJumpMinPush + " u/s, so stand close."],
+        ["BUNNY HOP", x(1 + 2 * C.bhopMultPer) + " to " + x(C.bhopMultMax), "Three or more jumps in a row, each one the moment you land (so you keep your speed; holding jump works, a timed press keeps more): +" + C.bhopMultPer + "x for each hop after the third."],
+        ["DROP SHOT", x(C.dropShotMult), "Hit within " + C.dropShotWindow + " s of landing from a big drop (falling at " + C.dropShotFall + "+ u/s, about 3 m)."],
+        ["LADDER SHOT", x(C.ladderMult), "Hit while on a ladder."],
       ]],
       ["Aim", [
         ["MID RANGE / LONG SHOT / MEGA SNIPE", "no cap", "+" + C.distanceMultPerM + "x per meter past " + C.distanceFrom + " m: " +
           x(1 + 15 * C.distanceMultPerM) + " at 30 m, " + x(1 + 35 * C.distanceMultPerM) + " at 50 m, " + x(1 + 65 * C.distanceMultPerM) + " at 80 m."],
         ["NO-SCOPE", x(C.noScopeMult), "Sniper, fired from the hip (not aiming), from " + C.noScopeMinDist + " m or more. With Realistic shooting on, hip shots spread a little, and moving spreads every gun."],
         ["QUICKSCOPE", x(C.quickscopeMult), "Sniper, fired within " + C.quickscopeWindow + " s of aiming in (iron sights or a scope)."],
+        ["HIP SHOT", x(C.hipShotMult), "Any other gun that can aim, fired from the hip at " + C.hipShotMinDist + " m or more (the dual SMGs and the minigun only fire from the hip, so they don't count)."],
         ["FLICK", x(C.flickMult), "Turn your aim " + C.flickAngle + "° or more in the last " + C.flickWindow + " s before the hit."],
         ["SNAP FLICK", x(C.snapFlickMult), C.snapFlickAngle + "° or more in the last " + C.snapFlickWindow + " s: a faster, bigger flick (instead of FLICK)."],
         ["QUICK SWITCH", x(C.quickSwitchMult), "Hit within " + C.quickSwitchWindow + " s of finishing a weapon swap, with a gun that hadn't just fired."],
@@ -7347,17 +7384,21 @@
       ]],
       ["Combos", [
         ["DOUBLE / TRIPLE / QUAD", x(1 + C.comboMultPer) + " / " + x(1 + 2 * C.comboMultPer) + " / " + x(1 + 3 * C.comboMultPer), "Extra hits in the same jump, before you land (up to " + x(C.comboMultMax) + ")."],
+        ["QUICK DOUBLE / TRIPLE", x(1 + C.quickDoubleMultPer) + " / " + x(1 + 2 * C.quickDoubleMultPer), "On the ground: another target within " + C.quickDoubleWindow + " s of the last (up to " + x(C.quickDoubleMultMax) + ")."],
         ["STREAK", "up to " + x(C.streakMultMax), "+" + C.streakMultPer + "x for each hit in a row. A gun shot or thrown knife that misses ends it."],
+        ["BUZZER BEATER", x(C.buzzerMult), "A hit in the last " + C.buzzerTime + " s of a Score Attack."],
       ]],
-      ["Penalties", [
-        ["CLOSE", x(C.pointBlankMult) + " to x1", "Closer than " + C.distanceFrom + " m, harshest at " + C.pointBlankMin + " m. Knife swings are exempt."],
-        ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. A pad or ramp flight you ran onto doesn't count."],
+      ["Map features", [
         ["PORTAL SHOT", x(C.portalMult), "A hit within " + C.portalScoreWindow + " s of coming out of a portal."],
         ["STRIP SHOT", x(C.stripMult), "A hit within " + C.stripScoreWindow + " s of a launch strip throwing you."],
         ["PLATFORM SHOT", x(C.platformMult), "A hit while riding a lift or the shuttle."],
         ["ZERO-G", x(C.zeroGMult), "A hit after " + C.zeroGAirTime + " s in the air on a low-gravity map."],
         ["CHAIN", x(1 + C.chainMultPer) + " to " + x(C.chainMultMax), "Different movement tricks (slide, wall bounce, grapple, pad or ramp launch, portal, launch strip, lift, blast jump) within " + C.chainWindow + " s: +" + C.chainMultPer + "x for each one after the first."],
         ["NEW", "+" + C.newTrickMultPer + "x each, up to " + x(C.newTrickMultMax), "The first time in a run you land a trick you haven't landed yet this run. Variety pays."],
+      ]],
+      ["Penalties", [
+        ["CLOSE", x(C.pointBlankMult) + " to x1", "Closer than " + C.distanceFrom + " m, harshest at " + C.pointBlankMin + " m. Knife swings are exempt."],
+        ["STANDING STILL", x(C.standingStillMult), "Moving under " + C.standingStillSpeed + " u/s when you fire, hopping in place included. A pad or ramp flight you ran onto doesn't count."],
         ["FANNED", x(C.fanMult), "A revolver shot from fanning the hammer (hold the trigger past a moment): quick and wide, so worth half."],
         ["UNREALISTIC", x(C.unrealisticMult), "Realistic shooting is turned off in Settings > Gameplay, so every shot lands exactly where you aim."],
         ["SPRAY", x(C.sprayMults[1]) + " / " + x(C.sprayMults[2]), "Rifle and AK: the 2nd shot of a full-auto spray, then every shot after. Tap-firing doesn't count."],
