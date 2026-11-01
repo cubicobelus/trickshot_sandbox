@@ -364,7 +364,7 @@ def test_grapple(browser, base):
 
 
 def test_first_visit(browser, base):
-    """A brand-new visitor sees a welcome with one Play button, which starts the basics; skipping works; the whole menu is there after; a returning one sees the menu."""
+    """A brand-new visitor lands straight in the tutorial (one click to start); Esc ends it and opens the menu; Esc at the start skips it; a returning one sees the menu."""
     page = browser.new_page(viewport={"width": 1280, "height": 720})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -372,31 +372,32 @@ def test_first_visit(browser, base):
     page.add_init_script("window.__noForceTutorial = false;")
     page.goto(base + "/index.html")
     page.wait_for_timeout(1000)
-    check("a first-time visitor sees the welcome (one line, a Play button) and not the full menu",
-          page.is_visible("#welcome-play") and "trick" in page.inner_text(".welcome-pitch").lower() and not page.is_visible("#map-picker") and not page.is_visible("#loadout"))
-    page.click("#welcome-play")
+    check("a first-time visitor lands in the tutorial, not the menu: step 1 shows with a click-to-start prompt",
+          page.is_visible("#tutorial") and "1/6" in page.inner_text("#tut-count") and page.is_visible("#tut-start") and not page.is_visible("#map-picker"), page.inner_text("#tut-count"))
+    page.click("#tut-start")
     step(page, 30)
-    check("Play starts the basics", page.is_visible("#tutorial") and "1/6" in page.inner_text("#tut-count"), page.inner_text("#tut-count"))
+    check("one click starts playing, still in the tutorial", page.evaluate("!!document.pointerLockElement") and page.is_visible("#tutorial") and not page.is_visible("#tut-start"))
     page.evaluate("__unlock()")
     step(page, 5)
-    check("back in the menu, everything is there, with a line saying so", page.is_visible("#map-picker") and page.is_visible("#loadout") and page.is_visible("#menu-opened"))
+    check("Esc ends the tutorial and opens the whole menu, with a line saying so",
+          not page.is_visible("#tutorial") and page.is_visible("#map-picker") and page.is_visible("#menu-opened"))
     page.reload()
     page.wait_for_timeout(1000)
     check("on the next visit the menu shows straight away and the play button is plain",
-          not page.is_visible("#welcome") and page.is_visible("#map-picker") and "tutorial" not in page.inner_text("#start-btn").lower(), page.inner_text("#start-btn"))
+          page.is_visible("#map-picker") and not page.is_visible("#tutorial") and "tutorial" not in page.inner_text("#start-btn").lower(), page.inner_text("#start-btn"))
     page.click("#start-btn")
     step(page, 20)
     check("and clicking it plays without the tutorial", not page.is_visible("#tutorial"))
     page.close()
-    page = browser.new_page(viewport={"width": 1280, "height": 720})   # a second new player, who skips the intro
+    page = browser.new_page(viewport={"width": 1280, "height": 720})   # a second new player, who skips it at the start
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script(INIT)
     page.add_init_script("window.__noForceTutorial = false;")
     page.goto(base + "/index.html")
     page.wait_for_timeout(1000)
-    page.click("#welcome-skip")
-    step(page, 20)
-    check("Skip the intro goes straight into play", not page.is_visible("#tutorial") and page.evaluate("!!document.pointerLockElement"))
+    page.keyboard.press("Escape")
+    step(page, 5)
+    check("Esc at the click-to-start prompt skips the tutorial and opens the menu", not page.is_visible("#tutorial") and not page.is_visible("#tut-start") and page.is_visible("#map-picker"))
     check("no errors on a first visit", not errors, "; ".join(errors[:3]))
     page.close()
 

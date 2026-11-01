@@ -28,11 +28,6 @@
     </details>
 
 
-    <div id="welcome" hidden>   <!-- the first visit only: one line about the game and one button -->
-      <p class="welcome-pitch">A sandbox for trickshots. Every trick multiplies your shot: jump, slide, spin, ride a pad, hit from far away.</p>
-      <div class="start" id="welcome-play">Play</div>
-      <p class="welcome-sub">Starts with a two-minute intro. <button type="button" class="link" id="welcome-skip">Skip the intro</button> &middot; <button type="button" class="link" id="welcome-settings">Mouse speed and settings</button></p>
-    </div>
     <p id="menu-opened" hidden>The whole menu is open now: every gun and grenade, the maps, modes and multiplayer.</p>
 
     <div id="mode-tabs">
@@ -146,7 +141,7 @@
   <div id="kill-banner" hidden><div class="kb-top"></div><div class="kb-sub"></div></div>   <!-- ELIMINATED name, and the new gun in a gun game -->
   <div id="run-count"></div>   <!-- Score Attack countdown: 3, 2, 1, GO -->
   <div id="tutorial" hidden>
-    <div class="tut-head"><span id="tut-count"></span><span class="tut-skip">Enter skips a step &middot; Esc for the menu</span></div>
+    <div class="tut-head"><span id="tut-count"></span><span class="tut-skip">Enter skips a step &middot; Esc ends the tutorial</span></div>
     <div class="tut-title" id="tut-title"></div>
     <div class="tut-text" id="tut-text"></div>
     <div class="tut-track"><div id="tut-fill"></div></div>
@@ -176,6 +171,7 @@
 
 <!-- after leaving an in-game replay with Esc -->
 <div id="resume" hidden><div>Move or click to keep playing<small>Esc for the menu</small></div></div>
+<div id="tut-start" hidden><div>Click to start<small>Esc skips the tutorial</small></div></div>   <!-- the first visit: the game opens in the tutorial -->
 
 <!-- a one-line tip the first time you play a map -->
 <div id="map-tip" hidden></div>

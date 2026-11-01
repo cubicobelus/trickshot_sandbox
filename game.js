@@ -5819,7 +5819,7 @@
 
   // after a replay from the middle of a game was closed with Esc (the browser won't let Esc grab the mouse
   // back): one click carries on, Esc again goes to the menu
-  const resumeEl = document.getElementById("resume");
+  const resumeEl = document.getElementById("resume"), tutStartEl = document.getElementById("tut-start");
   resumeEl.addEventListener("click", (e) => { e.stopPropagation(); requestPlay(); });
   window.addEventListener("keydown", (e) => {
     if (resumeEl.hidden) return;
@@ -5831,8 +5831,7 @@
     if (uiMode === "mp" && !net.active) return;   // nothing to play until you're in a room
     if (!resultsEl.hidden) return;                  // the results screen has its own buttons
     initAudio();
-    if (FIRST_VISIT && !tutOffered && uiMode === "solo" && !tut.active) { tutOffered = true; endFirstRun(); startTutorial("basics"); return; }   // first time: the basics come first
-    endFirstRun();
+    if (FIRST_VISIT && !tutOffered && uiMode === "solo" && !tut.active) { tutOffered = true; startTutorial("basics"); return; }   // first time: the basics come first
     if (uiMode === "solo" && isRunMode() && !runInProgress() && !tut.active) startRun();
     goFullscreen();
     lockPointer();
@@ -5863,9 +5862,13 @@
   // What's on screen, decided in one place. "play": the game (mouse captured); "menu"; "results" (Score
   // Attack's, over the menu); "replay" (the game view with the replay bar, mouse free for its buttons);
   // "resume" (the game view with "click to keep playing", after a replay closed by Esc).
+  let tutStartHidGun = false;
   function showScreen(name) {
     blocker.style.display = name === "menu" || name === "results" ? "flex" : "none";
-    hud.style.display = name === "play" || name === "replay" || name === "resume" ? "block" : "none";
+    hud.style.display = name === "play" || name === "replay" || name === "resume" || name === "tutstart" ? "block" : "none";
+    tutStartEl.hidden = name !== "tutstart";
+    if (name === "tutstart") { currentWeapon().group.visible = false; tutStartHidGun = true; }   // (the gun sits in an odd pose until play starts: keep it out of the first look)
+    else if (tutStartHidGun) { currentWeapon().group.visible = true; tutStartHidGun = false; }
     hud.classList.toggle("replaying", name === "replay");
     resumeEl.hidden = name !== "resume";
     replayEl.hidden = name !== "replay";
@@ -5874,6 +5877,7 @@
   document.addEventListener("pointerlockchange", () => {
     pointerLocked = document.pointerLockElement === domEl;
     if (pointerLocked) { hasPlayed = true; setSettingsPopup(false); showMapTip(); }
+    if (!pointerLocked && tut.active && document.hasFocus() && !replay.active) endTutorial(false);   // Esc ends the tutorial (switching windows only pauses it)
     if (!pointerLocked) { mouseHeld = false; attackPressed = false; vm.wantADS = false; saveStats(); refreshTutorialUI(); }
     if (replay.active) return;   // a replay frees the mouse on purpose and runs its own screens
     showScreen(pointerLocked ? "play" : resultsEl.hidden ? "menu" : "results");
@@ -12933,14 +12937,14 @@
   ];
   const tutSteps = () => (tut.set === "more" ? TUT_MORE : TUT_BASICS);
   const tutEl = document.getElementById("tutorial");
-  function startTutorial(set) {
+  function startTutorial(set, noPlay) {
     if (runInProgress() || run.state === "done") quitRun();
     if (currentMap.id !== "arena") loadMap("arena");   // its steps use the arena's pads and walls
     tut.active = true; tut.set = set === "more" ? "more" : "basics"; tut.step = 0; tut.doneTimer = 0;
     tutBegin();
     try { if (tut.set === "basics" && !localStorage.getItem(TUT_KEY)) localStorage.setItem(TUT_KEY, "started"); } catch (e) { /* ignore */ }
     refreshTutorialUI();
-    requestPlay();
+    if (!noPlay) requestPlay();
   }
   function tutBegin() {
     tut.base = Object.assign({}, stats);
@@ -13023,17 +13027,19 @@
     startTutorial(seen === "done" ? "more" : "basics");
   });
 
-  // ---- the first visit: a welcome with one button (the intro), and the whole menu once you have played ----
-  const welcomeEl = document.getElementById("welcome");
+  // ---- the first visit: the game opens in the basics (the browser needs one click before it gives the game the mouse); Esc skips them ----
   function endFirstRun() {
-    if (!document.body.classList.contains("first-run")) return;
-    document.body.classList.remove("first-run");
-    document.getElementById("menu-opened").hidden = false;   // a one-time line: the rest of the menu is here now
+    if (!firstRun) return;
+    firstRun = false;
+    document.getElementById("menu-opened").hidden = false;   // a one-time line in the menu: here is everything
   }
-  if (FIRST_VISIT) { document.body.classList.add("first-run"); welcomeEl.hidden = false; }
-  document.getElementById("welcome-play").addEventListener("click", (e) => { e.stopPropagation(); requestPlay(); });
-  document.getElementById("welcome-skip").addEventListener("click", (e) => { e.stopPropagation(); tutOffered = true; requestPlay(); });
-  document.getElementById("welcome-settings").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("settings-open").click(); });
+  let firstRun = FIRST_VISIT;
+  if (FIRST_VISIT) setTimeout(() => { tutOffered = true; startTutorial("basics", true); showScreen("tutstart"); }, 0);   // (once the rest of the game is set up)
+  tutStartEl.addEventListener("click", (e) => { e.stopPropagation(); endFirstRun(); requestPlay(); });
+  window.addEventListener("keydown", (e) => {
+    if (tutStartEl.hidden || e.code !== "Escape") return;
+    endTutorial(false); endFirstRun(); showScreen("menu");   // no tutorial: the menu
+  });
   controlsListeners.push(() => { if (tut.active && tut.doneTimer <= 0) renderTutorial(); });
   refreshTutorialUI();
 

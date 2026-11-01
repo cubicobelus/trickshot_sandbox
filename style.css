@@ -550,11 +550,11 @@
   #tut-fill { height: 100%; width: 0; background: var(--gold); transition: width 0.4s; }
 
   /* ---------------- replays ---------------- */
-  #resume { position: fixed; inset: 0; z-index: 64; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-  #resume[hidden] { display: none; }
-  #resume div { background: rgba(15,15,20,0.88); border: 1px solid var(--gold); color: var(--gold); font: bold 18px var(--font-ui);
+  #resume, #tut-start { position: fixed; inset: 0; z-index: 64; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  #resume[hidden], #tut-start[hidden] { display: none; }
+  #resume div, #tut-start div { background: rgba(15,15,20,0.88); border: 1px solid var(--gold); color: var(--gold); font: bold 18px var(--font-ui);
     padding: 14px 26px; border-radius: 10px; text-align: center; }
-  #resume small { display: block; color: var(--text-3); font-weight: normal; font-size: 12px; margin-top: 2px; }
+  #resume small, #tut-start small { display: block; color: var(--text-3); font-weight: normal; font-size: 12px; margin-top: 2px; }
   #watch-row { margin-top: 8px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
   #hud.replaying > *:not(#scope) { display: none !important; }
   #replay { position: fixed; inset: 0; z-index: 65; pointer-events: none; color: var(--white); }
@@ -802,15 +802,7 @@
   #flash-white { position: fixed; inset: 0; background: var(--white); opacity: 0; pointer-events: none; z-index: 20; }
   #smoke-veil { position: fixed; inset: 0; background: radial-gradient(ellipse at center, var(--smoke-1) 30%, var(--smoke-2) 100%); opacity: 0; pointer-events: none; z-index: 3; }
 
-  /* the first visit: only the welcome shows, until you have played once */
-  body.first-run #instructions > details, body.first-run #mode-tabs, body.first-run #loadout, body.first-run #attach-open,
-  body.first-run #panel-solo, body.first-run #panel-mp, body.first-run #touch-note:not([hidden]) ~ #welcome { display: none !important; }
-  #welcome { margin: 18px auto 6px; max-width: 520px; }
-  #welcome[hidden], body:not(.first-run) #welcome { display: none; }
-  .welcome-pitch { font-size: 17px; line-height: 1.5; color: var(--text-1); margin: 0 0 20px; }
-  #welcome-play { font-size: 24px; padding: 16px 0; }
-  .welcome-sub { font-size: 13px; color: var(--text-2); margin: 12px 0 0; }
-  .link { background: none; border: 0; padding: 0; font: inherit; color: var(--gold); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-  .link:hover { color: var(--white); }
   #menu-opened { font-size: 13px; color: var(--gold); margin: 4px 0 10px; }
   #menu-opened[hidden] { display: none; }
+  #tut-start { align-items: flex-end; padding-bottom: 26vh; }   /* below the crosshair, clear of the tutorial card */
+  #tut-start div { font-size: 22px; padding: 14px 34px; }
