@@ -3820,7 +3820,7 @@
       name: "CROSSBOW", group: crossbowGroup, projectile: true,   // projectile: it fires a bolt that flies (speed and drop: BOLT_SPEED, BOLT_GRAVITY) instead of a hit-scan
       restPos: new THREE.Vector3(0.22, -0.25, -0.52), restRot: new THREE.Euler(0.03, -0.08, 0.01),
       adsPos: new THREE.Vector3(0.0, -0.07, -0.30), adsRot: new THREE.Euler(0, 0, 0),
-      canADS: true, scope: false, adsZoom: 0.62, fireRate: 0.9, auto: false, isMelee: false, usesAmmo: true,
+      canADS: true, scope: false, adsZoom: 0.62, fireRate: 0.5, auto: false, isMelee: false, usesAmmo: true,
       drawNow: 1, magSize: 1, ammoLabel: "BOLTS", pellets: 1, spread: 0.006, spreadAds: 0.0005, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
       scoreScale: 0.9, recoil: 0.5, kick: 0.4, flashScale: 0, brake: false, smoke: 0,
       action: "none", ejectOnShot: false, casing: "small",
@@ -3829,15 +3829,15 @@
       recoilKick: { up: 0.02, grow: 0, side: 0.002, max: 0.05, recover: 5, hold: 0.2 },
       mag: crossbowMag, magRestY: crossbowMag.position.y,
       reload: {
-        time: 1.9, magOut: 0.15, magDrop: 0.3, magUp: 0.8, magSeat: 1.25, travel: 0.1, rise: 0.12, charge: 0.75,
+        time: 1.1, magOut: 0.09, magDrop: 0.17, magUp: 0.46, magSeat: 0.72, travel: 0.1, rise: 0.12, charge: 0.43,
         keys: [
           [0.00,  0,     0,     0,    0,     0   ],
-          [0.25, -0.05,  0.05,  0.14, 0.10, -0.45],
-          [0.90, -0.05,  0.04,  0.10, 0.10, -0.50],
-          [1.25, -0.05,  0.06,  0.14, 0.10, -0.42],
-          [1.50, -0.02,  0.02,  0.08, 0.04,  0.15],
-          [1.70, -0.02,  0.02,  0.08, 0.04,  0.15],
-          [1.90,  0,     0,     0,    0,     0   ],
+          [0.14, -0.05,  0.05,  0.14, 0.10, -0.45],
+          [0.52, -0.05,  0.04,  0.10, 0.10, -0.50],
+          [0.72, -0.05,  0.06,  0.14, 0.10, -0.42],
+          [0.87, -0.02,  0.02,  0.08, 0.04,  0.15],
+          [0.98, -0.02,  0.02,  0.08, 0.04,  0.15],
+          [1.10,  0,     0,     0,    0,     0   ],
         ],
       },
       inspectDuration: 1.8, inspects: GUN_INSPECTS,
@@ -4041,17 +4041,17 @@
       inspectDuration: 1.7, inspects: GUN_INSPECTS, inspectReach: 0.45,
     },
     bow: {
-      name: "BOW", group: bowGroup, draw: 0.7,   // hold the trigger to draw for 0.7 s, let go to loose the arrow (let go early and nothing flies); you walk at half speed while it is drawn or aimed
+      name: "BOW", group: bowGroup, draw: 0.5,   // hold the trigger to draw for 0.5 s, let go to loose the arrow (let go early and nothing flies); you walk at half speed while it is drawn or aimed
       restPos: new THREE.Vector3(0.16, -0.19, -0.55), restRot: new THREE.Euler(0.02, -0.06, 0.12),
       adsPos: new THREE.Vector3(0.025, -0.05, -0.44), adsRot: new THREE.Euler(0, 0, 0),   // the pin sight over the arrow, the riser beside it
-      canADS: true, scope: false, adsZoom: 0.7, fireRate: 0.45, auto: false, isMelee: false, usesAmmo: true,
+      canADS: true, scope: false, adsZoom: 0.7, fireRate: 0.3, auto: false, isMelee: false, usesAmmo: true,
       magSize: 5, ammoLabel: "ARROWS", pellets: 1, spread: 0.002, spreadAds: 0.0004, bloom: 0, bloomMax: 0, bloomRecover: 0.1,
       scoreScale: 1.0, recoil: 0.25, kick: 0.3, flashScale: 0.1, brake: false, smoke: 0,
       action: "none", ejectOnShot: false, casing: "small",
       muzzle: new THREE.Vector3(0, 0.015, -0.14), eject: new THREE.Vector3(0.03, 0.03, 0.0),
       sound: { recording: "pistol", rate: 2.4, lowcut: 1100, length: 0.22, gain: 0.35 },
       recoilKick: { up: 0.012, grow: 0, side: 0.002, max: 0.04, recover: 6, hold: 0.15 },
-      reload: { style: "shells", start: 0.3, perShell: 0.45, end: 0.2, pose: { x: -0.05, y: 0.05, rx: 0.3, ry: 0.1, rz: -0.3 } },   // one arrow at a time
+      reload: { style: "shells", start: 0.25, perShell: 0.32, end: 0.15, pose: { x: -0.05, y: 0.05, rx: 0.3, ry: 0.1, rz: -0.3 } },   // one arrow at a time
       inspectDuration: 1.8, inspects: GUN_INSPECTS,
     },
   });
@@ -7967,7 +7967,7 @@
   }
 
   const _thFwd = new THREE.Vector3(), _thRight = new THREE.Vector3(), _thLook = new THREE.Vector3();
-  const BOLT_SPEED = 75, BOLT_GRAVITY = 4, BOLT_LIFE = 1.6, BOLT_CONVERGE = 40;   // metres a second, how hard it drops, seconds in the air (about 100 m), where the muzzle's aim meets the crosshair's
+  const BOLT_SPEED = 170, BOLT_GRAVITY = 2, BOLT_LIFE = 0.8, BOLT_CONVERGE = 40;   // metres a second, how hard it drops, seconds in the air (about 135 m), where the muzzle's aim meets the crosshair's (fast and flat: it still flies, but needs little lead)
   const setThrownModel = (k, bolt) => { k.bolt = bolt; k.model.visible = !bolt; k.boltModel.visible = bolt; };
   const _boltDir = new THREE.Vector3(), _boltAim = new THREE.Vector3();
   function updateCrossbowDraw() {   // the string springs forward on a shot, comes back during a reload, and stays latched otherwise
