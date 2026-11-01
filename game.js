@@ -1473,6 +1473,7 @@
     maxBots: 11,   // (a big map holds more bots in practice)
     id: "arena", name: "Arena", blurb: "The trickshot arena: bounce corridors, kicker ramps, jump pads and a sniper tower.",
     half: 40, floor: "grass", wallH: 12, targetMaxY: 9.5,
+    rampSurface: "concrete",   // (ramps in the map's own material; the striped steel deck is for the industrial maps)
     theme: { skyTop: 0x3f7dc6, skyHorizon: 0xcfe2ee, fog: [45, 140], sunDir: [30, 50, 20], sunColor: 0xfff0d8, sunIntensity: 1.0, hemi: [0xd6e4f7, 0x4d5c3a, 0.58], surfaces: { grass: "#58853f" } },
     walls: [
       // bounce corridors: parallel walls to chain wall bounces down (the inner wall is 3.5 m lower so you can climb out over it)
@@ -1495,8 +1496,9 @@
     flags: [[-20, 0, 0.25], [20, 0, 0.25]],
     id: "courtyard", name: "Courtyard", blurb: "Close quarters at dusk: a ring of walls with four gates, a lane round the outside. Great with shotguns and Deagles.",
     half: 25, floor: "grass", wallH: 8, targetMaxY: 6.5,
+    rampSurface: "tiles",
     theme: { clouds: { n: 7, color: 0xffd6c2, shade: 0x6a4a66 }, skyTop: 0x3c4a8c, skyHorizon: 0xf0b58a, fog: [26, 90], sunDir: [-40, 16, 30], sunColor: 0xffc99a, sunIntensity: 1.0, hemi: [0xffd9b8, 0x6a5a44, 0.55],
-      surfaces: { grass: "#c9b48a", concrete: "#b7a89a", brick: "#a35c48", deck: "#7d8591" } },
+      surfaces: { grass: "#c9b48a", concrete: "#b7a89a", brick: "#a35c48", deck: "#7d8591", tiles: "#b4a089" } },
     walls: [
       // the ring (4.5 m: nobody sees over it), with a 5 m gate in the middle of each side
       wallAt(-7.25, -12, 9.5, 1, 4.5, "brick"), wallAt(7.25, -12, 9.5, 1, 4.5, "brick"),
@@ -1574,6 +1576,7 @@
     id: "icelake", name: "Ice Lake", blurb: "A frozen lake where nothing stops: slides never end and turning is slow. Ice pillars, snowbanks, an iceberg with a ramp up.",
     half: 40, floor: "ice", wallH: 7, targetMaxY: 9, physics: { friction: 0.7, momentumFriction: 0.25, groundAccel: 3.2, slideFriction: 0.22, maxSpeed: 25, speedMultMax: 2.085 },   // the speed cap is 25 here, and the speed bonus reaches x2.085 with it (a map's own maxSpeed and speedMultMax)
     boundary: "rock",   // grey cliffs round the lake, so the snow and the ice are not one more pale wall
+    rampSurface: "concrete",
     theme: { skyTop: 0x4f8fd0, skyHorizon: 0xdcebf6, fog: [60, 180], sunDir: [20, 40, -35], sunColor: 0xfff1dc, sunIntensity: 1.05, hemi: [0xd6e8f8, 0x6f8494, 0.7], exposure: 0.92,
       surfaces: { ice: "#86b6cf", concrete: "#eef3f6", brick: "#6fa8c8", deck: "#c9d9e6", facade: "#dfeaf2", facadeb: "#9fd0e8", roof: "#d6e4ee", rock: "#7d8792" } },
     walls: [
@@ -1745,8 +1748,9 @@
     flags: [[0, -35, 0.25], [0, 35, 0.25]],
     id: "harbour", name: "Harbour", blurb: "A container terminal at sunset: rows of containers make lanes and cover, some stacked two high (ladders) and some with a ramp up the side. A flag yard at each end.",
     half: 40, floor: "slab", wallH: 12, targetMaxY: 8,
+    rampSurface: "boards",
     theme: { clouds: { n: 8, color: 0xffe0c4, shade: 0x8a6a6a }, skyTop: 0x4a7fc0, skyHorizon: 0xf7d9b4, fog: [45, 140], sunDir: [-40, 28, 30], sunColor: 0xffd9a8, sunIntensity: 1.0, hemi: [0xfbe3c8, 0x5e6368, 0.62],
-      surfaces: { slab: "#6d7378", concrete: "#a39d94", deck: "#7d848b", cred: "#b3392f", cblue: "#2f5f9e", cgreen: "#3a7d4f", corange: "#d9822b", cyellow: "#d6b13a" } },
+      surfaces: { slab: "#6d7378", concrete: "#a39d94", deck: "#7d848b", cred: "#b3392f", cblue: "#2f5f9e", cgreen: "#3a7d4f", corange: "#d9822b", cyellow: "#d6b13a", boards: "#7a6044" } },
     walls: HARBOUR.walls,
     decks: HARBOUR.decks,
     ramps: HARBOUR.ramps,
