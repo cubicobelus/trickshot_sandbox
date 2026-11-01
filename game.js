@@ -8929,8 +8929,10 @@
   function makeAvatarGun(id, dark, steel, wood) {
     const g = new THREE.Group();
     const P = (geo, mat, x, y, z, rx) => { const m = addPart(g, geo, mat, x, y, z, rx || 0, 0, 0); m.userData.role = mat === dark ? "dark" : mat === steel ? "mid" : mat === wood ? "wood" : null; return m; };   // (the role is what a skin repaints)
-    const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
     const HP = Math.PI / 2;
+    // a part: a long thin square one is a barrel, so it is round; the rest get chamfered edges. Shared by every avatar
+    const B = (w, h, d) => { const key = w + "|" + h + "|" + d; return AV_GUN_GEO.get(key) || AV_GUN_GEO.set(key, w === h && w <= 0.045 && d >= 4 * w
+      ? new THREE.CylinderGeometry(w / 2, w / 2, d, 10).rotateX(HP) : bevelBox(w, h, d, Math.min(w, h, d) * 0.18)).get(key); };
     if (id === "rifle") {            // sniper: long barrel, wooden stock, and a scope when one is fitted
       P(B(0.07, 0.09, 0.55), dark, 0, 0, -0.15); P(B(0.04, 0.04, 0.6), steel, 0, 0.01, -0.7);
       g.userData.scope = P(new THREE.CylinderGeometry(0.035, 0.035, 0.34, 10), steel, 0, 0.1, -0.25, HP); g.userData.stock = P(B(0.06, 0.1, 0.2), wood, 0, -0.02, 0.2);
@@ -8992,10 +8994,15 @@
       P(B(0.05, 0.055, 0.34), steel, 0, 0.02, -0.12); P(B(0.046, 0.04, 0.3), dark, 0, -0.012, -0.1);
       P(B(0.01, 0.014, 0.014), dark, 0, 0.055, -0.27); P(B(0.042, 0.13, 0.065), dark, 0, -0.09, 0.04, 0.22);
     }
+    if (AV_GRIP.has(id)) {   // a pistol grip where the right hand holds a long gun (they had none: the hand held air under the receiver)
+      const r = (AV_HAND_HOLD[id] || AV_HAND_HOLD.default).r;
+      P(B(0.04, 0.11, 0.05), dark, 0, -0.085, r[2] + 0.01, 0.3);
+    }
     g.position.set(0.24, -0.25, -0.1);
     g.visible = false;
     return g;
   }
+  const AV_GUN_GEO = new Map(), AV_GRIP = new Set(["rifle", "ar", "smg", "dmr", "burst", "lmg", "ak", "launcher", "railgun", "crossbow", "combat"]);
 
   // the rope and spear of another player's grapple, made when they first use it
   function ensureRope(p) {
