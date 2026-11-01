@@ -473,30 +473,69 @@
   skyDome.renderOrder = -1;
   scene.add(skyDome);
 
-  // clouds are a map's choice (`theme.clouds`: how many, their colour and the shade under them, or false for none);
-  // each is a few soft flattened puffs on a ring well outside the map
+  // clouds are a map's choice (`theme.clouds`: how many, their colour and the shade under them, or false for none).
+  // Each is a flat painted card on a ring well outside the map, turned to face the middle: heaped puffs, lit from above
+  // and darker toward a flattish base. The card's red channel is how lit a spot is; the shader mixes shade to colour by it
   const clouds = new THREE.Group();
-  const cloudGeo = new THREE.IcosahedronGeometry(1, 2);
-  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x9aa6b4, fog: false });
   const CLOUD_DEFAULT = { n: 9, color: 0xffffff, shade: 0x9aa6b4 };
+  const cloudUniforms = { cloudShade: { value: new THREE.Color(CLOUD_DEFAULT.shade) } };
+  const cloudTex = [0, 1, 2, 3, 4, 5].map((v) => {
+    let seed = 3001 + v * 977;
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const W = 512, H = 256, c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d"), base = H * 0.72, puffs = [];
+    const n = 7 + Math.floor(rand() * 5), flat = v % 3 === 2;   // every third one is a long, low bank
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n, mid = 1 - Math.abs(t - 0.5) * 2;   // bigger toward the middle, so it heaps up
+      const r = H * (flat ? 0.12 + 0.1 * mid : 0.14 + 0.24 * mid) * (0.75 + rand() * 0.5);
+      puffs.push([W * (0.12 + 0.76 * t) + (rand() - 0.5) * 30, base - r * (0.35 + rand() * 0.4), r]);
+    }
+    for (const [x, y, r] of puffs.slice()) for (let k = 0; k < 3; k++) {   // small puffs round the upper edge break up the outline
+      const ang = Math.PI * (1.1 + rand() * 0.8), rr = r * (0.22 + rand() * 0.2);
+      puffs.push([x + Math.cos(ang) * r * 0.85, Math.min(y + Math.sin(ang) * r * 0.85, base - rr * 0.5), rr]);
+    }
+    const blob = (x, y, r, inner, outer) => {
+      const gr = g.createRadialGradient(x, y, r * 0.2, x, y, r);
+      gr.addColorStop(0, inner); gr.addColorStop(0.7, inner); gr.addColorStop(1, outer);
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    };
+    for (const [x, y, r] of puffs) blob(x, y, r, "rgba(150,150,150,1)", "rgba(200,200,200,0)");   // the body, in shade
+    g.globalCompositeOperation = "source-atop";
+    for (const [x, y, r] of puffs) blob(x - r * 0.08, y - r * 0.2, r * 0.95, "rgba(255,255,255,0.95)", "rgba(255,255,255,0.35)");   // lit tops
+    const fade = g.createLinearGradient(0, base - H * 0.2, 0, base + 4);   // the base darkens and is cut off flat
+    fade.addColorStop(0, "rgba(0,0,0,0)"); fade.addColorStop(1, "rgba(40,40,40,0.55)");
+    g.fillStyle = fade; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "destination-out";
+    const cut = g.createLinearGradient(0, base - 6, 0, base + 10);
+    cut.addColorStop(0, "rgba(0,0,0,0)"); cut.addColorStop(1, "rgba(0,0,0,1)");
+    g.fillStyle = cut; g.fillRect(0, base - 6, W, H);
+    g.globalCompositeOperation = "source-over";
+    return new THREE.CanvasTexture(c);   // (left linear: the shader reads it as a number, not a colour)
+  });
+  const cloudMats = cloudTex.map((map) => {
+    const m = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide });
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.cloudShade = cloudUniforms.cloudShade;
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform vec3 cloudShade;")
+        .replace("#include <map_fragment>", "vec4 ct = texture2D(map, vUv); diffuseColor = vec4(mix(cloudShade, diffuse, ct.r), opacity * ct.a);");
+    };
+    return m;
+  });
+  const cloudPlane = new THREE.PlaneGeometry(1, 0.5);
   function buildClouds(opt) {
     while (clouds.children.length) clouds.remove(clouds.children[0]);
     if (opt === false) return;
     const o = Object.assign({}, CLOUD_DEFAULT, opt || {});
-    cloudMat.color.setHex(o.color); cloudMat.emissive.setHex(o.shade);
+    cloudUniforms.cloudShade.value.setHex(o.shade);
+    for (const m of cloudMats) m.color.setHex(o.color);
     for (let i = 0; i < o.n; i++) {
-      const c = new THREE.Group();
-      const puffs = 4 + Math.floor(Math.random() * 3);
-      for (let j = 0; j < puffs; j++) {
-        const r = (j === 0 || j === puffs - 1 ? 6 : 9) + Math.random() * 6;   // smaller at the ends, so a cloud tapers
-        const m = new THREE.Mesh(cloudGeo, cloudMat);
-        m.scale.set(r * 1.3, r * 0.5, r);
-        m.position.set((j - (puffs - 1) / 2) * 13 + Math.random() * 4, Math.random() * 3 + (j % 2) * 2, Math.random() * 7);
-        c.add(m);
-      }
-      const ang = (i / o.n) * Math.PI * 2 + Math.random() * 0.5, dist = 220 + Math.random() * 90;
-      c.position.set(Math.cos(ang) * dist, 70 + Math.random() * 40, Math.sin(ang) * dist);
+      const v = Math.floor(Math.random() * cloudMats.length), w = (v % 3 === 2 ? 130 : 80) + Math.random() * 60;
+      const c = new THREE.Mesh(cloudPlane, cloudMats[v]);
+      c.scale.set(w * (Math.random() < 0.5 ? -1 : 1), w, 1);   // (mirrored at random, so six cards make many clouds)
+      const ang = (i / o.n) * Math.PI * 2 + Math.random() * 0.5, dist = 230 + Math.random() * 90;
+      c.position.set(Math.cos(ang) * dist, 60 + Math.random() * 45, Math.sin(ang) * dist);
       c.lookAt(0, c.position.y, 0);
+      c.renderOrder = -0.5;   // over the sky, under everything else
       clouds.add(c);
     }
   }
