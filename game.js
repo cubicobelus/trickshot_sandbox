@@ -1241,17 +1241,17 @@
     base.position.y = 0.07;
     base.receiveShadow = true;
     const glowMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(T.color).multiplyScalar(0.35), map: padPlateTex, emissive: T.color, emissiveMap: padPlateTex, emissiveIntensity: 0.8, roughness: 0.45, metalness: 0.5 });
-    const glow = new THREE.Mesh(new THREE.CylinderGeometry(T.radius - 0.05, T.radius - 0.05, 0.16, 40), [padBaseMat, glowMat, padBaseMat]);
-    glow.position.y = 0.08;
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(T.radius - 0.05, 40), glowMat);   // the plate: one flat disc on the base (one draw, not three)
+    glow.rotation.x = -Math.PI / 2; glow.position.y = 0.145;
     const rimMat = new THREE.MeshStandardMaterial({ color: tier === "mega" ? 0xd8a23a : 0x9aa3ad, roughness: 0.35, metalness: 0.8 });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(T.radius, 0.07, 8, 48), rimMat);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(T.radius, 0.07, 6, 36), rimMat);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.16;
     g.add(base, glow, ring);
     // rings of light that rise off the pad and fade, so it reads from across the map as "this throws you up"; more and higher on a mega pad
     const rings = [];
     for (let i = 0; i < (tier === "mega" ? 4 : 3); i++) {
-      const rm = new THREE.Mesh(new THREE.TorusGeometry(T.radius - 0.2, 0.045, 6, 48), new THREE.MeshBasicMaterial({ color: T.beamColor, transparent: true, opacity: 0, depthWrite: false }));
+      const rm = new THREE.Mesh(new THREE.TorusGeometry(T.radius - 0.2, 0.045, 4, 32), new THREE.MeshBasicMaterial({ color: T.beamColor, transparent: true, opacity: 0, depthWrite: false }));
       rm.rotation.x = Math.PI / 2; g.add(rm); rings.push(rm);
     }
     levelGroup.add(g);
