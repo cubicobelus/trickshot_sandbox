@@ -288,6 +288,7 @@
     // sound levels, on top of the master volume
     volGuns: 1, volMove: 1, volHits: 1, volKnife: 1, volGear: 1,
     loadout: "rifle",   // the one gun carried alongside the knife
+    nade: "frag",       // what G throws: frag, sticky, smoke or flash
     playMode: "free",   // "free" play, or a Score Attack run: "sa60"
     // how many of each target kind are up at once
     tgtNormal: 6, tgtMoving: 4, tgtSmall: 3, tgtTiny: 2,
@@ -1919,6 +1920,7 @@
     });
     levelGroup.clear();
     levelMats.clear(); waterAnim.length = 0;
+    if (!first) clearUtility();   // (smoke and a flash from the last map are gone; the first map comes before they are set up)
     groundMeshes.length = 0; wallBoxes.length = 0; bounceBoxes.length = 0; ramps.length = 0; jumpPads.length = 0; ladders.length = 0; movers.length = 0; portals.length = 0; boosts.length = 0; gates.length = 0;
     currentMap = m;
     CFG.arenaHalfSize = m.half;
@@ -5460,6 +5462,12 @@
   // the menu shows a few favourites, plus your gun if it is not one of them, and a More button for the rest
   const QUICK_GUNS = ["rifle", "ar", "shotgun"];
   const GUN_CLASSES = [["Snipers and marksman", ["rifle", "dmr"]], ["Rifles", ["ar", "ak", "burst"]], ["SMGs", ["smg", "dual", "mpistol"]], ["Machine guns", ["lmg", "minigun"]], ["Specialty", ["crossbow", "bow", "launcher", "rpg", "railgun"]], ["Shotguns", ["shotgun", "combat", "sawed"]], ["Pistols", ["pistol", "revolver"]]];
+  const NADE_TIPS = {
+    frag: "Frag: bounces and rolls, goes off after 2.2 s. Hold G to throw further; past halfway the pin is out and the fuse burns in your hand.",
+    sticky: "Sticky: glues itself to the first wall or floor it touches and goes off 1.8 s after the throw; a direct hit on a target or a player sets it off at once.",
+    smoke: "Smoke: pops 1.4 s after the throw into a cloud about 10 m across that lasts 13 s. Bots can't see through it.",
+    flash: "Flash: pops 1.5 s after the throw and blinds anyone near who is looking at it, you and bots included. Turn away.",
+  };
   const loadoutEl = document.getElementById("loadout"), loadoutPopupEl = document.getElementById("loadout-popup"), loadoutGroupsEl = document.getElementById("loadout-groups");
   const gunButton = (id) => {
     const b = document.createElement("button");
@@ -5477,7 +5485,7 @@
     const label = document.createElement("span"); label.className = "lo-label"; label.textContent = "Loadout"; loadoutEl.appendChild(label);
     for (const id of QUICK_GUNS.includes(SETTINGS.loadout) ? QUICK_GUNS : [...QUICK_GUNS, SETTINGS.loadout]) loadoutEl.appendChild(gunButton(id));
     const more = document.createElement("button");
-    more.type = "button"; more.id = "loadout-more"; more.className = "lo-more"; more.textContent = "More guns";
+    more.type = "button"; more.id = "loadout-more"; more.className = "lo-more"; more.textContent = "More guns, grenade";
     more.addEventListener("click", () => setLoadoutPopup(true));
     loadoutEl.appendChild(more);
     const locked = ggOn;   // (a gun game picks your gun for you)
@@ -5497,6 +5505,20 @@
         for (const id of ids) row.appendChild(gunButton(id));
         sec.appendChild(row); loadoutGroupsEl.appendChild(sec);
       }
+      const sec = document.createElement("div"); sec.className = "lo-group";   // the grenade G throws
+      sec.innerHTML = "<h3>Grenade (" + esc(bindLabel("grenade", true)) + ")</h3>";
+      const row = document.createElement("div"); row.className = "lo-row";
+      for (const k of NADE_ORDER) {
+        const b = document.createElement("button");
+        b.type = "button"; b.dataset.nade = k; b.className = "lo-gun lo-nade" + (k === SETTINGS.nade ? " active" : "");
+        b.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor">' + NADE_ICONS[k] + "</svg>" + NADES[k].name;
+        b.title = NADE_TIPS[k];
+        b.addEventListener("click", () => { SETTINGS.nade = k; saveSettings(); setLoadoutPopup(true); });
+        row.appendChild(b);
+      }
+      sec.appendChild(row);
+      const tip = document.createElement("p"); tip.className = "g-note"; tip.textContent = NADE_TIPS[SETTINGS.nade]; sec.appendChild(tip);
+      loadoutGroupsEl.prepend(sec);
     }
     loadoutPopupEl.hidden = !open;
   }
@@ -5628,6 +5650,7 @@
     if (typeof saved.unlimitedAmmo === "boolean") SETTINGS.unlimitedAmmo = saved.unlimitedAmmo;
     if (typeof saved.linkY === "boolean") sensLink.checked = saved.linkY;
     if (typeof saved.loadout === "string" && GUNS.includes(saved.loadout)) SETTINGS.loadout = saved.loadout;
+    if (["frag", "sticky", "smoke", "flash"].includes(saved.nade)) SETTINGS.nade = saved.nade;
     if (saved.skin && typeof saved.skin === "object") for (const g of GUNS) if (typeof saved.skin[g] === "string" && (GUN_SKINS[g] || []).includes(saved.skin[g])) SETTINGS.skin[g] = saved.skin[g];
     if (saved.attach && typeof saved.attach === "object") {   // only what the catalogue has
       for (const g of GUNS) {
@@ -8087,13 +8110,37 @@
     frag: { speed: 22, gravity: 16, fuse: 2.2, bounce: 0.5, push: 12 },
     rpg: { speed: 44, gravity: 1.5, fuse: 4, rocket: true, push: 18 },
     satchel: { speed: 22, gravity: 14, fuse: 4, sticky: true, push: 24 },   // the blast pack (C): sticks where it lands, goes off when you press C again (or after 4 s)
+    sticky: { speed: 22, gravity: 16, fuse: 1.8, glue: true, push: 12 },     // a sticky grenade (G): glues itself to the first wall or floor it touches, goes off at once on a target or a player
+    smoke: { speed: 22, gravity: 16, fuse: 1.4, bounce: 0.35, push: 0, util: true },   // a smoke grenade (G): a cloud nobody sees through, bots included
+    flash: { speed: 22, gravity: 16, fuse: 1.5, bounce: 0.4, push: 0, util: true },    // a flashbang (G): blinds whoever is looking at it, bots included
   };
-  const BLAST_CODE = { launcher: 2, frag: 3, rpg: 4, satchel: 5 }, BLAST_KIND = { 2: "launcher", 3: "frag", 4: "rpg", 5: "satchel" };   // how a blast travels over the network
+  const BLAST_CODE = { launcher: 2, frag: 3, rpg: 4, satchel: 5, sticky: 6, smoke: 7, flash: 8 }, BLAST_KIND = { 2: "launcher", 3: "frag", 4: "rpg", 5: "satchel", 6: "sticky", 7: "smoke", 8: "flash" };   // how a blast travels over the network
   const GREN_RADIUS = 0.12, FRAG_COOLDOWN = 9, PACK_COOLDOWN = 6;
+  // what G can throw: picked in the loadout, and a host can switch any of them (and the blast pack) off for a room
+  const NADES = { frag: { name: "Frag", cd: FRAG_COOLDOWN }, sticky: { name: "Sticky", cd: 10 }, smoke: { name: "Smoke", cd: 14 }, flash: { name: "Flash", cd: 12 } };
+  const NADE_ORDER = ["frag", "sticky", "smoke", "flash"];
+  const PACK_ICON = '<rect x="2.5" y="7" width="19" height="11" rx="2"/><rect x="10" y="6" width="4" height="13" fill="#000" opacity="0.45"/><circle cx="17.2" cy="10.8" r="1.5" fill="#000" opacity="0.5"/>';
+  const NADE_ICONS = {
+    frag: '<ellipse cx="12" cy="14.2" rx="6" ry="7.6"/><rect x="9.6" y="2.6" width="4.8" height="3.4" rx="1"/><path d="M14.8 3.6 L19.4 5.8 L18.4 7.9 L14.6 6.1Z"/><rect x="5.6" y="13.4" width="12.8" height="1.6" fill="#000" opacity="0.45"/>',
+    sticky: '<ellipse cx="12" cy="12.5" rx="6.4" ry="7.2"/><rect x="9.6" y="2" width="4.8" height="3.2" rx="1"/><circle cx="8" cy="20.6" r="1.6"/><circle cx="12.4" cy="21.6" r="1.3"/><circle cx="16" cy="20.2" r="1.1"/><circle cx="12" cy="12.5" r="2.2" fill="#000" opacity="0.4"/>',
+    smoke: '<rect x="8" y="9" width="8" height="13" rx="1.6"/><rect x="8" y="12" width="8" height="1.8" fill="#000" opacity="0.45"/><circle cx="9" cy="5.5" r="2.6"/><circle cx="14" cy="4.4" r="3.1"/><circle cx="18.4" cy="6.6" r="2.2"/>',
+    flash: '<rect x="8.5" y="8" width="7" height="14" rx="1.4"/><rect x="8.5" y="11" width="7" height="1.8" fill="#000" opacity="0.45"/><path d="M12 1.2v4M4.6 4.2l2.6 3M19.4 4.2l-2.6 3M2.6 10.6h3.6M17.8 10.6h3.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>',
+  };
+  const THROW_KINDS = ["frag", "sticky", "smoke", "flash", "pack"];   // what a room's rules can switch off
+  const nadeOn = (k) => !net.active || !net.rules || !Array.isArray(net.rules.nades) || net.rules.nades.includes(k);
+  function currentNade() {   // the grenade G throws now: your pick, or the first the room allows
+    if (nadeOn(SETTINGS.nade)) return SETTINGS.nade;
+    return NADE_ORDER.find(nadeOn) || null;
+  }
   const grenades = [];
   const grenGeo = new THREE.SphereGeometry(1, 14, 10), grenMat = new THREE.MeshStandardMaterial({ color: 0x4a6342, roughness: 0.6, metalness: 0.3 });
   grenGeo.scale(0.085, 0.13, 0.085); grenGeo.computeVertexNormals();   // an egg: longer than it is wide, like the real thing (the hit sphere stays round)
   const grenBand = new THREE.MeshStandardMaterial({ color: 0xd9b43a, roughness: 0.6 });
+  const grenGooGeo = new THREE.SphereGeometry(1, 14, 10); grenGooGeo.scale(0.1, 0.14, 0.1);
+  const grenGooMat = new THREE.MeshStandardMaterial({ color: 0xe0782a, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.82, emissive: 0x5a1e00 });
+  const grenCanGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.17, 14), grenBandGeo = new THREE.CylinderGeometry(0.047, 0.047, 0.03, 14);
+  const grenCanMat = new THREE.MeshStandardMaterial({ color: 0x6b736b, roughness: 0.55, metalness: 0.4 });
+  const grenSmokeBand = new THREE.MeshStandardMaterial({ color: 0x5fb36a, roughness: 0.5 }), grenFlashBand = new THREE.MeshStandardMaterial({ color: 0x4f8ef0, roughness: 0.5 });
   for (let i = 0; i < 10; i++) {
     const mesh = new THREE.Mesh(grenGeo, grenMat);
     const nade = new THREE.Group();   // what sits on the egg: grooves round it, a fuse cap on top and the safety lever down one side
@@ -8114,9 +8161,15 @@
     const ps = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.095, 0.165), metalDark); pack.add(ps);
     const pl = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b30 })); pl.position.set(0.07, 0.055, 0); pack.add(pl);
     pack.visible = false; mesh.add(pack);
+    const goo = new THREE.Mesh(grenGooGeo, grenGooMat); goo.visible = false; mesh.add(goo);   // the sticky grenade: the egg in a coat of glue
+    const can = new THREE.Group();   // the smoke and flash grenades: a can with a band and a cap
+    const cb = new THREE.Mesh(grenCanGeo, grenCanMat); can.add(cb);
+    const band = new THREE.Mesh(grenBandGeo, grenSmokeBand); can.add(band);
+    const ccap = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.03, 0.03, 10), metalMid); ccap.position.y = 0.095; can.add(ccap);
+    can.visible = false; mesh.add(can);
     mesh.visible = false; mesh.frustumCulled = false;
     scene.add(mesh);
-    grenades.push({ mesh, rocket, pack, stuck: false, spin: new THREE.Vector3(), rollAt: 0, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", remote: false, snap: null, kind: "launcher", smokeT: 0 });
+    grenades.push({ mesh, rocket, pack, goo, can, band, stuck: false, spin: new THREE.Vector3(), rollAt: 0, vel: new THREE.Vector3(), from: new THREE.Vector3(), age: 0, state: "idle", remote: false, snap: null, kind: "launcher", smokeT: 0 });
   }
   const blastFx = [];   // expanding balls of light
   for (let i = 0; i < 4; i++) {
@@ -8125,11 +8178,13 @@
     scene.add(mesh);
     blastFx.push({ mesh, age: 99, r: 4.5 });
   }
-  function retireGrenade(g) { g.state = "idle"; g.mesh.visible = false; g.rocket.visible = false; g.pack.visible = false; g.stuck = false; }
+  function retireGrenade(g) { g.state = "idle"; g.mesh.visible = false; g.rocket.visible = false; g.pack.visible = false; g.goo.visible = false; g.can.visible = false; g.stuck = false; }
   function dressGrenade(g, kind) {   // which model: a ball, a rocket or a blast pack
     const B = BLAST[kind];
-    g.mesh.children[0].visible = !B.rocket && !B.sticky; g.rocket.visible = !!B.rocket; g.pack.visible = !!B.sticky;
-    g.mesh.geometry = B.rocket || B.sticky ? emptyGeo : grenGeo;
+    g.mesh.children[0].visible = !B.rocket && !B.sticky && !B.util; g.rocket.visible = !!B.rocket; g.pack.visible = !!B.sticky;
+    g.goo.visible = !!B.glue; g.can.visible = !!B.util;
+    if (B.util) g.band.material = kind === "flash" ? grenFlashBand : grenSmokeBand;
+    g.mesh.geometry = B.rocket || B.sticky || B.util ? emptyGeo : grenGeo;
     g.mesh.rotation.set(0, 0, 0); g.stuck = false;
     g.rollAt = 0;
     if (B.rocket || B.sticky) g.spin.set(0, 0, 0);
@@ -8240,7 +8295,8 @@
   const FRAG_CHARGE_TIME = 1.1, FRAG_MIN_SPEED = 6, FRAG_MAX_SPEED = 36;
   const FRAG_COOK_FROM = FRAG_CHARGE_TIME / 2;   // the pin is out from here: a full-power throw has burned 0.55 s of its 2.2 s fuse, so it still has 1.65 s in the air; held past 2.75 s it goes off in your hand
   function fragAllowed() { return !(replay.active || localDead || (net.active && (net.phase !== "play" || countingDown() || net.gungame))); }
-  function startFragCharge() { if (fragCd <= 0 && fragAllowed()) fragCharge = 0; }
+  let nadeCdMax = FRAG_COOLDOWN, nadeIconShown = "frag";
+  function startFragCharge() { if (fragCd <= 0 && fragAllowed() && currentNade()) fragCharge = 0; }
   function releaseFrag() {
     if (fragCharge < 0) return;
     const power = Math.min(fragCharge / FRAG_CHARGE_TIME, 1), cooked = Math.max(0, fragCharge - FRAG_COOK_FROM);
@@ -8248,20 +8304,21 @@
     throwFrag(FRAG_MIN_SPEED + (FRAG_MAX_SPEED - FRAG_MIN_SPEED) * power, cooked);
   }
   function throwFrag(speed, cooked, inHand) {
-    if (fragCd > 0 || !fragAllowed()) return;
-    fragCd = FRAG_COOLDOWN;
+    const kind = currentNade();
+    if (fragCd > 0 || !fragAllowed() || !kind) return;
+    fragCd = nadeCdMax = NADES[kind].cd;
     camera.getWorldDirection(_thFwd);
     camera.getWorldQuaternion(_camQuat);
     _thRight.set(1, 0, 0).applyQuaternion(_camQuat);
     camera.getWorldPosition(_gLookAt).addScaledVector(_thFwd, 0.5).addScaledVector(_thRight, 0.12 * handSign());
     _gLookAt.y -= 0.12;
     _boltDir.copy(_thFwd); _boltDir.y += 0.14; _boltDir.normalize();   // a little lob
-    const fg = launchBlast("frag", _gLookAt, _boltDir, speed || BLAST.frag.speed);
-    fg.age = cooked || 0;   // (a cooked grenade has already burned part of its fuse)
-    fg.inHand = !!inHand;   // (one that goes off in your hand: in a room it kills you)
+    const fg = launchBlast(kind, _gLookAt, _boltDir, speed || BLAST[kind].speed);
+    fg.age = kind === "frag" ? cooked || 0 : 0;   // (a cooked grenade has already burned part of its fuse; only the frag cooks)
+    fg.inHand = kind === "frag" && !!inHand;   // (one that goes off in your hand: in a room it kills you)
     tone("triangle", 330, 120, 0.12 * SETTINGS.volGear, 0.14, 0, 0.1);
     noiseHit(1800, 1.0, 0.10 * SETTINGS.volGear, 0.09, "highpass", 0, 0.1);
-    if (run.state === "live") run.shots++;
+    if (run.state === "live" && !BLAST[kind].util) run.shots++;   // (smoke and a flash aren't shots at a target)
   }
   function updateNadeChip(dt) {
     if (fragCd > 0) fragCd = Math.max(0, fragCd - dt);
@@ -8270,15 +8327,17 @@
       else {
         const before = fragCharge;
         fragCharge += dt;
-        if (before < FRAG_COOK_FROM && fragCharge >= FRAG_COOK_FROM) tone("square", 1100, 1100, 0.05 * SETTINGS.volGear, 0.05, 0, 0.1);   // the pin is out
-        if (fragCharge - FRAG_COOK_FROM >= BLAST.frag.fuse) { fragCharge = -1; throwFrag(FRAG_MIN_SPEED, BLAST.frag.fuse, true); }   // held too long: it goes off in your hand
+        const cooks = currentNade() === "frag";   // (the others' fuses start when they leave your hand: holding G only sets the distance)
+        if (cooks && before < FRAG_COOK_FROM && fragCharge >= FRAG_COOK_FROM) tone("square", 1100, 1100, 0.05 * SETTINGS.volGear, 0.05, 0, 0.1);   // the pin is out
+        if (cooks && fragCharge - FRAG_COOK_FROM >= BLAST.frag.fuse) { fragCharge = -1; throwFrag(FRAG_MIN_SPEED, BLAST.frag.fuse, true); }   // held too long: it goes off in your hand
       }
     }
-    const show = fragAllowed(), charging = show && fragCharge >= 0;
-    setAb(abEls.nade, !show ? "" : charging ? "charging" : fragCd > 0 ? "cool" : "ready", "grenade", 1 - fragCd / FRAG_COOLDOWN);
+    const kindNow = currentNade(), show = fragAllowed() && !!kindNow, charging = show && fragCharge >= 0;
+    if (kindNow && kindNow !== nadeIconShown) { nadeIconShown = kindNow; abEls.nade.querySelector(".ab-ico").innerHTML = NADE_ICONS[kindNow]; abEls.nade.title = NADES[kindNow].name + " grenade"; }
+    setAb(abEls.nade, !show ? "" : charging ? "charging" : fragCd > 0 ? "cool" : "ready", "grenade", 1 - fragCd / nadeCdMax);
     if (tbEls.box.hidden === charging) tbEls.box.hidden = !charging;   // the bars under the crosshair: how far it will go, then how long the fuse has left
     if (charging) {
-      const cook = Math.max(0, fragCharge - FRAG_COOK_FROM), left = Math.max(0, 1 - cook / BLAST.frag.fuse);
+      const cook = kindNow === "frag" ? Math.max(0, fragCharge - FRAG_COOK_FROM) : 0, left = Math.max(0, 1 - cook / BLAST.frag.fuse);
       tbEls.dist.style.width = (Math.min(fragCharge / FRAG_CHARGE_TIME, 1) * 100).toFixed(1) + "%";
       if (tbEls.cookBox.hidden === (cook > 0)) tbEls.cookBox.hidden = !(cook > 0);
       tbEls.cook.style.width = (left * 100).toFixed(1) + "%";
@@ -8288,7 +8347,7 @@
   // the blast pack (C): throw it, it sticks where it lands, press C again to set it off. It launches you hard and only bruises others (no damage to you).
   let packCd = 0, packOut = null;
   function useSatchel() {
-    if (!fragAllowed()) return;
+    if (!fragAllowed() || !nadeOn("pack")) return;
     if (packOut && packOut.state === "flying" && !packOut.remote) { explodeGrenade(packOut); return; }
     if (packCd > 0) return;
     camera.getWorldDirection(_thFwd);
@@ -8304,7 +8363,7 @@
     if (packCd > 0) packCd = Math.max(0, packCd - dt);
     if (packOut && (packOut.state === "idle" || packOut.kind !== "satchel")) packOut = null;
     if (packOut && !fragAllowed()) { retireGrenade(packOut); packOut = null; }   // (dying or a new round: it is gone, nothing goes off)
-    const show = fragAllowed();
+    const show = fragAllowed() && nadeOn("pack");
     setAb(abEls.pack, !show ? "" : packOut ? "armed" : packCd > 0 ? "cool" : "ready", "satchel", 1 - packCd / PACK_COOLDOWN);
     if (show && packOut) abFuseEl.style.transform = "scaleX(" + Math.max(0, 1 - packOut.age / BLAST.satchel.fuse).toFixed(2) + ")";   // (a line that burns down while it waits)
   }
@@ -8321,6 +8380,13 @@
   // the blast, for the thrower: what it hurts, scores and claims
   const _blastC = new THREE.Vector3();
   function explodeGrenade(g) {
+    if (BLAST[g.kind].util) {   // smoke or a flash: no blast, nothing hurt, not a miss
+      const at = g.mesh.position.clone();
+      retireGrenade(g);
+      popUtility(g.kind, at);
+      if (net.active) sendToHost({ t: "blast", k: g.kind, o: [r2(at.x), r2(at.y), r2(at.z)], h: [] });
+      return;
+    }
     const pos = g.mesh.position.clone(), kind = g.kind, D = DAMAGE[kind], R = D.radius, B = BLAST[kind], inHand = !!g.inHand;
     retireGrenade(g);
     if (kind === "satchel") { packCd = PACK_COOLDOWN; packOut = null; }
@@ -8384,11 +8450,104 @@
     if (!hitCount) breakStreak();
     else flashCrosshair();
   }
+  // SMOKE AND FLASH. A smoke cloud is a ring of big soft puffs that swell, hang for a while and thin out; a bot cannot see through
+  // one (smokeBlocks). A flash blinds whoever is near and looking at it (white, fading over a few seconds) and stops bots seeing for as long
+  const SMOKE_R = 5, SMOKE_LIFE = 13, SMOKE_PUFFS = 34, FLASH_R = 22;
+  const smokeClouds = [], cloudPuffs = [];
+  for (let i = 0; i < SMOKE_PUFFS * 3; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0xb9bdc0, transparent: true, opacity: 0, depthWrite: false }));
+    sp.visible = false; scene.add(sp); cloudPuffs.push({ sp, busy: false });
+  }
+  const flashLight = new THREE.PointLight(0xffffff, 0, 30, 2);
+  scene.add(flashLight);
+  let flashLightAge = 99, flashBlind = 0;
+  const flashEl = document.getElementById("flash-white"), smokeVeilEl = document.getElementById("smoke-veil");
+  function popUtility(kind, pos) {
+    if (kind === "smoke") {
+      if (smokeClouds.length >= 3) { const old = smokeClouds.shift(); for (const q of old.puffs) { q.p.busy = false; q.p.sp.visible = false; } }
+      const gy = Math.max(surfaceBelow(pos.x, pos.y + 0.3, pos.z), pos.y - 3);
+      const c = { x: pos.x, y: gy, z: pos.z, age: 0, puffs: [] };
+      for (const q of cloudPuffs) {
+        if (q.busy || c.puffs.length >= SMOKE_PUFFS) continue;
+        q.busy = true; q.sp.visible = true; q.sp.material.opacity = 0; q.sp.material.rotation = Math.random() * 6.28;
+        const a = Math.random() * 6.28, r = SMOKE_R * Math.sqrt(Math.random()) * 0.8;
+        c.puffs.push({ p: q, ox: Math.cos(a) * r, oz: Math.sin(a) * r, oy: 0.4 + Math.random() * 3.2, size: 4.2 + Math.random() * 2.6, spin: (Math.random() - 0.5) * 0.3 });
+      }
+      smokeClouds.push(c);
+      noiseHit(900, 0.5, 0.35 * SETTINGS.volGear * (1 / (1 + pos.distanceTo(yawObject.position) / 20)), 1.6, "bandpass", 0, 0.6);   // a long hiss
+      return;
+    }
+    // the flash: a white light, sparks, a crack, then who it blinds
+    flashLight.position.copy(pos); flashLight.position.y += 0.3; flashLightAge = 0;
+    sparkBurst(pos, 0xffffff, 18, 9);
+    const d0 = pos.distanceTo(yawObject.position);
+    noiseHit(3200, 0.9, 0.9 * SETTINGS.volGuns / (1 + d0 / 18), 0.18, "highpass", 0, 0.2); tone("sine", 2600, 2400, 0.25 * SETTINGS.volGuns / (1 + d0 / 18), 0.6, 0.05, 0.6);
+    if (!localDead) {
+      camera.getWorldPosition(_grTmp); camera.getWorldDirection(_grAxis);
+      const d = _grTmp.distanceTo(pos);
+      if (d < FLASH_R && botLineClear(pos.x, pos.y + 0.15, pos.z, _grTmp.x, _grTmp.y, _grTmp.z)) {
+        const look = _grAxis.dot(_grSlide.copy(pos).sub(_grTmp).normalize());   // 1: staring at it, -1: back turned
+        const k = look > 0.55 ? 1 : look > 0 ? 0.55 : 0.2, sN = k * Math.pow(1 - d / FLASH_R, 0.6);
+        flashBlind = Math.max(flashBlind, 0.3 + 3.4 * sN);
+      }
+    }
+    if (net.active && net.role === "host") for (const q of net.players.values()) {   // bots: as blind, for as long
+      if (!q.bot || !q.alive || !q.ai) continue;
+      const d = Math.hypot(q.x - pos.x, q.y + 1.6 - pos.y, q.z - pos.z);
+      if (d >= FLASH_R || !botLineClear(pos.x, pos.y + 0.15, pos.z, q.x, q.y + 1.6, q.z)) continue;
+      const fx = -Math.sin(q.ai.aimYaw), fz = -Math.cos(q.ai.aimYaw), look = (fx * (pos.x - q.x) + fz * (pos.z - q.z)) / Math.max(Math.hypot(pos.x - q.x, pos.z - q.z), 0.1);
+      const k = look > 0.55 ? 1 : look > 0 ? 0.55 : 0.2;
+      q.ai.blindT = Math.max(q.ai.blindT || 0, 0.3 + 3.4 * k * Math.pow(1 - d / FLASH_R, 0.6));
+    }
+  }
+  function updateUtility(dt) {
+    for (let i = smokeClouds.length - 1; i >= 0; i--) {
+      const c = smokeClouds[i];
+      c.age += dt;
+      const grow = Math.min(c.age / 1.4, 1), fade = Math.min(Math.max((SMOKE_LIFE - c.age) / 2.5, 0), 1);
+      for (const q of c.puffs) {
+        q.p.sp.position.set(c.x + q.ox * (0.4 + 0.6 * grow), c.y + q.oy * (0.5 + 0.5 * grow) + c.age * 0.05, c.z + q.oz * (0.4 + 0.6 * grow));
+        q.p.sp.scale.setScalar(q.size * (0.35 + 0.65 * grow));
+        q.p.sp.material.opacity = Math.min(c.age / 0.5, 1) * fade;
+        q.p.sp.material.rotation += q.spin * dt;
+      }
+      if (c.age >= SMOKE_LIFE) { for (const q of c.puffs) { q.p.busy = false; q.p.sp.visible = false; } smokeClouds.splice(i, 1); }
+    }
+    {   // standing inside a cloud: a grey veil over the screen, thickest in the middle of it
+      let veil = 0;
+      camera.getWorldPosition(_grTmp);
+      for (const c of smokeClouds) {
+        const d = Math.hypot(_grTmp.x - c.x, (_grTmp.y - c.y - 1.6) * 1.3, _grTmp.z - c.z);
+        const k = Math.min(Math.max((SMOKE_R * 1.05 - d) / (SMOKE_R * 0.55), 0), 1) * Math.min(c.age / 1.2, 1) * Math.min(Math.max((SMOKE_LIFE - c.age) / 2.5, 0), 1);
+        veil = Math.max(veil, k);
+      }
+      const v = localDead ? "0" : (0.9 * veil).toFixed(3);
+      if (smokeVeilEl.style.opacity !== v) smokeVeilEl.style.opacity = v;
+    }
+    flashLightAge += dt;
+    flashLight.intensity = flashLightAge < 0.15 ? 14 * (1 - flashLightAge / 0.15) : 0;
+    if (flashBlind > 0 || flashEl.style.opacity !== "0") {
+      flashBlind = Math.max(0, flashBlind - dt);
+      flashEl.style.opacity = localDead ? "0" : Math.min(1, flashBlind / 1.1).toFixed(3);
+    }
+  }
+  // does a smoke cloud stand between two points? (a bot's eyes and its target)
+  function smokeBlocks(ax, ay, az, bx, by, bz) {
+    for (const c of smokeClouds) {
+      if (c.age < 0.8 || c.age > SMOKE_LIFE - 1.5) continue;
+      const cx = c.x - ax, cy = c.y + 1.6 - ay, cz = c.z - az, dx = bx - ax, dy = by - ay, dz = bz - az, L = dx * dx + dy * dy + dz * dz || 1;
+      const t = Math.min(Math.max((cx * dx + cy * dy + cz * dz) / L, 0), 1);
+      if (Math.hypot(cx - dx * t, cy - dy * t, cz - dz * t) < SMOKE_R * 0.8) return true;
+    }
+    return false;
+  }
+  function clearUtility() { for (const c of smokeClouds) for (const q of c.puffs) { q.p.busy = false; q.p.sp.visible = false; } smokeClouds.length = 0; flashBlind = 0; flashEl.style.opacity = "0"; smokeVeilEl.style.opacity = "0"; }
   const _grRay = new THREE.Ray(), _grStep = new THREE.Vector3(), _grHit = new THREE.Vector3(), _grTmp = new THREE.Vector3(), _grNormal = new THREE.Vector3();
   const _grAxis = new THREE.Vector3(), _grSlide = new THREE.Vector3(), _grQ = new THREE.Quaternion();
   const ROLL_DRAG = 2.2, ROLL_SPIN_MAX = 25;   // a grenade on the floor rolls on (it loses a bit over two tenths of its speed each tenth of a second) and rolls down a slope; the turn it shows is capped so it still reads
   function updateGrenades(dt) {
     updateBlastFx(dt);
+    updateUtility(dt);
     updateNadeChip(dt);
     updatePackChip(dt);
     if (!groundBoxes) groundBoxes = groundMeshes.map((m) => new THREE.Box3().setFromObject(m));
@@ -8435,7 +8594,7 @@
         if (direct) { o.addScaledVector(d, Math.max(hitDist, 0)); explodeGrenade(g); continue; }
       }
       if (kind === "wall" && hitDist <= len + rad) {
-        if (B.sticky) {   // a blast pack sticks to the wall or floor, its back to the surface
+        if (B.sticky || B.glue) {   // a blast pack (or a sticky grenade) sticks to the wall or floor, its back to the surface
           o.copy(_grHit).addScaledVector(_grNormal, 0.05);
           g.vel.set(0, 0, 0); g.stuck = true;
           g.mesh.lookAt(_gLookAt.copy(o).add(_grNormal));
@@ -8692,6 +8851,7 @@
     launcher: { blast: 1, max: 100, min: 25, radius: 4.5 },
     rpg: { blast: 1, max: 100, min: 30, radius: 5.2 },
     frag: { blast: 1, max: 90, min: 20, radius: 4 },   // the thrown grenade (G), not a gun
+    sticky: { blast: 1, max: 85, min: 20, radius: 3.6 },   // the sticky grenade (G): a little smaller, since it stays where you put it
     satchel: { blast: 1, max: 15, min: 5, radius: 4.5 },   // the blast pack (C): a launch for you, only a scratch for the others   // splash: full damage in the middle of the blast, a quarter at its edge (a ball 4.5 m wide each way)
     crossbow: { body: 55, head: 100 },   // like the Deagle: two body hits or one to the head; it flies, so it has to be led
     shotgun: { pellet: 11, headMult: 1.5, near: 8, far: 40, farMult: 0.25, pellets: 9 },   // per pellet, thinning with distance
@@ -8845,11 +9005,19 @@
     dm: "Targets are off. 100 health: the sniper kills in one hit, other guns take a few, and health comes back slowly if you stay out of the fight. Only kills score, with your trick multipliers.",
   };
   // "race", "dm" or "tdm" (team deathmatch is deathmatch with teams), and a kill limit
-  const cleanRules = (r) => ({ lowGrav: !!(r && r.lowGrav), oneShot: !!(r && r.oneShot), headOnly: !!(r && r.headOnly), fastResp: !!(r && r.fastResp), siphon: !!(r && r.siphon) });
+  const cleanRules = (r) => ({ lowGrav: !!(r && r.lowGrav), oneShot: !!(r && r.oneShot), headOnly: !!(r && r.headOnly), fastResp: !!(r && r.fastResp), siphon: !!(r && r.siphon),
+    nades: r && Array.isArray(r.nades) ? THROW_KINDS.filter((k) => r.nades.includes(k)) : THROW_KINDS.slice() });   // the throwables the room allows (all, unless the host switched some off)
   const siphonDefault = (modeId) => modeId === "dm" || modeId === "koth" || modeId === "gungame" || modeId === "br";   // on by default everywhere but the team modes (and the race and range, where nobody fights)
   function chooseRules(r) { net.pendingRules = cleanRules(r); }
   const RULE_NAMES = [["lowGrav", "low gravity"], ["oneShot", "one-shot kills"], ["headOnly", "headshots only"], ["fastResp", "fast respawn"], ["siphon", "siphon"]];
-  const ruleText = (r) => RULE_NAMES.filter(([k]) => r && r[k]).map(([, n]) => n).join(", ");
+  const THROW_NAMES = { frag: "frag", sticky: "sticky", smoke: "smoke", flash: "flash", pack: "blast pack" };
+  const ruleText = (r) => {
+    const parts = RULE_NAMES.filter(([k]) => r && r[k]).map(([, n]) => n);
+    const offs = r && Array.isArray(r.nades) ? THROW_KINDS.filter((k) => !r.nades.includes(k)) : [];
+    if (offs.length === THROW_KINDS.length) parts.push("no throwables");
+    else if (offs.length) parts.push("no " + offs.map((k) => THROW_NAMES[k]).join(" or "));
+    return parts.join(", ");
+  };
   // the map's own physics, then low gravity on top when the room asks for it (everyone's physics runs on their own computer)
   function applyRulePhysics() {
     Object.assign(CFG, BASE_PHYS, (currentMap && currentMap.physics) || {});
@@ -9351,7 +9519,7 @@
   }
 
   // ---------------- events: what actually happens on every peer ----------------
-  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", launcher: "exploded", rpg: "rocketed", frag: "fragged", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned", revolver: "gunned down", dual: "perforated", railgun: "railed", minigun: "shredded", sawed: "blew away", combat: "peppered", mpistol: "stitched", bow: "skewered" };
+  const KILL_VERBS = { rifle: "sniped", ar: "shot", ak: "sprayed", smg: "riddled", dmr: "dropped", burst: "tapped", lmg: "mowed", crossbow: "bolted", launcher: "exploded", rpg: "rocketed", frag: "fragged", sticky: "stuck", shotgun: "blasted", pistol: "popped", knife: "knifed", knifeThrow: "pinned", revolver: "gunned down", dual: "perforated", railgun: "railed", minigun: "shredded", sawed: "blew away", combat: "peppered", mpistol: "stitched", bow: "skewered" };
   function feedLine(html) {
     const el = document.createElement("div");
     el.innerHTML = html;
@@ -9491,7 +9659,7 @@
   function lifeLogReset() { lifeLog.dealt.clear(); lifeLog.taken.clear(); lifeLog.hits.clear(); }
   function deathRecap(k, m) {
     const lines = [];
-    const gun = WEAPONS[m.w] ? WEAPONS[m.w].name : m.w === "frag" ? "Grenade" : m.knife ? "Knife" : "";
+    const gun = WEAPONS[m.w] ? WEAPONS[m.w].name : m.w === "frag" ? "Grenade" : m.w === "sticky" ? "Sticky grenade" : m.knife ? "Knife" : "";
     let dist = null;
     if (k) dist = Math.hypot(k.x - yawObject.position.x, k.z - yawObject.position.z);
     lines.push((gun ? gun : "A hit") + (m.head && !m.knife ? " (headshot)" : "") + (dist !== null ? " from " + Math.round(dist) + " m" : ""));
@@ -9647,7 +9815,8 @@
       case "blast": {
         const o = vec3(m.o, 1000);
         if (!o || m.id === net.id) break;
-        showBlast(_tmpV1.set(o[0], o[1], o[2]), DAMAGE[m.k] && DAMAGE[m.k].blast ? DAMAGE[m.k].radius : 4.5);
+        if (m.k === "smoke" || m.k === "flash") popUtility(m.k, _tmpV1.set(o[0], o[1], o[2]));
+        else showBlast(_tmpV1.set(o[0], o[1], o[2]), DAMAGE[m.k] && DAMAGE[m.k].blast ? DAMAGE[m.k].radius : 4.5);
         for (const g of grenades) if (g.state === "flying" && g.remote && g.mesh.position.distanceTo(_tmpV1) < 3) { retireGrenade(g); break; }
         break;
       }
@@ -10102,11 +10271,12 @@
       case "throw": {
         const o = vec3(m.o, 1000), v = vec3(m.v, 200);
         const now = nowMs();
-        const nade = m.b >= 2 && m.b <= 5;
-        if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap && !(m.b === 3 && (net.gungame || now - (p.lastFragAt || -1e9) < 6000)) && !(m.b === 5 && (net.gungame || now - (p.lastPackAt || -1e9) < 2500))) {
+        const nade = m.b >= 2 && m.b <= 8, gNade = m.b === 3 || m.b >= 6;   // gNade: thrown with G (frag, sticky, smoke, flash)
+        const off = (k) => net.rules && Array.isArray(net.rules.nades) && !net.rules.nades.includes(k);   // switched off for this room
+        if (p.alive && o && v && now - p.lastThrowAt >= WEAPONS.knife.throwGap && !(gNade && (net.gungame || now - (p.lastFragAt || -1e9) < 6000 || off(BLAST_KIND[m.b]))) && !(m.b === 5 && (net.gungame || now - (p.lastPackAt || -1e9) < 2500 || off("pack")))) {
           if (now - p.lastThrowAt > THROW_WINDOW) p.knivesUp = 0;
           if (m.b !== 1 && !nade) p.knivesUp = Math.min(p.knivesUp + 1, 4);   // (a crossbow bolt is claimed through its shot message, a grenade through its blast, not as a knife)
-          if (nade) { p.grenades = Math.min((p.grenades || 0) + 1, 4); p.lastGrenadeAt = now; p.lastGrenadeO = o; if (m.b === 3) p.lastFragAt = now; if (m.b === 5) p.lastPackAt = now; }
+          if (nade) { p.grenades = Math.min((p.grenades || 0) + 1, 4); p.lastGrenadeAt = now; p.lastGrenadeO = o; if (gNade) p.lastFragAt = now; if (m.b === 5) p.lastPackAt = now; }
           p.lastThrowAt = now; p.lastFireAt = now; p.protectUntil = 0;
           hostBroadcast({ t: "throw", id: fromId, o, v, b: nade || m.b === 1 ? m.b : 0 });
         }
@@ -10134,7 +10304,8 @@
         const L = p.lastGrenadeO;
         if (L && Math.hypot(o[0] - L[0], o[1] - L[1], o[2] - L[2]) > 160) break;
         p.grenades--;
-        const bk = m.k === "frag" || m.k === "rpg" || m.k === "satchel" ? m.k : "launcher";
+        if (m.k === "smoke" || m.k === "flash") { hostBroadcast({ t: "blast", id: fromId, o, k: m.k }); break; }   // nothing to hurt: everyone just sees it (and the host's bots get flashed)
+        const bk = m.k === "frag" || m.k === "rpg" || m.k === "satchel" || m.k === "sticky" ? m.k : "launcher";
         hostBroadcast({ t: "blast", id: fromId, o, k: bk });
         const done = new Set();
         for (const h of (Array.isArray(m.h) ? m.h : []).slice(0, 8)) {
@@ -10695,7 +10866,8 @@
     if (net.br) { preferK *= BOT_MODE.br.prefer; retreatHp = Math.max(retreatHp, BOT_MODE.br.retreatHp); }
     ai.reactK = reactK; ai.errK = errK;
     const dx = tgt.x - p.x, dz = tgt.z - p.z, eyeY = p.y + 1.6, aimY = tgt.y + 1.15;
-    const los = botLineClear(p.x, eyeY, p.z, tgt.x, aimY, tgt.z);
+    if (ai.blindT > 0) ai.blindT -= dt;
+    const los = !(ai.blindT > 0) && botLineClear(p.x, eyeY, p.z, tgt.x, aimY, tgt.z) && !smokeBlocks(p.x, eyeY, p.z, tgt.x, aimY, tgt.z);   // (flashed, or smoke in the way: it sees nothing)
     // what it knows: where it last saw the target, or heard it fire. Out of sight it goes there, not straight to where the target
     // really is; once that trail is cold (it got there and found nobody, or a while passed) it goes back to hunting
     if (!ai.seen || ai.seen.id !== tgt.id) ai.seen = { id: tgt.id, x: tgt.x, y: tgt.y, z: tgt.z, t: now, reachedAt: 0 };
@@ -11149,6 +11321,20 @@
     for (const [id, key] of [["ps-r-lowgrav", "lowGrav"], ["ps-r-oneshot", "oneShot"], ["ps-r-headonly", "headOnly"], ["ps-r-fastresp", "fastResp"], ["ps-r-siphon", "siphon"]]) {
       document.getElementById(id).checked = !!d.rules[key];
       if (key !== "lowGrav") document.getElementById(id).parentElement.hidden = race;
+    }
+    {   // the throwables, a toggle each
+      const row = document.getElementById("ps-nades");
+      row.textContent = "";
+      if (!Array.isArray(d.rules.nades)) d.rules.nades = THROW_KINDS.slice();
+      for (const k of THROW_KINDS) {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "ps-nade" + (d.rules.nades.includes(k) ? " active" : ""); b.dataset.nade = k;
+        b.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor">' + (k === "pack" ? PACK_ICON : NADE_ICONS[k]) + "</svg>" + (k === "pack" ? "Blast pack" : NADES[k].name);
+        b.title = (d.rules.nades.includes(k) ? "On" : "Off") + ": click to switch";
+        b.addEventListener("click", () => { d.rules.nades = d.rules.nades.includes(k) ? d.rules.nades.filter((x) => x !== k) : THROW_KINDS.filter((x) => x === k || d.rules.nades.includes(x)); renderSetup(); });
+        row.appendChild(b);
+      }
+      document.getElementById("ps-nades-row").hidden = race;
     }
     const sum = [limitText(mode, d.limit)];
     if (ps.kind === "practice") sum.push(mode.id === "range" ? d.bots + " dummies" : d.bots + " bot" + (d.bots === 1 ? "" : "s"), mode.id === "range" ? "" : d.level);

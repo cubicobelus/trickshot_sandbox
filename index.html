@@ -98,6 +98,7 @@
   </div>
 </div>
 
+<div id="smoke-veil"></div>   <!-- standing in smoke: under the HUD, over the world -->
 <div id="hud">
   <div id="speedlines"></div>
   <div id="scope"><div id="scope-flash"></div><div id="scope-lines">
@@ -113,6 +114,7 @@
   <div id="trick-feed"><div id="trick-chain"></div></div>
   <div id="hitmark"></div>
   <div id="speed">
+    <div id="flash-white"></div>   <!-- a flashbang's white-out -->
     <div id="abilities">   <!-- grenade, blast pack and grapple: one tile each, a look for every state, no writing but the key -->
       <div class="ab" id="ab-nade" hidden><svg class="ab-ico" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="14.2" rx="6" ry="7.6"/><rect x="9.6" y="2.6" width="4.8" height="3.4" rx="1"/><path d="M14.8 3.6 L19.4 5.8 L18.4 7.9 L14.6 6.1Z"/><rect x="5.6" y="13.4" width="12.8" height="1.6" fill="#000" opacity="0.45"/></svg><kbd></kbd><svg class="ab-ring" viewBox="0 0 38 38"><circle class="trk" cx="19" cy="19" r="16"/><circle class="fill" cx="19" cy="19" r="16"/></svg></div>
       <div class="ab" id="ab-pack" hidden><svg class="ab-ico" viewBox="0 0 24 24" fill="currentColor"><rect x="2.5" y="7" width="19" height="11" rx="2"/><rect x="10" y="6" width="4" height="13" fill="#000" opacity="0.45"/><circle cx="17.2" cy="10.8" r="1.5" fill="#ff3b30"/></svg><kbd></kbd><svg class="ab-ring" viewBox="0 0 38 38"><circle class="trk" cx="19" cy="19" r="16"/><circle class="fill" cx="19" cy="19" r="16"/></svg><b class="ab-fuse"></b></div>
@@ -252,7 +254,7 @@
 <!-- the full gun list, opened by the loadout's More button -->
 <div id="loadout-popup" hidden>
   <div class="g-panel" role="dialog" aria-label="Choose a gun">
-    <div class="g-head"><h2>Choose a gun</h2><button type="button" class="g-close" id="loadout-close" aria-label="Close">&times;</button></div>
+    <div class="g-head"><h2>Choose a gun and a grenade</h2><button type="button" class="g-close" id="loadout-close" aria-label="Close">&times;</button></div>
     <div id="loadout-groups"></div>   <!-- built in game.js -->
   </div>
 </div>
@@ -319,6 +321,7 @@
           <label id="ps-r-fastresp-row" title="Back in the fight after 1 second instead of 3"><input type="checkbox" id="ps-r-fastresp">Fast respawn</label>
           <label id="ps-r-siphon-row" title="Every kill refills your health to 100"><input type="checkbox" id="ps-r-siphon">Siphon</label>
         </div>
+        <div id="ps-nades-row"><span class="ps-nades-label">Throwables</span><div id="ps-nades"></div></div>
       </div>
     </div>
     <div id="ps-gg" hidden>
