@@ -74,7 +74,7 @@ The bottom left shows a small tile for the grenade, the blast pack and the grapp
 
 **Attachments** (the button under the loadout) add scopes, a red dot, suppressors, brakes, grips, magazines, a choke or a laser to each gun (the SMG, rifle, AK, burst rifle, revolver and Deagle take lasers), plus a bipod (steadier when crouched, for the LMG and marksman rifle) and shotgun slugs (all the pellets in one tight, heavy shot). Every one is a trade (a suppressor is quiet but kicks a bit more, a high-zoom scope is slower to aim, an extended magazine reloads slower), and each unlocks once you have landed enough hits with that gun (10 to 80; a kill online counts as a hit). Every gun also has three **skins** (Desert camo, Midnight, Gold, Arctic and Crimson recolours), opened by landing 25, 75 and 150 hits with it and picked at the top of the Attachments window. Other players see your attachments and skin.
 
-Shots that land on a wall, platform or the floor leave bullet holes (switch them off in Settings > View), and what flies off depends on what you hit: sparks from metal, dust from stone and concrete, chips from wood.
+Shots that land on a wall, platform or the floor leave bullet holes (switch them off in Settings > View), and what flies off depends on what you hit: sparks from metal, dust from stone and concrete, chips from wood. **Settings > View > Show arms** puts your first-person arms on the gun (off by default).
 
 Base run speed is slow. You *build* speed by chaining slides, bunnyhops (press jump just as you land) and
 wall bounces, up to 22 u/s (25 on Ice Lake). Tap **E** to fire the grappling hook at a wall, the floor or a target and
