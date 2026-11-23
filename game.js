@@ -12966,6 +12966,7 @@
     document.getElementById("tut-title").textContent = s.title;
     document.getElementById("tut-text").textContent = typeof s.text === "function" ? s.text() : s.text;
     document.getElementById("tut-fill").style.width = (tut.step / steps.length * 100).toFixed(1) + "%";
+    tutEl.querySelector(".tut-skip").hidden = false;
     tutEl.classList.remove("done");
   }
   function tutNext() {
@@ -12978,6 +12979,7 @@
         ? "Moonbase has portals, Foundry launch strips, Rooftops lifts and ladders. Challenges in the menu ask for the hardest combinations, and the Trickshot list shows every trick."
         : "Next: Score Attack is 1:00 to score as much as you can. More moves (bunnyhop, wall bounce, grapple, knife) wait under More moves in the menu.\nThe menu now has every gun and grenade, the maps, Attachments, and Multiplayer > Practice with bots.";
       document.getElementById("tut-fill").style.width = "100%";
+      tutEl.querySelector(".tut-skip").hidden = true;   // (the tutorial is over: Enter and Esc do nothing on the closing card)
       tutEl.classList.add("done");
       tut.active = false;
       tut.endTimer = setTimeout(() => endTutorial(true), 12000);   // (a longer card to read)

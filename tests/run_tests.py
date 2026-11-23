@@ -925,6 +925,7 @@ def test_tutorial(browser, base):
     check("Enter skips steps through to the end of the basics", "complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
     ends = page.inner_text("#tut-text")
     check("the last card points at what to try next (Score Attack, More moves, Attachments, Practice)", all(k in ends for k in ("Score Attack", "More moves", "Attachments", "Practice")), ends[:120])
+    check("the closing card drops the Enter / Esc hint (the tutorial is over)", page.is_hidden("#tutorial .tut-skip"))
     page.evaluate("__unlock()")
     step(page, 5)
     check("finishing the basics is remembered and the button offers More moves",
@@ -932,6 +933,7 @@ def test_tutorial(browser, base):
     page.click("#tutorial-btn")
     step(page, 30)
     check("More moves starts at its first step", "more moves 1/" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    check("and the Enter / Esc hint is back", page.is_visible("#tutorial .tut-skip"))
     for _ in range(20):   # skip ahead to the map and records step
         if page.inner_text("#tut-title") == "Map and records":
             break
