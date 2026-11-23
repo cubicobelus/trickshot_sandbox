@@ -5661,7 +5661,7 @@
       }
     }
     if (["free", "sa60"].includes(saved.playMode)) SETTINGS.playMode = saved.playMode;
-    if (typeof saved.map === "string" && (MAPS[saved.map] || saved.map === "random")) SETTINGS.map = saved.map;
+    if (typeof saved.map === "string" && ((MAPS[saved.map] && saved.map !== "range") || saved.map === "random")) SETTINGS.map = saved.map;   // (an old save on the Range map: back to the arena, the range is a mode now)
     if (saved.binds && typeof saved.binds === "object") {
       for (const a of ACTION_IDS) {
         const s = saved.binds[a];
@@ -12822,6 +12822,7 @@
   window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !mapPopupEl.hidden && !mapPopupLive) hideMapPopup(); });
   const mapPickerEl = document.getElementById("map-picker");
   for (const id of MAP_ORDER) {
+    if (id === "range") continue;   // (the range has its own mode button: Shooting range)
     const b = document.createElement("button");
     b.type = "button"; b.dataset.map = id; b.title = MAPS[id].blurb;
     const c = document.createElement("canvas"); c.width = c.height = 64;

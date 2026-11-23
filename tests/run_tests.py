@@ -861,6 +861,7 @@ def test_maps(browser, base):
     page, errors = open_page(browser, base + "/index.html")
     ids = page.eval_on_selector_all("#map-picker button", "els => els.map(e => e.dataset.map)")
     check("the menu offers every map", len(ids) >= 3 and "arena" in ids and "courtyard" in ids and "foundry" in ids, ", ".join(ids))
+    check("but not the Range map (Shooting range is its own mode button)", "range" not in ids, ", ".join(ids))
     for mid in ids:
         page.click(f'#map-picker button[data-map="{mid}"]')
         page.wait_for_timeout(150)
