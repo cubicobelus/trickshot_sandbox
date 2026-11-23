@@ -1140,7 +1140,7 @@
       player.velocity.x = b.dx * CFG.maxSpeed; player.velocity.z = b.dz * CFG.maxSpeed;   // instantly at top speed, whatever you were doing
       player.velocity.y = b.pop;
       player.onGround = false; player.sliding = false; player.launch = "pad"; player.groundRise = 0;
-      noteTrick("strip", "LAUNCH STRIP");
+      noteTrick("strip", "LAUNCH STRIP"); tutEvent("strip");
       player.boostCool = 0.5; player.lastBoostAt = elapsedTime;
       playSfx("jumpPad", 0.6, 1.4, 0.1, "volMove");
       return;
@@ -7462,7 +7462,7 @@
   document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
   // Back up and restore: everything the game keeps in this browser as one file. An imported file is checked key by key and
   // value by value before it replaces anything (and the game's own loaders check again when it starts).
-  const DATA_JSON_KEYS = ["tsb-tips", "tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-challenges", "tsb-score-attack", "tsb-map-records"];
+  const DATA_JSON_KEYS = ["tsb-tips", "tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-challenges", "tsb-score-attack", "tsb-map-records", "tsb-training"];
   const DATA_KEYS = DATA_JSON_KEYS.concat(["tsb-tutorial", "tsb-name", "tsb-settings-seen"]);
   const importNoteEl = document.getElementById("data-import-note"), importApplyEl = document.getElementById("data-import-apply");
   let importClean = null;
@@ -8309,6 +8309,7 @@
     tone("triangle", 330, 120, 0.12 * SETTINGS.volGear, 0.14, 0, 0.1);
     noiseHit(1800, 1.0, 0.10 * SETTINGS.volGear, 0.09, "highpass", 0, 0.1);
     if (run.state === "live" && !BLAST[kind].util) run.shots++;   // (smoke and a flash aren't shots at a target)
+    tutEvent("throw", { kind, cooked: kind === "frag" && (cooked || 0) > 0.05 });
   }
   function updateNadeChip(dt) {
     if (fragCd > 0) fragCd = Math.max(0, fragCd - dt);
@@ -8338,7 +8339,7 @@
   let packCd = 0, packOut = null;
   function useSatchel() {
     if (!fragAllowed() || !nadeOn("pack")) return;
-    if (packOut && packOut.state === "flying" && !packOut.remote) { explodeGrenade(packOut); return; }
+    if (packOut && packOut.state === "flying" && !packOut.remote) { tutEvent("packBlow"); explodeGrenade(packOut); return; }
     if (packCd > 0) return;
     camera.getWorldDirection(_thFwd);
     camera.getWorldQuaternion(_camQuat);
@@ -8347,6 +8348,7 @@
     _gLookAt.y -= 0.1;
     _boltDir.copy(_thFwd); _boltDir.y += 0.08; _boltDir.normalize();
     packOut = launchBlast("satchel", _gLookAt, _boltDir);
+    tutEvent("packThrow");
     tone("triangle", 260, 110, 0.12 * SETTINGS.volGear, 0.12, 0, 0.1);
   }
   function updatePackChip(dt) {
@@ -8390,7 +8392,7 @@
       _blastC.y += (kind === "satchel" ? 0.8 : 0.35) * Math.max(pd, 0.5); _blastC.normalize();
       const push = B.push * (1 - pd / (R * 1.4));
       player.velocity.addScaledVector(_blastC, push);
-      if (player.velocity.y > 2.5) { player.onGround = false; player.sliding = false; }
+      if (player.velocity.y > 2.5) { player.onGround = false; player.sliding = false; if (push >= CFG.blastJumpMinPush) tutEvent("shove", { kind }); }
       if (push >= CFG.blastJumpMinPush && player.velocity.y > 2.5 && BLAST_JUMP[kind]) {   // a blast jump: a trick for whatever you hit while you are still flying
         player.blastKind = kind; player.blastAirId = player.groundedAt;
         noteTrick("blast", BLAST_JUMP[kind][0]);
@@ -12896,49 +12898,100 @@
   refreshModeUI();
 
   // ======================================================================
-  // TUTORIAL: short goals one at a time, in free play, each ticked off the moment you do it.
-  // Most are read from the stats counters (so they notice the real thing, however it happened).
+  // TRAINING: five short chapters of goals, one at a time, in free play, each ticked off the moment you do it.
+  // Most are read from the stats counters (so they notice the real thing, however it happened); a few from a trick
+  // tag on the last hit, or from tutEvent(), a tiny hook the throw, blast and launch-strip code calls.
   // ======================================================================
-  const TUT_KEY = "tsb-tutorial";
-  const tut = { active: false, set: "basics", step: 0, base: null, look: 0, doneTimer: 0, lastHit: null, sawMap: false, sawBoard: false };
+  const TUT_KEY = "tsb-tutorial";   // "started", "done" (the basics are finished) or "all" (the basics and Movement): the first visit reads it
+  const TRAIN_KEY = "tsb-training";   // a JSON list of the chapter ids finished
+  const tut = { active: false, set: "basics", step: 0, base: null, look: 0, doneTimer: 0, lastHit: null, sawMap: false, sawBoard: false, peak: 0, ev: {} };
   const tutDelta = (k) => stats[k] - tut.base[k];
   const keyOf = (a) => bindLabel(a);
   const either = (a, b) => [a, b].map(keyOf).filter((l) => l !== "unbound").join(" or ") || "unbound";
-  // The basics come first and are about the idea of the game (every trick multiplies the shot); More moves is the rest, for later
-  const TUT_BASICS = [
-    { title: "Move and look", text: () => "Walk with " + ["forward", "left", "back", "right"].map((a) => inputLabel(BINDS[a][0])).join(" ") + " and look around with the mouse.", done: () => tut.look > Math.PI * 0.3 && tutDelta("distance") > 3 },
-    { title: "Hit a target", text: () => "Hit a target with " + keyOf("fire") + ". The number that pops up is its score: 100 points times every trick you pulled off.", done: () => tutDelta("hits") >= 1 },
-    { title: "Shoot in the air", text: () => "Jump with " + keyOf("jump") + " and hit a target before you land. Being in the air is a trick: AIR x" + CFG.airMult + ".", done: () => tut.lastHit && tut.lastHit.tags.includes("AIR") },
-    { title: "Slide", text: () => (SETTINGS.autoSprint ? "Run" : "Hold " + keyOf("sprint") + " to run") + ", then hold " + keyOf("slide") + " to slide: it keeps your speed, and a hit while sliding is another trick.", done: () => tutDelta("slides") >= 1 },
-    { title: "Jump pad", text: "Run onto a jump pad, the round plates on the floor. A hit on the way up adds LAUNCHED to AIR.", done: () => tutDelta("padLaunches") >= 1 },
-    { title: "Trickshot", text: "Now stack them for a 3x shot: off a pad, mid-slide, a spin in the air, a far or a small target. Each trick multiplies the others.", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
+  const tutTag = (re) => !!tut.lastHit && tut.lastHit.tags.some((t) => re.test(t));
+  const TRAINING = [
+    { id: "basics", name: "Basics", map: "arena", blurb: "The idea of the game: every trick multiplies the shot.", steps: [
+      { title: "Move and look", text: () => "Walk with " + ["forward", "left", "back", "right"].map((a) => inputLabel(BINDS[a][0])).join(" ") + " and look around with the mouse.", done: () => tut.look > Math.PI * 0.3 && tutDelta("distance") > 3 },
+      { title: "Hit a target", text: () => "Hit a target with " + keyOf("fire") + ". The number that pops up is its score: 100 points times every trick you pulled off.", done: () => tutDelta("hits") >= 1 },
+      { title: "Shoot in the air", text: () => "Jump with " + keyOf("jump") + " and hit a target before you land. Being in the air is a trick: AIR x" + CFG.airMult + ".", done: () => tut.lastHit && tut.lastHit.tags.includes("AIR") },
+      { title: "Slide", text: () => (SETTINGS.autoSprint ? "Run" : "Hold " + keyOf("sprint") + " to run") + ", then hold " + keyOf("slide") + " to slide: it keeps your speed, and a hit while sliding is another trick.", done: () => tutDelta("slides") >= 1 },
+      { title: "Jump pad", text: "Run onto a jump pad, the round plates on the floor. A hit on the way up adds LAUNCHED to AIR.", done: () => tutDelta("padLaunches") >= 1 },
+      { title: "Trickshot", text: "Now stack them for a 3x shot: off a pad, mid-slide, a spin in the air, a far or a small target. Each trick multiplies the others.", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
+    ], end: ["That's the basics", "Next: Score Attack is 1:00 to score as much as you can. Movement, Trickshots, Grenades and Map features are more chapters under Training in the menu.\nThe menu now has every gun and grenade, the maps, Attachments, and Multiplayer > Practice with bots."] },
+    { id: "movement", name: "Movement", map: "arena", blurb: "Bunnyhops, wall bounces, the grapple and keeping your speed.", steps: [
+      { title: "Bunnyhop", text: () => "Press " + keyOf("jump") + " again the moment you land to keep your speed. Three in a row is BUNNY HOP.", done: () => tutDelta("bhops") >= 2 },
+      { title: "Wall bounce", text: () => "Run at a wall, jump, and press " + keyOf("jump") + " again as you reach it to kick off it.", done: () => tutDelta("wallBounces") >= 1 },
+      { title: "Perfect bounce", text: () => "Bounce again, but press " + keyOf("jump") + " right as you touch the wall. Right on time is a perfect bounce.", done: () => tutDelta("perfectBounces") >= 1 },
+      { title: "Grapple", text: () => "Aim at a wall, the floor or a target and tap " + keyOf("grapple") + ". A hook flies out and zips you there. Tap " + keyOf("grapple") + " or " + keyOf("jump") + " to let go and keep your speed.", done: () => tutDelta("grapples") >= 1 },
+      { title: "Keep your speed", text: "Reach 15 u/s on the ground or in the air. Chain slides, bunnyhops and wall bounces so you never slow down.", done: () => tut.peak >= 15 },
+      { title: "Knife", text: () => "Press " + either("knife", "swap") + " for the knife, then " + keyOf("aim") + " to throw it. " + either("gun", "swap") + " takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
+      { title: "Map and records", text: () => "Hold " + keyOf("map") + " to see the map and where you are, and " + keyOf("leaderboard") + " for your records on this map.", done: () => tut.sawMap && tut.sawBoard },
+    ], end: ["Movement done", "Speed is points: every trick you chain multiplies the next shot. Trickshots is next."] },
+    { id: "tricks", name: "Trickshots", map: "arena", blurb: "Aim, spins, flicks, scopes and combos.", steps: [
+      { title: "Aim", text: () => "Hold " + keyOf("aim") + " to aim down the sights, then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
+      { title: "Spin shot", text: "Jump and turn the mouse a half turn or more in the air, then hit a target: a 180 or a bigger SPIN.", done: () => tutTag(/SPIN$|^180\u00b0$/) },
+      { title: "Flick", text: "Swing the view fast onto a target and shoot at once: a FLICK, or a SNAP FLICK for a bigger one.", done: () => tutTag(/^(SNAP )?FLICK$/) },
+      { title: "No-scope", gun: "rifle", text: () => "You have the SNIPER for this one: hit a target from 20 m or more without aiming (don't hold " + keyOf("aim") + ").", done: () => tutTag(/^NO-SCOPE$/) },
+      { title: "Quickscope", gun: "rifle", text: () => "With the SNIPER, press " + keyOf("aim") + " and fire almost at once to hit a target.", done: () => tutTag(/^QUICKSCOPE$/) },
+      { title: "Two in one jump", text: "Jump and hit two targets before you land: a DOUBLE.", done: () => tutTag(/^(DOUBLE|TRIPLE|QUAD|5\+ HIT COMBO)$/) },
+      { title: "Chain", text: "Mix movement tricks within 5 s (slide, wall bounce, grapple, pad) and shoot: a CHAIN.", done: () => tutTag(/^CHAIN$/) },
+      { title: "Hang time", text: "Stay in the air a long time (a pad, a ramp or the grapple) and hit a target on the way down: HANG TIME.", done: () => tutTag(/^HANG TIME$/) },
+    ], end: ["Trickshots done", "The Trickshot list in the menu shows every trick, and Challenges asks for the hardest combinations."] },
+    { id: "grenades", name: "Grenades", map: "arena", blurb: "Throw, cook, blast jump, and the blast pack.", steps: [
+      { title: "Throw a grenade", text: () => "Press " + keyOf("grenade") + " to throw your grenade. Hold it to throw further.", done: () => !!tut.ev.throw },
+      { title: "Cook it", text: () => "Hold " + keyOf("grenade") + " with a frag until you hear a click: the fuse is burning in your hand. Then let go. (The cooldown is 9 s.)", done: () => !!tut.ev.cook },
+      { title: "Blast jump", text: "Set off a frag or a blast pack at your feet. The blast throws you into the air, and a hit from up there is a GRENADE JUMP or PACK JUMP.", done: () => !!tut.ev.shove || tutTag(/^(GRENADE|PACK) JUMP$/) },
+      { title: "Blast pack", text: () => "Press " + keyOf("satchel") + " to throw the blast pack, and " + keyOf("satchel") + " again to set it off.", done: () => !!tut.ev.packThrow && !!tut.ev.packBlow },
+      { title: "Other throwables", nade: "smoke", text: () => keyOf("grenade") + " throws Smoke for this one: throw it. Sticky and Flash are under More in the loadout.", done: () => !!tut.ev.other },
+    ], end: ["Grenades done", "A blast jump is a trick like any other: chain one into a shot for a big multiplier."] },
+    { id: "maps", name: "Map features", map: "moonbase", blurb: "Portals, launch strips, lifts and ladders.", steps: [
+      { title: "Portal", map: "moonbase", text: "Walk into a glowing portal and come out of its twin. A hit soon after is a PORTAL SHOT.", done: () => tutDelta("portals") >= 1 },
+      { title: "Launch strip", map: "foundry", text: "Step on an orange launch strip: it throws you down the hall at full speed.", done: () => !!tut.ev.strip },
+      { title: "Lift", map: "rooftops", text: "Stand on a lift, a platform that moves up and down, and ride it. A hit while riding is a PLATFORM SHOT.", done: () => !!player.onMover },
+      { title: "Ladder", map: "rooftops", text: () => "Walk at a ladder and hold " + keyOf("forward") + " to climb it.", done: () => !!player.ladder },
+    ], end: ["Map features done", "Every map has its own tricks: the map picker has a note on each one."] },
   ];
-  const TUT_MORE = [
-    { title: "Aim", text: () => "Hold " + keyOf("aim") + " to aim down the sights, then hit a target.", done: () => tut.lastHit && tut.lastHit.aimed },
-    { title: "Bunnyhop", text: () => "Press " + keyOf("jump") + " again the moment you land to keep your speed. Three in a row is BUNNY HOP.", done: () => tutDelta("bhops") >= 2 },
-    { title: "Wall bounce", text: () => "Run at a wall, jump, and press " + keyOf("jump") + " again as you reach it. Right on time is a perfect bounce.", done: () => tutDelta("wallBounces") >= 1 },
-    { title: "Grapple", text: () => "Aim at a wall, the floor or a target and tap " + keyOf("grapple") + ". A hook flies out and zips you there. Tap " + keyOf("grapple") + " or " + keyOf("jump") + " to let go and keep your speed.", done: () => tutDelta("grapples") >= 1 },
-    { title: "Knife", text: () => "Press " + either("knife", "swap") + " for the knife, then " + keyOf("aim") + " to throw it. " + either("gun", "swap") + " takes you back to the gun.", done: () => tutDelta("knifeThrows") >= 1 },
-    { title: "Map and records", text: () => "Hold " + keyOf("map") + " to see the map and where you are, and " + keyOf("leaderboard") + " for your records on this map.", done: () => tut.sawMap && tut.sawBoard },
-  ];
-  const tutSteps = () => (tut.set === "more" ? TUT_MORE : TUT_BASICS);
+  const tutChapter = () => TRAINING.find((c) => c.id === tut.set) || TRAINING[0];
+  const tutSteps = () => tutChapter().steps;
+  // the chapters finished: the list, plus what the old tutorial key says ("done": the basics; "all": the basics and Movement)
+  function trainDone() {
+    let a = [], seen = null;
+    try { const j = JSON.parse(localStorage.getItem(TRAIN_KEY) || "[]"); if (Array.isArray(j)) a = j.filter((x) => typeof x === "string"); } catch (e) { /* ignore */ }
+    try { seen = localStorage.getItem(TUT_KEY); } catch (e) { /* ignore */ }
+    if ((seen === "done" || seen === "all") && !a.includes("basics")) a.push("basics");
+    if (seen === "all" && !a.includes("movement")) a.push("movement");
+    return a;
+  }
   const tutEl = document.getElementById("tutorial");
   function startTutorial(set, noPlay) {
     if (runInProgress() || run.state === "done") quitRun();
-    if (currentMap.id !== "arena") loadMap("arena");   // its steps use the arena's pads and walls
-    clearTimeout(tut.endTimer);   // (the last tutorial's closing card must not end this one)
-    tut.active = true; tut.set = set === "more" ? "more" : "basics"; tut.step = 0; tut.doneTimer = 0;
+    clearTimeout(tut.endTimer);   // (the last chapter's closing card must not end this one)
+    tut.set = TRAINING.some((c) => c.id === set) ? set : "basics";
+    tut.active = true; tut.step = 0; tut.doneTimer = 0;
     tutBegin();
     try { if (tut.set === "basics" && !localStorage.getItem(TUT_KEY)) localStorage.setItem(TUT_KEY, "started"); } catch (e) { /* ignore */ }
     refreshTutorialUI();
     if (!noPlay) requestPlay();
   }
   function tutBegin() {
+    const want = tutSteps()[tut.step].map || tutChapter().map;   // (its goals use that map's pads, walls and strips; loading it also places the player at its spawn)
+    if (currentMap.id !== want) loadMap(want);
+    tutGear(tutSteps()[tut.step]);
     tut.base = Object.assign({}, stats);
-    tut.look = 0; tut.lastHit = null; tut.sawMap = false; tut.sawBoard = false;
+    tut.look = 0; tut.lastHit = null; tut.sawMap = false; tut.sawBoard = false; tut.peak = 0; tut.ev = {};
     renderTutorial();
   }
+  // a goal that needs a certain gun or throwable hands it to you (Esc would end the chapter, so you can't go and pick it), and the end of the chapter gives yours back
+  function tutGear(s) {
+    if (s.gun && SETTINGS.loadout !== s.gun) { if (tut.savedGun == null) tut.savedGun = SETTINGS.loadout; setLoadout(s.gun); }
+    if (s.nade && SETTINGS.nade !== s.nade) { if (tut.savedNade == null) tut.savedNade = SETTINGS.nade; SETTINGS.nade = s.nade; }
+  }
+  function tutRestoreGear() {
+    if (tut.savedGun != null) { setLoadout(tut.savedGun); tut.savedGun = null; }
+    if (tut.savedNade != null) { SETTINGS.nade = tut.savedNade; tut.savedNade = null; saveSettings(); }
+  }
   function endTutorial(finished) {
+    tutRestoreGear();
     tut.active = false;
     if (SETTINGS.map !== "random" && currentMap.id !== SETTINGS.map) loadMap(SETTINGS.map);
     tutEl.hidden = true;
@@ -12948,7 +13001,7 @@
     const steps = tutSteps(), s = steps[tut.step];
     tutEl.hidden = !tut.active;
     if (!s) return;
-    document.getElementById("tut-count").textContent = (tut.set === "more" ? "More moves " : "Tutorial ") + (tut.step + 1) + "/" + steps.length;
+    document.getElementById("tut-count").textContent = (tut.set === "basics" ? "Tutorial" : tutChapter().name) + " " + (tut.step + 1) + "/" + steps.length;
     document.getElementById("tut-title").textContent = s.title;
     document.getElementById("tut-text").textContent = typeof s.text === "function" ? s.text() : s.text;
     document.getElementById("tut-fill").style.width = (tut.step / steps.length * 100).toFixed(1) + "%";
@@ -12958,18 +13011,20 @@
   function tutNext() {
     tut.step++;
     if (tut.step >= tutSteps().length) {
-      const more = tut.set === "more";
-      document.getElementById("tut-count").textContent = more ? "More moves complete" : "Tutorial complete";
-      document.getElementById("tut-title").textContent = more ? "You know every move" : "That's the basics";
-      document.getElementById("tut-text").textContent = more
-        ? "Moonbase has portals, Foundry launch strips, Rooftops lifts and ladders. Challenges in the menu ask for the hardest combinations, and the Trickshot list shows every trick."
-        : "Next: Score Attack is 1:00 to score as much as you can. More moves (bunnyhop, wall bounce, grapple, knife) wait under More moves in the menu.\nThe menu now has every gun and grenade, the maps, Attachments, and Multiplayer > Practice with bots.";
+      const ch = tutChapter();
+      document.getElementById("tut-count").textContent = (ch.id === "basics" ? "Tutorial" : ch.name) + " complete";
+      document.getElementById("tut-title").textContent = ch.end[0];
+      document.getElementById("tut-text").textContent = ch.end[1];
       document.getElementById("tut-fill").style.width = "100%";
-      tutEl.querySelector(".tut-skip").hidden = true;   // (the tutorial is over: Enter and Esc do nothing on the closing card)
+      tutEl.querySelector(".tut-skip").hidden = true;   // (the chapter is over: Enter and Esc do nothing on the closing card)
       tutEl.classList.add("done");
       tut.active = false;
       tut.endTimer = setTimeout(() => endTutorial(true), 12000);   // (a longer card to read)
-      try { localStorage.setItem(TUT_KEY, more ? "all" : localStorage.getItem(TUT_KEY) === "all" ? "all" : "done"); } catch (e) { /* ignore */ }
+      try {
+        const a = trainDone(); if (!a.includes(ch.id)) a.push(ch.id);
+        localStorage.setItem(TRAIN_KEY, JSON.stringify(a));
+        if (ch.id === "basics") localStorage.setItem(TUT_KEY, localStorage.getItem(TUT_KEY) === "all" ? "all" : "done");
+      } catch (e) { /* ignore */ }
       refreshTutorialUI();
       return;
     }
@@ -12979,6 +13034,7 @@
   function updateTutorial(dt) {
     if (!tut.active) return;
     if (pointerLocked) { if (held("map")) tut.sawMap = true; if (held("leaderboard")) tut.sawBoard = true; }   // (the map and records step)
+    tut.peak = Math.max(tut.peak, Math.hypot(player.velocity.x, player.velocity.z));   // (the keep your speed step)
     if (tut.doneTimer > 0) {   // a short tick-off moment before the next step
       tut.doneTimer -= dt;
       if (tut.doneTimer <= 0) tutNext();
@@ -12995,26 +13051,53 @@
     if (!tut.active) return;
     tut.lastHit = { mult: res.mult, aimed: vm.adsProgress > 0.6, tags: res.tags.map((t) => trickKey(t) || "") };
   }
+  // from the throw, blast and launch strip code: "throw" {kind, cooked}, "packThrow", "packBlow", "shove" {kind} (your own blast threw you up), "strip"
+  function tutEvent(name, info) {
+    if (!tut.active) return;
+    if (name === "throw") {
+      tut.ev.throw = true;
+      if (info.cooked) tut.ev.cook = true;
+      if (info.kind === "sticky" || info.kind === "smoke" || info.kind === "flash") tut.ev.other = true;
+    } else tut.ev[name] = true;
+  }
   window.addEventListener("keydown", (e) => {
     if (!tut.active || !pointerLocked || replay.active) return;
     if (e.code === "Enter" || e.code === "NumpadEnter") { e.preventDefault(); if (tut.doneTimer <= 0) { tut.doneTimer = 0.01; } }   // skip this step
   });
 
-  // ---- the menu button ----
+  // ---- the menu: a Training button that opens the list of chapters ----
   const tutBtn = document.getElementById("tutorial-btn");
+  const trainEl = document.getElementById("training");
   function refreshTutorialUI() {
-    let seen = null;
-    try { seen = localStorage.getItem(TUT_KEY); } catch (e) { /* ignore */ }
-    tutBtn.textContent = tut.active ? "Quit tutorial" : seen === "done" ? "More moves" : seen === "all" ? "Tutorial" : seen ? "Restart tutorial" : "Tutorial";
-    tutBtn.classList.toggle("glow", (!seen || seen === "done") && !tut.active);
+    tutBtn.textContent = tut.active ? "Quit training" : "Training";
+    tutBtn.classList.toggle("glow", !trainDone().includes("basics") && !tut.active);   // until the basics are done
   }
+  function buildTraining() {
+    const list = document.getElementById("train-list"), got = trainDone();
+    list.textContent = "";
+    for (const c of TRAINING) {
+      const done = got.includes(c.id);
+      const row = document.createElement("div"); row.className = "ach-row train-row" + (done ? " done" : ""); row.dataset.chapter = c.id;
+      const mark = document.createElement("div"); mark.className = "ach-mark"; mark.textContent = done ? "\u2713" : "";
+      const body = document.createElement("div");
+      const name = document.createElement("b"); name.textContent = c.name;
+      const desc = document.createElement("span"); desc.textContent = c.blurb;
+      body.append(name, desc);
+      const n = document.createElement("small"); n.className = "ach-when"; n.textContent = c.steps.length + " goals";
+      row.append(mark, body, n);
+      row.addEventListener("click", (e) => { e.stopPropagation(); setTraining(false); startTutorial(c.id); });
+      list.appendChild(row);
+    }
+  }
+  function setTraining(open) { if (open) buildTraining(); trainEl.hidden = !open; }
   tutBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (tut.active) { endTutorial(false); return; }
-    let seen = null;
-    try { seen = localStorage.getItem(TUT_KEY); } catch (er) { /* ignore */ }
-    startTutorial(seen === "done" ? "more" : "basics");
+    setTraining(true);
   });
+  document.getElementById("train-close").addEventListener("click", () => setTraining(false));
+  trainEl.addEventListener("click", (e) => { if (e.target === trainEl) setTraining(false); });   // the backdrop
+  window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !trainEl.hidden) setTraining(false); });
 
   // ---- the first visit: the game opens in the basics (the browser needs one click before it gives the game the mouse); Esc skips them ----
   function endFirstRun() {

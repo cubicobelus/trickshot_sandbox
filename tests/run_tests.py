@@ -13,6 +13,7 @@ Screenshots of failures go to tests/output/ (ignored by git).
 import argparse
 import functools
 import http.server
+import json
 import os
 import shutil
 import sys
@@ -903,15 +904,24 @@ def test_maps(browser, base):
 
 
 def test_tutorial(browser, base):
-    """The basics start, tick steps off, can be skipped with Enter and are remembered; then More moves, with the map and records step."""
+    """The basics start, tick steps off, can be skipped with Enter and are remembered; the Training window lists five chapters; Movement and Map features run, finish and persist; old progress migrates."""
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
-    check("the tutorial button glows before you've done it and the panel is hidden in the menu",
-          glows and not page.is_visible("#tutorial"))
+    check("the Training button glows before the basics are done and the panel is hidden in the menu",
+          glows and not page.is_visible("#tutorial") and page.inner_text("#tutorial-btn") == "Training", page.inner_text("#tutorial-btn"))
     page.click("#tutorial-btn")
+    check("the button opens the Training window with five chapters, none ticked",
+          page.is_visible("#training") and page.locator("#train-list .train-row").count() == 5 and page.locator("#train-list .train-row.done").count() == 0,
+          str(page.locator("#train-list .train-row").count()))
+    check("each chapter shows its goal count", "6 goals" in page.inner_text("#train-list") and "7 goals" in page.inner_text("#train-list"), page.inner_text("#train-list")[:120])
+    page.keyboard.press("Escape")
+    check("Esc closes the window", not page.is_visible("#training"))
+    page.click("#tutorial-btn")
+    page.click("#train-list .train-row[data-chapter=basics]")
     step(page, 30)
-    check("starting the tutorial shows step 1 of the basics over the game", page.is_visible("#tutorial") and "1/6" in page.inner_text("#tut-count"),
+    check("starting Basics shows step 1 of 6 over the game", page.is_visible("#tutorial") and not page.is_visible("#training") and "1/6" in page.inner_text("#tut-count"),
           page.inner_text("#tut-count"))
+    check("the button now says Quit training", page.inner_text("#tutorial-btn") == "Quit training", page.inner_text("#tutorial-btn"))
     for _ in range(40):   # look around: a big sweep with the mouse, and a few steps forward
         page.evaluate("document.dispatchEvent(new MouseEvent('mousemove', {movementX: 100, movementY: 0}))")
         step(page, 1)
@@ -925,32 +935,79 @@ def test_tutorial(browser, base):
         step(page, 12)
     check("Enter skips steps through to the end of the basics", "complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
     ends = page.inner_text("#tut-text")
-    check("the last card points at what to try next (Score Attack, More moves, Attachments, Practice)", all(k in ends for k in ("Score Attack", "More moves", "Attachments", "Practice")), ends[:120])
+    check("the last card points at what to try next (Score Attack, Training, Attachments, Practice)", all(k in ends for k in ("Score Attack", "Training", "Attachments", "Practice")) and "More moves" not in ends, ends[:120])
     check("the closing card drops the Enter / Esc hint (the tutorial is over)", page.is_hidden("#tutorial .tut-skip"))
     page.evaluate("__unlock()")
     step(page, 5)
-    check("finishing the basics is remembered and the button offers More moves",
-          page.evaluate("localStorage.getItem('tsb-tutorial')") == "done" and page.inner_text("#tutorial-btn") == "More moves", page.inner_text("#tutorial-btn"))
+    check("finishing the basics is remembered (old key too) and the button stops glowing",
+          page.evaluate("localStorage.getItem('tsb-tutorial')") == "done" and "basics" in page.evaluate("localStorage.getItem('tsb-training')")
+          and not page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')") and page.inner_text("#tutorial-btn") == "Training", page.inner_text("#tutorial-btn"))
     page.click("#tutorial-btn")
+    check("the Training window shows Basics ticked and the rest not", page.locator("#train-list .train-row.done").count() == 1 and page.locator("#train-list .train-row[data-chapter=basics].done").count() == 1)
+    page.click("#train-list .train-row[data-chapter=movement]")
     step(page, 30)
-    check("More moves starts at its first step", "more moves 1/" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    check("Movement starts at its first step, named by chapter", "movement 1/7" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
     check("and the Enter / Esc hint is back", page.is_visible("#tutorial .tut-skip"))
     for _ in range(20):   # skip ahead to the map and records step
         if page.inner_text("#tut-title") == "Map and records":
             break
         page.keyboard.press("Enter")
         step(page, 12)
-    check("More moves has a step for the map and records keys", page.inner_text("#tut-title") == "Map and records", page.inner_text("#tut-title"))
+    check("Movement has a step for the map and records keys", page.inner_text("#tut-title") == "Map and records", page.inner_text("#tut-title"))
     page.keyboard.down("m"); step(page, 20)
     page.keyboard.down("l"); step(page, 20)
     page.keyboard.up("m"); page.keyboard.up("l")
     step(page, 120)
-    check("holding the map and records keys ticks that step off (and ends More moves)", "complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    check("holding the map and records keys ticks that step off (and ends Movement)", "movement complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
     page.evaluate("__unlock()")
     step(page, 5)
-    done = page.evaluate("localStorage.getItem('tsb-tutorial')") == "all" and page.inner_text("#tutorial-btn") == "Tutorial"
-    check("finishing More moves is remembered and the button goes plain", done, page.inner_text("#tutorial-btn"))
+    check("finishing Movement is remembered", sorted(json.loads(page.evaluate("localStorage.getItem('tsb-training')"))) == ["basics", "movement"], page.evaluate("localStorage.getItem('tsb-training')"))
+    page.reload()
+    page.wait_for_timeout(800)
+    page.click("#tutorial-btn")
+    check("after a reload Basics and Movement are still ticked", page.locator("#train-list .train-row.done").count() == 2)
+    page.click("#train-list .train-row[data-chapter=maps]")
+    step(page, 60)
+    check("Map features loads Moonbase and starts at its first goal", "map features 1/4" in page.inner_text("#tut-count").lower()
+          and page.inner_text("#tut-title") == "Portal", page.inner_text("#tut-count"))
+    page.keyboard.down("l"); step(page, 10)
+    check("and it is played on Moonbase", "Moonbase" in page.inner_text("#sb-title"), page.inner_text("#sb-title"))
+    page.keyboard.up("l"); step(page, 5)
+    page.keyboard.press("Enter"); step(page, 40)
+    check("Enter moves on to the Launch strip", page.inner_text("#tut-title") == "Launch strip", page.inner_text("#tut-title"))
+    page.keyboard.press("Enter"); step(page, 40)
+    page.keyboard.press("Enter"); step(page, 40)
+    page.keyboard.press("Enter"); step(page, 40)
+    check("the last goal ends the chapter", "map features complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    page.evaluate("__unlock()")
+    step(page, 5)
+    # a goal that needs the sniper hands it to you, and leaving the chapter gives your own gun back
+    pick_gun(page, "ar")
+    page.click("#tutorial-btn")
+    page.click("#train-list .train-row[data-chapter=tricks]")
+    step(page, 40)
+    for _ in range(8):
+        if page.inner_text("#tut-title") == "No-scope":
+            break
+        page.keyboard.press("Enter"); step(page, 40)
+    hot = " | ".join(page.eval_on_selector_all("#hotbar .slot", "els => els.map(e => e.textContent)"))
+    check("the No-scope goal puts the sniper in your hand", page.inner_text("#tut-title") == "No-scope" and "SNIPER" in hot, hot)
+    page.evaluate("__unlock()")
+    step(page, 5)
+    active = page.evaluate("document.querySelector('#loadout button.active') && document.querySelector('#loadout button.active').dataset.gun")
+    check("and leaving the chapter gives your own gun back", active == "ar" and not page.is_visible("#tutorial"), str(active))
+    page.close()
+    # progress from before the Training window: "all" means the basics and Movement are done
+    page, errors2 = open_page(browser, base + "/index.html")
+    page.evaluate("localStorage.removeItem('tsb-training'); localStorage.setItem('tsb-tutorial', 'all')")
+    page.reload()
+    page.wait_for_timeout(800)
+    page.click("#tutorial-btn")
+    check("old 'all' progress marks Basics and Movement done", page.locator("#train-list .train-row.done").count() == 2
+          and page.locator("#train-list .train-row[data-chapter=movement].done").count() == 1)
+    errors.extend(errors2)
     check("no errors in the tutorial", not errors, "; ".join(errors[:3]))
+    page.close()
     page.close()
 
 

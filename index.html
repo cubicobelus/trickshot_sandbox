@@ -36,7 +36,7 @@
       </div>
       <p id="mode-note"></p>
       <div class="start" id="start-btn">Click to play</div>
-      <button type="button" class="btn" id="tutorial-btn">Tutorial</button>
+      <button type="button" class="btn" id="tutorial-btn">Training</button>
       <button type="button" class="btn" id="glossary-open">Trickshot list</button>
       <button type="button" class="btn" id="stats-open">Stats</button>
       <button type="button" class="btn" id="ach-open">Achievements <span id="ach-count"></span></button>
@@ -208,6 +208,15 @@
     <div class="g-head"><h2>Achievements</h2><button type="button" class="g-close" id="ach-close" aria-label="Close">&times;</button></div>
     <p class="g-note">Goals to chase, kept in this browser.</p>
     <div id="ach-list"></div>
+  </div>
+</div>
+
+<!-- training chapters, a popup over everything; filled in game.js -->
+<div id="training" hidden>
+  <div class="g-panel" role="dialog" aria-label="Training">
+    <div class="g-head"><h2>Training</h2><button type="button" class="g-close" id="train-close" aria-label="Close">&times;</button></div>
+    <p class="g-note">Short chapters of goals, in any order. Pick one to start; Enter skips a goal and Esc ends the chapter.</p>
+    <div id="train-list"></div>
   </div>
 </div>
 

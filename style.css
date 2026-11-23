@@ -43,11 +43,11 @@
   /* the trickshot list: a popup over everything */
   #glossary-open, #stats-open, #ach-open, #chal-open { margin-top: 10px; }
   #ach-count, #chal-count { color: var(--gold); }
-  #glossary, #stats, #achievements, #challenges, #settings-popup, #map-popup, #attach-popup, #loadout-popup {
+  #glossary, #stats, #achievements, #challenges, #training, #settings-popup, #map-popup, #attach-popup, #loadout-popup {
     position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.7);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
-  #glossary[hidden], #stats[hidden], #achievements[hidden], #challenges[hidden], #settings-popup[hidden], #map-popup[hidden], #attach-popup[hidden], #loadout-popup[hidden] { display: none; }
+  #glossary[hidden], #stats[hidden], #achievements[hidden], #challenges[hidden], #training[hidden], #settings-popup[hidden], #map-popup[hidden], #attach-popup[hidden], #loadout-popup[hidden] { display: none; }
   #loadout-popup .g-panel { width: min(520px, 100%); max-height: calc(100vh - 72px); overflow-y: auto; }
   .lo-group h3 { margin: 12px 0 6px; font-size: 12px; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
   .lo-row { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -527,6 +527,9 @@
 
   /* ---------------- tutorial ---------------- */
   #tutorial-btn { margin-top: 10px; }
+  #training .g-panel { width: min(520px, 100%); }
+  .train-row { cursor: pointer; padding: 8px 4px; }
+  .train-row:hover b { color: var(--gold); }
   #tutorial-btn.glow { border-color: var(--gold); color: var(--gold); }
   #settings-open.glow::before, #tutorial-btn.glow::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); margin-right: 7px; vertical-align: 2px; }
   #tutorial {
