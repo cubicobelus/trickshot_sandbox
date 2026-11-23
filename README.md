@@ -1,5 +1,7 @@
 # Trickshot Sandbox
 
+[![tests](https://github.com/cubicobelus/trickshot_sandbox/actions/workflows/tests.yml/badge.svg)](https://github.com/cubicobelus/trickshot_sandbox/actions/workflows/tests.yml)
+
 A browser FPS where you chain slides, bunnyhops and wall bounces to build speed, then land
 absurd trickshots for a big score multiplier. Plain HTML and JavaScript, no build step.
 

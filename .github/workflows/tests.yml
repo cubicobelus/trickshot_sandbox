@@ -1,0 +1,24 @@
+name: tests
+
+# The quick test set on every push to main (and on pull requests), in a headless browser.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright and Chromium
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Quick tests
+        run: python -u tests/run_tests.py --quick --small
