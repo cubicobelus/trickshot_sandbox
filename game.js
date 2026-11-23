@@ -70,7 +70,6 @@
     try { return !localStorage.getItem("tsb-tutorial") && !localStorage.getItem("tsb-stats") && !localStorage.getItem("tsb-settings"); } catch (e) { return false; }
   })();
   let tutOffered = false, hasPlayed = false;
-  // (How to play starts closed even for a new player: the first-visit tutorial teaches the same controls one at a time)
 
   // ======================================================================
   // CONFIG
@@ -5485,7 +5484,8 @@
     const label = document.createElement("span"); label.className = "lo-label"; label.textContent = "Loadout"; loadoutEl.appendChild(label);
     for (const id of QUICK_GUNS.includes(SETTINGS.loadout) ? QUICK_GUNS : [...QUICK_GUNS, SETTINGS.loadout]) loadoutEl.appendChild(gunButton(id));
     const more = document.createElement("button");
-    more.type = "button"; more.id = "loadout-more"; more.className = "lo-more"; more.textContent = "More guns, grenade";
+    more.type = "button"; more.id = "loadout-more"; more.className = "lo-more"; more.title = "Every gun and the grenades";
+    more.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>MORE';   // (an icon like the guns beside it: the rest of the guns and the grenade picker)
     more.addEventListener("click", () => setLoadoutPopup(true));
     loadoutEl.appendChild(more);
     const locked = ggOn;   // (a gun game picks your gun for you)
@@ -6042,7 +6042,6 @@
 
   // ---- Settings > Controls: shows the bindings and changes them ----
   const controlsListeners = [];   // other parts of the game that show key names refresh through this
-  const controlsHintEl = document.getElementById("controls-hint");
   const bindListEl = document.getElementById("bind-list"), bindNoteEl = document.getElementById("bind-note");
   const autoSprintKeyEl = document.getElementById("as-key");
   let listening = null;      // { action, slot } while a box waits for an input
@@ -6065,20 +6064,6 @@
       el.classList.toggle("listening", waiting);
       el.classList.toggle("empty", !b && !waiting);
     }
-    // the menu's one-line summary of the controls
-    const k = (s) => '<span class="key">' + esc(s) + "</span>";
-    const L = (a) => bindLabel(a);
-    const move = ["forward", "left", "back", "right"].map((a) => inputLabel(BINDS[a][0]));
-    const gunKnife = Array.from(new Set([].concat(BINDS.gun, BINDS.knife, BINDS.swap).filter(Boolean))).map((b) => inputLabel(b)).join(" / ") || "unbound";
-    // a grid of key chips, each with what it does (the same bindings, read at a glance instead of as a sentence)
-    const chip = (key, what) => '<span class="kc">' + k(key) + "<i>" + what + "</i></span>";
-    const S = (a) => bindLabel(a, true), gunKnifeShort = Array.from(new Set([].concat(BINDS.gun, BINDS.knife, BINDS.swap).filter(Boolean))).map((b) => inputLabel(b, true)).join(" ") || "unbound";
-    controlsHintEl.innerHTML = [
-      chip(move.every((l) => l.length === 1) ? move.join("") : move.join(" "), "move"), chip(S("jump"), "jump"), chip(S("sprint"), "sprint"),
-      chip(S("slide"), "slide"), chip(S("fire"), "attack"), chip(S("aim"), "aim, throw knife"), chip(S("reload"), "reload"),
-      chip(S("grapple"), "grapple"), chip(S("grenade"), "grenade"), chip(S("satchel"), "blast pack"), chip(gunKnifeShort, "gun / knife"),
-      chip(S("inspect"), "inspect"), chip(S("replay"), "replay a hit"),
-    ].join("");
     loadoutWeapons().forEach((w, i) => {
       const el = hotbarSlots[w] && hotbarSlots[w].querySelector(".num");
       if (el) el.textContent = hotbarKey(i === 0 ? "gun" : "knife");
@@ -13034,7 +13019,6 @@
   function endFirstRun() {
     if (!firstRun) return;
     firstRun = false;
-    document.getElementById("menu-opened").hidden = false;   // a one-time line in the menu: here is everything
   }
   let firstRun = FIRST_VISIT;
   if (FIRST_VISIT) setTimeout(() => { tutOffered = true; startTutorial("basics", true); showScreen("tutstart"); }, 0);   // (once the rest of the game is set up)

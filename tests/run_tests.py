@@ -379,8 +379,8 @@ def test_first_visit(browser, base):
     check("one click starts playing, still in the tutorial", page.evaluate("!!document.pointerLockElement") and page.is_visible("#tutorial") and not page.is_visible("#tut-start"))
     page.evaluate("__unlock()")
     step(page, 5)
-    check("Esc ends the tutorial and opens the whole menu, with a line saying so",
-          not page.is_visible("#tutorial") and page.is_visible("#map-picker") and page.is_visible("#menu-opened"))
+    check("Esc ends the tutorial and opens the whole menu",
+          not page.is_visible("#tutorial") and page.is_visible("#map-picker"))
     page.reload()
     page.wait_for_timeout(1000)
     check("on the next visit the menu shows straight away and the play button is plain",

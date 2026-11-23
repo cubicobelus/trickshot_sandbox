@@ -46,7 +46,7 @@ hit, with a **bullet cam** that rides the shot to the target. Press **P** while 
 hit (P again to carry on). Your best trickshot's replay is kept in your browser. **Save video** in the replay bar
 saves it as a video you can post anywhere (.webm, or .mp4 in Safari), and **Save card** (also in the menu and on the results screen) makes a picture of your best shot: the map with the shot drawn on it, the points and every trick.
 
-**Loadout:** pick one gun in the menu (three favourites sit in the row, and **More guns** opens the rest); you always carry the knife too. 1 is the gun, 2 the knife.
+**Loadout:** pick one gun in the menu (three favourites sit in the row, and **More** opens the rest and the grenades); you always carry the knife too. 1 is the gun, 2 the knife.
 
 - **Sniper:** iron sights out of the box; fit a low- or high-zoom scope from Attachments. Its no-scope (a hit from the hip) and quickscope (a hit just after aiming in) bonuses are its own, and the other guns score less per hit so trickshots stay king.
 - **Rifle, AK, burst rifle:** the all-rounders. The burst rifle fires three rounds with each pull.
@@ -68,7 +68,7 @@ Bots never carry the launcher or the RPG, and neither is in the gun game by defa
 
 **G** throws a grenade from any gun on a 9 second cooldown (off in the gun game): hold it to throw further, and from halfway the fuse starts burning, so you can cook it for a quicker blast; hold it too long and it goes off in your hand, which kills you in a room. **C** throws a blast pack (a Raze-style satchel): it sticks where it lands and goes off when you press C again or after 4 seconds, flinging you away from it and only scratching other players (5 to 15 damage; none to you; 6 second recharge). In a room your own grenade, launcher and RPG blasts hurt you like anyone else.
 
-**Throwables:** pick what G throws in the loadout (More guns, grenade): the **Frag** above, a **Sticky** grenade that glues to the first wall or floor it touches (a direct hit on a target or a player sets it off at once), **Smoke** that pops into a cloud about 10 m across for 13 s (bots can't see through it, and standing inside it greys out your view), or a **Flash** that blinds anyone near who is looking at it, bots included (turn away). A host can switch any throwable, the blast pack too, off for a room in the setup window's rules; if yours is off, G throws the next one the room allows.
+**Throwables:** pick what G throws in the loadout (More): the **Frag** above, a **Sticky** grenade that glues to the first wall or floor it touches (a direct hit on a target or a player sets it off at once), **Smoke** that pops into a cloud about 10 m across for 13 s (bots can't see through it, and standing inside it greys out your view), or a **Flash** that blinds anyone near who is looking at it, bots included (turn away). A host can switch any throwable, the blast pack too, off for a room in the setup window's rules; if yours is off, G throws the next one the room allows.
 
 The bottom left shows a small tile for the grenade, the blast pack and the grapple: lit when ready, dim with a thin grey ring filling round it while it recharges, pulsing while a pack waits for you to set it off. Holding G puts two tiny bars under the crosshair: how far the throw will go, and once the pin is out, how much fuse is left.
 
