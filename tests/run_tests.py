@@ -726,6 +726,8 @@ def test_play_setup(browser, base):
     page.click("#mp-leave-btn")
     page.wait_for_timeout(200)
     # gun game: the label shows your level and the gun in your hand is the first of the ladder
+    # (pick the DMR first: a tier-5 gun can never open a ten-gun ladder, so seeing it would mean the gun game did not take over)
+    pick_gun(page, "dmr")
     start_practice(page, mode="gungame", bots=2)
     page.wait_for_timeout(300)
     page.click("#mp-play-btn")
@@ -736,7 +738,11 @@ def test_play_setup(browser, base):
     step(page, 3)
     check("in a gun game the loadout buttons and attachments are locked", page.evaluate("document.querySelectorAll('#loadout button:not([disabled])').length === 0 && document.getElementById('attach-open').disabled"))
     hot = page.eval_on_selector_all("#hotbar .slot", "els => els.map(e => e.textContent)")
-    check("and the gun in your hand is the ladder's first (the SMG), whatever you picked", any("SMG" in h for h in hot), " | ".join(hot))
+    # the ladder is rolled fresh each game, easiest tier first: an SMG, dual SMGs or the machine pistol, or (when none of those was rolled)
+    # a tier-2 rifle. The exact "first rung in hand" check is in test_gungame_ladder, which can read the ladder.
+    openers = ("SMG", "DUAL SMG", "MACHINE PISTOL", "RIFLE", "AK", "BURST")
+    check("and the gun in your hand is one of the easiest guns (the ladder's first), not the DMR you picked",
+          any(any(o in h.upper() for o in openers) for h in hot) and not any("DMR" in h.upper() for h in hot), " | ".join(hot))
     page.click("#mp-leave-btn")
     page.wait_for_timeout(200)
     page.click("#mp-card-host")
