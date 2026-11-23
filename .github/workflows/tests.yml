@@ -10,7 +10,7 @@ on:
 jobs:
   quick:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60   # (the runner draws in software: the quick set takes about 35 minutes there)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
