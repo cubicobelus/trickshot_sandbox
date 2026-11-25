@@ -500,7 +500,7 @@ def test_crosshair(browser, base):
     now = page.evaluate("[document.getElementById('xh-style').value, document.getElementById('hit-style').value]")
     check("a preset and the hit-marker style survive a reload", now == ["circle", "x"], str(now))
     count = page.evaluate("document.getElementById('ach-count').textContent")
-    check("the achievements include the map and King of the Hill ones", int(count.split("/")[1]) >= 36, count)
+    check("the achievements include the map and King of the Hill ones", int(count.split("/")[1]) >= 37, count)
     # the bigger map: clicking the map that is already chosen opens it; Esc closes it
     page.keyboard.press("Escape")
     page.wait_for_timeout(100)
@@ -904,14 +904,14 @@ def test_maps(browser, base):
 
 
 def test_tutorial(browser, base):
-    """The basics start, tick steps off, can be skipped with Enter and are remembered; the Training window lists five chapters; Movement and Map features run, finish and persist; old progress migrates."""
+    """The basics start, tick steps off, can be skipped with Enter and are remembered; the Training window lists seven chapters; Movement and Map features run, finish and persist; old progress migrates."""
     page, errors = open_page(browser, base + "/index.html")
     glows = page.evaluate("document.getElementById('tutorial-btn').classList.contains('glow')")
     check("the Training button glows before the basics are done and the panel is hidden in the menu",
           glows and not page.is_visible("#tutorial") and page.inner_text("#tutorial-btn") == "Training", page.inner_text("#tutorial-btn"))
     page.click("#tutorial-btn")
-    check("the button opens the Training window with five chapters, none ticked",
-          page.is_visible("#training") and page.locator("#train-list .train-row").count() == 5 and page.locator("#train-list .train-row.done").count() == 0,
+    check("the button opens the Training window with seven chapters, none ticked",
+          page.is_visible("#training") and page.locator("#train-list .train-row").count() == 7 and page.locator("#train-list .train-row.done").count() == 0,
           str(page.locator("#train-list .train-row").count()))
     check("each chapter shows its goal count", "6 goals" in page.inner_text("#train-list") and "7 goals" in page.inner_text("#train-list"), page.inner_text("#train-list")[:120])
     page.keyboard.press("Escape")
@@ -996,6 +996,39 @@ def test_tutorial(browser, base):
     step(page, 5)
     active = page.evaluate("document.querySelector('#loadout button.active') && document.querySelector('#loadout button.active').dataset.gun")
     check("and leaving the chapter gives your own gun back", active == "ar" and not page.is_visible("#tutorial"), str(active))
+    # Guns: the bow, crossbow and railgun goals hand over their guns; Esc gives yours back
+    page.click("#tutorial-btn")
+    page.click("#train-list .train-row[data-chapter=guns]")
+    step(page, 40)
+    seen = {}
+    for _ in range(8):
+        t = page.inner_text("#tut-title")
+        if t in ("Bow", "Crossbow", "Railgun") and t not in seen:
+            seen[t] = " | ".join(page.eval_on_selector_all("#hotbar .slot", "els => els.map(e => e.textContent)"))
+        if t == "Railgun":
+            break
+        page.keyboard.press("Enter"); step(page, 40)
+    check("the Guns chapter hands over the bow, crossbow and railgun", "BOW" in seen.get("Bow", "") and "CROSSBOW" in seen.get("Crossbow", "") and "RAILGUN" in seen.get("Railgun", ""), str(seen))
+    page.evaluate("__unlock()")
+    step(page, 5)
+    active = page.evaluate("document.querySelector('#loadout button.active') && document.querySelector('#loadout button.active').dataset.gun")
+    check("and leaving it gives your own gun back", active == "ar" and not page.is_visible("#tutorial"), str(active))
+    # Modes: Enter moves through the read cards; finishing the last chapter awards Graduate
+    page.evaluate("localStorage.setItem('tsb-training', JSON.stringify(['basics', 'movement', 'tricks', 'grenades', 'maps', 'guns']))")
+    page.click("#tutorial-btn")
+    page.click("#train-list .train-row[data-chapter=modes]")
+    step(page, 40)
+    check("Modes starts with the Score Attack taste and its countdown text", "modes 1/4" in page.inner_text("#tut-count").lower() and "0/5" in page.inner_text("#tut-text"), page.inner_text("#tut-text"))
+    page.keyboard.press("Enter"); step(page, 40)
+    check("Enter moves on to a read card that says Enter continues", page.inner_text("#tut-title") == "Practice with bots" and "Enter to continue" in page.inner_text("#tutorial .tut-skip"), page.inner_text("#tut-title"))
+    page.keyboard.press("Enter"); step(page, 40)
+    page.keyboard.press("Enter"); step(page, 40)
+    check("read cards advance with Enter", page.inner_text("#tut-title") == "Records and replays", page.inner_text("#tut-title"))
+    page.keyboard.press("Enter"); step(page, 40)
+    check("the last card ends the chapter", "modes complete" in page.inner_text("#tut-count").lower(), page.inner_text("#tut-count"))
+    check("finishing every chapter awards Graduate", "graduate" in page.evaluate("localStorage.getItem('tsb-achievements') || ''"), page.evaluate("localStorage.getItem('tsb-achievements')"))
+    page.evaluate("__unlock()")
+    step(page, 5)
     page.close()
     # progress from before the Training window: "all" means the basics and Movement are done
     page, errors2 = open_page(browser, base + "/index.html")

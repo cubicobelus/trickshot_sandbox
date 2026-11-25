@@ -6247,6 +6247,7 @@
     if (!w.usesAmmo || SETTINGS.unlimitedAmmo) return;
     if (reload.active || w.ammo >= w.magSize || vm.switchTimer > 0 || vm.grappleOut > 0.25) return;
     reload.active = true;
+    tutEvent("reload");
     reload.weapon = w.id;
     reload.elapsed = 0;
     reload.magDropped = false;
@@ -12105,6 +12106,7 @@
     { id: "summit", group: "Maps", name: "Summit Climber", desc: "Reach the top of the hill on Summit.", reached: true },
     { id: "hillhold", group: "King of the Hill", name: "Hill Holder", desc: "Hold the hill for 60 seconds in total.", goal: 60, progress: () => stats.hillTime, unit: "s" },
     { id: "kothwin", group: "King of the Hill", name: "King of the Hill", desc: "Win a King of the Hill round.", reached: true },
+    { id: "graduate", group: "Getting started", name: "Graduate", desc: "Finish every Training chapter.", reached: true },
   ];
   let achDone = {};
   try {
@@ -12917,7 +12919,7 @@
       { title: "Slide", text: () => (SETTINGS.autoSprint ? "Run" : "Hold " + keyOf("sprint") + " to run") + ", then hold " + keyOf("slide") + " to slide: it keeps your speed, and a hit while sliding is another trick.", done: () => tutDelta("slides") >= 1 },
       { title: "Jump pad", text: "Run onto a jump pad, the round plates on the floor. A hit on the way up adds LAUNCHED to AIR.", done: () => tutDelta("padLaunches") >= 1 },
       { title: "Trickshot", text: "Now stack them for a 3x shot: off a pad, mid-slide, a spin in the air, a far or a small target. Each trick multiplies the others.", done: () => tut.lastHit && tut.lastHit.mult >= 3 },
-    ], end: ["That's the basics", "Next: Score Attack is 1:00 to score as much as you can. Movement, Trickshots, Grenades and Map features are more chapters under Training in the menu.\nThe menu now has every gun and grenade, the maps, Attachments, and Multiplayer > Practice with bots."] },
+    ], end: ["That's the basics", "Next: Score Attack is 1:00 to score as much as you can. Movement, Trickshots, Grenades, Map features, Guns and Modes are more chapters under Training in the menu.\nThe menu now has every gun and grenade, the maps, Attachments, and Multiplayer > Practice with bots."] },
     { id: "movement", name: "Movement", map: "arena", blurb: "Bunnyhops, wall bounces, the grapple and keeping your speed.", steps: [
       { title: "Bunnyhop", text: () => "Press " + keyOf("jump") + " again the moment you land to keep your speed. Three in a row is BUNNY HOP.", done: () => tutDelta("bhops") >= 2 },
       { title: "Wall bounce", text: () => "Run at a wall, jump, and press " + keyOf("jump") + " again as you reach it to kick off it.", done: () => tutDelta("wallBounces") >= 1 },
@@ -12950,6 +12952,25 @@
       { title: "Lift", map: "rooftops", text: "Stand on a lift, a platform that moves up and down, and ride it. A hit while riding is a PLATFORM SHOT.", done: () => !!player.onMover },
       { title: "Ladder", map: "rooftops", text: () => "Walk at a ladder and hold " + keyOf("forward") + " to climb it.", done: () => !!player.ladder },
     ], end: ["Map features done", "Every map has its own tricks: the map picker has a note on each one."] },
+    { id: "guns", name: "Guns and attachments", map: "arena", blurb: "Reloads, long shots, the bow, crossbow and railgun.", steps: [
+      { title: "Reload", text: () => "Fire a few shots, then press " + keyOf("reload") + " to reload. (A reload only starts when the magazine isn't full.)", done: () => !!tut.ev.reload },
+      { title: "Long shot", gun: "rifle", text: () => "You have the SNIPER for this one: hold " + keyOf("aim") + " to aim and hit a target from 30 m or more. Back away from the targets first.", done: () => !!tut.lastHit && tut.lastHit.aimed && tut.lastHit.dist >= 30 },
+      { title: "Bow", gun: "bow", text: () => "You have the BOW: hold " + keyOf("fire") + " to draw, let go to loose the arrow (let go too early and nothing flies), and hit a target. It flies, so lead moving ones.", done: () => !!tut.lastHit && tut.lastHit.gun === "bow" },
+      { title: "Crossbow", gun: "crossbow", text: () => "You have the CROSSBOW: " + keyOf("fire") + " shoots a bolt that flies and drops. Hit a target.", done: () => !!tut.lastHit && tut.lastHit.gun === "crossbow" },
+      { title: "Railgun", gun: "railgun", text: () => "You have the RAILGUN: hold " + keyOf("fire") + " to charge for 0.6 s and it fires by itself when full (let go early and nothing happens). The shot goes through up to 3 targets. Hit one.", done: () => !!tut.lastHit && tut.lastHit.gun === "railgun" },
+    ], end: ["Guns and attachments done", "Every gun unlocks attachments as you land hits with it: see Attachments in the menu to fit them. Each gun has its own feel, so try them all in free play."] },
+    { id: "modes", name: "Modes", map: "arena", blurb: "Score Attack, bots, online rooms, records and replays.", steps: [
+      { title: "A taste of Score Attack", live: true, tick: (dt) => {
+          const a = tut.sa, n = tutDelta("hits") - a.h0;
+          if (n > 0) a.t += dt;
+          if (a.t >= 20 && n < 5) { a.t = 0; a.h0 = tutDelta("hits"); }   // out of time: start the count again
+        },
+        text: () => { const a = tut.sa, n = tutDelta("hits") - a.h0; return "Hit 5 targets within 20 seconds. " + n + "/5" + (n > 0 ? ", " + Math.max(0, 20 - a.t).toFixed(1) + " s left" : ", the clock starts on your first hit") + ".\nScore Attack in the menu is 1:00 of this, going for a high score."; },
+        done: () => tutDelta("hits") - tut.sa.h0 >= 5 },
+      { title: "Practice with bots", read: true, text: "Multiplayer > Practice with bots plays against computer players, offline. Modes: Deathmatch, Team Deathmatch, King of the Hill, Capture the flag, Battle royale and Gun game.", done: () => false },
+      { title: "Online rooms", read: true, text: "Under Multiplayer, host a room or join one with its code to play with friends. Online play is experimental.", done: () => false },
+      { title: "Records and replays", read: true, text: () => "Every map keeps your records (hold " + keyOf("leaderboard") + " in play to see them) and your best shot replay. The menu also has Stats, Achievements and Challenges.", done: () => false },
+    ], end: ["Modes done", "That's every chapter. Pick a mode, pick a map and play."] },
   ];
   const tutChapter = () => TRAINING.find((c) => c.id === tut.set) || TRAINING[0];
   const tutSteps = () => tutChapter().steps;
@@ -12978,7 +12999,7 @@
     if (currentMap.id !== want) loadMap(want);
     tutGear(tutSteps()[tut.step]);
     tut.base = Object.assign({}, stats);
-    tut.look = 0; tut.lastHit = null; tut.sawMap = false; tut.sawBoard = false; tut.peak = 0; tut.ev = {};
+    tut.look = 0; tut.lastHit = null; tut.sawMap = false; tut.sawBoard = false; tut.peak = 0; tut.ev = {}; tut.sa = { t: 0, h0: 0 };
     renderTutorial();
   }
   // a goal that needs a certain gun or throwable hands it to you (Esc would end the chapter, so you can't go and pick it), and the end of the chapter gives yours back
@@ -13005,7 +13026,9 @@
     document.getElementById("tut-title").textContent = s.title;
     document.getElementById("tut-text").textContent = typeof s.text === "function" ? s.text() : s.text;
     document.getElementById("tut-fill").style.width = (tut.step / steps.length * 100).toFixed(1) + "%";
-    tutEl.querySelector(".tut-skip").hidden = false;
+    const skipEl = tutEl.querySelector(".tut-skip");
+    skipEl.hidden = false;
+    skipEl.textContent = s.read ? "Enter to continue · Esc ends the chapter" : "Enter skips a step · Esc ends the tutorial";
     tutEl.classList.remove("done");
   }
   function tutNext() {
@@ -13024,6 +13047,7 @@
         const a = trainDone(); if (!a.includes(ch.id)) a.push(ch.id);
         localStorage.setItem(TRAIN_KEY, JSON.stringify(a));
         if (ch.id === "basics") localStorage.setItem(TUT_KEY, localStorage.getItem(TUT_KEY) === "all" ? "all" : "done");
+        if (TRAINING.every((c) => a.includes(c.id))) achReach("graduate");
       } catch (e) { /* ignore */ }
       refreshTutorialUI();
       return;
@@ -13040,7 +13064,10 @@
       if (tut.doneTimer <= 0) tutNext();
       return;
     }
-    if (tutSteps()[tut.step].done()) {
+    const cur = tutSteps()[tut.step];
+    if (cur.tick) cur.tick(dt);
+    if (cur.live) { const t = cur.text(), el = document.getElementById("tut-text"); if (el.textContent !== t) el.textContent = t; }   // (a goal with a countdown redraws its text)
+    if (cur.done()) {
       tut.doneTimer = 1.1;
       tutEl.classList.add("done");
       if (SETTINGS.volHits > 0) tone("triangle", 880, 1320, 0.1 * SETTINGS.volHits, 0.16, 0, 0.15);
@@ -13049,7 +13076,7 @@
   // from awardPoints: what the last hit was like
   function tutHit(res) {
     if (!tut.active) return;
-    tut.lastHit = { mult: res.mult, aimed: vm.adsProgress > 0.6, tags: res.tags.map((t) => trickKey(t) || "") };
+    tut.lastHit = { mult: res.mult, aimed: vm.adsProgress > 0.6, dist: res.dist || 0, gun: currentWeapon().id, tags: res.tags.map((t) => trickKey(t) || "") };
   }
   // from the throw, blast and launch strip code: "throw" {kind, cooked}, "packThrow", "packBlow", "shove" {kind} (your own blast threw you up), "strip"
   function tutEvent(name, info) {
