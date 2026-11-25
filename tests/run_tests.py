@@ -823,6 +823,26 @@ def test_attachments(browser, base):
     page.click('#attach-guns button[data-gun="dmr"]')
     check("an old save with the magazine in the grip slot moves it to the magazine slot",
           page.query_selector('#attach-slots .at-opt.active[data-opt="extmag"]') is not None)
+    # unlocks got cheaper: an option between the new and the old cost is announced once, in one message
+    page.evaluate("""() => { localStorage.removeItem('tsb-unlocks-seen'); localStorage.setItem('tsb-stats', JSON.stringify({since: '2026-01-01', kinds: {}, guns: {ar: {shots: 40, hits: 8, points: 0}}, tricks: {}})); }""")
+    page.reload()
+    page.wait_for_timeout(500)
+    msg = page.inner_text("#ach-toast")
+    seen = page.evaluate("localStorage.getItem('tsb-unlocks-seen')")
+    check("existing players are told once which attachments the new costs opened", "Unlocks are faster now" in msg and "RIFLE: red dot" in msg and seen is not None and "ar:reddot" in seen, msg.replace(chr(10), " | "))
+    page.reload()
+    page.wait_for_timeout(500)
+    check("and not again after a reload", "Unlocks are faster now" not in page.inner_text("#ach-toast"))
+    page.evaluate("localStorage.removeItem('tsb-unlocks-seen')")
+    page.evaluate("""() => localStorage.setItem('tsb-stats', JSON.stringify({since: '2026-01-01', kinds: {}, guns: {}, tricks: {}}))""")
+    page.reload()
+    page.wait_for_timeout(500)
+    check("a new player gets no message and an empty seen list", "Unlocks are faster now" not in page.inner_text("#ach-toast") and page.evaluate("localStorage.getItem('tsb-unlocks-seen')") == "[]")
+    click_tab(page, "other")
+    with page.expect_download() as dl:
+        page.click("#data-export")
+    doc = json.load(open(dl.value.path(), encoding="utf-8"))
+    check("the seen list is in the data backup", "tsb-unlocks-seen" in doc.get("data", {}), ", ".join(doc.get("data", {}).keys()))
     check("attachments run without errors", not errors, "; ".join(errors[:2]))
     page.close()
 
@@ -1644,6 +1664,7 @@ def test_crossbow(browser, base):
           d.yawObject.rotation.y = Math.atan2(-dx, -dz); d.pitchObject.rotation.x = Math.atan2(dy, Math.hypot(dx, dz));
           return b.id;
         }""")
+        hits_before = page.evaluate("((window.__dbg.stats.guns.crossbow || {}).hits || 0)")
         step(page, 3)
         page.dispatch_event("body > canvas", "mousedown", {"button": 0})
         step(page, 2)
@@ -1651,6 +1672,8 @@ def test_crossbow(browser, base):
         step(page, 70)
         hp = page.evaluate("(id) => window.__dbg.net.players.get(id).hp", bot)
         check("a bolt to the body takes 55 (the host believes the hit)", hp == 45, f"hp {hp}")
+        bhits = page.evaluate("((window.__dbg.stats.guns.crossbow || {}).hits || 0)")
+        check("a hit on a bot counts toward the gun's unlocks", bhits == hits_before + 1, f"{hits_before} -> {bhits} hits")
         step(page, 200)   # reloaded; aim at the head this time (a little high: the bolt drops about 20 cm over 25 m)
         page.evaluate("""(id) => {
           const d = window.__dbg, b = d.net.players.get(id);
@@ -2075,6 +2098,8 @@ def test_attach_extras(browser, base):
             page.click(f'#attach-slots .at-opt[data-opt="{opt}"]')   # (off again)
         check("each of them shows on the gun when fitted (slugs, extra grenades, quick loaders, lasers, a capacitor, a suppressor on both dual guns)", all(n > 0 for n in shown.values()) and shown["dual/suppressor"] >= 4, str(shown))
         page.click("#attach-close")
+        needs = page.evaluate("""() => { const A = window.__dbg.ATTACHMENTS; const f = (g, id) => Object.values(A[g]).flat().find((o) => o.id === id); return [f("ar", "reddot"), f("lmg", "optic-4x")].map((o) => [o.baseNeed, o.need]); }""")
+        check("every unlock costs about 55% (a 10-hit option needs 5, a 90-hit one 50)", needs == [[10, 5], [90, 50]], str(needs))
         check("the attachment extras run without errors", not errors, "; ".join(errors[:2]))
         page.close()
     finally:

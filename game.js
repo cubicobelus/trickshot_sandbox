@@ -4940,7 +4940,8 @@
   // ---- loadout: one gun plus the knife ----
   const GUNS = WEAPON_ORDER.filter((id) => WEAPONS[id].usesAmmo);
 
-  // ---- attachments: each gun has up to three slots; every option is a trade, and unlocks once you have landed `need` hits with that gun ----
+  // ---- attachments: each gun has up to six slots; every option is a trade, and unlocks once you have landed `need` hits with that gun (the cost written below is baseNeed; need is that scaled by ATTACH_NEED_SCALE) ----
+  const ATTACH_NEED_SCALE = 0.55;
   // fx: ads (aim-down-sights time), spread (hip), spreadAds, recoil, mag (size), reload (time), flash, sound (how loud), scopeFov (>1 wider)
   const ATTACH_SLOTS = {
     optic: "Optic", muzzle: "Muzzle", stock: "Stock", grip: "Grip", barrel: "Barrel", mag: "Magazine", sights: "Sights", bipod: "Bipod",
@@ -5019,6 +5020,9 @@
       mag: [{ id: "extmag", name: "Extended magazine", need: 45, fx: { mag: 1.3, reload: 1.1 }, text: "Two more rounds, slower reload" }],
     },
   };
+  for (const slots of Object.values(ATTACHMENTS)) for (const opts of Object.values(slots)) for (const opt of opts) {
+    if (opt.baseNeed == null) { opt.baseNeed = opt.need; opt.need = Math.max(5, Math.round(opt.baseNeed * ATTACH_NEED_SCALE / 5) * 5); }   // (shared option objects are scaled once)
+  }
   // what a fitted attachment looks like, built from where each gun's parts really are (see AT_MOUNT)
   const AT_STEEL = new THREE.MeshStandardMaterial({ color: 0x2b2f35, metalness: 0.7, roughness: 0.45 });
   const AT_RUBBER = new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.9 });
@@ -7463,7 +7467,7 @@
   document.getElementById("settings-close").addEventListener("click", () => setSettingsPopup(false));
   // Back up and restore: everything the game keeps in this browser as one file. An imported file is checked key by key and
   // value by value before it replaces anything (and the game's own loaders check again when it starts).
-  const DATA_JSON_KEYS = ["tsb-tips", "tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-challenges", "tsb-score-attack", "tsb-map-records", "tsb-training"];
+  const DATA_JSON_KEYS = ["tsb-tips", "tsb-settings", "tsb-best-shot", "tsb-best-replay", "tsb-stats", "tsb-achievements", "tsb-challenges", "tsb-score-attack", "tsb-map-records", "tsb-training", "tsb-unlocks-seen"];
   const DATA_KEYS = DATA_JSON_KEYS.concat(["tsb-tutorial", "tsb-name", "tsb-settings-seen"]);
   const importNoteEl = document.getElementById("data-import-note"), importApplyEl = document.getElementById("data-import-apply");
   let importClean = null;
@@ -7852,7 +7856,7 @@
       const gs = gunStat(vm.current);
       gs.shots++; stat("shots");
       if (targetHits) { gs.hits++; stat("shotsHit"); announceUnlocks(vm.current, gs.hits); }
-    }
+    } else if (playerHits) gunHit(vm.current, playerHits);   // a bot or player hit counts too (one per player hit)
     w.lastFiredAt = elapsedTime;
     addRecoil(w);
     if (!SETTINGS.unlimitedAmmo && w.ammo <= 0) autoReloadTimer = 0.25;
@@ -7986,7 +7990,7 @@
       const gs = gunStat(vm.current);
       gs.shots++; stat("shots");
       if (targetHits.size) { gs.hits++; stat("shotsHit"); announceUnlocks(vm.current, gs.hits); }
-    }
+    } else if (pvp) gunHit(vm.current, 1);
     if (ammoBefore === 1) w.lastRoundReady = false;
     w.lastFiredAt = elapsedTime;
     w.fannedNow = false;
@@ -8422,6 +8426,7 @@
     // other players: claimed to the host, which works out the damage itself
     if (net.active) {
       const hits = [];
+      let blastPlayers = 0;
       if (net.sub === "dm" && net.phase === "play") {
         const me = localPlayer();
         if (kind !== "satchel" && !localDead && (inHand || (Math.hypot(yawObject.position.x - pos.x, player.feetY + 0.9 - pos.y, yawObject.position.z - pos.z) <= R
@@ -8435,9 +8440,10 @@
           pendingRes.set(q.id, res);
           impactFx(_blastC, null, "player");
           hits.push({ v: q.id, pts: Math.round(CFG.basePoints * res.mult * (res.scale || 1)), tags: res.tags });
-          hitCount++;
+          hitCount++; blastPlayers++;
         }
       }
+      if (blastPlayers && WEAPONS[kind]) gunHit(kind, 1);   // hurting a bot or player counts as a hit (once per blast, like targets)
       sendToHost({ t: "blast", k: kind, o: [r2(pos.x), r2(pos.y), r2(pos.z)], h: hits, hand: inHand ? 1 : 0 });
     }
     if (!hitCount) breakStreak();
@@ -8767,7 +8773,7 @@
         playKnifeHit();
         lastShotOrigin.copy(k.from);
         hitPlayer.dist = k.from.distanceTo(o);   // how far it was thrown, not just this frame's step
-        if (k.bolt) mpPvpHit(hitPlayer, false, 0, k.weapon, k.snap, false);   // a bolt is scored and claimed as a gun hit
+        if (k.bolt) { mpPvpHit(hitPlayer, false, 0, k.weapon, k.snap, false); gunHit("crossbow", 1); }   // a bolt is scored and claimed as a gun hit
         else mpPvpHit(hitPlayer, true, 0, undefined, k.snap, true);
         retireKnife(k);
         continue;
@@ -9867,7 +9873,6 @@
       }
 
       case "kill": {
-        if (m.k === net.id && WEAPONS[m.w] && WEAPONS[m.w].usesAmmo) { const kgs = gunStat(m.w); kgs.hits++; announceUnlocks(m.w, kgs.hits); }   // a kill online counts as a hit toward unlocks
         if (m.w === "zone") {   // caught outside the safe zone
           const zv = net.players.get(m.v);
           if (zv) { zv.alive = false; zv.hp = 0; }
@@ -11945,14 +11950,50 @@
   }
   function stat(key, n) { stats[key] += n === undefined ? 1 : n; statsDirty = true; }
   function statMax(key, v) { if (v > stats[key]) { stats[key] = v; statsDirty = true; } }
-  function announceUnlocks(gun, hits) {
-    for (const opts of Object.values(ATTACHMENTS[gun] || {})) for (const o of opts) {
-      if (o.need === hits) { achQueue.push({ name: "Unlocked: " + o.name, desc: WEAPONS[gun].name + " attachment" }); if (!achToastTimer) nextAchToast(); }
+  // attachments already announced: "gun:optId" strings, kept so each unlock is announced once however the hits came in
+  const UNLOCKS_SEEN_KEY = "tsb-unlocks-seen";
+  let unlocksSeen = null;
+  const attachRows = (gun) => Object.values(ATTACHMENTS[gun] || {}).flat();
+  function loadUnlocksSeen() {
+    let raw = null;
+    try { raw = localStorage.getItem(UNLOCKS_SEEN_KEY); } catch (e) { /* ignore */ }
+    let list = null;
+    try { const j = JSON.parse(raw); if (Array.isArray(j)) list = j.filter((x) => typeof x === "string").slice(0, 400); } catch (e) { /* absent or broken: migrate */ }
+    unlocksSeen = new Set(list || []);
+    if (list) return;
+    const hitsOf = (g) => (stats.guns[g] && stats.guns[g].hits) || 0;
+    const fresh = [];
+    for (const gun of GUNS) for (const o of attachRows(gun)) {
+      const key = gun + ":" + o.id, h = hitsOf(gun);
+      if (h >= o.baseNeed) unlocksSeen.add(key);
+      else if (h >= o.need) fresh.push({ gun, o, key });
     }
+    saveUnlocksSeen();
+    if (!fresh.length) return;
+    const byGun = new Map();
+    for (const f of fresh) { if (!byGun.has(f.gun)) byGun.set(f.gun, []); byGun.get(f.gun).push(f); unlocksSeen.add(f.key); }
+    const parts = [...byGun].map(([g, l]) => WEAPONS[g].name + ": " + l.map((f) => f.o.name.toLowerCase()).join(", "));
+    saveUnlocksSeen();
+    achQueue.push({ name: "Unlocks are faster now", desc: "Newly open: " + parts.join(" · "), label: "Attachments" });   // one toast listing them all
+    if (!achToastTimer) nextAchToast();
+  }
+  function saveUnlocksSeen() { try { localStorage.setItem(UNLOCKS_SEEN_KEY, JSON.stringify([...unlocksSeen])); } catch (e) { /* ignore */ } }
+  function announceUnlocks(gun, hits) {
+    if (!unlocksSeen) return;
+    const h = (stats.guns[gun] && stats.guns[gun].hits) || 0;
+    let added = false;
+    for (const o of attachRows(gun)) {
+      const key = gun + ":" + o.id;
+      if (h < o.need || unlocksSeen.has(key)) continue;
+      unlocksSeen.add(key); added = true;
+      achQueue.push({ name: "Unlocked: " + o.name, desc: WEAPONS[gun].name + " attachment" }); if (!achToastTimer) nextAchToast();
+    }
+    if (added) saveUnlocksSeen();
     (GUN_SKINS[gun] || []).forEach((id, i) => {
       if (SKIN_NEED[i] === hits) { achQueue.push({ name: "Unlocked: " + SKIN_THEMES[id].name + " skin", desc: WEAPONS[gun].name + " skin" }); if (!achToastTimer) nextAchToast(); }
     });
   }
+  function gunHit(id, n) { if (!WEAPONS[id]) return; const gs = gunStat(id); gs.hits += n; statsDirty = true; announceUnlocks(id, gs.hits); }   // a hit on a bot or player (targets are counted where they are scored)
   function gunStat(id) { return stats.guns[id] || (stats.guns[id] = { shots: 0, hits: 0, points: 0 }); }
   // "FLICK 80° x1.40" -> "FLICK", "HANG TIME 1.4s x1.16" -> "HANG TIME"; spins keep their size; streaks are counted apart
   function trickKey(tag) {
@@ -12199,6 +12240,7 @@
   window.addEventListener("keydown", (e) => { if (e.code === "Escape" && !achEl.hidden) setAchievements(false); });
   achProgress();   // grind goals already met by the saved stats
   updateAchCount();
+  loadUnlocksSeen();
 
   // ======================================================================
   // TRICK CHALLENGES: one shot (or one run) that puts certain tricks together. Four tiers, from Bronze to
